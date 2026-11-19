@@ -37,11 +37,10 @@ import { ProductCard } from '../components/common/ProductCard';
 import { CategoryCard } from '../components/common/CategoryCard';
 import { BrandCard } from '../components/common/BrandCard';
 import { Button } from '../components/ui/Button';
-import { useLocationStore } from '../store/useLocationStore';
+import { HeroCarousel } from '../components/common/HeroCarousel';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { pincode, cityName, etaMinutes, openLocationModal } = useLocationStore();
 
   // Dynamic live backend state initialized with defaults
   const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
@@ -114,31 +113,13 @@ export const HomePage: React.FC = () => {
                 UltraTech cement, Astral CPVC, Havells wires, Greenply marine boards, and Bosch power tools with instant B2B GST ITC invoices.
               </p>
 
-              {/* Serviceability & Action Buttons */}
+              {/* Action CTA Buttons (Pincode chip removed, buttons balanced) */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-                <div
-                  onClick={openLocationModal}
-                  className="cursor-pointer flex items-center justify-between sm:justify-start gap-2 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/10 px-3.5 py-2.5 rounded-xl text-xs transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-brand-orange-400 flex-shrink-0" />
-                    <div className="truncate">
-                      <span className="text-slate-400">Site: </span>
-                      <strong className="text-white underline">{pincode} ({cityName.split(',')[0]})</strong>
-                    </div>
-                  </div>
-                  {etaMinutes > 0 && (
-                    <span className="bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-md text-[10px] border border-emerald-400/30 flex-shrink-0">
-                      {etaMinutes}m ETA
-                    </span>
-                  )}
-                </div>
-
                 <Button
                   variant="secondary"
                   size="md"
                   onClick={() => navigate('/products')}
-                  className="w-full sm:w-auto font-black shadow-lg"
+                  className="w-full sm:w-auto font-black shadow-lg px-6"
                   rightIcon={<ArrowRight className="w-4 h-4" />}
                 >
                   Order Materials
@@ -148,11 +129,19 @@ export const HomePage: React.FC = () => {
                   variant="outline"
                   size="md"
                   onClick={() => navigate('/tools/material-estimator')}
-                  className="w-full sm:w-auto bg-white/10 text-white border-white/20 hover:bg-white/20 font-bold"
+                  className="w-full sm:w-auto bg-white/10 text-white border-white/20 hover:bg-white/20 font-bold px-5"
                   leftIcon={<Calculator className="w-4 h-4 text-brand-orange-400" />}
                 >
-                  Estimator
+                  Material Estimator
                 </Button>
+
+                <Link
+                  to="/bulk-orders"
+                  className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-amber-300 hover:text-white px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  <Truck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Bulk Site Orders &rarr;</span>
+                </Link>
               </div>
 
               {/* Trust Indicators */}
@@ -172,33 +161,9 @@ export const HomePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Right Column: Hero Visual Card */}
+            {/* Right Column: Premium Animated Hero Carousel */}
             <div className="lg:col-span-5 relative mt-4 lg:mt-0">
-              <div className="relative rounded-3xl overflow-hidden border border-white/15 shadow-2xl bg-slate-800 aspect-[16/10] sm:aspect-[16/9] lg:aspect-auto lg:h-96">
-                <img
-                  src="https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80"
-                  alt="Construction Site Delivery"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-
-                {/* Floating Live Dispatch Badge */}
-                <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-4 bg-slate-900/90 backdrop-blur-md p-3 sm:p-4 rounded-2xl border border-white/15 flex items-center justify-between">
-                  <div>
-                    <div className="text-[9px] sm:text-[10px] text-brand-orange-400 font-black uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      Live Dark Store Dispatch Network
-                    </div>
-                    <div className="text-xs sm:text-sm font-bold text-white mt-0.5">Bengaluru Central WH-BLR-01 Online</div>
-                    <div className="text-[10px] sm:text-[11px] text-slate-400">Average site turnaround: 38 minutes</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] sm:text-xs font-black text-emerald-400 bg-emerald-950/80 px-2 py-1 rounded-lg border border-emerald-500/30">
-                      Fleet Active
-                    </span>
-                  </div>
-                </div>
-              </div>
+              <HeroCarousel />
             </div>
           </div>
         </div>

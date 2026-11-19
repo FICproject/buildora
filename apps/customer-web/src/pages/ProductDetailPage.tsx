@@ -46,7 +46,7 @@ export const ProductDetailPage: React.FC = () => {
   const { isInWishlist, toggleItem } = useWishlistStore();
   const { isInCompare, addItem: addToCompare } = useCompareStore();
   const { projects, addMaterialToProject } = useProjectStore();
-  const { pincode, cityName, etaMinutes } = useLocationStore();
+  const { pincode, locality, cityName, isServiceable, etaMinutes, etaText, warehouseName, openLocationModal } = useLocationStore();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -289,16 +289,27 @@ export const ProductDetailPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-900 flex items-center gap-1.5">
                 <Truck className="w-4 h-4 text-brand-orange-500" />
-                Delivery to {pincode} ({cityName.split(',')[0]})
+                Delivery to {pincode} ({locality || cityName.split(',')[0]})
               </span>
-              <span className="text-brand-blue-800 font-bold hover:underline cursor-pointer">
+              <button
+                type="button"
+                onClick={openLocationModal}
+                className="text-brand-blue-800 font-bold hover:underline"
+              >
                 Change
-              </span>
+              </button>
             </div>
-            <div className="flex items-center gap-2 text-emerald-700 font-bold">
-              <Zap className="w-3.5 h-3.5 fill-current" />
-              <span>Available for 60-Min Site Delivery from Indiranagar WH-BLR-01</span>
-            </div>
+            {isServiceable ? (
+              <div className="flex items-center gap-2 text-emerald-700 font-bold">
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>Available for {etaMinutes}-Min Site Delivery &bull; {warehouseName || 'Active Dark Store'}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-amber-700 font-medium">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Delivery availability is being verified for your location.</span>
+              </div>
+            )}
           </div>
 
           {/* Quantity & CTA Buttons */}

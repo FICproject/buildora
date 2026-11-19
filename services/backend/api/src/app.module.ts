@@ -11,6 +11,7 @@ import { SupportController } from './modules/support/controllers/support.control
 import { ContentController } from './modules/content/controllers/content.controller';
 import { WalletController } from './modules/wallet/controllers/wallet.controller';
 import { CustomerController } from './modules/customer/controllers/customer.controller';
+import { ServiceabilityController } from './modules/warehouses/controllers/serviceability.controller';
 
 @Module({
   imports: [],
@@ -26,6 +27,7 @@ import { CustomerController } from './modules/customer/controllers/customer.cont
     ContentController,
     WalletController,
     CustomerController,
+    ServiceabilityController,
   ],
   providers: [DatabaseService],
   exports: [DatabaseService],

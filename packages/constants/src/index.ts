@@ -547,22 +547,89 @@ export const MASTER_BRANDS = [
   }
 ];
 
-export const SERVICEABLE_PINCODES: Record<string, { city: string; state: string; etaMinutes: number; warehouse: string }> = {
-  '560001': { city: 'Bengaluru Central', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01' },
-  '560002': { city: 'Bengaluru City', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01' },
-  '560034': { city: 'Koramangala, Bengaluru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02' },
-  '560038': { city: 'Indiranagar, Bengaluru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01' },
-  '560066': { city: 'Whitefield, Bengaluru', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-03' },
-  '560100': { city: 'Electronic City, Bengaluru', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02' },
-  '560102': { city: 'HSR Layout, Bengaluru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02' },
-  '560043': { city: 'Banaswadi, Bengaluru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01' },
-  '560076': { city: 'Bannerghatta Road, Bengaluru', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02' },
-  '560092': { city: 'Sahakara Nagar, Bengaluru', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-01' },
-  '400001': { city: 'Mumbai South', state: 'Maharashtra', etaMinutes: 90, warehouse: 'WH-MUM-01' },
-  '400050': { city: 'Bandra, Mumbai', state: 'Maharashtra', etaMinutes: 90, warehouse: 'WH-MUM-01' },
-  '110001': { city: 'Connaught Place, New Delhi', state: 'Delhi', etaMinutes: 90, warehouse: 'WH-DEL-01' },
-  '600001': { city: 'Chennai North', state: 'Tamil Nadu', etaMinutes: 90, warehouse: 'WH-MAA-01' },
-  '500001': { city: 'Hyderabad Central', state: 'Telangana', etaMinutes: 90, warehouse: 'WH-HYD-01' }
+export const SERVICEABLE_PINCODES: Record<string, { city: string; locality: string; state: string; etaMinutes: number; warehouse: string; zone: string }> = {
+  // Central Bengaluru (WH-BLR-01 - Central Indiranagar Hub)
+  '560001': { city: 'Bengaluru', locality: 'Bengaluru GPO / MG Road', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560002': { city: 'Bengaluru', locality: 'City Market / Chickpet', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560005': { city: 'Bengaluru', locality: 'Frazer Town / Pulikeshi Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560008': { city: 'Bengaluru', locality: 'Ulsoor / Halasuru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560025': { city: 'Bengaluru', locality: 'Richmond Town / Ashok Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560038': { city: 'Bengaluru', locality: 'Indiranagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560042': { city: 'Bengaluru', locality: 'Halasuru / Cambridge Layout', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560043': { city: 'Bengaluru', locality: 'Banaswadi / Kalyan Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560051': { city: 'Bengaluru', locality: 'Shivaji Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560071': { city: 'Bengaluru', locality: 'Domlur / Amarjyoti Layout', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560075': { city: 'Bengaluru', locality: 'HAL 3rd Stage / Tippasandra', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+  '560084': { city: 'Bengaluru', locality: 'Richards Town / Cooke Town', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
+
+  // South & South-East Bengaluru (WH-BLR-02 - Koramangala & HSR Hub)
+  '560034': { city: 'Bengaluru', locality: 'Koramangala', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560041': { city: 'Bengaluru', locality: 'Jayanagar 4th Block', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560068': { city: 'Bengaluru', locality: 'Madivala / Bommanahalli', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560069': { city: 'Bengaluru', locality: 'Jayanagar East / Byrasandra', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560076': { city: 'Bengaluru', locality: 'Bannerghatta Road / Hulimavu', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560078': { city: 'Bengaluru', locality: 'JP Nagar (Phases 1-6)', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560083': { city: 'Bengaluru', locality: 'Gottigere / Bannerghatta', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560095': { city: 'Bengaluru', locality: 'Koramangala 4th Block', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560099': { city: 'Bengaluru', locality: 'Electronic City Phase 2', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560100': { city: 'Bengaluru', locality: 'Electronic City Phase 1', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560102': { city: 'Bengaluru', locality: 'HSR Layout', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560103': { city: 'Bengaluru', locality: 'Bellandur / Outer Ring Road', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560104': { city: 'Bengaluru', locality: 'Begur / Hongasandra', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+
+  // East & North-East Bengaluru (WH-BLR-03 - Whitefield & IT Corridor Hub)
+  '560016': { city: 'Bengaluru', locality: 'Ramamurthy Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560017': { city: 'Bengaluru', locality: 'Old Airport Road / Vimanapura', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560035': { city: 'Bengaluru', locality: 'Sarjapur Road / Doddakannelli', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560036': { city: 'Bengaluru', locality: 'KR Puram / Dooravani Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560037': { city: 'Bengaluru', locality: 'Marathahalli / HAL', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560048': { city: 'Bengaluru', locality: 'Mahadevapura / Hoodi', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560049': { city: 'Bengaluru', locality: 'Bhattarahalli / TC Palya', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560066': { city: 'Bengaluru', locality: 'Whitefield', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560067': { city: 'Bengaluru', locality: 'Kadugodi / ITPL', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560087': { city: 'Bengaluru', locality: 'Varthur / Gunjur', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560093': { city: 'Bengaluru', locality: 'CV Raman Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+
+  // West & North-West Bengaluru (WH-BLR-04 - Nagarabhavi & Rajajinagar Hub)
+  '560003': { city: 'Bengaluru', locality: 'Malleshwaram', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560004': { city: 'Bengaluru', locality: 'Basavanagudi / Gandhi Bazaar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560010': { city: 'Bengaluru', locality: 'Rajajinagar 1st Block', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560019': { city: 'Bengaluru', locality: 'Hanumanthanagar / Gavipuram', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560021': { city: 'Bengaluru', locality: 'Rajajinagar 2nd Stage', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560022': { city: 'Bengaluru', locality: 'Yeshwanthpur', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560040': { city: 'Bengaluru', locality: 'Vijayanagar / RPC Layout', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560050': { city: 'Bengaluru', locality: 'Basavanagudi', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560056': { city: 'Bengaluru', locality: 'Bangalore University / Jnana Bharati', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560058': { city: 'Bengaluru', locality: 'Peenya Industrial Area', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560060': { city: 'Bengaluru', locality: 'Kengeri Satellite Town', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560070': { city: 'Bengaluru', locality: 'Banashankari 2nd Stage', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560072': { city: 'Bengaluru', locality: 'Nagarabhavi / Bengaluru West', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560074': { city: 'Bengaluru', locality: 'Kumbalgodu Industrial Area', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560079': { city: 'Bengaluru', locality: 'Basaveshwaranagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560085': { city: 'Bengaluru', locality: 'Banashankari 3rd Stage', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560091': { city: 'Bengaluru', locality: 'Viswaneedam / Magadi Road', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560096': { city: 'Bengaluru', locality: 'Mahalakshmi Layout', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560098': { city: 'Bengaluru', locality: 'Rajarajeshwari Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+
+  // North Bengaluru (WH-BLR-05 - Hebbal & Yelahanka Hub)
+  '560024': { city: 'Bengaluru', locality: 'Hebbal / Ganganagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560032': { city: 'Bengaluru', locality: 'RT Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560054': { city: 'Bengaluru', locality: 'Mathikere / MSRIT', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560057': { city: 'Bengaluru', locality: 'Dasarahalli / Tumkur Road', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560063': { city: 'Bengaluru', locality: 'Jalahalli', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560064': { city: 'Bengaluru', locality: 'Yelahanka New Town', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560065': { city: 'Bengaluru', locality: 'Yelahanka Old Town', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560077': { city: 'Bengaluru', locality: 'Kothanur / Hennur Road', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560092': { city: 'Bengaluru', locality: 'Sahakara Nagar / Byatarayanapura', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560094': { city: 'Bengaluru', locality: 'Sanjaynagar / RMV 2nd Stage', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560097': { city: 'Bengaluru', locality: 'Vidyaranyapura', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560114': { city: 'Bengaluru', locality: 'Manyata Tech Park / Nagavara', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+
+  // Outer Bengaluru & Key Construction Corridors
+  '562110': { city: 'Bengaluru Rural', locality: 'Devanahalli Airport Corridor', state: 'Karnataka', etaMinutes: 120, warehouse: 'WH-BLR-05', zone: 'OUTER_BLR' },
+  '562125': { city: 'Bengaluru Rural', locality: 'Hosakote Industrial Area', state: 'Karnataka', etaMinutes: 120, warehouse: 'WH-BLR-03', zone: 'OUTER_BLR' },
+  '562157': { city: 'Bengaluru Rural', locality: 'Nelamangala Highway Corridor', state: 'Karnataka', etaMinutes: 120, warehouse: 'WH-BLR-04', zone: 'OUTER_BLR' },
+  '562106': { city: 'Bengaluru Rural', locality: 'Anekal / Attibele Industrial Area', state: 'Karnataka', etaMinutes: 120, warehouse: 'WH-BLR-02', zone: 'OUTER_BLR' }
 };
 
 export const AVAILABLE_COUPONS = [

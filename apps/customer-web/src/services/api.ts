@@ -327,5 +327,13 @@ export const api = {
 
   async getFaqs(): Promise<FaqItem[]> {
     return request<FaqItem[]>('/faqs', {}, SEED_FAQS);
+  },
+
+  async getBengaluruZones(): Promise<any> {
+    return request<any>(
+      '/serviceability/bengaluru-zones',
+      { method: 'GET' },
+      null
+    );
   }
 };
