@@ -244,7 +244,7 @@ export const HomePage: React.FC = () => {
                   />
                 </div>
                 <span className="text-[11px] font-bold text-slate-700 group-hover:text-brand-blue-900 line-clamp-1 w-full">
-                  {cat.name.split(' ')[0]}
+                  {(cat.name || 'Category').split(' ')[0]}
                 </span>
               </Link>
             ))}

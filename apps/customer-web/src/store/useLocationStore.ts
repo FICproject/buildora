@@ -59,26 +59,30 @@ export const useLocationStore = create<LocationState>()(
         try {
           const remote = await api.checkServiceability(cleaned);
           if (remote && remote.pincode === cleaned) {
+            const loc = remote.locality || 'Bengaluru Urban';
+            const city = remote.cityName || 'Bengaluru';
+            const eta = typeof remote.etaMinutes === 'number' ? remote.etaMinutes : 60;
+
             set({
               pincode: cleaned,
-              locality: remote.locality,
-              cityName: remote.cityName,
-              state: remote.state,
-              isServiceable: remote.isServiceable,
-              etaMinutes: remote.etaMinutes,
-              etaText: remote.etaText || (remote.etaMinutes > 0 ? `Estimated delivery: ${remote.etaMinutes} minutes` : 'Verification In Progress'),
-              warehouse: remote.warehouseId || '',
-              warehouseName: remote.warehouseName || '',
+              locality: loc,
+              cityName: city,
+              state: remote.state || 'Karnataka',
+              isServiceable: Boolean(remote.isServiceable),
+              etaMinutes: eta,
+              etaText: remote.etaText || (eta > 0 ? `Estimated delivery: ${eta} minutes` : 'Verification In Progress'),
+              warehouse: remote.warehouseId || 'WH-BLR-01',
+              warehouseName: remote.warehouseName || 'Bengaluru Quick Commerce Dark Store',
               dispatchStatus: remote.dispatchStatus || (remote.isServiceable ? 'ACTIVE_DISPATCH' : 'UNDER_VERIFICATION'),
               isLoading: false,
               lastVerifiedAt: new Date().toISOString()
             });
 
             return {
-              serviceable: remote.isServiceable,
-              message: remote.message,
-              locality: remote.locality,
-              etaMinutes: remote.etaMinutes
+              serviceable: Boolean(remote.isServiceable),
+              message: remote.message || `Delivery available in ${eta} minutes to ${loc}!`,
+              locality: loc,
+              etaMinutes: eta
             };
           }
         } catch {
@@ -89,10 +93,12 @@ export const useLocationStore = create<LocationState>()(
         const known = (SERVICEABLE_PINCODES as Record<string, any>)[cleaned];
         if (known) {
           const eta = known.etaMinutes || 60;
+          const loc = known.locality || (known.city ? String(known.city).split(',')[0].trim() : 'Bengaluru');
+          const city = known.city || 'Bengaluru';
           set({
             pincode: cleaned,
-            locality: known.locality || known.city.split(',')[0],
-            cityName: 'Bengaluru',
+            locality: loc,
+            cityName: city,
             state: known.state || 'Karnataka',
             isServiceable: true,
             etaMinutes: eta,
@@ -106,8 +112,8 @@ export const useLocationStore = create<LocationState>()(
 
           return {
             serviceable: true,
-            message: `Delivery available in ${eta} minutes to ${known.locality || known.city}!`,
-            locality: known.locality || known.city,
+            message: `Delivery available in ${eta} minutes to ${loc}!`,
+            locality: loc,
             etaMinutes: eta
           };
         }

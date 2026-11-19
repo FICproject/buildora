@@ -52,7 +52,7 @@ export const CheckoutPage: React.FC = () => {
     building: '',
     street: '',
     area: '',
-    city: defaultCity.split(',')[0] || 'Bengaluru',
+    city: (defaultCity ? defaultCity.split(',')[0].trim() : '') || 'Bengaluru',
     state: 'Karnataka',
     pincode: defaultPincode || '560038',
     deliveryInstructions: '',

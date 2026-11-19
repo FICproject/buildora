@@ -58,27 +58,37 @@ export const LocationModal: React.FC = () => {
       setInputPincode(pincode || '');
       setFeedback(null);
       if (isAuthenticated) {
-        api.getAddresses().then((addrs) => setSavedAddresses(addrs || [])).catch(() => {});
+        api.getAddresses().then((addrs) => setSavedAddresses(addrs || [])).catch(() => { });
       }
     }
   }, [isModalOpen, pincode, isAuthenticated]);
 
   const handleVerify = async (codeToVerify?: string) => {
-    const code = (codeToVerify || inputPincode).trim();
+    const code = (codeToVerify || inputPincode || '').trim();
     if (!/^[1-9][0-9]{5}$/.test(code)) {
       setFeedback({ type: 'error', message: 'Please enter a valid 6-digit Indian PIN code.' });
       return;
     }
 
-    const res = await checkAndSetPincode(code);
-    if (res.serviceable) {
-      setFeedback({ type: 'success', message: res.message });
-      setTimeout(() => {
-        closeLocationModal();
-        setFeedback(null);
-      }, 1200);
-    } else {
-      setFeedback({ type: 'warning', message: res.message });
+    try {
+      const res = await checkAndSetPincode(code);
+      if (res && res.serviceable) {
+        setFeedback({ type: 'success', message: res.message || 'Location verified successfully!' });
+        setTimeout(() => {
+          closeLocationModal();
+          setFeedback(null);
+        }, 1200);
+      } else {
+        setFeedback({
+          type: 'warning',
+          message: res?.message || 'Delivery availability is being verified for this location.'
+        });
+      }
+    } catch {
+      setFeedback({
+        type: 'error',
+        message: 'Unable to verify this location right now. Please try again.'
+      });
     }
   };
 
@@ -87,15 +97,23 @@ export const LocationModal: React.FC = () => {
     setFeedback(null);
     try {
       const result = await detectCurrentLocation();
-      if (result.success) {
-        setFeedback({ type: 'success', message: result.message });
+      if (result && result.success) {
+        setFeedback({ type: 'success', message: result.message || 'Location detected successfully!' });
         setTimeout(() => {
           closeLocationModal();
           setFeedback(null);
         }, 1200);
       } else {
-        setFeedback({ type: 'error', message: result.message });
+        setFeedback({
+          type: 'error',
+          message: result?.message || 'Unable to detect GPS position. Please enter pincode manually.'
+        });
       }
+    } catch {
+      setFeedback({
+        type: 'error',
+        message: 'Unable to access device location. Please enter pincode manually.'
+      });
     } finally {
       setIsGpsLoading(false);
     }
@@ -174,13 +192,12 @@ export const LocationModal: React.FC = () => {
         {/* Feedback / Verification Status */}
         {feedback && (
           <div
-            className={`p-3 rounded-xl text-xs font-medium flex items-start gap-2.5 ${
-              feedback.type === 'success'
+            className={`p-3 rounded-xl text-xs font-medium flex items-start gap-2.5 ${feedback.type === 'success'
                 ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
                 : feedback.type === 'warning'
-                ? 'bg-amber-50 text-amber-900 border border-amber-200'
-                : 'bg-rose-50 text-rose-900 border border-rose-200'
-            }`}
+                  ? 'bg-amber-50 text-amber-900 border border-amber-200'
+                  : 'bg-rose-50 text-rose-900 border border-rose-200'
+              }`}
           >
             {feedback.type === 'success' ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -258,11 +275,10 @@ export const LocationModal: React.FC = () => {
                   key={hub.code}
                   type="button"
                   onClick={() => handleVerify(hub.code)}
-                  className={`text-left p-2 rounded-xl border text-xs transition-all ${
-                    isSelected
+                  className={`text-left p-2 rounded-xl border text-xs transition-all ${isSelected
                       ? 'border-brand-blue-600 bg-brand-blue-50/70 text-brand-blue-900 shadow-sm'
                       : 'border-slate-200 hover:border-brand-blue-300 hover:bg-slate-50 text-slate-700'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-black text-slate-900">{hub.code}</span>

@@ -24,6 +24,7 @@ import {
 import { SEED_PRODUCTS, MASTER_CATEGORIES } from '@buildora/constants';
 import { api } from '../services/api';
 import { formatCurrency, calculateBulkDiscount } from '@buildora/utils';
+import { formatLocationDisplay } from '../utils';
 import { useCartStore } from '../store/useCartStore';
 import { useWishlistStore } from '../store/useWishlistStore';
 import { useCompareStore } from '../store/useCompareStore';
@@ -289,7 +290,7 @@ export const ProductDetailPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-900 flex items-center gap-1.5">
                 <Truck className="w-4 h-4 text-brand-orange-500" />
-                Delivery to {pincode} ({locality || cityName.split(',')[0]})
+                Delivery to {pincode || '560072'} ({formatLocationDisplay(locality, cityName)})
               </span>
               <button
                 type="button"

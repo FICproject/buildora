@@ -34,6 +34,7 @@ import {
   CONSTRUCTION_DEPARTMENTS
 } from '@buildora/constants';
 import { formatCurrency } from '@buildora/utils';
+import { formatLocationDisplay } from '../../utils';
 import { LocationModal } from './LocationModal';
 import { AuthModal } from './AuthModal';
 import { CartDrawer } from './CartDrawer';
@@ -60,7 +61,6 @@ export const Header: React.FC = () => {
   const { isAuthenticated, user, logout, openAuthModal } = useAuthStore();
 
   // Modals & Drawers state
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
@@ -174,12 +174,12 @@ export const Header: React.FC = () => {
                 type="button"
                 onClick={openLocationModal}
                 className="flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-slate-200 hover:border-brand-blue-400 bg-slate-50 hover:bg-brand-blue-50/50 transition-all text-left group w-fit"
-                title={`Deliver to ${pincode} - ${locality || cityName} (${isServiceable ? etaText : 'Availability being verified'})`}
+                title={`Deliver to ${pincode || '560072'} - ${locality || cityName || 'Bengaluru'} (${isServiceable ? etaText : 'Availability being verified'})`}
               >
                 <MapPin className="w-3.5 h-3.5 text-brand-orange-600 flex-shrink-0" />
                 <span className="text-[10px] text-slate-500 font-medium">Deliver to</span>
                 <span className="font-bold text-xs text-slate-800 flex items-center gap-1 truncate max-w-[140px] xl:max-w-[180px]">
-                  {pincode} ({locality ? locality.split(' ')[0] : cityName.split(',')[0]})
+                  {pincode || '560072'} ({formatLocationDisplay(locality, cityName)})
                   <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
                 </span>
                 {etaMinutes > 0 ? (
@@ -211,7 +211,7 @@ export const Header: React.FC = () => {
                   <div className="w-7 h-7 rounded-lg bg-brand-blue-900 text-white flex items-center justify-center font-black text-xs shadow-sm">
                     {user.name ? user.name.charAt(0) : 'U'}
                   </div>
-                  <span className="hidden xl:inline truncate max-w-[100px]">{user.name || user.phone}</span>
+                  <span className="hidden xl:inline truncate max-w-[100px]">{user.name ? user.name.split(' ')[0] : (user.phone || 'Account')}</span>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
                 </button>
               ) : (
@@ -222,7 +222,7 @@ export const Header: React.FC = () => {
                   title="Sign In to Account"
                 >
                   <User className="w-4 h-4 text-slate-600" />
-                  <span className="hidden xl:inline">Sign In</span>
+                  <span className="font-bold">Sign In</span>
                 </button>
               )}
 
@@ -398,11 +398,11 @@ export const Header: React.FC = () => {
                   type="button"
                   onClick={openLocationModal}
                   className="flex items-center gap-1.5 py-0.5 px-2 rounded-lg border border-slate-200 bg-slate-50 text-left text-xs w-fit"
-                  title={`Deliver to ${pincode} - ${locality || cityName}`}
+                  title={`Deliver to ${pincode || '560072'} - ${locality || cityName || 'Bengaluru'}`}
                 >
                   <MapPin className="w-3 h-3 text-brand-orange-600 flex-shrink-0" />
                   <span className="font-bold text-[11px] text-slate-800 truncate max-w-[130px]">
-                    {pincode} ({locality ? locality.split(' ')[0] : cityName.split(',')[0]})
+                    {pincode || '560072'} ({formatLocationDisplay(locality, cityName)})
                   </span>
                   <ChevronDown className="w-2.5 h-2.5 text-slate-400" />
                 </button>
@@ -559,7 +559,7 @@ export const Header: React.FC = () => {
               >
                 <div className="flex items-center gap-1.5 truncate">
                   <MapPin className="w-3.5 h-3.5 text-brand-orange-600 flex-shrink-0" />
-                  <span className="truncate">Deliver to: <strong className="text-slate-900">{pincode} ({locality ? locality.split(' ')[0] : cityName.split(',')[0]})</strong></span>
+                  <span className="truncate">Deliver to: <strong className="text-slate-900">{pincode || '560072'} ({formatLocationDisplay(locality, cityName)})</strong></span>
                 </div>
                 {etaMinutes > 0 ? (
                   <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.5 rounded-md flex-shrink-0 ml-1">
@@ -594,12 +594,12 @@ export const Header: React.FC = () => {
 
         {/* 3. DESKTOP ROW 2: HOME + 5 CONSTRUCTION DEPARTMENTS */}
         <div ref={megaMenuRef} className="bg-slate-50 border-t border-slate-200/80 px-4 sm:px-6 lg:px-8 hidden lg:block relative">
-          <div className="w-full max-w-[1680px] mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-1 text-xs font-bold text-slate-700 py-1.5 flex-wrap">
+          <div className="w-full max-w-[1680px] mx-auto flex items-center justify-center">
+            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-700 py-1.5 flex-wrap">
               {/* Home Navigation Item */}
               <Link
                 to="/"
-                className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl font-black text-xs transition-all mr-1.5 shadow-sm ${
+                className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl font-black text-xs transition-all mr-1 shadow-sm ${
                   location.pathname === '/'
                     ? 'bg-brand-blue-900 text-white'
                     : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70 bg-white border border-slate-200/80'
@@ -611,10 +611,11 @@ export const Header: React.FC = () => {
               </Link>
 
               {/* 5 Main Construction Departments */}
-              {CONSTRUCTION_DEPARTMENTS.map((dept) => {
+              {CONSTRUCTION_DEPARTMENTS.map((dept, deptIdx) => {
                 const Icon = DEPARTMENT_ICONS[dept.slug] || Building2;
                 const isOpen = activeDepartment === dept.slug;
                 const deptCats = getDepartmentCategories(dept.slug);
+                const isRightAligned = deptIdx >= 2;
 
                 return (
                   <div
@@ -642,7 +643,9 @@ export const Header: React.FC = () => {
                     {isOpen && (
                       <div
                         onMouseLeave={() => setActiveDepartment(null)}
-                        className="absolute top-full left-0 mt-1 w-[680px] bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 z-50 animate-in fade-in zoom-in-95 duration-150"
+                        className={`absolute top-full mt-1 w-[680px] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 z-50 animate-in fade-in zoom-in-95 duration-150 ${
+                          isRightAligned ? 'right-0' : 'left-0'
+                        }`}
                       >
                         <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
                           <div>
@@ -864,7 +867,7 @@ export const Header: React.FC = () => {
 
       {/* Persistent Modals */}
       <LocationModal />
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <AuthModal />
       <CartDrawer isOpen={isCartDrawerOpen} onClose={() => setIsCartDrawerOpen(false)} />
     </>
   );
