@@ -18,9 +18,12 @@ export interface LocationState {
   isLoading: boolean;
   lastVerifiedAt: string;
 
+  selectedAddressId?: string | null;
+  selectedAddressLabel?: string | null;
+
   checkAndSetPincode: (code: string) => Promise<{ serviceable: boolean; message: string; locality: string; etaMinutes: number }>;
   detectCurrentLocation: () => Promise<{ success: boolean; message: string }>;
-  selectSavedAddress: (address: { pincode: string; locality?: string; city?: string }) => Promise<void>;
+  selectSavedAddress: (address: { id?: string; label?: string; pincode: string; locality?: string; city?: string }) => Promise<void>;
   openLocationModal: () => void;
   closeLocationModal: () => void;
 }
@@ -38,6 +41,8 @@ export const useLocationStore = create<LocationState>()(
       warehouse: 'WH-BLR-04',
       warehouseName: 'Bengaluru West Hub (Nagarabhavi / Peenya)',
       dispatchStatus: 'ACTIVE_DISPATCH',
+      selectedAddressId: null,
+      selectedAddressLabel: null,
       isModalOpen: false,
       isLoading: false,
       lastVerifiedAt: new Date().toISOString(),
@@ -278,7 +283,11 @@ export const useLocationStore = create<LocationState>()(
       selectSavedAddress: async (address) => {
         if (address.pincode) {
           await get().checkAndSetPincode(address.pincode);
-          set({ isModalOpen: false });
+          set({
+            selectedAddressId: address.id || null,
+            selectedAddressLabel: address.label || address.locality || null,
+            isModalOpen: false
+          });
         }
       },
 

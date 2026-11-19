@@ -56,7 +56,7 @@ export const Header: React.FC = () => {
   // Stores
   const { getSummary } = useCartStore();
   const summary = getSummary();
-  const { pincode, locality, cityName, isServiceable, etaMinutes, etaText, openLocationModal } = useLocationStore();
+  const { pincode, locality, cityName, isServiceable, etaMinutes, etaText, selectedAddressLabel, openLocationModal } = useLocationStore();
   const { items: wishlistItems } = useWishlistStore();
   const { isAuthenticated, user, logout, openAuthModal } = useAuthStore();
 
@@ -153,15 +153,15 @@ export const Header: React.FC = () => {
               STRICT ORDER: [Logo + Location Underneath] → Search → My Account → Wishlist → Notifications → Wallet → Cart
           */}
           <div className="hidden lg:flex items-center justify-between gap-3 xl:gap-6">
-            {/* 1. Brand Logo + Deliver-To Location Stacked Underneath */}
-            <div className="flex flex-col gap-1.5 flex-shrink-0">
-              <Link to="/" className="flex items-center gap-2.5 group">
-                <div className="w-9 h-9 rounded-xl bg-brand-blue-900 flex items-center justify-center text-white font-extrabold text-xl shadow-md group-hover:bg-brand-orange-500 transition-colors">
+            {/* 1. Brand Logo + Deliver-To Location Block (HomeRun Reference Inspired) */}
+            <div className="flex items-center gap-3 xl:gap-4 flex-shrink-0">
+              <Link to="/" className="flex items-center gap-2.5 group" title="BUILDORA 60 - Build Smart. Deliver Fast.">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue-900 flex items-center justify-center text-white font-black text-xl shadow-md group-hover:bg-brand-orange-500 transition-colors">
                   B
                 </div>
                 <div className="flex flex-col">
                   <span className="font-black text-xl tracking-tight text-slate-900 leading-none">
-                    BUILDORA<span className="text-brand-orange-500 ml-0.5">60</span>
+                    BUILDORA <span className="text-brand-orange-500">60</span>
                   </span>
                   <span className="text-[8.5px] font-extrabold text-brand-blue-800 tracking-wider uppercase mt-0.5">
                     BUILD SMART. DELIVER FAST.
@@ -169,28 +169,34 @@ export const Header: React.FC = () => {
                 </div>
               </Link>
 
-              {/* Deliver-To Location Pill directly under BUILDORA Logo */}
+              {/* Compact Clickable Delivery Location Block */}
               <button
                 type="button"
                 onClick={openLocationModal}
-                className="flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-slate-200 hover:border-brand-blue-400 bg-slate-50 hover:bg-brand-blue-50/50 transition-all text-left group w-fit"
-                title={`Deliver to ${pincode || '560072'} - ${locality || cityName || 'Bengaluru'} (${isServiceable ? etaText : 'Availability being verified'})`}
+                className="flex items-center gap-2 py-1.5 px-3 rounded-xl border border-slate-200/90 hover:border-brand-blue-500 bg-slate-50/90 hover:bg-brand-blue-50/50 transition-all text-left group cursor-pointer shadow-xs max-w-[210px] xl:max-w-[240px]"
+                title="Click to check pincode or select delivery site"
               >
-                <MapPin className="w-3.5 h-3.5 text-brand-orange-600 flex-shrink-0" />
-                <span className="text-[10px] text-slate-500 font-medium">Deliver to</span>
-                <span className="font-bold text-xs text-slate-800 flex items-center gap-1 truncate max-w-[140px] xl:max-w-[180px]">
-                  {pincode || '560072'} ({formatLocationDisplay(locality, cityName)})
-                  <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                </span>
-                {etaMinutes > 0 ? (
-                  <span className="ml-1 bg-emerald-100 text-emerald-800 text-[9.5px] font-black px-1.5 py-0.5 rounded-md flex-shrink-0">
-                    {etaMinutes}m
+                <div className="w-7 h-7 rounded-lg bg-brand-orange-500/10 text-brand-orange-600 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                  <MapPin className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1 leading-none">
+                    {etaMinutes > 0 ? (
+                      <span className="text-xs font-black text-emerald-700 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        {etaMinutes} mins ETA
+                      </span>
+                    ) : (
+                      <span className="text-xs font-black text-slate-800">
+                        Delivery Site
+                      </span>
+                    )}
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-brand-blue-600 transition-colors flex-shrink-0" />
+                  </div>
+                  <span className="text-[10px] text-slate-600 font-semibold truncate mt-0.5">
+                    {pincode ? `${pincode} · ${formatLocationDisplay(locality, cityName, selectedAddressLabel)}` : 'Enter delivery location'}
                   </span>
-                ) : (
-                  <span className="ml-1 bg-amber-100 text-amber-800 text-[9px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0">
-                    Verifying
-                  </span>
-                )}
+                </div>
               </button>
             </div>
 
@@ -377,33 +383,38 @@ export const Header: React.FC = () => {
           {/* B. TABLET LAYOUT (md: 768px - 1023px) */}
           <div className="hidden md:flex lg:hidden flex-col gap-2.5">
             <div className="flex items-center justify-between gap-3">
-              {/* Logo & Location Stacked Underneath */}
-              <div className="flex flex-col gap-1 flex-shrink-0">
+              {/* Logo & Location Block */}
+              <div className="flex items-center gap-3 flex-shrink-0">
                 <Link to="/" className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-brand-blue-900 flex items-center justify-center text-white font-black text-lg shadow-md">
                     B
                   </div>
                   <div className="flex flex-col">
                     <span className="font-black text-lg tracking-tight text-slate-900 leading-none">
-                      BUILDORA<span className="text-brand-orange-500 ml-0.5">60</span>
+                      BUILDORA <span className="text-brand-orange-500">60</span>
                     </span>
-                    <span className="text-[8px] font-extrabold text-brand-blue-800 tracking-wider uppercase mt-0.5">
+                    <span className="text-[7.5px] font-extrabold text-brand-blue-800 tracking-wider uppercase mt-0.5">
                       BUILD SMART. DELIVER FAST.
                     </span>
                   </div>
                 </Link>
 
-                {/* Location Pill under Buildora */}
+                {/* Location Pill */}
                 <button
                   type="button"
                   onClick={openLocationModal}
-                  className="flex items-center gap-1.5 py-0.5 px-2 rounded-lg border border-slate-200 bg-slate-50 text-left text-xs w-fit"
+                  className="flex items-center gap-1.5 py-1 px-2.5 rounded-xl border border-slate-200 bg-slate-50 text-left text-xs cursor-pointer hover:border-brand-blue-400"
                   title={`Deliver to ${pincode || '560072'} - ${locality || cityName || 'Bengaluru'}`}
                 >
                   <MapPin className="w-3 h-3 text-brand-orange-600 flex-shrink-0" />
-                  <span className="font-bold text-[11px] text-slate-800 truncate max-w-[130px]">
-                    {pincode || '560072'} ({formatLocationDisplay(locality, cityName)})
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="font-black text-[11px] text-emerald-700 leading-none">
+                      {etaMinutes > 0 ? `${etaMinutes}m ETA` : 'Deliver to'}
+                    </span>
+                    <span className="text-[10px] text-slate-700 font-semibold truncate max-w-[120px] mt-0.5">
+                      {pincode || '560072'} &bull; {formatLocationDisplay(locality, cityName, selectedAddressLabel)}
+                    </span>
+                  </div>
                   <ChevronDown className="w-2.5 h-2.5 text-slate-400" />
                 </button>
               </div>
@@ -504,7 +515,7 @@ export const Header: React.FC = () => {
                     B
                   </div>
                   <span className="font-black text-base tracking-tight text-slate-900">
-                    BUILDORA<span className="text-brand-orange-500">60</span>
+                    BUILDORA <span className="text-brand-orange-500">60</span>
                   </span>
                 </Link>
               </div>
@@ -555,18 +566,30 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={openLocationModal}
-                className="flex-1 flex items-center justify-between py-1.5 px-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 min-h-[36px]"
+                className="flex-1 flex items-center justify-between py-1.5 px-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 min-h-[38px] shadow-xs active:bg-slate-100"
               >
-                <div className="flex items-center gap-1.5 truncate">
-                  <MapPin className="w-3.5 h-3.5 text-brand-orange-600 flex-shrink-0" />
-                  <span className="truncate">Deliver to: <strong className="text-slate-900">{pincode || '560072'} ({formatLocationDisplay(locality, cityName)})</strong></span>
+                <div className="flex items-center gap-2 truncate">
+                  <div className="w-5 h-5 rounded-md bg-brand-orange-500/10 text-brand-orange-600 flex items-center justify-center flex-shrink-0">
+                    <MapPin className="w-3 h-3" />
+                  </div>
+                  <div className="flex flex-col text-left truncate leading-tight">
+                    <div className="flex items-center gap-1 font-black text-[11px] text-slate-900">
+                      <span>{pincode || '560072'}</span>
+                      <span className="text-slate-400 font-normal">&bull;</span>
+                      <span className="truncate font-bold text-slate-700">
+                        {formatLocationDisplay(locality, cityName, selectedAddressLabel)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
+
                 {etaMinutes > 0 ? (
-                  <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.5 rounded-md flex-shrink-0 ml-1">
+                  <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.5 rounded-md flex-shrink-0 ml-1 flex items-center gap-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     {etaMinutes}m ETA
                   </span>
                 ) : (
-                  <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                 )}
               </button>
 

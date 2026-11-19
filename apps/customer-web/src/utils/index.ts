@@ -6,7 +6,11 @@
  * Safely extracts a concise area or locality label for display in headers and badges.
  * Never throws an error even if inputs are undefined, null, non-strings, or malformed.
  */
-export function formatLocationDisplay(locality?: unknown, cityName?: unknown): string {
+export function formatLocationDisplay(locality?: unknown, cityName?: unknown, label?: unknown): string {
+  if (typeof label === 'string' && label.trim().length > 0) {
+    return label.trim();
+  }
+
   if (typeof locality === 'string' && locality.trim().length > 0) {
     const clean = locality.trim();
     // Return first segment before slash, comma, or parenthesis
