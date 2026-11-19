@@ -1,0 +1,15 @@
+{
+  "name": "@buildora/workers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BUILDORA 60 - Background Jobs, Message Queues & Event Handlers",
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0",
+    "typescript": "^5.4.0"
+  }
+}

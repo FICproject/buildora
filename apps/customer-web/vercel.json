@@ -1,0 +1,11 @@
+{
+  "framework": "vite",
+  "buildCommand": "pnpm --filter @buildora/customer-web build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

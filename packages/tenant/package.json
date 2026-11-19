@@ -1,0 +1,15 @@
+{
+  "name": "@buildora/tenant",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "description": "Multi-tenant context resolution, tenant metadata, and domain mapping definitions.",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src --ext ts,tsx"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

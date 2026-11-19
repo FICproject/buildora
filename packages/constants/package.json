@@ -1,0 +1,18 @@
+{
+  "name": "@buildora/constants",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "description": "System-wide constants, status enumerations, unit definitions, and error codes.",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src --ext ts,tsx"
+  },
+  "dependencies": {
+    "@buildora/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

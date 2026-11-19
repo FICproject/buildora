@@ -1,0 +1,599 @@
+// Master constants for BUILDORA 60
+
+export const APP_NAME = 'BUILDORA 60';
+export const APP_TAGLINE = 'BUILD SMART. DELIVER FAST.';
+export const SUPPORT_EMAIL = 'support@buildora.com';
+export const SUPPORT_PHONE = '1800-60-BUILD (1800-60-28453)';
+
+// The 28 Master Categories required for Buildora 60
+export const MASTER_CATEGORIES = [
+  {
+    id: 'cat-1',
+    name: 'Cement & Concrete',
+    slug: 'cement-concrete',
+    icon: 'Package',
+    image: 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=600&q=80',
+    description: 'High-grade OPC 53, PPC, white cement, ready-mix concrete, and aggregates.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-1-1', name: 'OPC 53 Grade Cement', slug: 'opc-53-grade', categorySlug: 'cement-concrete' },
+      { id: 'sub-1-2', name: 'PPC Portland Pozzolana', slug: 'ppc-cement', categorySlug: 'cement-concrete' },
+      { id: 'sub-1-3', name: 'White Cement & Putty', slug: 'white-cement-putty', categorySlug: 'cement-concrete' },
+      { id: 'sub-1-4', name: 'Ready-Mix Concrete Mortar', slug: 'ready-mix-mortar', categorySlug: 'cement-concrete' }
+    ]
+  },
+  {
+    id: 'cat-2',
+    name: 'Tiling & Tile Adhesives',
+    slug: 'tiling-tile-adhesives',
+    icon: 'Grid',
+    image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
+    description: 'Vitrified tiles, ceramic wall tiles, heavy-duty tile adhesives, and epoxy grouts.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-2-1', name: 'Vitrified Floor Tiles', slug: 'vitrified-floor-tiles', categorySlug: 'tiling-tile-adhesives' },
+      { id: 'sub-2-2', name: 'Ceramic Wall Tiles', slug: 'ceramic-wall-tiles', categorySlug: 'tiling-tile-adhesives' },
+      { id: 'sub-2-3', name: 'Polymer Tile Adhesives', slug: 'tile-adhesives', categorySlug: 'tiling-tile-adhesives' },
+      { id: 'sub-2-4', name: 'Epoxy Tile Grouts & Spacers', slug: 'epoxy-grouts', categorySlug: 'tiling-tile-adhesives' }
+    ]
+  },
+  {
+    id: 'cat-3',
+    name: 'Plywood, MDF & HDHMR',
+    slug: 'plywood-mdf-hdhmr',
+    icon: 'Layers',
+    image: 'https://images.unsplash.com/photo-1546484396-fb3fc6f95f98?auto=format&fit=crop&w=600&q=80',
+    description: 'Calibrated BWP waterproof marine plywood, BWR, HDHMR moisture-resistant boards, and MDF.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-3-1', name: 'BWP Marine Grade Plywood', slug: 'bwp-marine-plywood', categorySlug: 'plywood-mdf-hdhmr' },
+      { id: 'sub-3-2', name: 'BWR Commercial Plywood', slug: 'bwr-commercial-plywood', categorySlug: 'plywood-mdf-hdhmr' },
+      { id: 'sub-3-3', name: 'HDHMR Moisture Proof Boards', slug: 'hdhmr-boards', categorySlug: 'plywood-mdf-hdhmr' },
+      { id: 'sub-3-4', name: 'Interior MDF Sheets', slug: 'interior-mdf-sheets', categorySlug: 'plywood-mdf-hdhmr' }
+    ]
+  },
+  {
+    id: 'cat-4',
+    name: 'Adhesives',
+    slug: 'adhesives',
+    icon: 'Flame',
+    image: 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=600&q=80',
+    description: 'Woodworking adhesives, instant cyanoacrylate glues, PU sealants, and contact adhesives.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-4-1', name: 'Synthetic Resin Wood Adhesives', slug: 'wood-adhesives', categorySlug: 'adhesives' },
+      { id: 'sub-4-2', name: 'Fast Setting Marine Adhesives', slug: 'fast-setting-marine', categorySlug: 'adhesives' },
+      { id: 'sub-4-3', name: 'Contact Rubber Adhesives', slug: 'contact-rubber-adhesives', categorySlug: 'adhesives' }
+    ]
+  },
+  {
+    id: 'cat-5',
+    name: 'Waterproofing',
+    slug: 'waterproofing',
+    icon: 'Droplets',
+    image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80',
+    description: 'Integral liquid waterproofing compounds, acrylic polymer coatings, and terrace membrane systems.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-5-1', name: 'Integral Cement Waterproofing', slug: 'integral-cement-waterproofing', categorySlug: 'waterproofing' },
+      { id: 'sub-5-2', name: 'Terrace & Roof Coatings', slug: 'terrace-roof-coatings', categorySlug: 'waterproofing' },
+      { id: 'sub-5-3', name: 'Bathroom & Sump Polymers', slug: 'bathroom-sump-polymers', categorySlug: 'waterproofing' }
+    ]
+  },
+  {
+    id: 'cat-6',
+    name: 'Painting & Finishes',
+    slug: 'painting-finishes',
+    icon: 'Paintbrush',
+    image: 'https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=600&q=80',
+    description: 'Interior emulsions, exterior weather-guard coatings, enamel paints, primers, and rollers.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-6-1', name: 'Interior Emulsion Paints', slug: 'interior-emulsions', categorySlug: 'painting-finishes' },
+      { id: 'sub-6-2', name: 'Exterior Weatherproof Paints', slug: 'exterior-weatherproof', categorySlug: 'painting-finishes' },
+      { id: 'sub-6-3', name: 'Wall Primers & Putty', slug: 'primers-putty', categorySlug: 'painting-finishes' },
+      { id: 'sub-6-4', name: 'Brushes, Rollers & Trays', slug: 'painting-tools', categorySlug: 'painting-finishes' }
+    ]
+  },
+  {
+    id: 'cat-7',
+    name: 'Hinges, Channels & Handles',
+    slug: 'hinges-channels-handles',
+    icon: 'Cpu',
+    image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80',
+    description: 'Soft-close hydraulic auto hinges, telescopic drawer slides, and architectural cabinet handles.',
+    subcategories: [
+      { id: 'sub-7-1', name: 'Soft-Close Auto Hinges (SS 304)', slug: 'auto-hinges', categorySlug: 'hinges-channels-handles' },
+      { id: 'sub-7-2', name: 'Telescopic Drawer Channels', slug: 'telescopic-channels', categorySlug: 'hinges-channels-handles' },
+      { id: 'sub-7-3', name: 'Cabinet Knobs & Pull Handles', slug: 'cabinet-handles', categorySlug: 'hinges-channels-handles' }
+    ]
+  },
+  {
+    id: 'cat-8',
+    name: 'Kitchen Systems & Accessories',
+    slug: 'kitchen-systems-accessories',
+    icon: 'Box',
+    image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=600&q=80',
+    description: 'Modular SS 304 wire baskets, tandem boxes, corner carousels, and pantry pull-outs.',
+    subcategories: [
+      { id: 'sub-8-1', name: 'SS 304 Modular Wire Baskets', slug: 'wire-baskets', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-8-2', name: 'Soft-Close Tandem Drawer Boxes', slug: 'tandem-boxes', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-8-3', name: 'Corner Carousel Units', slug: 'corner-carousels', categorySlug: 'kitchen-systems-accessories' }
+    ]
+  },
+  {
+    id: 'cat-9',
+    name: 'Wardrobe & Bed Fittings',
+    slug: 'wardrobe-bed-fittings',
+    icon: 'Shield',
+    image: 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=600&q=80',
+    description: 'Sliding wardrobe systems, hydraulic bed lifters, cloth hanging rods, and tie racks.',
+    subcategories: [
+      { id: 'sub-9-1', name: 'Heavy Duty Bed Lift-Up Mechanisms', slug: 'bed-lift-ups', categorySlug: 'wardrobe-bed-fittings' },
+      { id: 'sub-9-2', name: 'Sliding Wardrobe Track Systems', slug: 'sliding-tracks', categorySlug: 'wardrobe-bed-fittings' },
+      { id: 'sub-9-3', name: 'Wardrobe Organizers & Rods', slug: 'wardrobe-rods', categorySlug: 'wardrobe-bed-fittings' }
+    ]
+  },
+  {
+    id: 'cat-10',
+    name: 'Door Locks & Hardware',
+    slug: 'door-locks-hardware',
+    icon: 'Key',
+    image: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&w=600&q=80',
+    description: 'Mortise lock handles, computerized cylinder door locks, tower bolts, and hydraulic door closers.',
+    subcategories: [
+      { id: 'sub-10-1', name: 'Main Door Mortise Handle Sets', slug: 'mortise-locks', categorySlug: 'door-locks-hardware' },
+      { id: 'sub-10-2', name: 'Computerized Cylindrical Locks', slug: 'cylindrical-locks', categorySlug: 'door-locks-hardware' },
+      { id: 'sub-10-3', name: 'Hydraulic Overhead Door Closers', slug: 'door-closers', categorySlug: 'door-locks-hardware' }
+    ]
+  },
+  {
+    id: 'cat-11',
+    name: 'Wires, MCB & Distribution Boards',
+    slug: 'wires-mcb-distribution-boards',
+    icon: 'Zap',
+    image: 'https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?auto=format&fit=crop&w=600&q=80',
+    description: 'FR/FRLS copper flexible wires, miniature circuit breakers (MCBs), RCCBs, and metallic DB boxes.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-11-1', name: 'FRLS Insulated Copper Wires (90m)', slug: 'frls-copper-wires', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-11-2', name: 'Single & Double Pole MCBs', slug: 'mcbs', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-11-3', name: 'Distribution Boards & Enclosures', slug: 'distribution-boards', categorySlug: 'wires-mcb-distribution-boards' }
+    ]
+  },
+  {
+    id: 'cat-12',
+    name: 'Switches & Sockets',
+    slug: 'switches-sockets',
+    icon: 'ToggleRight',
+    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
+    description: 'Modular switches, power sockets, designer glass cover plates, and USB charger modules.',
+    subcategories: [
+      { id: 'sub-12-1', name: 'Modular Switches (6A/16A)', slug: 'modular-switches', categorySlug: 'switches-sockets' },
+      { id: 'sub-12-2', name: 'Power Sockets & Shuttered Plugs', slug: 'power-sockets', categorySlug: 'switches-sockets' },
+      { id: 'sub-12-3', name: 'Designer Modular Cover Plates', slug: 'cover-plates', categorySlug: 'switches-sockets' }
+    ]
+  },
+  {
+    id: 'cat-13',
+    name: 'Electrical Conduits',
+    slug: 'electrical-conduits',
+    icon: 'Columns',
+    image: 'https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?auto=format&fit=crop&w=600&q=80',
+    description: 'Medium and heavy mechanical stress PVC conduit pipes, circular junction boxes, and bends.',
+    subcategories: [
+      { id: 'sub-13-1', name: 'Rigid PVC Electrical Conduits (20mm/25mm)', slug: 'pvc-conduits', categorySlug: 'electrical-conduits' },
+      { id: 'sub-13-2', name: 'Conduit Bends & Deep Junction Boxes', slug: 'conduit-accessories', categorySlug: 'electrical-conduits' }
+    ]
+  },
+  {
+    id: 'cat-14',
+    name: 'Lighting',
+    slug: 'lighting',
+    icon: 'Sun',
+    image: 'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=600&q=80',
+    description: 'Recessed LED downlights, COB spotlights, LED batten tube lights, and cove strip lighting.',
+    subcategories: [
+      { id: 'sub-14-1', name: 'Slim LED Recessed Downlights', slug: 'recessed-downlights', categorySlug: 'lighting' },
+      { id: 'sub-14-2', name: 'COB Directional Spotlights', slug: 'cob-spotlights', categorySlug: 'lighting' },
+      { id: 'sub-14-3', name: 'LED Batten Surface Lights', slug: 'led-battens', categorySlug: 'lighting' }
+    ]
+  },
+  {
+    id: 'cat-15',
+    name: 'Ceiling Fans & Exhaust',
+    slug: 'ceiling-fans-exhaust',
+    icon: 'Wind',
+    image: 'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?auto=format&fit=crop&w=600&q=80',
+    description: 'Energy-saving BLDC ceiling fans, heavy-duty ventilation fans, and silent exhaust systems.',
+    subcategories: [
+      { id: 'sub-15-1', name: 'BLDC Energy Saving Ceiling Fans (1200mm)', slug: 'bldc-ceiling-fans', categorySlug: 'ceiling-fans-exhaust' },
+      { id: 'sub-15-2', name: 'Bathroom & Kitchen High-Speed Exhaust Fans', slug: 'exhaust-fans', categorySlug: 'ceiling-fans-exhaust' }
+    ]
+  },
+  {
+    id: 'cat-16',
+    name: 'CPVC Pipes & Overhead Tanks',
+    slug: 'cpvc-pipes-overhead-tanks',
+    icon: 'Compass',
+    image: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=600&q=80',
+    description: 'Hot & cold potable water CPVC pipes, fittings, ball valves, solvent cements, and storage tanks.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-16-1', name: 'SDR 11 CPVC Hot & Cold Water Pipes', slug: 'cpvc-pipes', categorySlug: 'cpvc-pipes-overhead-tanks' },
+      { id: 'sub-16-2', name: 'Brass Elbows, Tees & Couplers', slug: 'cpvc-brass-fittings', categorySlug: 'cpvc-pipes-overhead-tanks' },
+      { id: 'sub-16-3', name: 'Heavy Duty CPVC Solvent Cement', slug: 'cpvc-solvent', categorySlug: 'cpvc-pipes-overhead-tanks' }
+    ]
+  },
+  {
+    id: 'cat-17',
+    name: 'Sanitary & Bath Fittings',
+    slug: 'sanitary-bath-fittings',
+    icon: 'Anchor',
+    image: 'https://images.unsplash.com/photo-1584622781564-1d987f7333c1?auto=format&fit=crop&w=600&q=80',
+    description: 'Ceramic single-piece water closets, wall-hung toilets, brass chrome faucets, and overhead showers.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-17-1', name: 'Single Piece Ceramic Water Closets', slug: 'water-closets', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-17-2', name: 'Quarter Turn Brass Chrome Basin Mixers', slug: 'basin-mixers', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-17-3', name: 'Overhead Rain Showers & Arms', slug: 'rain-showers', categorySlug: 'sanitary-bath-fittings' }
+    ]
+  },
+  {
+    id: 'cat-18',
+    name: 'Kitchen Sinks & Faucets',
+    slug: 'kitchen-sinks-faucets',
+    icon: 'Coffee',
+    image: 'https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&w=600&q=80',
+    description: 'Stainless steel grade 304 handmade sinks, quartz granite composite sinks, and flexible spout mixers.',
+    subcategories: [
+      { id: 'sub-18-1', name: 'SS 304 Handmade Single Bowl Sinks', slug: 'ss-kitchen-sinks', categorySlug: 'kitchen-sinks-faucets' },
+      { id: 'sub-18-2', name: 'Flexible Pull-Out Kitchen Sink Faucets', slug: 'kitchen-faucets', categorySlug: 'kitchen-sinks-faucets' }
+    ]
+  },
+  {
+    id: 'cat-19',
+    name: 'Water Storage Tanks',
+    slug: 'water-storage-tanks',
+    icon: 'Database',
+    image: 'https://images.unsplash.com/photo-1521747116042-5a810fda9664?auto=format&fit=crop&w=600&q=80',
+    description: 'Triple and 4-layer UV stabilized anti-bacterial overhead water storage tanks.',
+    subcategories: [
+      { id: 'sub-19-1', name: '1000L 4-Layer Anti-Bacterial Tanks', slug: '1000l-tanks', categorySlug: 'water-storage-tanks' },
+      { id: 'sub-19-2', name: '500L Multi-Layer Overhead Tanks', slug: '500l-tanks', categorySlug: 'water-storage-tanks' }
+    ]
+  },
+  {
+    id: 'cat-20',
+    name: 'Power Tools & Accessories',
+    slug: 'power-tools-accessories',
+    icon: 'Wrench',
+    image: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=600&q=80',
+    description: 'Heavy rotary hammer drills, 4-inch angle grinders, marble tile cutters, and drill bit sets.',
+    featured: true,
+    subcategories: [
+      { id: 'sub-20-1', name: 'Rotary Hammer Drills (800W)', slug: 'rotary-hammers', categorySlug: 'power-tools-accessories' },
+      { id: 'sub-20-2', name: 'Heavy Duty 4-Inch Angle Grinders', slug: 'angle-grinders', categorySlug: 'power-tools-accessories' },
+      { id: 'sub-20-3', name: 'Diamond Marble Cutting Blades', slug: 'cutting-blades', categorySlug: 'power-tools-accessories' }
+    ]
+  },
+  {
+    id: 'cat-21',
+    name: 'General Hardware & Tools',
+    slug: 'general-hardware-tools',
+    icon: 'Tool',
+    image: 'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=600&q=80',
+    description: 'Steel measuring tapes, spirit levels, claw hammers, screwdrivers, pliers, and drywall screws.',
+    subcategories: [
+      { id: 'sub-21-1', name: 'Measuring Tapes (5m/30m) & Spirit Levels', slug: 'measuring-tools', categorySlug: 'general-hardware-tools' },
+      { id: 'sub-21-2', name: 'Hardened Hand Tools & Hammer Sets', slug: 'hand-tools', categorySlug: 'general-hardware-tools' },
+      { id: 'sub-21-3', name: 'Fasteners, Screws & Anchor Bolts', slug: 'fasteners-screws', categorySlug: 'general-hardware-tools' }
+    ]
+  },
+  {
+    id: 'cat-22',
+    name: 'CCTV & Networking',
+    slug: 'cctv-networking',
+    icon: 'Camera',
+    image: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?auto=format&fit=crop&w=600&q=80',
+    description: 'High-definition IP surveillance cameras, NVRs, CAT6 networking cables, and server patch panels.',
+    subcategories: [
+      { id: 'sub-22-1', name: 'HD Outdoor IP Bullet & Dome Cameras', slug: 'ip-cameras', categorySlug: 'cctv-networking' },
+      { id: 'sub-22-2', name: 'CAT6 Pure Copper Ethernet Cables (305m)', slug: 'cat6-cables', categorySlug: 'cctv-networking' }
+    ]
+  },
+  {
+    id: 'cat-23',
+    name: 'Home Appliances & Power Backup',
+    slug: 'home-appliances-power-backup',
+    icon: 'BatteryCharging',
+    image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80',
+    description: 'Pure sine wave home inverters, tubular power backup batteries, and digital water geysers.',
+    subcategories: [
+      { id: 'sub-23-1', name: 'Pure Sine Wave Inverters (1100VA)', slug: 'inverters', categorySlug: 'home-appliances-power-backup' },
+      { id: 'sub-23-2', name: 'Storage Electric Water Geysers (25L)', slug: 'water-geysers', categorySlug: 'home-appliances-power-backup' }
+    ]
+  },
+  {
+    id: 'cat-24',
+    name: 'Safety & Workwear',
+    slug: 'safety-workwear',
+    icon: 'LifeBuoy',
+    image: 'https://images.unsplash.com/photo-1578873375969-d65275e89647?auto=format&fit=crop&w=600&q=80',
+    description: 'ISI certified construction helmets, steel-toe safety shoes, high-visibility reflective jackets, and gloves.',
+    subcategories: [
+      { id: 'sub-24-1', name: 'Steel-Toe Protective Safety Shoes', slug: 'safety-shoes', categorySlug: 'safety-workwear' },
+      { id: 'sub-24-2', name: 'Industrial Hard Hats & Helmets', slug: 'safety-helmets', categorySlug: 'safety-workwear' },
+      { id: 'sub-24-3', name: 'Reflective Safety Vests & Eyewear', slug: 'safety-vests', categorySlug: 'safety-workwear' }
+    ]
+  },
+  {
+    id: 'cat-25',
+    name: 'Glass Door Hardware',
+    slug: 'glass-door-hardware',
+    icon: 'Maximize',
+    image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80',
+    description: 'Hydraulic floor springs for frameless glass doors, patch fittings, and D-pull glass handles.',
+    subcategories: [
+      { id: 'sub-25-1', name: 'Heavy Duty Hydraulic Floor Springs', slug: 'floor-springs', categorySlug: 'glass-door-hardware' },
+      { id: 'sub-25-2', name: 'Stainless Steel Top & Bottom Patch Fittings', slug: 'patch-fittings', categorySlug: 'glass-door-hardware' }
+    ]
+  },
+  {
+    id: 'cat-26',
+    name: 'Welding Consumables',
+    slug: 'welding-consumables',
+    icon: 'Crosshair',
+    image: 'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?auto=format&fit=crop&w=600&q=80',
+    description: 'General purpose mild steel welding electrodes (E6013), cutting wheels, and welding goggles.',
+    subcategories: [
+      { id: 'sub-26-1', name: 'Mild Steel Welding Electrodes (3.15mm)', slug: 'welding-electrodes', categorySlug: 'welding-consumables' },
+      { id: 'sub-26-2', name: 'Industrial Abrasive Cutting Discs', slug: 'cutting-discs', categorySlug: 'welding-consumables' }
+    ]
+  },
+  {
+    id: 'cat-27',
+    name: 'Bathroom Renovation Materials',
+    slug: 'bathroom-renovation-materials',
+    icon: 'Feather',
+    image: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=600&q=80',
+    description: 'Shower glass partition channels, concealed cistern flushing tanks, and anti-cockroach floor drains.',
+    subcategories: [
+      { id: 'sub-27-1', name: 'Concealed Dual-Flush Water Cisterns', slug: 'concealed-cisterns', categorySlug: 'bathroom-renovation-materials' },
+      { id: 'sub-27-2', name: 'Stainless Steel Linear Floor Drain Channels', slug: 'floor-drains', categorySlug: 'bathroom-renovation-materials' }
+    ]
+  },
+  {
+    id: 'cat-28',
+    name: 'Ceiling & Flooring',
+    slug: 'ceiling-flooring',
+    icon: 'Layout',
+    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80',
+    description: 'Gypsum false ceiling boards, GI perimeter channels, wooden laminate flooring, and underlays.',
+    subcategories: [
+      { id: 'sub-28-1', name: 'Tapered Edge Gypsum Plaster Boards', slug: 'gypsum-boards', categorySlug: 'ceiling-flooring' },
+      { id: 'sub-28-2', name: 'Galvanized GI Ceiling Framework Channels', slug: 'ceiling-channels', categorySlug: 'ceiling-flooring' },
+      { id: 'sub-28-3', name: 'AC4 Grade Wooden Laminate Flooring', slug: 'laminate-flooring', categorySlug: 'ceiling-flooring' }
+    ]
+  }
+];
+
+export const CONSTRUCTION_DEPARTMENTS = [
+  {
+    id: 'dept-1',
+    name: 'Civil & Interiors',
+    slug: 'civil-interiors',
+    icon: 'Building2',
+    description: 'Cement, waterproof plaster, plywood, decorative boards, paints, tiles and structural adhesives.',
+    categorySlugs: [
+      'cement-concrete',
+      'tiling-tile-adhesives',
+      'plywood-mdf-hdhmr',
+      'adhesives',
+      'waterproofing',
+      'painting-finishes',
+      'bathroom-renovation-materials',
+      'ceiling-flooring'
+    ]
+  },
+  {
+    id: 'dept-2',
+    name: 'Furniture & Architectural Hardware',
+    slug: 'furniture-hardware',
+    icon: 'Layers',
+    description: 'Concealed auto-hinges, telescopic channels, handles, mortise locks, sliding systems and glass fittings.',
+    categorySlugs: [
+      'hinges-channels-handles',
+      'kitchen-systems-accessories',
+      'wardrobe-bed-fittings',
+      'door-locks-hardware',
+      'glass-door-hardware'
+    ]
+  },
+  {
+    id: 'dept-3',
+    name: 'Electrical',
+    slug: 'electrical',
+    icon: 'Zap',
+    description: 'FRLS building wires, MCBs, distribution boards, modular switches, PVC conduits, LEDs and surveillance.',
+    categorySlugs: [
+      'wires-mcb-distribution-boards',
+      'switches-sockets',
+      'electrical-conduits',
+      'lighting',
+      'ceiling-fans-exhaust',
+      'cctv-networking'
+    ]
+  },
+  {
+    id: 'dept-4',
+    name: 'Plumbing, Sanitary & Bath',
+    slug: 'plumbing-sanitary',
+    icon: 'Compass',
+    description: 'CPVC hot & cold pipes, overhead tanks, sanitary ceramics, chrome brass faucets and handmade sinks.',
+    categorySlugs: [
+      'cpvc-pipes-overhead-tanks',
+      'sanitary-bath-fittings',
+      'kitchen-sinks-faucets',
+      'water-storage-tanks'
+    ]
+  },
+  {
+    id: 'dept-5',
+    name: 'Hardware & Appliances',
+    slug: 'hardware-appliances',
+    icon: 'Wrench',
+    description: 'Rotary hammer drills, angle grinders, site safety PPE, inverters, geysers and welding electrodes.',
+    categorySlugs: [
+      'power-tools-accessories',
+      'general-hardware-tools',
+      'home-appliances-power-backup',
+      'safety-workwear',
+      'welding-consumables'
+    ]
+  }
+];
+
+export const MASTER_BRANDS = [
+  {
+    id: 'brand-1',
+    name: 'UltraTech Cement',
+    slug: 'ultratech',
+    logo: 'https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=200&q=80',
+    description: "The Engineer's Choice - India's leading manufacturer of grey cement, ready-mix concrete, and building solutions.",
+    featured: true,
+    categories: ['cement-concrete', 'tiling-tile-adhesives']
+  },
+  {
+    id: 'brand-2',
+    name: 'Asian Paints',
+    slug: 'asian-paints',
+    logo: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=200&q=80',
+    description: 'Leading decorative coatings and finishes for interior walls, exterior facades, primers, and wood stains.',
+    featured: true,
+    categories: ['painting-finishes', 'waterproofing']
+  },
+  {
+    id: 'brand-3',
+    name: 'Astral Pipes',
+    slug: 'astral',
+    logo: 'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?auto=format&fit=crop&w=200&q=80',
+    description: 'Pioneers in CPVC plumbing systems, solvent cements, drainage pipes, and water storage solutions.',
+    featured: true,
+    categories: ['cpvc-pipes-overhead-tanks', 'sanitary-bath-fittings']
+  },
+  {
+    id: 'brand-4',
+    name: 'Havells',
+    slug: 'havells',
+    logo: 'https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?auto=format&fit=crop&w=200&q=80',
+    description: 'Top-tier electrical goods: FRLS building wires, MCBs, modular switches, and LED downlights.',
+    featured: true,
+    categories: ['wires-mcb-distribution-boards', 'switches-sockets', 'lighting', 'ceiling-fans-exhaust']
+  },
+  {
+    id: 'brand-5',
+    name: 'Pidilite (Fevicol & Dr. Fixit)',
+    slug: 'pidilite',
+    logo: 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=200&q=80',
+    description: 'Unmatched construction adhesives, waterproofing chemicals, sealants, and tile fixing polymers.',
+    featured: true,
+    categories: ['adhesives', 'waterproofing', 'tiling-tile-adhesives']
+  },
+  {
+    id: 'brand-6',
+    name: 'Greenply',
+    slug: 'greenply',
+    logo: 'https://images.unsplash.com/photo-1546484396-fb3fc6f95f98?auto=format&fit=crop&w=200&q=80',
+    description: 'Premium quality BWP marine plywood, calibrated architectural boards, and decorative veneers.',
+    featured: true,
+    categories: ['plywood-mdf-hdhmr', 'wardrobe-bed-fittings']
+  },
+  {
+    id: 'brand-7',
+    name: 'Bosch Power Tools',
+    slug: 'bosch',
+    logo: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=200&q=80',
+    description: 'German precision engineering in rotary hammer drills, angle grinders, and industrial accessories.',
+    featured: true,
+    categories: ['power-tools-accessories', 'general-hardware-tools']
+  },
+  {
+    id: 'brand-8',
+    name: 'Kajaria Ceramics',
+    slug: 'kajaria',
+    logo: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=200&q=80',
+    description: "India's No. 1 tile company with glazed vitrified floor tiles and designer ceramic wall tiles.",
+    featured: true,
+    categories: ['tiling-tile-adhesives']
+  },
+  {
+    id: 'brand-9',
+    name: 'Godrej Locks',
+    slug: 'godrej',
+    logo: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&w=200&q=80',
+    description: 'Trusted architectural locks, digital smart locks, mortise handles, and door security hardware.',
+    featured: true,
+    categories: ['door-locks-hardware', 'hinges-channels-handles']
+  },
+  {
+    id: 'brand-10',
+    name: 'Supreme Industries',
+    slug: 'supreme',
+    logo: 'https://images.unsplash.com/photo-1521747116042-5a810fda9664?auto=format&fit=crop&w=200&q=80',
+    description: 'Multi-layer anti-bacterial water storage tanks, PVC conduits, and drainage piping systems.',
+    featured: true,
+    categories: ['water-storage-tanks', 'electrical-conduits', 'cpvc-pipes-overhead-tanks']
+  }
+];
+
+export const SERVICEABLE_PINCODES: Record<string, { city: string; state: string; etaMinutes: number; warehouse: string }> = {
+  '560001': { city: 'Bengaluru Central', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01' },
+  '560002': { city: 'Bengaluru City', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01' },
+  '560034': { city: 'Koramangala, Bengaluru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02' },
+  '560038': { city: 'Indiranagar, Bengaluru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01' },
+  '560066': { city: 'Whitefield, Bengaluru', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-03' },
+  '560100': { city: 'Electronic City, Bengaluru', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02' },
+  '560102': { city: 'HSR Layout, Bengaluru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02' },
+  '560043': { city: 'Banaswadi, Bengaluru', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01' },
+  '560076': { city: 'Bannerghatta Road, Bengaluru', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02' },
+  '560092': { city: 'Sahakara Nagar, Bengaluru', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-01' },
+  '400001': { city: 'Mumbai South', state: 'Maharashtra', etaMinutes: 90, warehouse: 'WH-MUM-01' },
+  '400050': { city: 'Bandra, Mumbai', state: 'Maharashtra', etaMinutes: 90, warehouse: 'WH-MUM-01' },
+  '110001': { city: 'Connaught Place, New Delhi', state: 'Delhi', etaMinutes: 90, warehouse: 'WH-DEL-01' },
+  '600001': { city: 'Chennai North', state: 'Tamil Nadu', etaMinutes: 90, warehouse: 'WH-MAA-01' },
+  '500001': { city: 'Hyderabad Central', state: 'Telangana', etaMinutes: 90, warehouse: 'WH-HYD-01' }
+};
+
+export const AVAILABLE_COUPONS = [
+  {
+    code: 'BUILD60',
+    title: 'First Order Discount',
+    description: 'Flat ₹300 off on your first order above ₹2,500',
+    discountType: 'FIXED' as const,
+    discountValue: 300,
+    minOrderValue: 2500,
+    expiryDate: '2027-12-31'
+  },
+  {
+    code: 'CONSTRUCT10',
+    title: 'Site Special 10%',
+    description: '10% discount up to ₹1,500 for orders above ₹10,000',
+    discountType: 'PERCENTAGE' as const,
+    discountValue: 10,
+    minOrderValue: 10000,
+    maxDiscount: 1500,
+    expiryDate: '2027-12-31'
+  },
+  {
+    code: 'BULKPRO20',
+    title: 'Commercial Bulk Discount',
+    description: 'Flat ₹2,500 off on large bulk orders above ₹35,000',
+    discountType: 'FIXED' as const,
+    discountValue: 2500,
+    minOrderValue: 35000,
+    expiryDate: '2027-12-31'
+  }
+];
+
+export * from './seed-data';

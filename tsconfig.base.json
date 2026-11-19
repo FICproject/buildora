@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "strict": false,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@buildora/types": ["packages/types/src/index.ts"],
+      "@buildora/constants": ["packages/constants/src/index.ts"],
+      "@buildora/utils": ["packages/utils/src/index.ts"],
+      "@buildora/config": ["packages/config/src/index.ts"],
+      "@buildora/auth": ["packages/auth/src/index.ts"],
+      "@buildora/tenant": ["packages/tenant/src/index.ts"],
+      "@buildora/validation": ["packages/validation/src/index.ts"],
+      "@buildora/api-client": ["packages/api-client/src/index.ts"]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage"
+  ]
+}

@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.turbo/
+
+# Mobile / Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.apk
+*.aab
+*.ipa
+.generated/
+ephemeral/
+
+# Logs & Runtime
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+coverage/
+.nyc_output/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE & OS
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Terraform & Cloud
+.terraform/
+*.tfstate
+*.tfstate.backup

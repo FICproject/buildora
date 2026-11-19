@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # BUILDORA 60 NestJS Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: services/backend/api/Dockerfile
+    container_name: buildora-backend-api
+    restart: always
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - MONGODB_URI=${MONGODB_URI:-mongodb+srv://ficitproject_db_user:mongodb@cluster0.eucyu5w.mongodb.net/buildora60?retryWrites=true&w=majority}
+      - MONGODB_DATABASE=buildora60
+      - DEFAULT_TENANT_ID=tenant-buildora-blr
+      - JWT_SECRET=${JWT_SECRET:-buildora-60-jwt-production-secret-key-2026}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - buildora-network
+
+  # BUILDORA 60 Customer Web (Nginx + React Vite SPA)
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/customer-web/Dockerfile
+    container_name: buildora-customer-web
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - buildora-network
+
+networks:
+  buildora-network:
+    driver: bridge

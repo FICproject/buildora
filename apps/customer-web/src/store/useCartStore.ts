@@ -1,0 +1,184 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { CartItem, Product, ProductVariant, Coupon, DeliverySpeed } from '@buildora/types';
+import { AVAILABLE_COUPONS } from '@buildora/constants';
+import { calculateBulkDiscount, calculateCartSummary } from '@buildora/utils';
+import { api } from '../services/api';
+
+interface CartStoreState {
+  items: CartItem[];
+  coupon: Coupon | null;
+  deliverySpeed: DeliverySpeed;
+  walletBalanceToUse: number;
+  addItem: (product: Product, quantity?: number, variant?: ProductVariant) => void;
+  removeItem: (productId: string, variantId?: string) => void;
+  updateQuantity: (productId: string, quantity: number, variantId?: string) => void;
+  applyCoupon: (couponCode: string) => { success: boolean; message: string };
+  removeCoupon: () => void;
+  setDeliverySpeed: (speed: DeliverySpeed) => void;
+  setWalletBalanceToUse: (amount: number) => void;
+  clearCart: () => void;
+  getSummary: () => ReturnType<typeof calculateCartSummary>;
+  syncWithBackend: () => Promise<any>;
+}
+
+export const useCartStore = create<CartStoreState>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      coupon: null,
+      deliverySpeed: 'ASAP_60',
+      walletBalanceToUse: 0,
+
+      addItem: (product, quantity = 1, variant) => {
+        set((state) => {
+          const effectivePrice = variant ? variant.price : product.price;
+          const effectiveMrp = variant ? variant.mrp : product.mrp;
+          const variantId = variant?.id;
+          const maxStock = variant ? variant.stock : product.stockCount;
+
+          const existingIndex = state.items.findIndex(
+            (item) => item.productId === product.id && item.variantId === variantId
+          );
+
+          let updatedItems: CartItem[];
+
+          if (existingIndex > -1) {
+            const existing = state.items[existingIndex];
+            const newQty = Math.min(existing.quantity + quantity, maxStock);
+            const bulkDiscount = calculateBulkDiscount(newQty, product.bulkPricing);
+            const effectiveUnit = effectivePrice * (1 - bulkDiscount / 100);
+
+            updatedItems = [...state.items];
+            updatedItems[existingIndex] = {
+              ...existing,
+              quantity: newQty,
+              bulkDiscountPercentage: bulkDiscount,
+              effectiveUnitPrice: Math.round(effectiveUnit),
+              totalPrice: Math.round(effectiveUnit * newQty)
+            };
+          } else {
+            const initialQty = Math.min(quantity, maxStock);
+            const bulkDiscount = calculateBulkDiscount(initialQty, product.bulkPricing);
+            const effectiveUnit = effectivePrice * (1 - bulkDiscount / 100);
+
+            const newItem: CartItem = {
+              productId: product.id,
+              variantId,
+              sku: variant ? variant.sku : product.sku,
+              name: product.name + (variant ? ` (${variant.name})` : ''),
+              slug: product.slug,
+              brand: product.brand,
+              image: product.images[0] || '',
+              unit: product.unit,
+              price: effectivePrice,
+              mrp: effectiveMrp,
+              gstRate: product.gstRate,
+              quantity: initialQty,
+              bulkDiscountPercentage: bulkDiscount,
+              effectiveUnitPrice: Math.round(effectiveUnit),
+              totalPrice: Math.round(effectiveUnit * initialQty),
+              maxStock
+            };
+            updatedItems = [...state.items, newItem];
+          }
+
+          return { items: updatedItems };
+        });
+      },
+
+      removeItem: (productId, variantId) => {
+        set((state) => ({
+          items: state.items.filter(
+            (item) => !(item.productId === productId && item.variantId === variantId)
+          )
+        }));
+      },
+
+      updateQuantity: (productId, quantity, variantId) => {
+        set((state) => {
+          if (quantity <= 0) {
+            return {
+              items: state.items.filter(
+                (item) => !(item.productId === productId && item.variantId === variantId)
+              )
+            };
+          }
+
+          const updatedItems = state.items.map((item) => {
+            if (item.productId === productId && item.variantId === variantId) {
+              const clampedQty = Math.min(quantity, item.maxStock);
+              // Bulk discount logic
+              const effectiveUnit = item.price * (1 - item.bulkDiscountPercentage / 100);
+              return {
+                ...item,
+                quantity: clampedQty,
+                effectiveUnitPrice: Math.round(effectiveUnit),
+                totalPrice: Math.round(effectiveUnit * clampedQty)
+              };
+            }
+            return item;
+          });
+
+          return { items: updatedItems };
+        });
+      },
+
+      applyCoupon: (couponCode) => {
+        const found = AVAILABLE_COUPONS.find(
+          (c) => c.code.toUpperCase() === couponCode.trim().toUpperCase()
+        );
+        if (!found) {
+          return { success: false, message: 'Invalid coupon code. Try BUILD60' };
+        }
+
+        const summary = get().getSummary();
+        if (summary.discountedSubtotal < found.minOrderValue) {
+          return {
+            success: false,
+            message: `Coupon requires a minimum order of ₹${found.minOrderValue}`
+          };
+        }
+
+        set({ coupon: found });
+        return { success: true, message: `Coupon ${found.code} applied successfully!` };
+      },
+
+      removeCoupon: () => set({ coupon: null }),
+
+      setDeliverySpeed: (speed) => set({ deliverySpeed: speed }),
+
+      setWalletBalanceToUse: (amount) => set({ walletBalanceToUse: amount }),
+
+      clearCart: () => set({ items: [], coupon: null, walletBalanceToUse: 0 }),
+
+      getSummary: () => {
+        const state = get();
+        return calculateCartSummary({
+          items: state.items,
+          coupon: state.coupon,
+          deliverySpeed: state.deliverySpeed,
+          walletBalanceToUse: state.walletBalanceToUse
+        });
+      },
+
+      syncWithBackend: async () => {
+        const state = get();
+        try {
+          const res = await api.calculateCart({
+            items: state.items,
+            coupon: state.coupon?.code || null,
+            deliverySpeed: state.deliverySpeed,
+            walletBalanceToUse: state.walletBalanceToUse
+          });
+          return res;
+        } catch {
+          return null;
+        }
+      }
+    }),
+    {
+      name: 'buildora-cart-storage'
+    }
+  )
+);

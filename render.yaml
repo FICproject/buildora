@@ -1,0 +1,31 @@
+services:
+  # Backend API on Render Web Service
+  - type: web
+    name: buildora-backend-api
+    env: node
+    plan: free
+    buildCommand: pnpm install && pnpm --filter @buildora/backend-api build
+    startCommand: node services/backend/api/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DATABASE
+        value: buildora60
+      - key: DEFAULT_TENANT_ID
+        value: tenant-buildora-blr
+
+  # Customer Web on Render Static Site
+  - type: web
+    name: buildora-customer-web
+    env: static
+    plan: free
+    buildCommand: pnpm install && pnpm --filter @buildora/customer-web build
+    staticPublishPath: ./apps/customer-web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

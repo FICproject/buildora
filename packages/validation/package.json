@@ -1,0 +1,15 @@
+{
+  "name": "@buildora/validation",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "description": "Shared schema validations and data integrity checkers.",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src --ext ts,tsx"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
