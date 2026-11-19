@@ -15,7 +15,7 @@ export const DealsPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
+    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-10">
       <div className="text-center max-w-xl mx-auto space-y-2">
         <div className="inline-flex items-center gap-1.5 bg-brand-orange-100 text-brand-orange-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
           <Sparkles className="w-3.5 h-3.5 text-brand-orange-500" /> Deals &amp; Vouchers

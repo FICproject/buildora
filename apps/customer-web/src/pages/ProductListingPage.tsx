@@ -155,7 +155,7 @@ export const ProductListingPage: React.FC = () => {
     (localSearch ? 1 : 0);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6">
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500">
         <Link to="/" className="hover:text-brand-blue-900">

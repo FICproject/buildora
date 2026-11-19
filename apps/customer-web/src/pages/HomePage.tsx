@@ -93,7 +93,7 @@ export const HomePage: React.FC = () => {
       <section className="relative bg-gradient-to-br from-brand-blue-950 via-brand-blue-900 to-slate-900 text-white overflow-hidden py-8 sm:py-12 lg:py-16">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#f97316_1px,transparent_1px)] [background-size:16px_16px]" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
             {/* Left Column: Headlines & CTAs */}
             <div className="lg:col-span-7 space-y-4 sm:space-y-6">
@@ -205,7 +205,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 2. 4-PILLAR DELIVERY BENEFITS GRID */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
           <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-orange-100 text-brand-orange-600 flex items-center justify-center flex-shrink-0">
@@ -250,7 +250,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 3. QUICK CATEGORY SHORTCUTS STRIP */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card p-3 sm:p-4">
           <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-3">
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
@@ -288,7 +288,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 4. TOP DEALS OF THE DAY */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent rounded-3xl border border-brand-orange-200/80 p-4 sm:p-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
             <div>
@@ -324,7 +324,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 5. SHOP BY 28 MASTER CATEGORIES */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg sm:text-2xl font-black text-slate-900">
@@ -347,7 +347,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 6. NEWLY LAUNCHED SITE MATERIALS */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-blue-100 text-brand-blue-800 flex items-center justify-center font-bold">
@@ -371,7 +371,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 7. CONTRACTOR BEST SELLERS SECTION */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
@@ -395,7 +395,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 8. PROMOTIONAL BANNER: CONTRACTOR CLUB SAVINGS */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-gradient-to-r from-brand-blue-950 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl relative overflow-hidden border border-white/10">
           <div className="space-y-2 z-10 max-w-xl">
             <span className="bg-amber-400 text-slate-900 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
@@ -430,7 +430,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 9. CATEGORY SPOTLIGHT: STRUCTURAL CIVIL */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-slate-100/80 rounded-3xl p-4 sm:p-8 border border-slate-200">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4 sm:mb-6">
             <div>
@@ -458,7 +458,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 10. CATEGORY SPOTLIGHT: ELECTRICAL */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-slate-100/80 rounded-3xl p-4 sm:p-8 border border-slate-200">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4 sm:mb-6">
             <div>
@@ -486,7 +486,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 11. ESTIMATOR & COMMERCIAL BOQ */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <div className="bg-gradient-to-br from-brand-blue-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-card relative overflow-hidden">
             <div className="space-y-3 z-10">
@@ -541,7 +541,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 12. DIRECT AUTHORIZED BRANDS */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg sm:text-2xl font-black text-slate-900">Direct Authorized Brands</h2>
@@ -560,7 +560,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 13. KNOWLEDGE HUB */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg sm:text-2xl font-black text-slate-900">Knowledge Hub &amp; Construction Tips</h2>
@@ -610,7 +610,7 @@ export const HomePage: React.FC = () => {
 
       {/* 14. CUSTOMER TESTIMONIALS */}
       <section className="bg-slate-100/80 py-8 sm:py-12 border-y border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-6">
           <div className="text-center max-w-xl mx-auto">
             <h2 className="text-lg sm:text-2xl font-black text-slate-900">
               Trusted by 10,000+ Builders &amp; Site Engineers
@@ -670,7 +670,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 15. MOBILE APP DOWNLOAD STRIP */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-gradient-to-r from-brand-blue-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-card">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-brand-orange-500/20 text-brand-orange-400 flex items-center justify-center flex-shrink-0">

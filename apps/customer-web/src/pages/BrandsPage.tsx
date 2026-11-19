@@ -16,7 +16,7 @@ export const BrandsPage: React.FC = () => {
 
   if (activeBrand) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-8">
         <nav className="flex items-center gap-1.5 text-xs text-slate-500">
           <Link to="/" className="hover:text-brand-blue-900">Home</Link>
           <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
@@ -64,7 +64,7 @@ export const BrandsPage: React.FC = () => {
 
   // Brands Directory Overview
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-8">
       <div className="text-center max-w-xl mx-auto space-y-2">
         <h1 className="text-3xl font-black text-slate-900">Authorized Manufacturer Directory</h1>
         <p className="text-xs text-slate-500">

@@ -118,7 +118,7 @@ export const Header: React.FC = () => {
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm transition-all duration-200">
         {/* 1. TOP ANNOUNCEMENT BAR */}
         <div className="bg-brand-blue-950 text-slate-200 text-xs py-1 px-3 sm:px-4 font-medium border-b border-brand-blue-900">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="w-full max-w-[1680px] mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3 truncate">
               <span className="flex items-center gap-1.5 text-amber-400 font-bold tracking-wide flex-shrink-0">
                 <Zap className="w-3.5 h-3.5 fill-current animate-pulse text-amber-400" />
@@ -146,52 +146,50 @@ export const Header: React.FC = () => {
         </div>
 
         {/* 2. MAIN HEADER ROW */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3">
           {/* A. DESKTOP LAYOUT (lg & above)
-              STRICT ORDER: Logo → Location → Search → My Account → Wishlist → Notifications → Wallet → Cart
+              STRICT ORDER: [Logo + Location Underneath] → Search → My Account → Wishlist → Notifications → Wallet → Cart
           */}
-          <div className="hidden lg:flex items-center justify-between gap-3 xl:gap-4">
-            {/* 1. Logo */}
-            <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 group">
-              <div className="w-10 h-10 rounded-xl bg-brand-blue-900 flex items-center justify-center text-white font-extrabold text-2xl shadow-md group-hover:bg-brand-orange-500 transition-colors">
-                B
-              </div>
-              <div className="flex flex-col">
-                <span className="font-black text-xl tracking-tight text-slate-900 leading-none">
-                  BUILDORA<span className="text-brand-orange-500 ml-0.5">60</span>
-                </span>
-                <span className="text-[9px] font-extrabold text-brand-blue-800 tracking-wider uppercase mt-1">
-                  BUILD SMART. DELIVER FAST.
-                </span>
-              </div>
-            </Link>
+          <div className="hidden lg:flex items-center justify-between gap-3 xl:gap-6">
+            {/* 1. Brand Logo + Deliver-To Location Stacked Underneath */}
+            <div className="flex flex-col gap-1.5 flex-shrink-0">
+              <Link to="/" className="flex items-center gap-2.5 group">
+                <div className="w-9 h-9 rounded-xl bg-brand-blue-900 flex items-center justify-center text-white font-extrabold text-xl shadow-md group-hover:bg-brand-orange-500 transition-colors">
+                  B
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-black text-xl tracking-tight text-slate-900 leading-none">
+                    BUILDORA<span className="text-brand-orange-500 ml-0.5">60</span>
+                  </span>
+                  <span className="text-[8.5px] font-extrabold text-brand-blue-800 tracking-wider uppercase mt-0.5">
+                    BUILD SMART. DELIVER FAST.
+                  </span>
+                </div>
+              </Link>
 
-            {/* 2. Deliver-To Location Pill */}
-            <button
-              type="button"
-              onClick={openLocationModal}
-              className="flex items-center gap-2 py-1.5 px-2.5 xl:px-3 rounded-xl border border-slate-200 hover:border-brand-blue-400 bg-slate-50 hover:bg-brand-blue-50/40 transition-all text-left flex-shrink-0 group"
-              title="Change Delivery Site Pincode"
-            >
-              <div className="w-8 h-8 rounded-lg bg-brand-orange-100 flex items-center justify-center text-brand-orange-600 group-hover:scale-105 transition-transform flex-shrink-0">
-                <MapPin className="w-4 h-4" />
-              </div>
-              <div className="flex flex-col text-xs leading-tight min-w-0">
-                <span className="text-[10px] text-slate-400 font-medium">Deliver to</span>
-                <span className="font-bold text-slate-800 flex items-center gap-1 truncate max-w-[130px] xl:max-w-[150px]">
+              {/* Deliver-To Location Pill directly under BUILDORA Logo */}
+              <button
+                type="button"
+                onClick={openLocationModal}
+                className="flex items-center gap-1.5 py-1 px-2.5 rounded-lg border border-slate-200 hover:border-brand-blue-400 bg-slate-50 hover:bg-brand-blue-50/50 transition-all text-left group w-fit"
+                title="Change Delivery Site Pincode"
+              >
+                <MapPin className="w-3.5 h-3.5 text-brand-orange-600 flex-shrink-0" />
+                <span className="text-[10px] text-slate-500 font-medium">Deliver to</span>
+                <span className="font-bold text-xs text-slate-800 flex items-center gap-1 truncate max-w-[130px] xl:max-w-[160px]">
                   {pincode} ({cityName.split(',')[0]})
                   <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
                 </span>
-              </div>
-              {etaMinutes > 0 && (
-                <span className="ml-1 bg-emerald-100 text-emerald-800 text-[10px] font-black px-1.5 py-0.5 rounded-md flex-shrink-0">
-                  {etaMinutes}m
-                </span>
-              )}
-            </button>
+                {etaMinutes > 0 && (
+                  <span className="ml-1 bg-emerald-100 text-emerald-800 text-[9.5px] font-black px-1.5 py-0.5 rounded-md flex-shrink-0">
+                    {etaMinutes}m
+                  </span>
+                )}
+              </button>
+            </div>
 
-            {/* 3. Search Bar */}
-            <div className="flex-1 max-w-xl mx-1 xl:mx-2">
+            {/* 2. Search Bar */}
+            <div className="flex-1 max-w-2xl mx-2 xl:mx-4">
               <SmartSearchBar />
             </div>
 
@@ -373,31 +371,33 @@ export const Header: React.FC = () => {
           {/* B. TABLET LAYOUT (md: 768px - 1023px) */}
           <div className="hidden md:flex lg:hidden flex-col gap-2.5">
             <div className="flex items-center justify-between gap-3">
-              {/* Logo */}
-              <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-                <div className="w-9 h-9 rounded-xl bg-brand-blue-900 flex items-center justify-center text-white font-black text-xl shadow-md">
-                  B
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-black text-lg tracking-tight text-slate-900 leading-none">
-                    BUILDORA<span className="text-brand-orange-500 ml-0.5">60</span>
-                  </span>
-                  <span className="text-[8px] font-extrabold text-brand-blue-800 tracking-wider uppercase mt-0.5">
-                    BUILD SMART. DELIVER FAST.
-                  </span>
-                </div>
-              </Link>
+              {/* Logo & Location Stacked Underneath */}
+              <div className="flex flex-col gap-1 flex-shrink-0">
+                <Link to="/" className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-brand-blue-900 flex items-center justify-center text-white font-black text-lg shadow-md">
+                    B
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-black text-lg tracking-tight text-slate-900 leading-none">
+                      BUILDORA<span className="text-brand-orange-500 ml-0.5">60</span>
+                    </span>
+                    <span className="text-[8px] font-extrabold text-brand-blue-800 tracking-wider uppercase mt-0.5">
+                      BUILD SMART. DELIVER FAST.
+                    </span>
+                  </div>
+                </Link>
 
-              {/* Location Pill */}
-              <button
-                type="button"
-                onClick={openLocationModal}
-                className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl border border-slate-200 bg-slate-50 text-left text-xs"
-              >
-                <MapPin className="w-3.5 h-3.5 text-brand-orange-600 flex-shrink-0" />
-                <span className="font-bold text-slate-800 truncate max-w-[110px]">{pincode} ({cityName.split(',')[0]})</span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
+                {/* Location Pill under Buildora */}
+                <button
+                  type="button"
+                  onClick={openLocationModal}
+                  className="flex items-center gap-1.5 py-0.5 px-2 rounded-lg border border-slate-200 bg-slate-50 text-left text-xs w-fit"
+                >
+                  <MapPin className="w-3 h-3 text-brand-orange-600 flex-shrink-0" />
+                  <span className="font-bold text-[11px] text-slate-800 truncate max-w-[120px]">{pincode} ({cityName.split(',')[0]})</span>
+                  <ChevronDown className="w-2.5 h-2.5 text-slate-400" />
+                </button>
+              </div>
 
               {/* Tablet Actions Group */}
               <div className="flex items-center gap-1.5">
@@ -584,9 +584,9 @@ export const Header: React.FC = () => {
         </div>
 
         {/* 3. DESKTOP ROW 2: 5 CONSTRUCTION DEPARTMENTS & MEGA MENU */}
-        <div ref={megaMenuRef} className="bg-slate-50 border-t border-slate-200/80 px-4 hidden lg:block relative">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-1 text-xs font-bold text-slate-700 py-1.5">
+        <div ref={megaMenuRef} className="bg-slate-50 border-t border-slate-200/80 px-4 sm:px-6 lg:px-8 hidden lg:block relative">
+          <div className="w-full max-w-[1680px] mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-1 text-xs font-bold text-slate-700 py-1.5 flex-wrap">
               {/* All 28 Categories Mega Menu Dropdown */}
               <div className="relative mr-2">
                 <button
@@ -719,12 +719,6 @@ export const Header: React.FC = () => {
               >
                 <Sparkles className="w-3.5 h-3.5 fill-current" /> Deals
               </Link>
-            </div>
-
-            <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
-              <span className="flex items-center gap-1 text-emerald-700 font-bold">
-                <Clock className="w-3.5 h-3.5" /> 7:00 AM - 11:00 PM Site Delivery
-              </span>
             </div>
           </div>
         </div>

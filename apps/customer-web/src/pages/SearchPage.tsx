@@ -45,7 +45,7 @@ export const SearchPage: React.FC = () => {
   }, [query, categories]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-6">
       <nav className="flex items-center gap-1.5 text-xs text-slate-500">
         <Link to="/" className="hover:text-brand-blue-900">Home</Link>
         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
