@@ -169,52 +169,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. 4-PILLAR DELIVERY BENEFITS GRID */}
-      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-orange-100 text-brand-orange-600 flex items-center justify-center flex-shrink-0">
-              <Zap className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
-            </div>
-            <div>
-              <div className="font-bold text-slate-900 text-xs sm:text-sm">60-Min Site Delivery</div>
-              <div className="text-[11px] sm:text-xs text-slate-500">Dedicated EV mini-truck fleet</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-100 text-brand-blue-700 flex items-center justify-center flex-shrink-0">
-              <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div>
-              <div className="font-bold text-slate-900 text-xs sm:text-sm">100% Genuine Stock</div>
-              <div className="text-[11px] sm:text-xs text-slate-500">Direct from authorized plants</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
-              <Package className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div>
-              <div className="font-bold text-slate-900 text-xs sm:text-sm">No Minimum Order</div>
-              <div className="text-[11px] sm:text-xs text-slate-500">Order 1 bag or 500 bags</div>
-            </div>
-          </div>
-
-          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-2.5 sm:gap-3.5">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
-              <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div>
-              <div className="font-bold text-slate-900 text-xs sm:text-sm">Instant B2B GST</div>
-              <div className="text-[11px] sm:text-xs text-slate-500">Full ITC tax compliance</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. QUICK CATEGORY SHORTCUTS STRIP */}
+      {/* 2. QUICK CATEGORY SHORTCUTS STRIP */}
       <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card p-3 sm:p-4">
           <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-3">

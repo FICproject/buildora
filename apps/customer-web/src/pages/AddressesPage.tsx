@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { MapPin, Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { MapPin, Plus, Trash2, CheckCircle2, Check, Navigation } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLocationStore } from '../store/useLocationStore';
 import { Button } from '../components/ui/Button';
+import { AddressType } from '@buildora/types';
 
 export const AddressesPage: React.FC = () => {
   const { addresses, addAddress, deleteAddress, setDefaultAddress } = useAuthStore();
+  const { selectSavedAddress, selectedAddressId } = useLocationStore();
 
   const [isAdding, setIsAdding] = useState(false);
   const [newAddr, setNewAddr] = useState({
     recipientName: 'Arjun Verma',
     mobile: '9876543210',
-    type: 'CONSTRUCTION_SITE' as const,
+    type: 'CONSTRUCTION_SITE' as AddressType,
     building: '',
     street: '',
     area: '',
@@ -20,15 +23,46 @@ export const AddressesPage: React.FC = () => {
     deliveryInstructions: ''
   });
 
+  const handleSelectActive = (addr: any) => {
+    const label = addr.type === 'HOME' ? 'Home' : addr.type === 'WORK' ? 'Office' : 'Job Site';
+    const loc = addr.area || addr.street;
+    selectSavedAddress({
+      id: addr.id,
+      label,
+      fullAddress: `${label} · ${loc}, ${addr.city || 'Bengaluru'}`,
+      pincode: addr.pincode,
+      locality: loc,
+      city: addr.city || 'Bengaluru'
+    });
+  };
+
+  const handleSetDefault = (addr: any) => {
+    setDefaultAddress(addr.id);
+    handleSelectActive(addr);
+  };
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (newAddr.building && newAddr.street && newAddr.pincode) {
+      const isFirst = addresses.length === 0;
       addAddress({
         ...newAddr,
-        isDefault: addresses.length === 0,
+        isDefault: isFirst,
         isConstructionSite: newAddr.type === 'CONSTRUCTION_SITE'
       });
       setIsAdding(false);
+
+      if (isFirst) {
+        const label = newAddr.type === 'HOME' ? 'Home' : newAddr.type === 'WORK' ? 'Office' : 'Job Site';
+        selectSavedAddress({
+          label,
+          fullAddress: `${label} · ${newAddr.area || newAddr.street}, ${newAddr.city}`,
+          pincode: newAddr.pincode,
+          locality: newAddr.area || newAddr.street,
+          city: newAddr.city
+        });
+      }
+
       setNewAddr({
         recipientName: 'Arjun Verma',
         mobile: '9876543210',
@@ -214,19 +248,34 @@ export const AddressesPage: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              {addr.isDefault ? (
-                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Default Address
-                </span>
-              ) : (
-                <button
-                  onClick={() => setDefaultAddress(addr.id)}
-                  className="text-brand-blue-800 font-semibold hover:underline"
-                >
-                  Set as Default
-                </button>
-              )}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {addr.isDefault ? (
+                  <span className="text-brand-blue-900 font-extrabold flex items-center gap-1 text-[11px] bg-brand-blue-50 px-2 py-0.5 rounded-lg border border-brand-blue-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-brand-blue-700" /> Default Address
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleSetDefault(addr)}
+                    className="text-brand-blue-800 font-bold hover:underline text-[11px]"
+                  >
+                    Set as Default
+                  </button>
+                )}
+
+                {selectedAddressId === addr.id ? (
+                  <span className="text-emerald-700 font-extrabold text-[10px] bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 flex items-center gap-1">
+                    <Check className="w-3 h-3 stroke-[3]" /> Active in Header
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleSelectActive(addr)}
+                    className="text-brand-orange-600 font-bold hover:underline text-[11px]"
+                  >
+                    Deliver to this site
+                  </button>
+                )}
+              </div>
 
               <button
                 onClick={() => {
@@ -234,7 +283,7 @@ export const AddressesPage: React.FC = () => {
                     deleteAddress(addr.id);
                   }
                 }}
-                className="text-slate-400 hover:text-red-600 p-1"
+                className="text-slate-400 hover:text-red-600 p-1 transition-colors"
                 title="Delete address"
               >
                 <Trash2 className="w-4 h-4" />

@@ -20,10 +20,11 @@ export interface LocationState {
 
   selectedAddressId?: string | null;
   selectedAddressLabel?: string | null;
+  selectedAddressFull?: string | null;
 
   checkAndSetPincode: (code: string) => Promise<{ serviceable: boolean; message: string; locality: string; etaMinutes: number }>;
   detectCurrentLocation: () => Promise<{ success: boolean; message: string }>;
-  selectSavedAddress: (address: { id?: string; label?: string; pincode: string; locality?: string; city?: string }) => Promise<void>;
+  selectSavedAddress: (address: { id?: string; label?: string; fullAddress?: string; pincode: string; locality?: string; city?: string }) => Promise<void>;
   openLocationModal: () => void;
   closeLocationModal: () => void;
 }
@@ -43,6 +44,7 @@ export const useLocationStore = create<LocationState>()(
       dispatchStatus: 'ACTIVE_DISPATCH',
       selectedAddressId: null,
       selectedAddressLabel: null,
+      selectedAddressFull: null,
       isModalOpen: false,
       isLoading: false,
       lastVerifiedAt: new Date().toISOString(),
@@ -286,6 +288,7 @@ export const useLocationStore = create<LocationState>()(
           set({
             selectedAddressId: address.id || null,
             selectedAddressLabel: address.label || address.locality || null,
+            selectedAddressFull: address.fullAddress || (address.label ? `${address.label} · ${address.locality || address.pincode}` : null),
             isModalOpen: false
           });
         }

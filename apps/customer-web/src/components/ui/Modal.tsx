@@ -5,6 +5,7 @@ export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
+  subtitle?: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
@@ -13,6 +14,7 @@ export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
   title,
+  subtitle,
   children,
   maxWidth = 'md'
 }) => {
@@ -53,11 +55,14 @@ export const Modal: React.FC<ModalProps> = ({
         className={`relative w-full ${maxWidthClass} max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl z-10 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200`}
       >
         {title && (
-          <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0">
-            <h3 className="text-base sm:text-lg font-black text-slate-900">{title}</h3>
+          <div className="flex items-start justify-between px-5 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0">
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">{title}</h3>
+              {subtitle && <p className="text-xs text-slate-500 mt-1 leading-normal">{subtitle}</p>}
+            </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="p-1.5 -mr-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />

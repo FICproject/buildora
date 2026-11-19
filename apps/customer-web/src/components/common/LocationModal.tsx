@@ -215,12 +215,13 @@ export const LocationModal: React.FC = () => {
     <Modal
       isOpen={isModalOpen}
       onClose={closeLocationModal}
-      title={
+      title="Select Delivery Location"
+      subtitle={
         modalMode === 'SAVED_ADDRESSES'
-          ? 'Select Delivery Address'
+          ? 'Select a delivery address or add a new construction job site.'
           : modalMode === 'ADD_ADDRESS'
-            ? 'Add New Site Delivery Address'
-            : 'Check Delivery Availability'
+            ? 'Enter your site details for 60-minute quick-commerce material dispatch.'
+            : 'Enter your pincode to check delivery availability and estimated delivery time.'
       }
       maxWidth="md"
     >
@@ -230,16 +231,16 @@ export const LocationModal: React.FC = () => {
         {/* ========================================================= */}
         {modalMode === 'SAVED_ADDRESSES' && (
           <div className="space-y-4 animate-in fade-in duration-150">
-            {/* Top '+ Add new address' Button (HomeRun screenshot 4) */}
+            {/* Top '+ Add new address' Button (HomeRun reference style) */}
             <button
               type="button"
               onClick={() => {
                 setModalMode('ADD_ADDRESS');
                 setNewPincode(pincode || '');
               }}
-              className="w-full py-3 px-4 rounded-xl border border-dashed border-emerald-500 bg-emerald-50/60 hover:bg-emerald-50 text-emerald-800 font-extrabold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+              className="w-full py-3 px-4 rounded-xl border border-dashed border-brand-blue-600 bg-brand-blue-50/70 hover:bg-brand-blue-100/70 text-brand-blue-900 font-extrabold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
             >
-              <Plus className="w-4 h-4 text-emerald-600 stroke-[2.5]" />
+              <Plus className="w-4 h-4 text-brand-blue-900 stroke-[2.5]" />
               <span>+ Add new address</span>
             </button>
 
@@ -367,6 +368,8 @@ export const LocationModal: React.FC = () => {
                   <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
+                    inputMode="numeric"
+                    autoFocus
                     maxLength={6}
                     value={inputPincode}
                     onChange={(e) => {
@@ -383,7 +386,7 @@ export const LocationModal: React.FC = () => {
                   onClick={() => handleVerify()}
                   size="md"
                   disabled={isLoading || inputPincode.length !== 6}
-                  className="px-5 font-black text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="px-5 font-black text-xs bg-brand-blue-900 hover:bg-brand-blue-800 text-white shadow-sm"
                 >
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check Availability'}
                 </Button>
@@ -448,7 +451,7 @@ export const LocationModal: React.FC = () => {
                     variant="primary"
                     size="sm"
                     onClick={() => closeLocationModal()}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2 mt-2"
+                    className="w-full bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black text-xs py-2.5 mt-2 shadow-md"
                   >
                     Confirm &amp; Start Shopping &rarr;
                   </Button>
