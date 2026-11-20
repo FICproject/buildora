@@ -85,10 +85,7 @@ export const Header: React.FC = () => {
     }
     if (activeDepartment !== deptSlug) {
       setActiveDepartment(deptSlug);
-      const cats = getDepartmentCategories(deptSlug);
-      if (cats.length > 0) {
-        setSelectedParentCategorySlug(cats[0].slug);
-      }
+      setSelectedParentCategorySlug('all');
     }
   };
 
@@ -195,10 +192,10 @@ export const Header: React.FC = () => {
         {/* MAIN HEADER ROW */}
         <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3">
           {/* A. DESKTOP LAYOUT (lg & above)
-              STRICT ORDER: [Brand + Location Underneath] → Search → My Account → Wishlist → Notifications → Wallet → Cart
+              3 CLEAR SECTIONS: [Brand & Location] → [Flexible Center Search] → [User Actions]
           */}
-          <div className="hidden lg:flex items-center justify-between gap-3 xl:gap-6">
-            {/* 1. BUILDORA Brand + Location Block (HomeRun Reference Hierarchy) */}
+          <div className="hidden lg:flex items-center justify-between gap-4 xl:gap-8">
+            {/* 1. LEFT SECTION — Brand & Location */}
             <div
               onClick={openLocationModal}
               className="flex items-center gap-3 p-1.5 -ml-1.5 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer flex-shrink-0 group select-none"
@@ -215,90 +212,93 @@ export const Header: React.FC = () => {
                   <span>{getLocationDisplayETA()}</span>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-blue-600 group-hover:translate-y-0.5 transition-all" />
                 </div>
-                <span className="text-[11px] text-slate-500 font-medium truncate max-w-[170px] xl:max-w-[230px] leading-tight mt-0.5">
+                <span className="text-[11px] text-slate-500 font-medium truncate max-w-[170px] xl:max-w-[210px] leading-tight mt-0.5">
                   {getLocationDisplaySubtitle()}
                 </span>
               </div>
             </div>
 
-            {/* 2. Search Bar */}
-            <div className="flex-1 max-w-2xl mx-2 xl:mx-4">
+            {/* 2. CENTER SECTION — Expanded Flexible Search Bar */}
+            <div className="flex-1 min-w-0 mx-2 xl:mx-4">
               <SmartSearchBar />
             </div>
 
-            {/* 4. My Account - Direct Link to Dashboard (No Dropdown) */}
-            <div className="relative flex-shrink-0">
+            {/* 3. RIGHT SECTION — User Actions (Order: Profile → Wishlist → Notifications → Wallet → Cart) */}
+            <div className="flex-shrink-0 flex items-center gap-2 xl:gap-2.5">
+              {/* 1. Profile / Account */}
               {isAuthenticated && user ? (
                 <Link
                   to="/account"
-                  className="flex items-center gap-2 p-1.5 xl:px-3 xl:py-2 rounded-xl border border-slate-200 hover:border-brand-blue-400 hover:bg-slate-50 text-xs font-bold text-slate-800 bg-white shadow-sm transition-all"
+                  className="h-10 flex items-center gap-2 px-2.5 xl:px-3 rounded-xl border border-slate-200 hover:border-brand-blue-400 hover:bg-slate-50 text-xs font-bold text-slate-800 bg-white shadow-2xs hover:shadow-xs transition-all flex-shrink-0"
                   title="My Account Dashboard"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-brand-blue-900 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                  <div className="w-7 h-7 rounded-lg bg-brand-blue-900 text-white flex items-center justify-center font-black text-xs shadow-xs flex-shrink-0">
                     {user.name ? user.name.charAt(0) : 'U'}
                   </div>
-                  <span className="hidden xl:inline truncate max-w-[100px]">{user.name ? user.name.split(' ')[0] : (user.phone || 'Account')}</span>
+                  <span className="hidden xl:inline truncate max-w-[90px] xl:max-w-[110px] text-xs font-bold text-slate-800">
+                    {user.name ? user.name.split(' ')[0] : (user.phone || 'Account')}
+                  </span>
                 </Link>
               ) : (
                 <button
                   type="button"
                   onClick={() => openAuthModal('/account', 'Sign in to access your Buildora account and saved details')}
-                  className="flex items-center gap-1.5 py-2 px-3 xl:px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-800 transition-colors shadow-sm"
+                  className="h-10 flex items-center gap-1.5 px-3 xl:px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-800 transition-colors shadow-2xs flex-shrink-0"
                   title="Sign In to Account"
                 >
-                  <User className="w-4 h-4 text-slate-600" />
+                  <User className="w-4 h-4 text-slate-600 flex-shrink-0" />
                   <span className="font-bold">Sign In</span>
                 </button>
               )}
-            </div>
 
-            {/* 5. Wishlist */}
-            <Link
-              to="/wishlist"
-              className="relative p-2.5 rounded-xl text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 transition-colors flex items-center justify-center flex-shrink-0"
-              title="View Saved Materials (Wishlist)"
-            >
-              <Heart className="w-5 h-5" />
-              {wishlistItems.length > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-sm">
-                  {wishlistItems.length}
+              {/* 2. Wishlist */}
+              <Link
+                to="/wishlist"
+                className="h-10 w-10 relative rounded-xl text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 transition-colors flex items-center justify-center flex-shrink-0"
+                title="View Saved Materials (Wishlist)"
+              >
+                <Heart className="w-5 h-5" />
+                {wishlistItems.length > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs">
+                    {wishlistItems.length}
+                  </span>
+                )}
+              </Link>
+
+              {/* 3. Notifications */}
+              <div className="flex-shrink-0">
+                <NotificationPopover />
+              </div>
+
+              {/* 4. Wallet */}
+              <button
+                type="button"
+                onClick={handleWalletClick}
+                className="h-10 flex items-center gap-1.5 px-2.5 xl:px-3 rounded-xl border border-slate-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/40 text-xs font-bold text-slate-800 transition-all shadow-2xs hover:shadow-xs flex-shrink-0"
+                title={isAuthenticated ? 'Buildora Wallet Balance' : 'Sign in to access Buildora Cash'}
+              >
+                <Wallet className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                {isAuthenticated && user ? (
+                  <span className="text-emerald-700 font-extrabold truncate max-w-[85px]">
+                    {formatCurrency(user.walletBalance)}
+                  </span>
+                ) : (
+                  <span className="text-slate-700">Wallet</span>
+                )}
+              </button>
+
+              {/* 5. Cart */}
+              <Link
+                to="/cart"
+                className="h-10 flex items-center gap-2 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black px-3.5 xl:px-4 rounded-xl shadow-xs hover:shadow-md transition-all flex-shrink-0"
+                title="View Shopping Cart"
+              >
+                <ShoppingCart className="w-4 h-4 flex-shrink-0" />
+                <span className="text-xs font-black tracking-tight whitespace-nowrap">
+                  Cart ({summary.itemCount})
                 </span>
-              )}
-            </Link>
-
-            {/* 6. Notifications */}
-            <div className="flex-shrink-0">
-              <NotificationPopover />
+              </Link>
             </div>
-
-            {/* 7. Wallet */}
-            <button
-              type="button"
-              onClick={handleWalletClick}
-              className="flex items-center gap-1.5 py-2 px-2.5 xl:px-3 rounded-xl border border-slate-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/40 text-xs font-bold text-slate-800 transition-all shadow-sm flex-shrink-0"
-              title={isAuthenticated ? 'Buildora Wallet Balance' : 'Sign in to access Buildora Cash'}
-            >
-              <Wallet className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              {isAuthenticated && user ? (
-                <span className="text-emerald-700 font-extrabold truncate max-w-[80px]">
-                  {formatCurrency(user.walletBalance)}
-                </span>
-              ) : (
-                <span className="text-slate-700">Wallet</span>
-              )}
-            </button>
-
-            {/* 8. Cart - Shows Only Product Count & Direct Navigation to /cart */}
-            <Link
-              to="/cart"
-              className="flex items-center gap-2 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black py-2 px-3 xl:px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex-shrink-0"
-              title="View Shopping Cart"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              <span className="text-xs font-bold tracking-tight">
-                Cart ({summary.itemCount})
-              </span>
-            </Link>
           </div>
 
           {/* B. TABLET LAYOUT (md: 768px - 1023px) */}
@@ -508,185 +508,43 @@ export const Header: React.FC = () => {
               </Link>
 
               {/* 5 Main Construction Departments */}
-              {CONSTRUCTION_DEPARTMENTS.map((dept, deptIdx) => {
+              {CONSTRUCTION_DEPARTMENTS.map((dept) => {
                 const Icon = DEPARTMENT_ICONS[dept.slug] || Building2;
                 const isOpen = activeDepartment === dept.slug;
                 const isActive = isDeptActive(dept);
-                const deptCats = getDepartmentCategories(dept.slug);
-                const isRightAligned = deptIdx >= 2;
-
-                // Active parent category for this department (defaults to first parent category)
-                const currentParent =
-                  deptCats.find((c) => c.slug === selectedParentCategorySlug) || deptCats[0];
-                const subcategories = currentParent?.subcategories || [];
 
                 return (
                   <div
                     key={dept.id}
-                    className="relative"
                     onMouseEnter={() => handleDeptMouseEnter(dept.slug)}
                     onMouseLeave={handleDeptMouseLeave}
                   >
                     <button
                       type="button"
                       onClick={() => {
-                        // Support tap on touchscreens or click
                         if (activeDepartment === dept.slug) {
                           setActiveDepartment(null);
                         } else {
                           setActiveDepartment(dept.slug);
-                          if (deptCats.length > 0) {
-                            setSelectedParentCategorySlug(deptCats[0].slug);
-                          }
+                          setSelectedParentCategorySlug('all');
                         }
                       }}
                       className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs ${
                         isActive
                           ? 'bg-brand-blue-900 text-white shadow-sm'
                           : isOpen
-                          ? 'bg-slate-200/80 text-brand-blue-900 shadow-xs'
+                          ? 'bg-slate-900 text-white shadow-xs'
                           : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
                       }`}
                     >
-                      <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-brand-orange-500'}`} />
+                      <Icon className={`w-3.5 h-3.5 ${isActive || isOpen ? 'text-white' : 'text-brand-orange-500'}`} />
                       <span>{dept.name}</span>
                       <ChevronDown
                         className={`w-3 h-3 transition-transform duration-150 ${
-                          isActive ? 'text-white/80' : 'text-slate-400'
+                          isActive || isOpen ? 'text-white/80' : 'text-slate-400'
                         } ${isOpen ? 'rotate-180' : ''}`}
                       />
                     </button>
-
-                    {/* Department Mega Menu with seamless hover bridge */}
-                    {isOpen && (
-                      <div
-                        className={`absolute top-full pt-1.5 w-[760px] max-w-[calc(100vw-2rem)] z-50 ${
-                          isRightAligned ? 'right-0' : 'left-0'
-                        }`}
-                        onMouseEnter={() => handleDeptMouseEnter(dept.slug)}
-                        onMouseLeave={handleDeptMouseLeave}
-                      >
-                        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in-0 slide-in-from-top-1 duration-150">
-                          {/* UNIFIED TWO-COLUMN MEGA MENU: PARENT (LEFT) & CHILD (RIGHT) */}
-                          <div className="grid grid-cols-12 min-h-[340px] max-h-[440px]">
-                            {/* LEFT COLUMN: Parent Categories */}
-                            <div className="col-span-5 border-r border-slate-100 bg-slate-50/70 p-2.5 sm:p-3 overflow-y-auto no-scrollbar space-y-1">
-                              <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                                <span>Categories</span>
-                                <span className="text-slate-400 font-mono text-[9px]">{deptCats.length}</span>
-                              </div>
-                              {deptCats.map((cat) => {
-                                const isSelected = currentParent && cat.slug === currentParent.slug;
-                                return (
-                                  <div
-                                    key={cat.id}
-                                    onMouseEnter={() => setSelectedParentCategorySlug(cat.slug)}
-                                    className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                                      isSelected
-                                        ? 'bg-brand-blue-50/90 text-brand-blue-900 font-black shadow-xs border border-brand-blue-200/70'
-                                        : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/60 border border-transparent'
-                                    }`}
-                                  >
-                                    <Link
-                                      to={`/categories/${cat.slug}`}
-                                      onClick={() => setActiveDepartment(null)}
-                                      className="flex-1 min-w-0 flex items-center gap-2 truncate"
-                                      title={`View ${cat.name}`}
-                                    >
-                                      <span
-                                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors ${
-                                          isSelected ? 'bg-brand-blue-900' : 'bg-brand-orange-500'
-                                        }`}
-                                      />
-                                      <span className="truncate">{cat.name}</span>
-                                    </Link>
-                                    <ChevronRight
-                                      className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${
-                                        isSelected
-                                          ? 'text-brand-blue-900 translate-x-0.5'
-                                          : 'text-slate-300 group-hover:text-slate-500'
-                                      }`}
-                                    />
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            {/* RIGHT COLUMN: Child Categories */}
-                            <div className="col-span-7 bg-white p-4 sm:p-5 overflow-y-auto no-scrollbar flex flex-col justify-between">
-                              <div>
-                                {/* Parent Category Title Header */}
-                                <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-3">
-                                  <div className="min-w-0 pr-2">
-                                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider truncate">
-                                      {currentParent?.name}
-                                    </h4>
-                                    {currentParent?.description && (
-                                      <p className="text-[11px] text-slate-500 font-normal line-clamp-1 mt-0.5">
-                                        {currentParent.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <Link
-                                    to={`/categories/${currentParent?.slug}`}
-                                    onClick={() => setActiveDepartment(null)}
-                                    className="text-[11px] font-bold text-brand-orange-600 hover:text-brand-orange-700 hover:underline flex items-center gap-1 flex-shrink-0"
-                                  >
-                                    <span>View All</span>
-                                    <ArrowRight className="w-3 h-3" />
-                                  </Link>
-                                </div>
-
-                                {/* Child Categories Grid */}
-                                {subcategories.length > 0 ? (
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                                    {subcategories.map((sub) => (
-                                      <Link
-                                        key={sub.id}
-                                        to={`/categories/${currentParent.slug}/${sub.slug}`}
-                                        onClick={() => setActiveDepartment(null)}
-                                        className="group flex items-center justify-between p-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-brand-blue-900 hover:bg-slate-50 transition-all border border-transparent hover:border-slate-200/60"
-                                      >
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-brand-orange-500 transition-colors flex-shrink-0" />
-                                          <span className="truncate group-hover:font-bold">{sub.name}</span>
-                                        </div>
-                                        <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-orange-500 group-hover:translate-x-0.5 transition-all opacity-0 group-hover:opacity-100 flex-shrink-0" />
-                                      </Link>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="py-6 text-center text-xs text-slate-500 space-y-2">
-                                    <p>Browse all available products in this category.</p>
-                                    <Link
-                                      to={`/categories/${currentParent?.slug}`}
-                                      onClick={() => setActiveDepartment(null)}
-                                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-blue-50 text-brand-blue-900 rounded-lg font-bold text-xs hover:bg-brand-blue-100"
-                                    >
-                                      <span>Explore {currentParent?.name}</span>
-                                      <ArrowRight className="w-3 h-3" />
-                                    </Link>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Bottom Dispatch Indicator & Direct Category Link */}
-                              <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                                <span className="text-slate-400 font-medium">⚡ 60-min job site dispatch active</span>
-                                <Link
-                                  to={`/categories/${currentParent?.slug}`}
-                                  onClick={() => setActiveDepartment(null)}
-                                  className="font-bold text-brand-blue-900 hover:text-brand-orange-600 hover:underline flex items-center gap-1"
-                                >
-                                  <span>Browse All {currentParent?.name}</span>
-                                  &rarr;
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -715,6 +573,119 @@ export const Header: React.FC = () => {
               </Link>
             </div>
           </div>
+
+          {/* FULL-SIZE SPACIOUS MEGA MENU CONTAINER */}
+          {activeDepartment && (() => {
+            const activeDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === activeDepartment);
+            if (!activeDept) return null;
+            const deptCats = getDepartmentCategories(activeDept.slug);
+            const currentParent = deptCats.find((c) => c.slug === selectedParentCategorySlug);
+            const subcategories = currentParent ? (currentParent.subcategories || []) : [];
+
+            return (
+              <div
+                className="absolute top-full left-0 right-0 pt-2 z-50 flex justify-center px-4 sm:px-6 lg:px-8 pointer-events-auto"
+                onMouseEnter={() => {
+                  if (hoverTimeoutRef.current) {
+                    clearTimeout(hoverTimeoutRef.current);
+                    hoverTimeoutRef.current = null;
+                  }
+                }}
+                onMouseLeave={handleDeptMouseLeave}
+              >
+                <div className="w-full max-w-[1240px] xl:max-w-[1360px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in-0 slide-in-from-top-1 duration-150">
+                  <div className="flex min-h-[400px] max-h-[540px]">
+                    {/* LEFT PANEL: MAIN CATEGORIES */}
+                    <div className="w-[280px] sm:w-[320px] flex-shrink-0 border-r border-slate-100 bg-white p-5 overflow-y-auto no-scrollbar">
+                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3 px-3">
+                        MAIN CATEGORIES
+                      </div>
+                      <div className="space-y-1.5">
+                        {/* ALL Category Item */}
+                        <button
+                          type="button"
+                          onMouseEnter={() => setSelectedParentCategorySlug('all')}
+                          onClick={() => {
+                            setActiveDepartment(null);
+                            navigate('/products');
+                          }}
+                          className={`w-full group flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left ${
+                            selectedParentCategorySlug === 'all'
+                              ? 'bg-slate-900 text-white font-black shadow-xs'
+                              : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
+                          }`}
+                        >
+                          <span className="uppercase">ALL</span>
+                          <ChevronRight
+                            className={`w-4 h-4 flex-shrink-0 transition-transform ${
+                              selectedParentCategorySlug === 'all'
+                                ? 'text-brand-orange-400 translate-x-0.5'
+                                : 'text-slate-300 group-hover:text-slate-500'
+                            }`}
+                          />
+                        </button>
+
+                        {/* Parent Category Items */}
+                        {deptCats.map((cat) => {
+                          const isSelected = selectedParentCategorySlug === cat.slug;
+                          return (
+                            <Link
+                              key={cat.id}
+                              to={`/categories/${cat.slug}`}
+                              onClick={() => setActiveDepartment(null)}
+                              onMouseEnter={() => setSelectedParentCategorySlug(cat.slug)}
+                              className={`group flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-slate-900 text-white font-black shadow-xs'
+                                  : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
+                              }`}
+                              title={`View ${cat.name}`}
+                            >
+                              <span className="truncate flex-1 min-w-0">{cat.name}</span>
+                              <ChevronRight
+                                className={`w-4 h-4 flex-shrink-0 transition-transform ${
+                                  isSelected
+                                    ? 'text-brand-orange-400 translate-x-0.5'
+                                    : 'text-slate-300 group-hover:text-slate-500'
+                                }`}
+                              />
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* RIGHT PANEL: ALL CHILD CATEGORIES */}
+                    <div className="flex-1 bg-white p-6 sm:p-8 overflow-y-auto no-scrollbar flex flex-col">
+                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-4">
+                        ALL CHILD CATEGORIES
+                      </div>
+
+                      {selectedParentCategorySlug !== 'all' && subcategories.length > 0 ? (
+                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                          {subcategories.map((sub) => (
+                            <Link
+                              key={sub.id}
+                              to={`/categories/${currentParent?.slug}/${sub.slug}`}
+                              onClick={() => setActiveDepartment(null)}
+                              className="group flex items-center justify-between p-3.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-brand-blue-900 bg-slate-50/70 hover:bg-brand-blue-50/60 border border-slate-100/90 hover:border-brand-blue-200/70 transition-all shadow-2xs hover:shadow-xs"
+                            >
+                              <span className="truncate group-hover:font-bold">{sub.name}</span>
+                              <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-blue-900 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex-1 min-h-[240px] flex items-center justify-center text-xs font-medium text-slate-400">
+                          No third-level categories configured for Products.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* 4. DEDICATED RESPONSIVE MOBILE DRAWER */}

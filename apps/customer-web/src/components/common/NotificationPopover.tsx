@@ -85,7 +85,7 @@ export const NotificationPopover: React.FC = () => {
         onClick={handleToggle}
         aria-label="View notifications"
         aria-expanded={isOpen}
-        className="relative p-2 sm:p-2.5 rounded-xl text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-brand-blue-500/20"
+        className="h-10 w-10 relative rounded-xl text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 transition-colors flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-brand-blue-500/20 flex-shrink-0"
         title="Notifications & Dispatches"
       >
         <Bell className="w-5 h-5" />

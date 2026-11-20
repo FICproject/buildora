@@ -216,9 +216,9 @@ export const SmartSearchBar: React.FC = () => {
   };
 
   return (
-    <div ref={searchContainerRef} className="relative w-full max-w-xl mx-auto">
+    <div ref={searchContainerRef} className="relative w-full">
       {/* 1. DESKTOP & TABLET INLINE SEARCH BAR */}
-      <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+      <form onSubmit={handleSearchSubmit} className="relative flex items-center w-full">
         <input
           ref={inputRef}
           type="text"
@@ -231,7 +231,7 @@ export const SmartSearchBar: React.FC = () => {
           onBlur={() => setIsFocused(false)}
           placeholder=""
           aria-label="Search construction materials"
-          className="w-full pl-10 pr-24 py-2 sm:py-2.5 text-xs sm:text-sm bg-slate-100/90 hover:bg-slate-100 focus:bg-white border border-transparent focus:border-brand-blue-500 rounded-2xl focus:outline-none transition-all shadow-inner font-medium text-slate-900"
+          className="w-full h-10 sm:h-11 pl-10 pr-24 text-xs sm:text-sm bg-slate-100/90 hover:bg-slate-100 focus:bg-white border border-transparent focus:border-brand-blue-500 rounded-2xl focus:outline-none transition-all shadow-inner font-medium text-slate-900"
         />
 
         {/* Animated Rotating Placeholder overlay */}
@@ -267,7 +267,7 @@ export const SmartSearchBar: React.FC = () => {
 
         <button
           type="submit"
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-brand-blue-900 hover:bg-brand-blue-800 text-white text-xs font-bold px-3 sm:px-3.5 py-1.5 rounded-xl transition-colors shadow-sm"
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-brand-blue-900 hover:bg-brand-blue-800 text-white text-xs font-bold px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-colors shadow-sm flex items-center justify-center"
         >
           Search
         </button>
