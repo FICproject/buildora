@@ -1,5 +1,6 @@
 import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { RootLayout } from '../layouts/RootLayout';
 import { PublicStoreLayout } from '../layouts/PublicStoreLayout';
 import { CustomerAccountLayout } from '../layouts/CustomerAccountLayout';
 import { CheckoutLayout } from '../layouts/CheckoutLayout';
@@ -38,11 +39,14 @@ import {
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 export const router = createBrowserRouter([
-  // Public Storefront Routes
   {
-    path: '/',
-    element: <PublicStoreLayout />,
+    element: <RootLayout />,
     children: [
+      // Public Storefront Routes
+      {
+        path: '/',
+        element: <PublicStoreLayout />,
+        children: [
       { index: true, element: <HomePage /> },
       { path: 'products', element: <ProductListingPage /> },
       { path: 'products/:slug', element: <ProductDetailPage /> },
@@ -131,6 +135,8 @@ export const router = createBrowserRouter([
       { index: true, element: <SupportPage /> },
       { path: 'tickets', element: <SupportPage /> },
       { path: 'tickets/:ticketId', element: <SupportPage /> }
+    ]
+  }
     ]
   }
 ]);

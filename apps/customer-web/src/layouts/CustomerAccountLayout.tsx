@@ -24,6 +24,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useWishlistStore } from '../store/useWishlistStore';
 import { formatCurrency } from '@buildora/utils';
 import { Button } from '../components/ui/Button';
+import { ScrollToTop } from '../components/common/ScrollToTop';
 
 export const CustomerAccountLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ export const CustomerAccountLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
+      <ScrollToTop />
       <Header />
       <main className="flex-grow py-4 sm:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

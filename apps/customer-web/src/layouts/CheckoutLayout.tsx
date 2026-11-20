@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { ShieldCheck, Lock, PhoneCall } from 'lucide-react';
+import { ScrollToTop } from '../components/common/ScrollToTop';
 
 export const CheckoutLayout: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+      <ScrollToTop />
       {/* Focused Checkout Header */}
       <header className="bg-white border-b border-slate-200 py-3.5 px-4 sticky top-0 z-30 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
