@@ -1,123 +1,278 @@
 import React, { useState } from 'react';
-import { User, Phone, Mail, Building2, CheckCircle2, Save } from 'lucide-react';
+import { User, Phone, Mail, Building2, CheckCircle2, Save, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { Button } from '../components/ui/Button';
 
 export const ProfilePage: React.FC = () => {
   const { user, updateProfile } = useAuthStore();
 
-  const [name, setName] = useState(user?.name || 'Arjun Verma');
+  // Split existing user name into First and Last name
+  const nameParts = (user?.name || 'Arjun Verma').trim().split(' ');
+  const initialFirst = nameParts[0] || 'Arjun';
+  const initialLast = nameParts.slice(1).join(' ') || (nameParts.length === 1 ? '' : 'Verma');
+
+  // Card 1: Personal & Contact Information State
+  const [firstName, setFirstName] = useState(initialFirst);
+  const [lastName, setLastName] = useState(initialLast);
   const [email, setEmail] = useState(user?.email || 'arjun.verma@buildora.com');
+  const [isSavingPersonal, setIsSavingPersonal] = useState(false);
+  const [personalSaved, setPersonalSaved] = useState(false);
+  const [personalError, setPersonalError] = useState('');
+
+  // Card 2: GST & Business Tax Information State
   const [businessName, setBusinessName] = useState(user?.businessName || 'Apex Infra Construction Ltd');
   const [gstin, setGstin] = useState(user?.gstin || '29AABCB1234F1Z8');
-  const [isSaved, setIsSaved] = useState(false);
+  const [isSavingGst, setIsSavingGst] = useState(false);
+  const [gstSaved, setGstSaved] = useState(false);
+  const [gstError, setGstError] = useState('');
 
-  const handleSave = (e: React.FormEvent) => {
+  // Dedicated Save 1: Personal Information
+  const handleSavePersonal = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile({
-      name,
-      email,
-      businessName,
-      gstin
-    });
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2500);
+    setPersonalError('');
+    if (!firstName.trim()) {
+      setPersonalError('First Name is required.');
+      return;
+    }
+
+    setIsSavingPersonal(true);
+    try {
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      await updateProfile({
+        name: fullName,
+        email: email.trim()
+      });
+      setPersonalSaved(true);
+      setTimeout(() => setPersonalSaved(false), 3000);
+    } catch (err: any) {
+      setPersonalError(err?.message || 'Failed to update personal information. Please try again.');
+    } finally {
+      setIsSavingPersonal(false);
+    }
+  };
+
+  // Dedicated Save 2: GST Information
+  const handleSaveGst = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGstError('');
+    const cleanGstin = gstin.trim().toUpperCase();
+
+    if (cleanGstin.length > 0 && cleanGstin.length !== 15) {
+      setGstError('GSTIN Number must be exactly 15 characters (e.g., 29AABCB1234F1Z8).');
+      return;
+    }
+
+    setIsSavingGst(true);
+    try {
+      await updateProfile({
+        businessName: businessName.trim(),
+        gstin: cleanGstin
+      });
+      setGstSaved(true);
+      setTimeout(() => setGstSaved(false), 3000);
+    } catch (err: any) {
+      setGstError(err?.message || 'Failed to update GST information. Please try again.');
+    } finally {
+      setIsSavingGst(false);
+    }
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card p-6 sm:p-8 space-y-6">
-      <div className="pb-4 border-b border-slate-100">
-        <h2 className="text-xl font-black text-slate-900">Personal &amp; Business Profile</h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Manage your contact credentials and business GST details for automatic tax invoice generation.
-        </p>
+    <div className="space-y-6">
+      {/* ======================================================== */}
+      {/* CARD 1: PERSONAL & BUSINESS PROFILE                     */}
+      {/* ======================================================== */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card p-6 sm:p-8 space-y-5">
+        <div className="pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900">Personal &amp; Business Profile</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Manage your personal credentials, contact email, and verified phone number.
+            </p>
+          </div>
+          <span className="self-start sm:self-auto text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">
+            Profile Details
+          </span>
+        </div>
+
+        {personalSaved && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>Personal profile updated successfully!</span>
+          </div>
+        )}
+
+        {personalError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{personalError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSavePersonal} className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* First Name */}
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">First Name</label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Arjun"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-500 font-medium text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Last Name */}
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Last Name</label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="e.g. Verma"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-500 font-medium text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Email Address */}
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Email Address</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  placeholder="name@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-500 font-medium text-xs"
+                />
+              </div>
+            </div>
+
+            {/* Registered Phone (Verified) */}
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Phone Number</label>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={user?.phone || '9876543210'}
+                  disabled
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-500 font-medium cursor-not-allowed text-xs"
+                />
+              </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Verified with mobile OTP. Contact support to update registered mobile.
+              </span>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <Button
+              variant="primary"
+              size="md"
+              type="submit"
+              disabled={isSavingPersonal}
+              className="bg-brand-blue-900 hover:bg-brand-blue-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm"
+              leftIcon={<Save className="w-4 h-4" />}
+            >
+              {isSavingPersonal ? 'Saving...' : 'Save Personal Information'}
+            </Button>
+          </div>
+        </form>
       </div>
 
-      {isSaved && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          Profile updated successfully!
-        </div>
-      )}
-
-      <form onSubmit={handleSave} className="space-y-4 text-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* ======================================================== */}
+      {/* CARD 2: GST INFORMATION (INDEPENDENT SECTION)             */}
+      {/* ======================================================== */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card p-6 sm:p-8 space-y-5">
+        <div className="pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <label className="font-bold text-slate-700 block mb-1">Full Name</label>
-            <div className="relative">
-              <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
-                required
-              />
-            </div>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-brand-orange-500" />
+              GST Information
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Registered business tax details for eligible 18% &amp; 28% Input Tax Credit (ITC) tax invoice downloads.
+            </p>
           </div>
-
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">Registered Phone</label>
-            <div className="relative">
-              <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={user?.phone || '9876543210'}
-                disabled
-                className="w-full pl-9 pr-3 py-2 border rounded-lg bg-slate-50 text-slate-500 font-medium cursor-not-allowed"
-              />
-            </div>
-            <span className="text-[10px] text-slate-400">Phone verified for OTP authentication</span>
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">Email Address</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
-                required
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-700 block mb-1">Company / Firm Name</label>
-            <div className="relative">
-              <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
-              />
-            </div>
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="font-bold text-slate-700 block mb-1">15-Digit GSTIN Number</label>
-            <input
-              type="text"
-              maxLength={15}
-              value={gstin}
-              onChange={(e) => setGstin(e.target.value.toUpperCase())}
-              className="w-full p-2 border rounded-lg font-mono font-bold focus:outline-none focus:ring-1 focus:ring-brand-blue-500"
-            />
-            <span className="text-[10px] text-slate-400 mt-1 block">
-              Entering a valid GSTIN enables instant Input Tax Credit (ITC) tax invoice downloads on all material orders.
-            </span>
-          </div>
+          <span className="self-start sm:self-auto text-[10px] font-black uppercase tracking-wider bg-brand-orange-50 text-brand-orange-800 border border-brand-orange-200 px-2.5 py-1 rounded-lg">
+            Tax &amp; B2B ITC
+          </span>
         </div>
 
-        <div className="pt-4 border-t border-slate-100">
-          <Button variant="primary" size="md" type="submit" leftIcon={<Save className="w-4 h-4" />}>
-            Save Profile Changes
-          </Button>
-        </div>
-      </form>
+        {gstSaved && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>GST details updated successfully!</span>
+          </div>
+        )}
+
+        {gstError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{gstError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSaveGst} className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Company / Firm Name */}
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Company / Firm Name</label>
+              <div className="relative">
+                <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="e.g. Apex Infra Construction Ltd"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-500 font-medium text-xs"
+                />
+              </div>
+            </div>
+
+            {/* 15-Digit GSTIN Number */}
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">15-Digit GSTIN Number</label>
+              <input
+                type="text"
+                maxLength={15}
+                placeholder="29AABCB1234F1Z8"
+                value={gstin}
+                onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-blue-500 text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-600 text-[11px] leading-relaxed">
+            <strong className="text-slate-900 font-bold">Why provide GSTIN?</strong> A valid 15-digit GSTIN is automatically applied to all construction material dispatches, enabling instant GST tax invoice downloads with eligible Input Tax Credit (ITC) for your registered firm.
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <Button
+              variant="primary"
+              size="md"
+              type="submit"
+              disabled={isSavingGst}
+              className="bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm"
+              leftIcon={<Save className="w-4 h-4" />}
+            >
+              {isSavingGst ? 'Saving...' : 'Save GST Information'}
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

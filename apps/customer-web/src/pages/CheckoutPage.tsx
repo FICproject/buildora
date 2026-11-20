@@ -118,7 +118,20 @@ export const CheckoutPage: React.FC = () => {
   const handleCompleteOrder = async () => {
     setIsProcessingPayment(true);
 
-    const deliveryAddr = addresses.find((a) => a.id === selectedAddressId) || addresses[0];
+    const deliveryAddr = addresses.find((a) => a.id === selectedAddressId) || addresses[0] || {
+      id: 'addr-default-' + Date.now(),
+      type: 'CONSTRUCTION_SITE',
+      recipientName: user?.name || newAddress.recipientName || 'Site Contact',
+      mobile: user?.phone || newAddress.mobile || '9876543210',
+      building: newAddress.building || 'Bengaluru Project Site',
+      street: newAddress.street || 'Main Road',
+      area: newAddress.area || 'Bengaluru',
+      city: newAddress.city || defaultCity || 'Bengaluru',
+      state: 'Karnataka',
+      pincode: newAddress.pincode || defaultPincode || '560072',
+      isDefault: true,
+      isConstructionSite: true
+    };
 
     try {
       const order = await placeOrder({

@@ -63,21 +63,16 @@ export const Header: React.FC = () => {
   // Modals & Drawers state
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
 
   // Active mega menu department dropdown
   const [activeDepartment, setActiveDepartment] = useState<string | null>(null);
   const [isAllCategoriesOpen, setIsAllCategoriesOpen] = useState(false);
 
-  const accountRef = useRef<HTMLDivElement>(null);
   const megaMenuRef = useRef<HTMLDivElement>(null);
 
   // Close menus on outside click or escape
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (accountRef.current && !accountRef.current.contains(event.target as Node)) {
-        setIsAccountMenuOpen(false);
-      }
       if (megaMenuRef.current && !megaMenuRef.current.contains(event.target as Node)) {
         setActiveDepartment(null);
         setIsAllCategoriesOpen(false);
@@ -86,7 +81,6 @@ export const Header: React.FC = () => {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setIsAccountMenuOpen(false);
         setActiveDepartment(null);
         setIsAllCategoriesOpen(false);
         setIsMobileMenuOpen(false);
@@ -115,6 +109,28 @@ export const Header: React.FC = () => {
     return MASTER_CATEGORIES.filter((c) => dept.categorySlugs.includes(c.slug));
   };
 
+  const getLocationDisplaySubtitle = () => {
+    if (selectedAddressFull) {
+      return selectedAddressFull;
+    }
+    if (selectedAddressLabel && pincode) {
+      const loc = locality ? locality.split(/[/,]/)[0].trim() : (cityName || 'Bengaluru');
+      return `${selectedAddressLabel} · ${loc}, ${pincode}`;
+    }
+    if (pincode) {
+      const loc = locality ? locality.split(/[/,]/)[0].trim() : (cityName || 'Bengaluru Urban');
+      return `${pincode} · ${loc}`;
+    }
+    return 'Enter pincode to check delivery';
+  };
+
+  const getLocationDisplayETA = () => {
+    if (!pincode && !selectedAddressFull) {
+      return 'Check Delivery Time';
+    }
+    return etaMinutes > 0 ? `${etaMinutes} mins` : '60 mins';
+  };
+
   return (
     <>
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm transition-all duration-200">
@@ -138,11 +154,11 @@ export const Header: React.FC = () => {
                   BUILDORA <span className="text-brand-orange-500">60</span>
                 </span>
                 <div className="flex items-center gap-1 text-xs font-black text-slate-900 group-hover:text-brand-blue-900 transition-colors mt-1.5">
-                  <span>{etaMinutes > 0 ? `${etaMinutes} mins` : '60 mins'}</span>
+                  <span>{getLocationDisplayETA()}</span>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-blue-600 group-hover:translate-y-0.5 transition-all" />
                 </div>
                 <span className="text-[11px] text-slate-500 font-medium truncate max-w-[170px] xl:max-w-[230px] leading-tight mt-0.5">
-                  {selectedAddressFull || (selectedAddressLabel ? `${selectedAddressLabel} · ${pincode || '560072'}` : (locality ? `${pincode || '560072'} · ${locality.split(/[/,]/)[0].trim()}` : pincode || '560072'))}
+                  {getLocationDisplaySubtitle()}
                 </span>
               </div>
             </div>
@@ -152,21 +168,19 @@ export const Header: React.FC = () => {
               <SmartSearchBar />
             </div>
 
-            {/* 4. My Account */}
-            <div ref={accountRef} className="relative flex-shrink-0">
+            {/* 4. My Account - Direct Link to Dashboard (No Dropdown) */}
+            <div className="relative flex-shrink-0">
               {isAuthenticated && user ? (
-                <button
-                  type="button"
-                  onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
-                  className="flex items-center gap-2 p-1.5 xl:px-3 xl:py-2 rounded-xl border border-slate-200 hover:border-brand-blue-400 text-xs font-bold text-slate-800 bg-white shadow-sm transition-all"
-                  title="My Account Menu"
+                <Link
+                  to="/account"
+                  className="flex items-center gap-2 p-1.5 xl:px-3 xl:py-2 rounded-xl border border-slate-200 hover:border-brand-blue-400 hover:bg-slate-50 text-xs font-bold text-slate-800 bg-white shadow-sm transition-all"
+                  title="My Account Dashboard"
                 >
                   <div className="w-7 h-7 rounded-lg bg-brand-blue-900 text-white flex items-center justify-center font-black text-xs shadow-sm">
                     {user.name ? user.name.charAt(0) : 'U'}
                   </div>
                   <span className="hidden xl:inline truncate max-w-[100px]">{user.name ? user.name.split(' ')[0] : (user.phone || 'Account')}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                </button>
+                </Link>
               ) : (
                 <button
                   type="button"
@@ -177,96 +191,6 @@ export const Header: React.FC = () => {
                   <User className="w-4 h-4 text-slate-600" />
                   <span className="font-bold">Sign In</span>
                 </button>
-              )}
-
-              {/* Account Dropdown Menu */}
-              {isAccountMenuOpen && isAuthenticated && user && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2.5 z-50 animate-in fade-in zoom-in-95 duration-100 text-xs">
-                  <div className="px-4 py-2 border-b border-slate-100">
-                    <div className="font-black text-slate-900 truncate">{user.name}</div>
-                    <div className="text-[11px] text-slate-500">+91 {user.phone}</div>
-                    {user.businessName && (
-                      <div className="text-[10px] text-brand-blue-800 font-bold truncate mt-0.5">
-                        {user.businessName}
-                      </div>
-                    )}
-                  </div>
-                  <div className="py-1">
-                    <Link
-                      to="/account"
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="block px-4 py-2 hover:bg-slate-50 font-bold text-brand-blue-900"
-                    >
-                      Account Dashboard Overview
-                    </Link>
-                    <Link
-                      to="/account/orders"
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="block px-4 py-2 hover:bg-slate-50 font-medium text-slate-700"
-                    >
-                      My Orders &amp; Dispatches
-                    </Link>
-                    <Link
-                      to="/account/wallet"
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="flex items-center justify-between px-4 py-2 hover:bg-slate-50 font-medium text-slate-700"
-                    >
-                      <span>Buildora Wallet</span>
-                      <span className="font-extrabold text-emerald-600">
-                        {formatCurrency(user.walletBalance)}
-                      </span>
-                    </Link>
-                    <Link
-                      to="/account/rewards"
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="flex items-center justify-between px-4 py-2 hover:bg-slate-50 font-medium text-slate-700"
-                    >
-                      <span>Contractor Rewards</span>
-                      <span className="font-extrabold text-amber-600">{user.rewardPoints} pts</span>
-                    </Link>
-                    <Link
-                      to="/account/addresses"
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="block px-4 py-2 hover:bg-slate-50 font-medium text-slate-700"
-                    >
-                      Site Delivery Addresses
-                    </Link>
-                    <Link
-                      to="/account/projects"
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="block px-4 py-2 hover:bg-slate-50 font-medium text-slate-700"
-                    >
-                      Project Procurement Lists
-                    </Link>
-                    <Link
-                      to="/account/profile"
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="block px-4 py-2 hover:bg-slate-50 font-medium text-slate-700"
-                    >
-                      Profile Settings &amp; GSTIN
-                    </Link>
-                    <Link
-                      to="/account/security"
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="block px-4 py-2 hover:bg-slate-50 font-medium text-slate-700"
-                    >
-                      Security &amp; PIN Settings
-                    </Link>
-                  </div>
-                  <div className="border-t border-slate-100 mt-1 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        logout();
-                        setIsAccountMenuOpen(false);
-                        navigate('/');
-                      }}
-                      className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 font-bold"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                </div>
               )}
             </div>
 
@@ -306,25 +230,17 @@ export const Header: React.FC = () => {
               )}
             </button>
 
-            {/* 8. Cart */}
-            <button
-              type="button"
-              onClick={() => setIsCartDrawerOpen(true)}
+            {/* 8. Cart - Shows Only Product Count & Direct Navigation to /cart */}
+            <Link
+              to="/cart"
               className="flex items-center gap-2 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black py-2 px-3 xl:px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex-shrink-0"
               title="View Shopping Cart"
             >
-              <div className="relative">
-                <ShoppingCart className="w-4 h-4" />
-                {summary.itemCount > 0 && (
-                  <span className="absolute -top-2.5 -right-2.5 bg-brand-blue-950 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-brand-orange-500 shadow-sm">
-                    {summary.itemCount}
-                  </span>
-                )}
-              </div>
+              <ShoppingCart className="w-4 h-4" />
               <span className="text-xs font-bold tracking-tight">
-                {summary.grandTotal > 0 ? formatCurrency(summary.grandTotal) : 'Cart'}
+                Cart ({summary.itemCount})
               </span>
-            </button>
+            </Link>
           </div>
 
           {/* B. TABLET LAYOUT (md: 768px - 1023px) */}
@@ -344,11 +260,11 @@ export const Header: React.FC = () => {
                     BUILDORA <span className="text-brand-orange-500">60</span>
                   </span>
                   <div className="flex items-center gap-1 text-[11px] font-black text-slate-900 group-hover:text-brand-blue-900 transition-colors mt-1">
-                    <span>{etaMinutes > 0 ? `${etaMinutes} mins` : '60 mins'}</span>
+                    <span>{getLocationDisplayETA()}</span>
                     <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-brand-blue-600 transition-transform" />
                   </div>
                   <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px] leading-tight mt-0.5">
-                    {selectedAddressFull || (selectedAddressLabel ? `${selectedAddressLabel} · ${pincode || '560072'}` : (locality ? `${pincode || '560072'} · ${locality.split(/[/,]/)[0].trim()}` : pincode || '560072'))}
+                    {getLocationDisplaySubtitle()}
                   </span>
                 </div>
               </div>
@@ -398,15 +314,15 @@ export const Header: React.FC = () => {
                   <Wallet className="w-4 h-4" />
                 </button>
 
-                {/* Cart */}
-                <button
-                  type="button"
-                  onClick={() => setIsCartDrawerOpen(true)}
-                  className="flex items-center gap-1 bg-brand-orange-500 text-white font-bold py-1.5 px-3 rounded-xl text-xs shadow-sm"
+                {/* Cart - Product Count Only & Direct Navigation */}
+                <Link
+                  to="/cart"
+                  className="flex items-center gap-1.5 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-bold py-1.5 px-3 rounded-xl text-xs shadow-sm"
+                  title="Shopping Cart"
                 >
                   <ShoppingCart className="w-3.5 h-3.5" />
-                  <span>{summary.grandTotal > 0 ? formatCurrency(summary.grandTotal) : 'Cart'}</span>
-                </button>
+                  <span>Cart ({summary.itemCount})</span>
+                </Link>
 
                 {/* Hamburger */}
                 <button
@@ -456,11 +372,11 @@ export const Header: React.FC = () => {
                       BUILDORA <span className="text-brand-orange-500">60</span>
                     </span>
                     <div className="flex items-center gap-0.5 text-[10.5px] font-black text-slate-900 mt-1">
-                      <span>{etaMinutes > 0 ? `${etaMinutes} mins` : '60 mins'}</span>
+                      <span>{getLocationDisplayETA()}</span>
                       <ChevronDown className="w-2.5 h-2.5 text-slate-400 group-hover:text-brand-blue-600 transition-transform flex-shrink-0" />
                     </div>
                     <span className="text-[9.5px] text-slate-500 font-medium truncate max-w-[125px] leading-tight mt-0.5">
-                      {selectedAddressFull || (selectedAddressLabel ? `${selectedAddressLabel} · ${pincode || '560072'}` : (locality ? `${pincode || '560072'} · ${locality.split(/[/,]/)[0].trim()}` : pincode || '560072'))}
+                      {getLocationDisplaySubtitle()}
                     </span>
                   </div>
                 </div>
@@ -494,25 +410,17 @@ export const Header: React.FC = () => {
                 {/* Notifications */}
                 <NotificationPopover />
 
-                {/* Cart Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsCartDrawerOpen(true)}
-                  className="flex items-center gap-1 bg-brand-orange-500 text-white font-black py-1.5 px-2 rounded-xl shadow-sm text-xs min-h-[36px]"
+                {/* Cart Button - Product Count Only & Direct Navigation */}
+                <Link
+                  to="/cart"
+                  className="flex items-center gap-1 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black py-1.5 px-2 rounded-xl shadow-sm text-xs min-h-[36px]"
                   title="Shopping Cart"
                 >
-                  <div className="relative">
-                    <ShoppingCart className="w-3.5 h-3.5" />
-                    {summary.itemCount > 0 && (
-                      <span className="absolute -top-2 -right-2 bg-brand-blue-950 text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center">
-                        {summary.itemCount}
-                      </span>
-                    )}
-                  </div>
+                  <ShoppingCart className="w-3.5 h-3.5" />
                   <span className="text-[11px] font-bold">
-                    {summary.grandTotal > 0 ? formatCurrency(summary.grandTotal) : 'Cart'}
+                    Cart ({summary.itemCount})
                   </span>
-                </button>
+                </Link>
               </div>
             </div>
 

@@ -60,7 +60,12 @@ export const useLocationStore = create<LocationState>()(
           };
         }
 
-        set({ isLoading: true });
+        set({
+          isLoading: true,
+          selectedAddressId: null,
+          selectedAddressLabel: null,
+          selectedAddressFull: null
+        });
 
         // 1. Try Backend API first
         try {
@@ -224,7 +229,12 @@ export const useLocationStore = create<LocationState>()(
       },
 
       detectCurrentLocation: async () => {
-        set({ isLoading: true });
+        set({
+          isLoading: true,
+          selectedAddressId: null,
+          selectedAddressLabel: null,
+          selectedAddressFull: null
+        });
         return new Promise((resolve) => {
           if (!('geolocation' in navigator)) {
             set({ isLoading: false });
@@ -285,10 +295,13 @@ export const useLocationStore = create<LocationState>()(
       selectSavedAddress: async (address) => {
         if (address.pincode) {
           await get().checkAndSetPincode(address.pincode);
+          const label = address.label || 'Site';
+          const area = address.locality || address.city || 'Bengaluru';
+          const full = address.fullAddress || `${label} · ${area}, ${address.city || 'Bengaluru'} ${address.pincode}`;
           set({
             selectedAddressId: address.id || null,
-            selectedAddressLabel: address.label || address.locality || null,
-            selectedAddressFull: address.fullAddress || (address.label ? `${address.label} · ${address.locality || address.pincode}` : null),
+            selectedAddressLabel: label,
+            selectedAddressFull: full,
             isModalOpen: false
           });
         }

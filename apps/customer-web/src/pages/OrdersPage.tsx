@@ -238,11 +238,21 @@ export const OrdersPage: React.FC = () => {
                 <MapPin className="w-4 h-4 text-brand-orange-500" /> Site Delivery Address
               </div>
               <div className="text-slate-700 leading-relaxed">
-                <div className="font-bold text-slate-900">{selectedOrder.deliveryAddress.recipientName}</div>
-                <div>{selectedOrder.deliveryAddress.building}, {selectedOrder.deliveryAddress.street}</div>
-                <div>{selectedOrder.deliveryAddress.city}, {selectedOrder.deliveryAddress.state} - {selectedOrder.deliveryAddress.pincode}</div>
-                <div className="text-slate-500 mt-1">Phone: +91 {selectedOrder.deliveryAddress.mobile}</div>
-                {selectedOrder.deliveryAddress.deliveryInstructions && (
+                <div className="font-bold text-slate-900">
+                  {selectedOrder.deliveryAddress?.recipientName || 'Site Contact'}
+                </div>
+                <div>
+                  {[selectedOrder.deliveryAddress?.building, selectedOrder.deliveryAddress?.street].filter(Boolean).join(', ') || 'Address on file'}
+                </div>
+                <div>
+                  {[selectedOrder.deliveryAddress?.area, selectedOrder.deliveryAddress?.city].filter(Boolean).join(', ') || 'Bengaluru'}
+                  {selectedOrder.deliveryAddress?.state ? `, ${selectedOrder.deliveryAddress.state}` : ''}
+                  {selectedOrder.deliveryAddress?.pincode ? ` - ${selectedOrder.deliveryAddress.pincode}` : ''}
+                </div>
+                {selectedOrder.deliveryAddress?.mobile && (
+                  <div className="text-slate-500 mt-1">Phone: +91 {selectedOrder.deliveryAddress.mobile}</div>
+                )}
+                {selectedOrder.deliveryAddress?.deliveryInstructions && (
                   <div className="mt-2 p-2 bg-amber-50 rounded-lg text-amber-900 text-[11px] font-medium border border-amber-200">
                     <strong>Site Note:</strong> {selectedOrder.deliveryAddress.deliveryInstructions}
                   </div>
@@ -480,11 +490,17 @@ export const OrdersPage: React.FC = () => {
                   <div>
                     <span className="text-slate-500">Delivering to: </span>
                     <strong className="text-slate-800">
-                      {order.deliveryAddress.building}, {order.deliveryAddress.city} ({order.deliveryAddress.pincode})
+                      {order.deliveryAddress ? (
+                        [order.deliveryAddress.building, order.deliveryAddress.street, order.deliveryAddress.area, order.deliveryAddress.city]
+                          .filter(Boolean)
+                          .join(', ') + (order.deliveryAddress.pincode ? ` (${order.deliveryAddress.pincode})` : '')
+                      ) : (
+                        'Registered Site Destination (Bengaluru)'
+                      )}
                     </strong>
                     <div className="text-[11px] text-slate-500 mt-0.5">
                       Grand Total: <strong className="text-slate-900 font-bold">{formatCurrency(order.grandTotal)}</strong>{' '}
-                      ({order.paymentMethod.replace(/_/g, ' ')})
+                      ({order.paymentMethod ? order.paymentMethod.replace(/_/g, ' ') : 'PREPAID'})
                     </div>
                   </div>
 

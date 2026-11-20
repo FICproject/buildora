@@ -36,18 +36,8 @@ export const CustomerAccountLayout: React.FC = () => {
     { label: 'Profile', path: '/account/profile', icon: User },
     { label: 'My Orders', path: '/account/orders', icon: Package },
     { label: 'Site Addresses', path: '/account/addresses', icon: MapPin },
-    {
-      label: 'Buildora Wallet',
-      path: '/account/wallet',
-      icon: Wallet,
-      badge: user ? formatCurrency(user.walletBalance) : undefined
-    },
-    {
-      label: 'Rewards',
-      path: '/account/rewards',
-      icon: Award,
-      badge: user ? `${user.rewardPoints} pts` : undefined
-    },
+    { label: 'Buildora Wallet', path: '/account/wallet', icon: Wallet },
+    { label: 'Rewards', path: '/account/rewards', icon: Award },
     {
       label: 'Saved Materials',
       path: '/account/wishlist',
@@ -55,9 +45,7 @@ export const CustomerAccountLayout: React.FC = () => {
       badge: wishlistItems.length > 0 ? `${wishlistItems.length}` : undefined
     },
     { label: 'Shopping Lists', path: '/account/projects', icon: FolderKanban },
-    { label: 'Notifications', path: '/account/notifications', icon: Bell },
-    { label: 'Support Desk', path: '/account/support', icon: LifeBuoy },
-    { label: 'Security PIN', path: '/account/security', icon: ShieldCheck }
+    { label: 'Support Desk', path: '/account/support', icon: LifeBuoy }
   ];
 
   const currentTab = navItems.find((n) =>

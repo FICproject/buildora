@@ -148,13 +148,21 @@ export const OrderTrackingPage: React.FC = () => {
           </h4>
           <div className="text-xs text-slate-600 space-y-1">
             <div className="font-bold text-slate-900 text-sm">
-              {order.deliveryAddress.recipientName}
+              {order.deliveryAddress?.recipientName || 'Site Contact'}
             </div>
             <p className="leading-relaxed">
-              {order.deliveryAddress.building}, {order.deliveryAddress.street}, {order.deliveryAddress.area}, {order.deliveryAddress.city} - {order.deliveryAddress.pincode}
+              {order.deliveryAddress ? (
+                [order.deliveryAddress.building, order.deliveryAddress.street, order.deliveryAddress.area, order.deliveryAddress.city]
+                  .filter(Boolean)
+                  .join(', ') + (order.deliveryAddress.pincode ? ` - ${order.deliveryAddress.pincode}` : '')
+              ) : (
+                'Registered Site Destination (Bengaluru)'
+              )}
             </p>
-            <div className="text-slate-500">Phone: +91 {order.deliveryAddress.mobile}</div>
-            {order.deliveryAddress.deliveryInstructions && (
+            {order.deliveryAddress?.mobile && (
+              <div className="text-slate-500">Phone: +91 {order.deliveryAddress.mobile}</div>
+            )}
+            {order.deliveryAddress?.deliveryInstructions && (
               <div className="mt-2 p-2 bg-amber-50 rounded-lg text-amber-900 font-medium text-[11px]">
                 Offloading Note: {order.deliveryAddress.deliveryInstructions}
               </div>

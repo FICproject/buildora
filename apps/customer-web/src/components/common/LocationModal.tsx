@@ -106,9 +106,12 @@ export const LocationModal: React.FC = () => {
       if (res && res.serviceable) {
         setFeedback({
           type: 'success',
-          message: res.message || `Delivery verified for ${res.locality || code}!`,
+          message: res.message || `Delivery available in ${res.etaMinutes || 60} mins to ${res.locality || code}!`,
           verifiedData: res
         });
+        setTimeout(() => {
+          closeLocationModal();
+        }, 1200);
       } else {
         setFeedback({
           type: 'warning',
@@ -215,13 +218,13 @@ export const LocationModal: React.FC = () => {
     <Modal
       isOpen={isModalOpen}
       onClose={closeLocationModal}
-      title="Select Delivery Location"
+      title={modalMode === 'SAVED_ADDRESSES' ? 'Select Delivery Address' : modalMode === 'ADD_ADDRESS' ? 'Add Delivery Address' : 'Delivery Time'}
       subtitle={
         modalMode === 'SAVED_ADDRESSES'
           ? 'Select a delivery address or add a new construction job site.'
           : modalMode === 'ADD_ADDRESS'
             ? 'Enter your site details for 60-minute quick-commerce material dispatch.'
-            : 'Enter your pincode to check delivery availability and estimated delivery time.'
+            : 'Enter your pincode to check delivery time & serviceability'
       }
       maxWidth="md"
     >
@@ -362,7 +365,7 @@ export const LocationModal: React.FC = () => {
 
             {/* Pincode Input Form */}
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-700">Enter 6-Digit Site Pincode</label>
+              <label className="block text-xs font-bold text-slate-700">Enter Pincode</label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -377,7 +380,7 @@ export const LocationModal: React.FC = () => {
                       setInputPincode(val);
                       setFeedback(null);
                     }}
-                    placeholder="Enter 6-digit PIN (e.g. 560072)"
+                    placeholder="Enter Pincode"
                     className="w-full pl-10 pr-3 py-2.5 text-sm font-semibold tracking-wider border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600"
                     onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
                   />
@@ -386,9 +389,9 @@ export const LocationModal: React.FC = () => {
                   onClick={() => handleVerify()}
                   size="md"
                   disabled={isLoading || inputPincode.length !== 6}
-                  className="px-5 font-black text-xs bg-brand-blue-900 hover:bg-brand-blue-800 text-white shadow-sm"
+                  className="px-6 font-black text-xs bg-brand-blue-900 hover:bg-brand-blue-800 text-white shadow-sm"
                 >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Check Availability'}
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
                 </Button>
               </div>
             </div>
