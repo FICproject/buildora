@@ -9,6 +9,7 @@ import {
   X,
   Zap,
   ChevronDown,
+  ChevronRight,
   Calculator,
   Truck,
   PhoneCall,
@@ -66,7 +67,12 @@ export const Header: React.FC = () => {
 
   // Active mega menu department dropdown
   const [activeDepartment, setActiveDepartment] = useState<string | null>(null);
+  const [selectedParentCategorySlug, setSelectedParentCategorySlug] = useState<string | null>(null);
   const [isAllCategoriesOpen, setIsAllCategoriesOpen] = useState(false);
+
+  // Mobile navigation accordion state
+  const [mobileExpandedDept, setMobileExpandedDept] = useState<string | null>(null);
+  const [mobileExpandedCat, setMobileExpandedCat] = useState<string | null>(null);
 
   const megaMenuRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,7 +83,13 @@ export const Header: React.FC = () => {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
     }
-    setActiveDepartment(deptSlug);
+    if (activeDepartment !== deptSlug) {
+      setActiveDepartment(deptSlug);
+      const cats = getDepartmentCategories(deptSlug);
+      if (cats.length > 0) {
+        setSelectedParentCategorySlug(cats[0].slug);
+      }
+    }
   };
 
   const handleDeptMouseLeave = () => {
@@ -93,6 +105,8 @@ export const Header: React.FC = () => {
   useEffect(() => {
     setActiveDepartment(null);
     setIsMobileMenuOpen(false);
+    setMobileExpandedDept(null);
+    setMobileExpandedCat(null);
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
     }
@@ -501,6 +515,11 @@ export const Header: React.FC = () => {
                 const deptCats = getDepartmentCategories(dept.slug);
                 const isRightAligned = deptIdx >= 2;
 
+                // Active parent category for this department (defaults to first parent category)
+                const currentParent =
+                  deptCats.find((c) => c.slug === selectedParentCategorySlug) || deptCats[0];
+                const subcategories = currentParent?.subcategories || [];
+
                 return (
                   <div
                     key={dept.id}
@@ -512,7 +531,14 @@ export const Header: React.FC = () => {
                       type="button"
                       onClick={() => {
                         // Support tap on touchscreens or click
-                        setActiveDepartment((prev) => (prev === dept.slug ? null : dept.slug));
+                        if (activeDepartment === dept.slug) {
+                          setActiveDepartment(null);
+                        } else {
+                          setActiveDepartment(dept.slug);
+                          if (deptCats.length > 0) {
+                            setSelectedParentCategorySlug(deptCats[0].slug);
+                          }
+                        }
                       }}
                       className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs ${
                         isActive
@@ -534,54 +560,129 @@ export const Header: React.FC = () => {
                     {/* Department Mega Menu with seamless hover bridge */}
                     {isOpen && (
                       <div
-                        className={`absolute top-full pt-1.5 w-[680px] max-w-[calc(100vw-2rem)] z-50 ${
+                        className={`absolute top-full pt-1.5 w-[760px] max-w-[calc(100vw-2rem)] z-50 ${
                           isRightAligned ? 'right-0' : 'left-0'
                         }`}
                         onMouseEnter={() => handleDeptMouseEnter(dept.slug)}
                         onMouseLeave={handleDeptMouseLeave}
                       >
-                        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-6 animate-in fade-in-0 slide-in-from-top-1 duration-150">
-                          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-                            <div>
-                              <div className="text-xs font-black text-brand-blue-900 uppercase tracking-wider">
-                                {dept.name}
+                        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in-0 slide-in-from-top-1 duration-150">
+                          {/* UNIFIED TWO-COLUMN MEGA MENU: PARENT (LEFT) & CHILD (RIGHT) */}
+                          <div className="grid grid-cols-12 min-h-[340px] max-h-[440px]">
+                            {/* LEFT COLUMN: Parent Categories */}
+                            <div className="col-span-5 border-r border-slate-100 bg-slate-50/70 p-2.5 sm:p-3 overflow-y-auto no-scrollbar space-y-1">
+                              <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                <span>Categories</span>
+                                <span className="text-slate-400 font-mono text-[9px]">{deptCats.length}</span>
                               </div>
-                              <p className="text-[11px] text-slate-500 font-normal">{dept.description}</p>
-                            </div>
-                            <Link
-                              to={`/categories/${dept.categorySlugs[0]}`}
-                              onClick={() => setActiveDepartment(null)}
-                              className="text-xs font-bold text-brand-orange-600 hover:underline flex items-center gap-1"
-                            >
-                              Explore Department &rarr;
-                            </Link>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            {deptCats.map((cat) => (
-                              <div key={cat.id} className="space-y-1">
-                                <Link
-                                  to={`/categories/${cat.slug}`}
-                                  onClick={() => setActiveDepartment(null)}
-                                  className="font-bold text-xs text-slate-900 hover:text-brand-blue-900 flex items-center gap-1.5"
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-brand-orange-500" />
-                                  {cat.name}
-                                </Link>
-                                <div className="pl-3 space-y-0.5 text-[11px] text-slate-500 font-normal">
-                                  {cat.subcategories.slice(0, 3).map((sub) => (
+                              {deptCats.map((cat) => {
+                                const isSelected = currentParent && cat.slug === currentParent.slug;
+                                return (
+                                  <div
+                                    key={cat.id}
+                                    onMouseEnter={() => setSelectedParentCategorySlug(cat.slug)}
+                                    className={`group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-brand-blue-50/90 text-brand-blue-900 font-black shadow-xs border border-brand-blue-200/70'
+                                        : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/60 border border-transparent'
+                                    }`}
+                                  >
                                     <Link
-                                      key={sub.id}
-                                      to={`/categories/${cat.slug}/${sub.slug}`}
+                                      to={`/categories/${cat.slug}`}
                                       onClick={() => setActiveDepartment(null)}
-                                      className="block hover:text-brand-blue-900 truncate"
+                                      className="flex-1 min-w-0 flex items-center gap-2 truncate"
+                                      title={`View ${cat.name}`}
                                     >
-                                      &bull; {sub.name}
+                                      <span
+                                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors ${
+                                          isSelected ? 'bg-brand-blue-900' : 'bg-brand-orange-500'
+                                        }`}
+                                      />
+                                      <span className="truncate">{cat.name}</span>
                                     </Link>
-                                  ))}
+                                    <ChevronRight
+                                      className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${
+                                        isSelected
+                                          ? 'text-brand-blue-900 translate-x-0.5'
+                                          : 'text-slate-300 group-hover:text-slate-500'
+                                      }`}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* RIGHT COLUMN: Child Categories */}
+                            <div className="col-span-7 bg-white p-4 sm:p-5 overflow-y-auto no-scrollbar flex flex-col justify-between">
+                              <div>
+                                {/* Parent Category Title Header */}
+                                <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-3">
+                                  <div className="min-w-0 pr-2">
+                                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider truncate">
+                                      {currentParent?.name}
+                                    </h4>
+                                    {currentParent?.description && (
+                                      <p className="text-[11px] text-slate-500 font-normal line-clamp-1 mt-0.5">
+                                        {currentParent.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Link
+                                    to={`/categories/${currentParent?.slug}`}
+                                    onClick={() => setActiveDepartment(null)}
+                                    className="text-[11px] font-bold text-brand-orange-600 hover:text-brand-orange-700 hover:underline flex items-center gap-1 flex-shrink-0"
+                                  >
+                                    <span>View All</span>
+                                    <ArrowRight className="w-3 h-3" />
+                                  </Link>
                                 </div>
+
+                                {/* Child Categories Grid */}
+                                {subcategories.length > 0 ? (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                    {subcategories.map((sub) => (
+                                      <Link
+                                        key={sub.id}
+                                        to={`/categories/${currentParent.slug}/${sub.slug}`}
+                                        onClick={() => setActiveDepartment(null)}
+                                        className="group flex items-center justify-between p-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-brand-blue-900 hover:bg-slate-50 transition-all border border-transparent hover:border-slate-200/60"
+                                      >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-brand-orange-500 transition-colors flex-shrink-0" />
+                                          <span className="truncate group-hover:font-bold">{sub.name}</span>
+                                        </div>
+                                        <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-orange-500 group-hover:translate-x-0.5 transition-all opacity-0 group-hover:opacity-100 flex-shrink-0" />
+                                      </Link>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="py-6 text-center text-xs text-slate-500 space-y-2">
+                                    <p>Browse all available products in this category.</p>
+                                    <Link
+                                      to={`/categories/${currentParent?.slug}`}
+                                      onClick={() => setActiveDepartment(null)}
+                                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-brand-blue-50 text-brand-blue-900 rounded-lg font-bold text-xs hover:bg-brand-blue-100"
+                                    >
+                                      <span>Explore {currentParent?.name}</span>
+                                      <ArrowRight className="w-3 h-3" />
+                                    </Link>
+                                  </div>
+                                )}
                               </div>
-                            ))}
+
+                              {/* Bottom Dispatch Indicator & Direct Category Link */}
+                              <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                                <span className="text-slate-400 font-medium">⚡ 60-min job site dispatch active</span>
+                                <Link
+                                  to={`/categories/${currentParent?.slug}`}
+                                  onClick={() => setActiveDepartment(null)}
+                                  className="font-bold text-brand-blue-900 hover:text-brand-orange-600 hover:underline flex items-center gap-1"
+                                >
+                                  <span>Browse All {currentParent?.name}</span>
+                                  &rarr;
+                                </Link>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -694,32 +795,97 @@ export const Header: React.FC = () => {
               <span>Home</span>
             </Link>
 
-            {/* Construction Departments */}
-            <div className="space-y-2">
+            {/* Construction Departments Accordion */}
+            <div className="space-y-1.5">
               <div className="text-[11px] uppercase tracking-wider text-slate-400 font-extrabold px-1">
                 Construction Departments
               </div>
-              <div className="grid grid-cols-1 gap-1">
+              <div className="space-y-1">
                 {CONSTRUCTION_DEPARTMENTS.map((dept) => {
                   const Icon = DEPARTMENT_ICONS[dept.slug] || Building2;
                   const isActive = isDeptActive(dept);
+                  const isDeptExpanded = mobileExpandedDept === dept.slug;
+                  const deptCats = getDepartmentCategories(dept.slug);
+
                   return (
-                    <Link
-                      key={dept.id}
-                      to={`/categories/${dept.categorySlugs[0]}`}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition-colors ${
-                        isActive
-                          ? 'bg-brand-blue-900 text-white shadow-sm'
-                          : 'hover:bg-slate-50 border border-slate-100 text-slate-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-brand-orange-500'}`} />
-                        <span>{dept.name}</span>
-                      </div>
-                      <ArrowRight className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                    </Link>
+                    <div key={dept.id} className="rounded-xl border border-slate-100 overflow-hidden bg-white">
+                      {/* Department Trigger Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMobileExpandedDept(isDeptExpanded ? null : dept.slug);
+                          if (!isDeptExpanded && deptCats.length > 0) {
+                            setMobileExpandedCat(deptCats[0].slug);
+                          }
+                        }}
+                        className={`w-full flex items-center justify-between p-2.5 text-xs font-bold transition-colors ${
+                          isActive
+                            ? 'bg-brand-blue-900 text-white'
+                            : isDeptExpanded
+                            ? 'bg-slate-100 text-brand-blue-900'
+                            : 'hover:bg-slate-50 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-brand-orange-500'}`} />
+                          <span>{dept.name}</span>
+                        </div>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                            isActive ? 'text-white' : 'text-slate-400'
+                          } ${isDeptExpanded ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+
+                      {/* Expanded Parent Categories on Mobile */}
+                      {isDeptExpanded && (
+                        <div className="p-2 bg-slate-50 border-t border-slate-100 space-y-1.5 animate-in fade-in-0 duration-150">
+                          {deptCats.map((cat) => {
+                            const isCatExpanded = mobileExpandedCat === cat.slug;
+                            return (
+                              <div key={cat.id} className="bg-white rounded-lg border border-slate-200/70 overflow-hidden">
+                                <div className="flex items-center justify-between p-2 text-xs font-bold text-slate-800">
+                                  <Link
+                                    to={`/categories/${cat.slug}`}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="flex items-center gap-1.5 truncate text-brand-blue-950 hover:underline flex-1"
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-brand-orange-500 flex-shrink-0" />
+                                    <span className="truncate">{cat.name}</span>
+                                  </Link>
+                                  {cat.subcategories && cat.subcategories.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setMobileExpandedCat(isCatExpanded ? null : cat.slug)}
+                                      className="p-1 text-slate-400 hover:text-slate-600 flex-shrink-0"
+                                      aria-label={`Toggle subcategories for ${cat.name}`}
+                                    >
+                                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCatExpanded ? 'rotate-180' : ''}`} />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Child subcategories list */}
+                                {isCatExpanded && cat.subcategories && cat.subcategories.length > 0 && (
+                                  <div className="pl-6 pr-2 py-1.5 bg-slate-50/80 border-t border-slate-100 space-y-1 text-[11px]">
+                                    {cat.subcategories.map((sub) => (
+                                      <Link
+                                        key={sub.id}
+                                        to={`/categories/${cat.slug}/${sub.slug}`}
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="block py-1 text-slate-600 hover:text-brand-blue-900 truncate"
+                                      >
+                                        &bull; {sub.name}
+                                      </Link>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>

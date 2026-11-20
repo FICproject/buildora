@@ -171,45 +171,7 @@ export const HomePage: React.FC = () => {
         </section>
       </div>
 
-      {/* 2. QUICK CATEGORY SHORTCUTS STRIP */}
-      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card p-3 sm:p-4">
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 mb-3">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-brand-orange-500" />
-              Quick Material Shortcuts
-            </h3>
-            <Link to="/products" className="text-xs font-bold text-brand-blue-800 hover:underline">
-              View All 28 &rarr;
-            </Link>
-          </div>
-
-          {/* Swipeable row on mobile, grid on desktop */}
-          <div className="flex sm:grid sm:grid-cols-5 lg:grid-cols-10 gap-2 sm:gap-3 overflow-x-auto no-scrollbar pb-1 text-center">
-            {categories.slice(0, 10).map((cat) => (
-              <Link
-                key={cat.id}
-                to={`/categories/${cat.slug}`}
-                className="group flex flex-col items-center p-2 rounded-xl hover:bg-slate-50 transition-colors min-w-[76px] sm:min-w-0 flex-shrink-0"
-              >
-                <div className="w-12 h-12 rounded-xl bg-slate-100 group-hover:bg-brand-blue-50 border border-slate-200/60 flex items-center justify-center overflow-hidden mb-1.5 transition-colors">
-                  <img
-                    src={cat.image}
-                    alt={cat.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                    loading="lazy"
-                  />
-                </div>
-                <span className="text-[11px] font-bold text-slate-700 group-hover:text-brand-blue-900 line-clamp-1 w-full">
-                  {(cat.name || 'Category').split(' ')[0]}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 4. TOP DEALS OF THE DAY */}
+      {/* 2. TOP DEALS OF THE DAY */}
       <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent rounded-3xl border border-brand-orange-200/80 p-4 sm:p-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
