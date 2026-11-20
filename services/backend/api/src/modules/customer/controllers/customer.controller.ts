@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Put, Patch, Post, Delete, Body, Param } from '@nestjs/common';
 import { Address, CustomerProfile } from '@buildora/types';
 
 let mockProfile: CustomerProfile = {
@@ -65,6 +65,11 @@ export class CustomerController {
       message: 'Profile updated successfully',
       data: mockProfile
     };
+  }
+
+  @Patch('profile')
+  patchProfile(@Body() body: Partial<CustomerProfile>) {
+    return this.updateProfile(body);
   }
 
   @Get('addresses')

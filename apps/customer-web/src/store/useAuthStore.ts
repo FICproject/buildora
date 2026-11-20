@@ -25,6 +25,20 @@ interface AuthStoreState {
   addWalletBalance: (amount: number) => void;
 }
 
+const DEFAULT_DEMO_USER: CustomerProfile = {
+  id: 'cust-demo-1',
+  name: 'Arjun Verma',
+  phone: '9876543210',
+  email: 'arjun.verma@buildora.com',
+  isPhoneVerified: true,
+  isEmailVerified: true,
+  gstin: '29AABCB1234F1Z8',
+  businessName: 'Apex Infra Construction Ltd',
+  walletBalance: 1250,
+  rewardPoints: 480,
+  createdAt: '2026-01-15T10:00:00.000Z'
+};
+
 const DEFAULT_DEMO_ADDRESSES: Address[] = [
   {
     id: 'addr-1',
@@ -126,14 +140,18 @@ export const useAuthStore = create<AuthStoreState>()(
         try {
           const updated = await api.updateProfile(profile);
           if (updated) {
-            set((state) => ({ user: { ...state.user, ...updated } as CustomerProfile }));
+            set((state) => ({
+              isAuthenticated: true,
+              user: { ...(state.user || DEFAULT_DEMO_USER), ...updated }
+            }));
             return;
           }
         } catch {
           // Fallback to local state
         }
         set((state) => ({
-          user: state.user ? { ...state.user, ...profile } : null
+          isAuthenticated: true,
+          user: { ...(state.user || DEFAULT_DEMO_USER), ...profile }
         }));
       },
 

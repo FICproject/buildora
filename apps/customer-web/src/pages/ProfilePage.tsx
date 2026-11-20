@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Phone, Mail, Building2, CheckCircle2, Save, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { Button } from '../components/ui/Button';
@@ -26,12 +26,31 @@ export const ProfilePage: React.FC = () => {
   const [gstSaved, setGstSaved] = useState(false);
   const [gstError, setGstError] = useState('');
 
+  // Synchronize with store user state on mount and updates
+  useEffect(() => {
+    if (user) {
+      const parts = (user.name || '').trim().split(' ');
+      setFirstName(parts[0] || '');
+      setLastName(parts.slice(1).join(' '));
+      if (user.email) setEmail(user.email);
+      if (user.businessName) setBusinessName(user.businessName);
+      if (user.gstin) setGstin(user.gstin);
+    }
+  }, [user]);
+
   // Dedicated Save 1: Personal Information
   const handleSavePersonal = async (e: React.FormEvent) => {
     e.preventDefault();
     setPersonalError('');
-    if (!firstName.trim()) {
-      setPersonalError('First Name is required.');
+
+    if (!firstName.trim() || firstName.trim().length < 2) {
+      setPersonalError('First Name is required (minimum 2 characters).');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email.trim())) {
+      setPersonalError('Please enter a valid email address.');
       return;
     }
 
@@ -43,7 +62,7 @@ export const ProfilePage: React.FC = () => {
         email: email.trim()
       });
       setPersonalSaved(true);
-      setTimeout(() => setPersonalSaved(false), 3000);
+      setTimeout(() => setPersonalSaved(false), 3500);
     } catch (err: any) {
       setPersonalError(err?.message || 'Failed to update personal information. Please try again.');
     } finally {
@@ -57,9 +76,17 @@ export const ProfilePage: React.FC = () => {
     setGstError('');
     const cleanGstin = gstin.trim().toUpperCase();
 
-    if (cleanGstin.length > 0 && cleanGstin.length !== 15) {
-      setGstError('GSTIN Number must be exactly 15 characters (e.g., 29AABCB1234F1Z8).');
-      return;
+    if (cleanGstin.length > 0) {
+      // 15-character Indian GSTIN format check
+      const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+      if (!gstinRegex.test(cleanGstin)) {
+        setGstError('GSTIN Number must be a valid 15-character format (e.g. 29AABCB1234F1Z8).');
+        return;
+      }
+      if (!businessName.trim() || businessName.trim().length < 2) {
+        setGstError('Company / Firm Name is required when providing a GSTIN.');
+        return;
+      }
     }
 
     setIsSavingGst(true);
@@ -69,7 +96,7 @@ export const ProfilePage: React.FC = () => {
         gstin: cleanGstin
       });
       setGstSaved(true);
-      setTimeout(() => setGstSaved(false), 3000);
+      setTimeout(() => setGstSaved(false), 3500);
     } catch (err: any) {
       setGstError(err?.message || 'Failed to update GST information. Please try again.');
     } finally {
