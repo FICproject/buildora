@@ -294,10 +294,10 @@ export const useLocationStore = create<LocationState>()(
 
       selectSavedAddress: async (address) => {
         if (address.pincode) {
-          await get().checkAndSetPincode(address.pincode);
-          const label = address.label || 'Site';
+          const label = address.label || 'Job Site';
           const area = address.locality || address.city || 'Bengaluru';
-          const full = address.fullAddress || `${label} · ${area}, ${address.city || 'Bengaluru'} ${address.pincode}`;
+          const full = address.fullAddress || `${label} - ${area}, ${address.pincode}`;
+          await get().checkAndSetPincode(address.pincode);
           set({
             selectedAddressId: address.id || null,
             selectedAddressLabel: label,

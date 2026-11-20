@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   MapPin,
@@ -29,7 +29,7 @@ export const CheckoutPage: React.FC = () => {
   const { items, coupon, deliverySpeed, walletBalanceToUse, getSummary, clearCart } = useCartStore();
   const { isAuthenticated, user, addresses, addAddress, verifyOtp } = useAuthStore();
   const { placeOrder } = useOrderStore();
-  const { pincode: defaultPincode, cityName: defaultCity } = useLocationStore();
+  const { pincode: defaultPincode, cityName: defaultCity, selectSavedAddress } = useLocationStore();
 
   const summary = getSummary();
 
@@ -43,9 +43,16 @@ export const CheckoutPage: React.FC = () => {
 
   // Step 2: Selected address
   const [selectedAddressId, setSelectedAddressId] = useState<string>(
-    addresses.find((a) => a.isDefault)?.id || addresses[0]?.id || ''
+    addresses.find((a) => a && a.isDefault)?.id || addresses[0]?.id || ''
   );
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
+
+  useEffect(() => {
+    if (addresses.length > 0 && !selectedAddressId) {
+      const def = addresses.find((a) => a && a.isDefault) || addresses[0];
+      if (def) setSelectedAddressId(def.id);
+    }
+  }, [addresses, selectedAddressId]);
   const [newAddress, setNewAddress] = useState({
     recipientName: user?.name || 'Arjun Verma',
     mobile: user?.phone || '9876543210',
@@ -93,10 +100,11 @@ export const CheckoutPage: React.FC = () => {
   };
 
   // Handle Save New Address
-  const handleSaveAddress = (e: React.FormEvent) => {
+  const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newAddress.building && newAddress.street && newAddress.pincode) {
-      addAddress({
+      const isFirst = addresses.length === 0;
+      await addAddress({
         type: newAddress.isConstructionSite ? 'CONSTRUCTION_SITE' : 'WORK',
         recipientName: newAddress.recipientName,
         mobile: newAddress.mobile,
@@ -107,9 +115,25 @@ export const CheckoutPage: React.FC = () => {
         state: newAddress.state,
         pincode: newAddress.pincode,
         deliveryInstructions: newAddress.deliveryInstructions,
-        isDefault: false,
+        isDefault: isFirst,
         isConstructionSite: newAddress.isConstructionSite
       });
+
+      const updatedAddrs = useAuthStore.getState().addresses;
+      const latest = updatedAddrs[updatedAddrs.length - 1];
+      if (latest) {
+        setSelectedAddressId(latest.id);
+        const area = latest.area || latest.street || 'Bengaluru';
+        const label = latest.type === 'HOME' ? 'Home' : latest.type === 'WORK' ? 'Office' : 'Job Site';
+        await selectSavedAddress({
+          id: latest.id,
+          label,
+          fullAddress: `${label} - ${area}, ${latest.pincode}`,
+          pincode: latest.pincode,
+          locality: area,
+          city: latest.city || 'Bengaluru'
+        });
+      }
       setIsAddingNewAddress(false);
     }
   };
@@ -316,46 +340,69 @@ export const CheckoutPage: React.FC = () => {
 
             {currentStep === 2 ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {addresses.map((addr) => (
-                    <div
-                      key={addr.id}
-                      onClick={() => setSelectedAddressId(addr.id)}
-                      className={`cursor-pointer p-4 rounded-xl border transition-all text-xs space-y-1.5 ${
-                        selectedAddressId === addr.id
-                          ? 'border-brand-blue-600 bg-brand-blue-50/40 shadow-sm'
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
+                {addresses.length === 0 && !isAddingNewAddress && (
+                  <div className="p-4 rounded-xl border border-dashed border-brand-orange-300 bg-brand-orange-50/50 text-slate-800 space-y-2">
+                    <div className="font-bold text-sm text-slate-900">No delivery address saved yet</div>
+                    <p className="text-xs text-slate-600">Please add your construction site delivery address to continue with your order.</p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setIsAddingNewAddress(true)}
+                      leftIcon={<Plus className="w-4 h-4" />}
+                      className="bg-brand-blue-900 hover:bg-brand-blue-800 text-white font-bold"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900">{addr.recipientName}</span>
-                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                          {addr.type}
-                        </span>
-                      </div>
-                      <p className="text-slate-600 leading-relaxed">
-                        {addr.building}, {addr.street}, {addr.area}, {addr.city} - {addr.pincode}
-                      </p>
-                      <div className="text-[11px] text-slate-500">Phone: +91 {addr.mobile}</div>
-                      {addr.deliveryInstructions && (
-                        <div className="text-[10px] text-amber-800 italic">
-                          Note: {addr.deliveryInstructions}
+                      + Add Delivery Address
+                    </Button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {addresses.filter(Boolean).map((addr) => {
+                    const addrDetails = [addr.building, addr.street, addr.area, addr.city].filter(Boolean).join(', ');
+                    return (
+                      <div
+                        key={addr.id}
+                        onClick={() => setSelectedAddressId(addr.id)}
+                        className={`cursor-pointer p-4 rounded-xl border transition-all text-xs space-y-1.5 ${
+                          selectedAddressId === addr.id
+                            ? 'border-brand-blue-600 bg-brand-blue-50/40 shadow-sm'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900">{addr.recipientName || 'Site Contact'}</span>
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                            {addr.type || 'SITE'}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        <p className="text-slate-600 leading-relaxed">
+                          {addrDetails} {addr.pincode ? `- ${addr.pincode}` : ''}
+                        </p>
+                        {addr.mobile && (
+                          <div className="text-[11px] text-slate-500">Phone: +91 {addr.mobile}</div>
+                        )}
+                        {addr.deliveryInstructions && (
+                          <div className="text-[10px] text-amber-800 italic">
+                            Note: {addr.deliveryInstructions}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {!isAddingNewAddress ? (
+                {addresses.length > 0 && !isAddingNewAddress && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setIsAddingNewAddress(true)}
                     leftIcon={<Plus className="w-4 h-4" />}
                   >
-                    Add New Site Address
+                    Add Another Site Address
                   </Button>
-                ) : (
+                )}
+
+                {isAddingNewAddress && (
                   <form onSubmit={handleSaveAddress} className="p-4 bg-slate-50 rounded-xl space-y-3 text-xs border border-slate-200">
                     <div className="font-bold text-slate-800">New Construction Site Address</div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
@@ -430,26 +477,44 @@ export const CheckoutPage: React.FC = () => {
                       <Button variant="primary" size="sm" type="submit">
                         Save Site Address
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setIsAddingNewAddress(false)}>
-                        Cancel
-                      </Button>
+                      {addresses.length > 0 && (
+                        <Button variant="ghost" size="sm" onClick={() => setIsAddingNewAddress(false)}>
+                          Cancel
+                        </Button>
+                      )}
                     </div>
                   </form>
                 )}
 
                 <div className="pt-2">
-                  <Button variant="primary" size="md" onClick={() => setCurrentStep(3)}>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    disabled={!selectedAddressId}
+                    onClick={() => {
+                      if (selectedAddressId) {
+                        setCurrentStep(3);
+                      }
+                    }}
+                  >
                     Continue to Delivery Options &rarr;
                   </Button>
+                  {!selectedAddressId && (
+                    <p className="text-[11px] text-amber-700 font-semibold mt-1.5">
+                      Please add or select a delivery address to continue.
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="text-xs text-slate-600">
                 Delivering to:{' '}
                 <strong className="text-slate-800">
-                  {addresses.find((a) => a.id === selectedAddressId)?.building},{' '}
-                  {addresses.find((a) => a.id === selectedAddressId)?.city} -{' '}
-                  {addresses.find((a) => a.id === selectedAddressId)?.pincode}
+                  {(() => {
+                    const sel = addresses.find((a) => a && a.id === selectedAddressId);
+                    if (!sel) return 'Address to be confirmed';
+                    return [sel.building, sel.street, sel.area, sel.city].filter(Boolean).join(', ') + (sel.pincode ? ` - ${sel.pincode}` : '');
+                  })()}
                 </strong>
               </div>
             )}

@@ -5,37 +5,17 @@ import {
   AlertCircle,
   Navigation,
   Clock,
-  Building2,
-  Sparkles,
   Loader2,
-  Check,
   Plus,
   Home,
   Briefcase,
-  HardHat,
-  ArrowRight,
-  ChevronRight,
-  X
+  HardHat
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { useLocationStore } from '../../store/useLocationStore';
 import { useAuthStore } from '../../store/useAuthStore';
-import { SERVICEABLE_PINCODES } from '@buildora/constants';
 import { Address, AddressType } from '@buildora/types';
-import { api } from '../../services/api';
-import { formatLocationDisplay } from '../../utils';
-
-const POPULAR_BENGALURU_HUBS = [
-  { code: '560072', name: 'Nagarabhavi / West Hub', eta: 60, tag: 'West Hub' },
-  { code: '560038', name: 'Indiranagar / Central', eta: 60, tag: 'Central Hub' },
-  { code: '560102', name: 'HSR Layout / South', eta: 60, tag: 'South Hub' },
-  { code: '560034', name: 'Koramangala', eta: 60, tag: 'South Hub' },
-  { code: '560066', name: 'Whitefield Corridor', eta: 60, tag: 'East Hub' },
-  { code: '560010', name: 'Rajajinagar 1st Block', eta: 60, tag: 'West Hub' },
-  { code: '560024', name: 'Hebbal / North Corridor', eta: 60, tag: 'North Hub' },
-  { code: '560076', name: 'Bannerghatta Road', eta: 90, tag: 'South Hub' },
-];
 
 export const LocationModal: React.FC = () => {
   const {
@@ -43,28 +23,26 @@ export const LocationModal: React.FC = () => {
     closeLocationModal,
     pincode,
     locality,
-    cityName,
     isServiceable,
     etaMinutes,
-    etaText,
-    warehouseName,
     isLoading,
     checkAndSetPincode,
     detectCurrentLocation,
-    selectSavedAddress
+    selectSavedAddress,
+    selectedAddressId
   } = useLocationStore();
 
-  const { isAuthenticated, user, addresses, addAddress } = useAuthStore();
+  const { user, addresses, addAddress } = useAuthStore();
 
-  // Mode: 'SAVED_ADDRESSES' | 'CHECK_PINCODE' | 'ADD_ADDRESS'
+  // Modal view modes: 'CHECK_PINCODE' (Reference 2) | 'SAVED_ADDRESSES' (Reference 3) | 'ADD_ADDRESS'
   const [modalMode, setModalMode] = useState<'SAVED_ADDRESSES' | 'CHECK_PINCODE' | 'ADD_ADDRESS'>('CHECK_PINCODE');
   const [selectedAddrId, setSelectedAddrId] = useState<string>('');
   const [inputPincode, setInputPincode] = useState('');
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string; verifiedData?: any } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string; data?: any } | null>(null);
   const [isGpsLoading, setIsGpsLoading] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
 
-  // New Address Form State
+  // Add Address Form State
   const [newAddrType, setNewAddrType] = useState<AddressType>('CONSTRUCTION_SITE');
   const [newRecipient, setNewRecipient] = useState('');
   const [newMobile, setNewMobile] = useState('');
@@ -75,23 +53,27 @@ export const LocationModal: React.FC = () => {
   const [newInstructions, setNewInstructions] = useState('');
   const [formError, setFormError] = useState('');
 
-  // Sync state on open
+  // Sync state whenever the modal opens or addresses change
   useEffect(() => {
     if (isModalOpen) {
       setInputPincode(pincode || '');
       setFeedback(null);
       setFormError('');
 
-      // If user has saved addresses, show saved addresses view (Reference style)
+      // If user has saved addresses, show saved addresses view (Reference Screenshot 3)
       if (addresses && addresses.length > 0) {
         setModalMode('SAVED_ADDRESSES');
-        const defaultAddr = addresses.find((a) => a.isDefault) || addresses[0];
-        setSelectedAddrId(defaultAddr?.id || '');
+        const activeAddr =
+          addresses.find((a) => a && a.id === selectedAddressId) ||
+          addresses.find((a) => a && a.isDefault) ||
+          addresses[0];
+        setSelectedAddrId(activeAddr?.id || '');
       } else {
+        // First-time visitor / no saved addresses: show clean Pincode-Only modal (Reference Screenshot 2)
         setModalMode('CHECK_PINCODE');
       }
     }
-  }, [isModalOpen, pincode, addresses]);
+  }, [isModalOpen, pincode, addresses, selectedAddressId]);
 
   // Handle Verify Pincode
   const handleVerify = async (codeToVerify?: string) => {
@@ -107,16 +89,16 @@ export const LocationModal: React.FC = () => {
         setFeedback({
           type: 'success',
           message: res.message || `Delivery available in ${res.etaMinutes || 60} mins to ${res.locality || code}!`,
-          verifiedData: res
+          data: res
         });
         setTimeout(() => {
           closeLocationModal();
-        }, 1200);
+        }, 800);
       } else {
         setFeedback({
           type: 'warning',
-          message: res?.message || 'Delivery is not available for this pincode yet. We are expanding our Bengaluru delivery network.',
-          verifiedData: res
+          message: res?.message || 'Delivery is currently not available for this pincode. Buildora 60 operates across Bengaluru.',
+          data: res
         });
       }
     } catch {
@@ -127,14 +109,17 @@ export const LocationModal: React.FC = () => {
     }
   };
 
-  // Handle GPS detection
+  // Handle GPS detection (requested explicitly by user click)
   const handleDetectGPS = async () => {
     setIsGpsLoading(true);
     setFeedback(null);
     try {
       const result = await detectCurrentLocation();
       if (result && result.success) {
-        setFeedback({ type: 'success', message: result.message || 'Location detected within Bengaluru!' });
+        setFeedback({ type: 'success', message: result.message || 'Location detected within Bengaluru site dispatch network!' });
+        setTimeout(() => {
+          closeLocationModal();
+        }, 1000);
       } else {
         setFeedback({
           type: 'error',
@@ -151,16 +136,21 @@ export const LocationModal: React.FC = () => {
     }
   };
 
-  // Confirm selected saved address
+  // Confirm selected saved address (Reference Screenshot 3)
   const handleConfirmSavedAddress = async () => {
-    const targetAddr = addresses.find((a) => a.id === selectedAddrId) || addresses[0];
+    const validAddresses = (addresses || []).filter(Boolean);
+    const targetAddr = validAddresses.find((a) => a.id === selectedAddrId) || validAddresses[0];
     if (targetAddr) {
+      const area = targetAddr.area || targetAddr.street || 'Bengaluru';
+      const label = targetAddr.type === 'HOME' ? 'Home' : targetAddr.type === 'WORK' ? 'Office' : 'Job Site';
+      const full = `${label} - ${area}, ${targetAddr.pincode}`;
       await selectSavedAddress({
         id: targetAddr.id,
-        label: targetAddr.type === 'HOME' ? 'Home' : targetAddr.type === 'WORK' ? 'Office' : 'Job Site',
+        label,
+        fullAddress: full,
         pincode: targetAddr.pincode,
-        locality: targetAddr.area || targetAddr.street,
-        city: targetAddr.city
+        locality: area,
+        city: targetAddr.city || 'Bengaluru'
       });
       closeLocationModal();
     }
@@ -183,9 +173,10 @@ export const LocationModal: React.FC = () => {
 
     setIsSavingAddress(true);
     try {
+      const isFirst = !addresses || addresses.length === 0;
       const newAddr: Omit<Address, 'id'> = {
         type: newAddrType,
-        recipientName: newRecipient.trim() || user?.name || 'Site Engineer',
+        recipientName: newRecipient.trim() || user?.name || 'Site Contact',
         mobile: newMobile.trim() || user?.phone || '9876543210',
         building: newBuilding.trim(),
         street: newStreet.trim(),
@@ -194,13 +185,18 @@ export const LocationModal: React.FC = () => {
         state: 'Karnataka',
         pincode: cleanPin,
         deliveryInstructions: newInstructions.trim(),
-        isDefault: true,
+        isDefault: isFirst,
         isConstructionSite: newAddrType === 'CONSTRUCTION_SITE'
       };
 
       await addAddress(newAddr);
+
+      const label = newAddrType === 'HOME' ? 'Home' : newAddrType === 'WORK' ? 'Office' : 'Job Site';
+      const full = `${label} - ${newArea.trim()}, ${cleanPin}`;
+
       await selectSavedAddress({
-        label: newAddrType === 'HOME' ? 'Home' : newAddrType === 'WORK' ? 'Office' : 'Job Site',
+        label,
+        fullAddress: full,
         pincode: cleanPin,
         locality: newArea.trim(),
         city: 'Bengaluru'
@@ -208,7 +204,7 @@ export const LocationModal: React.FC = () => {
 
       setIsSavingAddress(false);
       closeLocationModal();
-    } catch (err: any) {
+    } catch {
       setIsSavingAddress(false);
       setFormError('Failed to save address. Please try again.');
     }
@@ -218,182 +214,55 @@ export const LocationModal: React.FC = () => {
     <Modal
       isOpen={isModalOpen}
       onClose={closeLocationModal}
-      title={modalMode === 'SAVED_ADDRESSES' ? 'Select Delivery Address' : modalMode === 'ADD_ADDRESS' ? 'Add Delivery Address' : 'Delivery Time'}
+      title={
+        modalMode === 'SAVED_ADDRESSES'
+          ? 'Select Delivery Address'
+          : modalMode === 'ADD_ADDRESS'
+          ? 'Add Delivery Address'
+          : 'Delivery Time'
+      }
       subtitle={
         modalMode === 'SAVED_ADDRESSES'
-          ? 'Select a delivery address or add a new construction job site.'
+          ? 'Select a delivery address or add a new address'
           : modalMode === 'ADD_ADDRESS'
-            ? 'Enter your site details for 60-minute quick-commerce material dispatch.'
-            : 'Enter your pincode to check delivery time & serviceability'
+          ? 'Enter your address details for material dispatch'
+          : 'Please enter Pincode to check delivery time & serviceability'
       }
-      maxWidth="md"
+      maxWidth={modalMode === 'CHECK_PINCODE' ? 'md' : 'md'}
     >
-      <div className="space-y-4 pt-1">
-        {/* ========================================================= */}
-        {/* VIEW 1: SAVED ADDRESSES SELECTOR (HOMERUN REFERENCE STYLE) */}
-        {/* ========================================================= */}
-        {modalMode === 'SAVED_ADDRESSES' && (
-          <div className="space-y-4 animate-in fade-in duration-150">
-            {/* Top '+ Add new address' Button (HomeRun reference style) */}
-            <button
-              type="button"
-              onClick={() => {
-                setModalMode('ADD_ADDRESS');
-                setNewPincode(pincode || '');
-              }}
-              className="w-full py-3 px-4 rounded-xl border border-dashed border-brand-blue-600 bg-brand-blue-50/70 hover:bg-brand-blue-100/70 text-brand-blue-900 font-extrabold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
-            >
-              <Plus className="w-4 h-4 text-brand-blue-900 stroke-[2.5]" />
-              <span>+ Add new address</span>
-            </button>
-
-            {/* Separator */}
-            <div className="relative flex items-center justify-center">
-              <div className="border-t border-slate-200 w-full" />
-              <span className="bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider absolute">
-                or select site
-              </span>
-            </div>
-
-            {/* Saved Addresses List */}
-            <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-              {addresses.map((addr) => {
-                const isSelected = selectedAddrId === addr.id;
-                const Icon =
-                  addr.type === 'HOME'
-                    ? Home
-                    : addr.type === 'WORK'
-                      ? Briefcase
-                      : HardHat;
-
-                return (
-                  <div
-                    key={addr.id}
-                    onClick={() => setSelectedAddrId(addr.id)}
-                    className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${isSelected
-                        ? 'border-brand-blue-700 bg-brand-blue-50/50 shadow-sm'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                  >
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${isSelected
-                          ? 'bg-brand-blue-900 text-white'
-                          : 'bg-slate-100 text-slate-600'
-                        }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-black text-xs text-slate-900 flex items-center gap-1.5">
-                          {addr.type === 'HOME' ? 'Home' : addr.type === 'WORK' ? 'Office / Commercial' : 'Construction Job Site'}
-                          {addr.isDefault && (
-                            <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded">
-                              DEFAULT
-                            </span>
-                          )}
-                        </span>
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected
-                              ? 'border-brand-blue-700 bg-brand-blue-700'
-                              : 'border-slate-300'
-                            }`}
-                        >
-                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-slate-700 mt-1 leading-relaxed">
-                        {addr.building}, {addr.street}, {addr.area}, {addr.city}, Karnataka{' '}
-                        <strong className="text-slate-900 font-extrabold">{addr.pincode}</strong>
-                      </p>
-
-                      {addr.recipientName && (
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Contact: {addr.recipientName} ({addr.mobile})
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Bottom Yellow/Orange Action Button (HomeRun screenshot 4) */}
-            <div className="pt-2 space-y-2">
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={handleConfirmSavedAddress}
-                className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-black shadow-md text-sm py-3"
-              >
-                Confirm location and continue
-              </Button>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => setModalMode('CHECK_PINCODE')}
-                  className="text-xs font-bold text-brand-blue-800 hover:underline inline-flex items-center gap-1"
-                >
-                  <MapPin className="w-3.5 h-3.5 text-brand-orange-500" />
-                  <span>Check another Pincode &amp; Delivery ETA &rarr;</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* VIEW 2: PINCODE-FIRST AVAILABILITY CHECK (REFERENCE 5)   */}
-        {/* ========================================================= */}
+      <div className="pt-1">
+        {/* ========================================================================= */}
+        {/* VIEW 1: FIRST-TIME VISITOR — PINCODE-ONLY MODAL (REFERENCE SCREENSHOT 2)  */}
+        {/* ========================================================================= */}
         {modalMode === 'CHECK_PINCODE' && (
           <div className="space-y-4 animate-in fade-in duration-150">
-            {/* Header info badge */}
-            <div className="flex items-start gap-3 p-3 bg-brand-blue-50/70 border border-brand-blue-100 rounded-2xl">
-              <div className="w-10 h-10 rounded-xl bg-brand-orange-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                <MapPin className="w-5 h-5" />
+            {/* Pincode Input & Apply Row */}
+            <div className="flex gap-2.5 items-stretch">
+              <div className="relative flex-1">
+                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoFocus
+                  maxLength={6}
+                  value={inputPincode}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setInputPincode(val);
+                    setFeedback(null);
+                  }}
+                  placeholder="Enter Pincode"
+                  className="w-full pl-10 pr-3 py-3 text-sm font-semibold tracking-wider border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600 transition-all placeholder:text-slate-400"
+                  onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
+                />
               </div>
-              <div>
-                <h3 className="font-black text-sm text-slate-900 leading-tight">Check Delivery Availability</h3>
-                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                  Enter your construction site pincode to check material availability and estimated delivery time in Bengaluru.
-                </p>
-              </div>
-            </div>
-
-            {/* Pincode Input Form */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-700">Enter Pincode</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoFocus
-                    maxLength={6}
-                    value={inputPincode}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      setInputPincode(val);
-                      setFeedback(null);
-                    }}
-                    placeholder="Enter Pincode"
-                    className="w-full pl-10 pr-3 py-2.5 text-sm font-semibold tracking-wider border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600"
-                    onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
-                  />
-                </div>
-                <Button
-                  onClick={() => handleVerify()}
-                  size="md"
-                  disabled={isLoading || inputPincode.length !== 6}
-                  className="px-6 font-black text-xs bg-brand-blue-900 hover:bg-brand-blue-800 text-white shadow-sm"
-                >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
-                </Button>
-              </div>
+              <Button
+                onClick={() => handleVerify()}
+                disabled={isLoading || inputPincode.length !== 6}
+                className="px-6 py-3 font-black text-sm bg-brand-blue-900 hover:bg-brand-blue-800 text-white rounded-xl shadow-xs transition-all flex items-center justify-center min-w-[96px]"
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+              </Button>
             </div>
 
             {/* GPS Detection Button */}
@@ -401,30 +270,31 @@ export const LocationModal: React.FC = () => {
               type="button"
               onClick={handleDetectGPS}
               disabled={isGpsLoading || isLoading}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 border border-slate-200 hover:border-brand-blue-400 bg-white hover:bg-brand-blue-50/40 rounded-xl text-xs font-bold text-brand-blue-900 transition-all shadow-xs group"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 border border-slate-200 hover:border-brand-blue-400 bg-slate-50/50 hover:bg-brand-blue-50/30 rounded-xl text-xs font-bold text-slate-700 hover:text-brand-blue-900 transition-all shadow-2xs group"
             >
               {isGpsLoading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 text-brand-blue-700 animate-spin" />
-                  <span>Detecting GPS Coordinates...</span>
+                  <span>Detecting device GPS...</span>
                 </>
               ) : (
                 <>
                   <Navigation className="w-3.5 h-3.5 text-brand-orange-500 group-hover:rotate-45 transition-transform" />
-                  <span>Detect My Current Site Location (GPS)</span>
+                  <span>Detect My Current Location (GPS)</span>
                 </>
               )}
             </button>
 
-            {/* Live Verification Result Box */}
+            {/* Feedback Status Box */}
             {feedback && (
               <div
-                className={`p-3.5 rounded-2xl text-xs font-medium space-y-2 border ${feedback.type === 'success'
-                    ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
+                className={`p-3.5 rounded-2xl text-xs font-medium space-y-2 border transition-all ${
+                  feedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-950 border-emerald-300 animate-in fade-in'
                     : feedback.type === 'warning'
-                      ? 'bg-amber-50 text-amber-950 border-amber-300'
-                      : 'bg-rose-50 text-rose-950 border-rose-300'
-                  }`}
+                    ? 'bg-amber-50 text-amber-950 border-amber-300 animate-in fade-in'
+                    : 'bg-rose-50 text-rose-950 border-rose-300 animate-in fade-in'
+                }`}
               >
                 <div className="flex items-start gap-2.5">
                   {feedback.type === 'success' ? (
@@ -439,106 +309,154 @@ export const LocationModal: React.FC = () => {
                     {feedback.type === 'success' && (
                       <div className="flex items-center gap-2 mt-1">
                         <span className="bg-emerald-700 text-white font-black text-[10px] px-2 py-0.5 rounded-md">
-                          🟢 {etaMinutes > 0 ? `${etaMinutes}-minute delivery` : 'Verified Area'}
+                          🟢 {etaMinutes > 0 ? `${etaMinutes}-minute delivery` : 'Serviceable'}
                         </span>
                         <span className="text-emerald-800 text-[11px] font-semibold">
-                          Available for direct site dispatch
+                          Available for direct site material dispatch
                         </span>
                       </div>
                     )}
                   </div>
                 </div>
-
-                {feedback.type === 'success' && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => closeLocationModal()}
-                    className="w-full bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black text-xs py-2.5 mt-2 shadow-md"
-                  >
-                    Confirm &amp; Start Shopping &rarr;
-                  </Button>
-                )}
               </div>
             )}
 
-            {/* Active Selected Location Summary */}
-            {pincode && !feedback && (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
-                <div className="min-w-0 pr-2">
-                  <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Selected Location</span>
-                  <div className="font-black text-slate-900 truncate">
-                    {pincode} &bull; {formatLocationDisplay(locality, cityName)}
-                  </div>
-                  <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                    {isServiceable ? etaText : 'Verification in progress'}
-                  </div>
-                </div>
-                {isServiceable && (
-                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-1 rounded-lg flex-shrink-0 flex items-center gap-1 border border-emerald-300">
-                    <Check className="w-3 h-3 stroke-[3]" /> {etaMinutes}m ETA
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Popular Active Bengaluru Hubs Grid */}
-            <div className="pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-brand-orange-500" />
-                  Popular Bengaluru Dispatch Hubs
-                </span>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                  Active Fleet
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-0.5">
-                {POPULAR_BENGALURU_HUBS.map((hub) => {
-                  const isSelected = pincode === hub.code;
-                  return (
-                    <button
-                      key={hub.code}
-                      type="button"
-                      onClick={() => handleVerify(hub.code)}
-                      className={`text-left p-2 rounded-xl border text-xs transition-all ${isSelected
-                          ? 'border-brand-blue-600 bg-brand-blue-50/70 text-brand-blue-900 shadow-xs'
-                          : 'border-slate-200 hover:border-brand-blue-300 hover:bg-slate-50 text-slate-700'
-                        }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-black text-slate-900">{hub.code}</span>
-                        <span className="text-[9.5px] font-extrabold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.2 rounded">
-                          {hub.eta}m
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-600 truncate mt-0.5 font-medium">{hub.name}</div>
-                      <span className="text-[9px] text-slate-400 block font-normal">{hub.tag}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Back to Saved Addresses if user has any */}
+            {/* If customer has saved addresses, provide navigation back to saved addresses view */}
             {addresses && addresses.length > 0 && (
               <div className="pt-2 border-t border-slate-100 text-center">
                 <button
                   type="button"
                   onClick={() => setModalMode('SAVED_ADDRESSES')}
-                  className="text-xs font-bold text-slate-600 hover:text-brand-blue-900 underline"
+                  className="text-xs font-bold text-brand-blue-800 hover:text-brand-blue-900 hover:underline inline-flex items-center gap-1"
                 >
-                  &larr; Back to Saved Delivery Addresses
+                  <span>&larr; Back to saved delivery addresses</span>
                 </button>
               </div>
             )}
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* VIEW 3: ADD NEW CONSTRUCTION SITE ADDRESS                 */}
-        {/* ========================================================= */}
+        {/* ========================================================================= */}
+        {/* VIEW 2: RETURNING CUSTOMER — SAVED ADDRESS SELECTION (SCREENSHOT 3)       */}
+        {/* ========================================================================= */}
+        {modalMode === 'SAVED_ADDRESSES' && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            {/* Top '+ Add new address' Button (HomeRun reference style) */}
+            <button
+              type="button"
+              onClick={() => {
+                setModalMode('ADD_ADDRESS');
+                setNewPincode(pincode || '');
+                setFormError('');
+              }}
+              className="w-full py-3 px-4 rounded-xl border border-dashed border-brand-blue-600 bg-brand-blue-50/70 hover:bg-brand-blue-100/70 text-brand-blue-900 font-extrabold text-xs flex items-center justify-center gap-2 transition-colors shadow-2xs"
+            >
+              <Plus className="w-4 h-4 text-brand-blue-900 stroke-[2.5]" />
+              <span>+ Add new address</span>
+            </button>
+
+            {/* Saved Addresses List */}
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {(addresses || []).filter(Boolean).map((addr) => {
+                const isSelected = selectedAddrId === addr.id;
+                const Icon =
+                  addr.type === 'HOME'
+                    ? Home
+                    : addr.type === 'WORK'
+                    ? Briefcase
+                    : HardHat;
+
+                const addressLine = [addr.building, addr.street, addr.area, addr.city, addr.state]
+                  .filter(Boolean)
+                  .join(', ');
+
+                return (
+                  <div
+                    key={addr.id}
+                    onClick={() => setSelectedAddrId(addr.id)}
+                    className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
+                      isSelected
+                        ? 'border-brand-blue-700 bg-brand-blue-50/50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                        isSelected
+                          ? 'bg-brand-blue-900 text-white'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-xs text-slate-900 flex items-center gap-1.5">
+                          {addr.type === 'HOME' ? 'Home' : addr.type === 'WORK' ? 'Office / Commercial' : 'Job Site'}
+                          {addr.isDefault && (
+                            <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded">
+                              DEFAULT
+                            </span>
+                          )}
+                        </span>
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            isSelected
+                              ? 'border-brand-blue-700 bg-brand-blue-700'
+                              : 'border-slate-300'
+                          }`}
+                        >
+                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-700 mt-1 leading-relaxed">
+                        {addressLine || 'Address on file'} <strong className="text-slate-900 font-extrabold">{addr.pincode}</strong>
+                      </p>
+
+                      {addr.recipientName && (
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Contact: {addr.recipientName} {addr.mobile ? `(${addr.mobile})` : ''}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom Confirm Action Button */}
+            <div className="pt-2 space-y-2">
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={handleConfirmSavedAddress}
+                className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-black shadow-md text-sm py-3 rounded-xl transition-all"
+              >
+                Confirm location and continue
+              </Button>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalMode('CHECK_PINCODE');
+                    setInputPincode(pincode || '');
+                  }}
+                  className="text-xs font-bold text-brand-blue-800 hover:underline inline-flex items-center gap-1"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-brand-orange-500" />
+                  <span>Change Pincode / Enter another location &rarr;</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* VIEW 3: ADD NEW DELIVERY ADDRESS                                          */}
+        {/* ========================================================================= */}
         {modalMode === 'ADD_ADDRESS' && (
           <form onSubmit={handleSaveNewAddress} className="space-y-3.5 animate-in fade-in duration-150">
             {formError && (
@@ -566,10 +484,11 @@ export const LocationModal: React.FC = () => {
                       key={item.type}
                       type="button"
                       onClick={() => setNewAddrType(item.type as AddressType)}
-                      className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${isSel
+                      className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        isSel
                           ? 'border-brand-blue-700 bg-brand-blue-50 text-brand-blue-900 shadow-xs'
                           : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-                        }`}
+                      }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
                       <span>{item.label}</span>
@@ -582,7 +501,7 @@ export const LocationModal: React.FC = () => {
             {/* Recipient & Phone */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Site Contact / Engineer</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Contact Name / Site Engineer</label>
                 <input
                   type="text"
                   required

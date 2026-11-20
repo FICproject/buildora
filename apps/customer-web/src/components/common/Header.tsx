@@ -151,21 +151,24 @@ export const Header: React.FC = () => {
   };
 
   const getLocationDisplaySubtitle = () => {
+    if (selectedAddressLabel && pincode) {
+      const loc = locality ? locality.split(/[/,]/)[0].trim() : (cityName || 'Bengaluru');
+      return `${selectedAddressLabel} - ${loc}, ${pincode}`;
+    }
     if (selectedAddressFull) {
       return selectedAddressFull;
     }
-    if (selectedAddressLabel && pincode) {
-      const loc = locality ? locality.split(/[/,]/)[0].trim() : (cityName || 'Bengaluru');
-      return `${selectedAddressLabel} · ${loc}, ${pincode}`;
-    }
     if (pincode) {
       const loc = locality ? locality.split(/[/,]/)[0].trim() : (cityName || 'Bengaluru Urban');
-      return `${pincode} · ${loc}`;
+      return `${pincode} - ${loc}`;
     }
-    return 'Enter pincode to check delivery';
+    return 'Enter Pincode';
   };
 
   const getLocationDisplayETA = () => {
+    if (pincode && !isServiceable) {
+      return 'Check Serviceability';
+    }
     if (!pincode && !selectedAddressFull) {
       return 'Check Delivery Time';
     }

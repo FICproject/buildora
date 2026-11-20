@@ -491,7 +491,7 @@ export const OrdersPage: React.FC = () => {
                     <span className="text-slate-500">Delivering to: </span>
                     <strong className="text-slate-800">
                       {order.deliveryAddress ? (
-                        [order.deliveryAddress.building, order.deliveryAddress.street, order.deliveryAddress.area, order.deliveryAddress.city]
+                        [order.deliveryAddress?.building, order.deliveryAddress?.street, order.deliveryAddress?.area, order.deliveryAddress?.city]
                           .filter(Boolean)
                           .join(', ') + (order.deliveryAddress.pincode ? ` (${order.deliveryAddress.pincode})` : '')
                       ) : (

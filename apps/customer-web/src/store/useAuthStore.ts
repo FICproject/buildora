@@ -77,7 +77,7 @@ export const useAuthStore = create<AuthStoreState>()(
       isAuthenticated: false,
       user: null,
       token: null,
-      addresses: DEFAULT_DEMO_ADDRESSES,
+      addresses: [],
       isAuthModalOpen: false,
       authPromptReason: null,
       intendedDestination: null,
@@ -113,9 +113,11 @@ export const useAuthStore = create<AuthStoreState>()(
         try {
           const res = await api.verifyOtp(phone, otp);
           if (res.success && res.user) {
+            const userAddrs = (res.user as any)?.addresses || DEFAULT_DEMO_ADDRESSES;
             set({
               isAuthenticated: true,
               user: res.user,
+              addresses: get().addresses.length > 0 ? get().addresses : userAddrs,
               token: res.token || 'demo-jwt-token-buildora-60'
             });
             return { success: true, message: res.message || 'Signed in successfully!' };
@@ -131,6 +133,7 @@ export const useAuthStore = create<AuthStoreState>()(
           isAuthenticated: false,
           user: null,
           token: null,
+          addresses: [],
           intendedDestination: null,
           authPromptReason: null
         });

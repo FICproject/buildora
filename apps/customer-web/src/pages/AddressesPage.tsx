@@ -29,7 +29,7 @@ export const AddressesPage: React.FC = () => {
     selectSavedAddress({
       id: addr.id,
       label,
-      fullAddress: `${label} · ${loc}, ${addr.city || 'Bengaluru'}`,
+      fullAddress: `${label} - ${loc}, ${addr.pincode}`,
       pincode: addr.pincode,
       locality: loc,
       city: addr.city || 'Bengaluru'
@@ -56,7 +56,7 @@ export const AddressesPage: React.FC = () => {
         const label = newAddr.type === 'HOME' ? 'Home' : newAddr.type === 'WORK' ? 'Office' : 'Job Site';
         selectSavedAddress({
           label,
-          fullAddress: `${label} · ${newAddr.area || newAddr.street}, ${newAddr.city}`,
+          fullAddress: `${label} - ${newAddr.area || newAddr.street}, ${newAddr.pincode}`,
           pincode: newAddr.pincode,
           locality: newAddr.area || newAddr.street,
           city: newAddr.city
@@ -221,7 +221,7 @@ export const AddressesPage: React.FC = () => {
 
       {/* Address Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {addresses.map((addr) => (
+        {addresses.filter(Boolean).map((addr) => (
           <div
             key={addr.id}
             className={`p-5 rounded-2xl border text-xs space-y-3 flex flex-col justify-between ${
@@ -232,15 +232,15 @@ export const AddressesPage: React.FC = () => {
           >
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 text-sm">{addr.recipientName}</span>
+                <span className="font-bold text-slate-900 text-sm">{addr.recipientName || 'Site Contact'}</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 uppercase">
-                  {addr.type.replace(/_/g, ' ')}
+                  {(addr.type || 'SITE').replace(/_/g, ' ')}
                 </span>
               </div>
               <p className="text-slate-600 leading-relaxed">
-                {addr.building}, {addr.street}, {addr.area}, {addr.city} - {addr.pincode}
+                {[addr.building, addr.street, addr.area, addr.city].filter(Boolean).join(', ')} {addr.pincode ? `- ${addr.pincode}` : ''}
               </p>
-              <div className="text-slate-500">Contact: +91 {addr.mobile}</div>
+              {addr.mobile && <div className="text-slate-500">Contact: +91 {addr.mobile}</div>}
               {addr.deliveryInstructions && (
                 <div className="p-2 bg-amber-50 rounded-lg text-amber-900 font-medium text-[11px]">
                   Note: {addr.deliveryInstructions}

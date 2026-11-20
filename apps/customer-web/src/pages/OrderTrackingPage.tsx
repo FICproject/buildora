@@ -152,7 +152,7 @@ export const OrderTrackingPage: React.FC = () => {
             </div>
             <p className="leading-relaxed">
               {order.deliveryAddress ? (
-                [order.deliveryAddress.building, order.deliveryAddress.street, order.deliveryAddress.area, order.deliveryAddress.city]
+                [order.deliveryAddress?.building, order.deliveryAddress?.street, order.deliveryAddress?.area, order.deliveryAddress?.city]
                   .filter(Boolean)
                   .join(', ') + (order.deliveryAddress.pincode ? ` - ${order.deliveryAddress.pincode}` : '')
               ) : (
