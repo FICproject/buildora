@@ -72,6 +72,31 @@ async function request<T>(
   return fallbackData;
 }
 
+async function postJson<T>(endpoint: string, body: any): Promise<T> {
+  const token = getStoredToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-tenant-id': DEFAULT_TENANT_ID,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+    return await res.json();
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Network request failed. Please check connection.'
+    } as unknown as T;
+  }
+}
+
 export const api = {
   // Health & Diagnostics
   async getHealth() {
@@ -238,6 +263,66 @@ export const api = {
       },
       null
     );
+  },
+
+  // Secure Dual OTP Phone Number Change Flow
+  async initiatePhoneChange(newPhone: string, currentPhone?: string) {
+    return postJson<{
+      success: boolean;
+      message: string;
+      sessionId?: string;
+      maskedOldPhone?: string;
+      maskedNewPhone?: string;
+      cooldownSeconds?: number;
+      devOtpHint?: string;
+    }>('/customer/phone-change/initiate', { newPhone, currentPhone });
+  },
+
+  async verifyOldPhoneChange(sessionId: string, otp: string) {
+    return postJson<{
+      success: boolean;
+      message: string;
+      maskedOldPhone?: string;
+      maskedNewPhone?: string;
+      cooldownSeconds?: number;
+      devOtpHint?: string;
+    }>('/customer/phone-change/verify-old', { sessionId, otp });
+  },
+
+  async verifyNewPhoneChange(sessionId: string, otp: string) {
+    return postJson<{
+      success: boolean;
+      message: string;
+      maskedOldPhone?: string;
+      maskedNewPhone?: string;
+      readyForConfirmation?: boolean;
+    }>('/customer/phone-change/verify-new', { sessionId, otp });
+  },
+
+  async resendPhoneChangeOtp(sessionId: string, target: 'OLD' | 'NEW') {
+    return postJson<{
+      success: boolean;
+      message: string;
+      cooldownSeconds?: number;
+      devOtpHint?: string;
+    }>('/customer/phone-change/resend', { sessionId, target });
+  },
+
+  async confirmPhoneChange(sessionId: string) {
+    return postJson<{
+      success: boolean;
+      message: string;
+      newPhone?: string;
+      maskedNewPhone?: string;
+      user?: CustomerProfile;
+    }>('/customer/phone-change/confirm', { sessionId });
+  },
+
+  async cancelPhoneChange(sessionId: string) {
+    return postJson<{
+      success: boolean;
+      message: string;
+    }>('/customer/phone-change/cancel', { sessionId });
   },
 
   async getAddresses(): Promise<Address[]> {

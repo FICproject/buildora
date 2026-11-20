@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Phone, Mail, Building2, CheckCircle2, Save, AlertCircle, ShieldCheck } from 'lucide-react';
+import { User, Phone, Mail, Building2, CheckCircle2, Save, AlertCircle, ShieldCheck, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { Button } from '../components/ui/Button';
+import { ChangePhoneNumberModal } from '../components/profile/ChangePhoneNumberModal';
 
 export const ProfilePage: React.FC = () => {
   const { user, updateProfile } = useAuthStore();
@@ -18,6 +19,10 @@ export const ProfilePage: React.FC = () => {
   const [isSavingPersonal, setIsSavingPersonal] = useState(false);
   const [personalSaved, setPersonalSaved] = useState(false);
   const [personalError, setPersonalError] = useState('');
+
+  // Phone Change Modal State
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [phoneSuccessMessage, setPhoneSuccessMessage] = useState<string | null>(null);
 
   // Card 2: GST & Business Tax Information State
   const [businessName, setBusinessName] = useState(user?.businessName || 'Apex Infra Construction Ltd');
@@ -129,6 +134,13 @@ export const ProfilePage: React.FC = () => {
           </div>
         )}
 
+        {phoneSuccessMessage && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span>{phoneSuccessMessage}</span>
+          </div>
+        )}
+
         {personalError && (
           <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl flex items-center gap-2 animate-in fade-in">
             <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
@@ -185,20 +197,38 @@ export const ProfilePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Registered Phone (Verified) */}
+            {/* Registered Phone (Verified with Secure Change Flow) */}
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Phone Number</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700">Phone Number</label>
+                <button
+                  type="button"
+                  onClick={() => setIsPhoneModalOpen(true)}
+                  className="text-[11px] font-bold text-brand-blue-900 hover:text-brand-orange-600 hover:underline flex items-center gap-1 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3 text-brand-orange-500" />
+                  <span>Change Phone Number</span>
+                </button>
+              </div>
               <div className="relative">
                 <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={user?.phone || '9876543210'}
                   disabled
-                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-500 font-medium cursor-not-allowed text-xs"
+                  className="w-full pl-9 pr-24 py-2 border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-mono font-bold cursor-not-allowed text-xs"
                 />
+                <button
+                  type="button"
+                  onClick={() => setIsPhoneModalOpen(true)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-white border border-slate-200 hover:border-brand-blue-500 text-brand-blue-900 rounded-lg text-[10px] font-black tracking-tight shadow-xs transition-all hover:bg-brand-blue-50"
+                  title="Initiate secure phone change"
+                >
+                  Change
+                </button>
               </div>
               <span className="text-[10px] text-slate-400 mt-1 block">
-                Verified with mobile OTP. Contact support to update registered mobile.
+                Verified with mobile OTP. Click <strong className="text-slate-600 font-bold">Change Phone Number</strong> to update via dual-OTP security verification.
               </span>
             </div>
           </div>
@@ -300,6 +330,17 @@ export const ProfilePage: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Secure Dual-OTP Change Phone Number Modal */}
+      <ChangePhoneNumberModal
+        isOpen={isPhoneModalOpen}
+        onClose={() => setIsPhoneModalOpen(false)}
+        currentPhone={user?.phone || '9876543210'}
+        onPhoneUpdated={(newPhone) => {
+          setPhoneSuccessMessage(`Registered mobile number updated successfully to +91 ${newPhone}!`);
+          setTimeout(() => setPhoneSuccessMessage(null), 5000);
+        }}
+      />
     </div>
   );
 };
