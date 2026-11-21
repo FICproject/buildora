@@ -78,7 +78,7 @@ export class CartController {
           serviceable: true,
           estimatedMinutes: info.etaMinutes,
           warehouse: info.warehouse,
-          freeDeliveryThreshold: 1999
+          freeDeliveryThreshold: 1000
         }
       };
     } else {

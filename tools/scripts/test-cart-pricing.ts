@@ -46,6 +46,26 @@ assert(summary1.deliveryFee === 199, `Below ₹1,000 standard delivery fee is �
 assert(summary1.handlingFee === 99, `Cement triggers Heavy Material Handling fee ₹99 (Actual: ${summary1.handlingFee})`);
 assert(summary1.grandTotal === 790 + 199 + 99, `Grand Total = 790 + 199 + 99 = 1088 (Actual: ${summary1.grandTotal})`);
 
+// Specific audit for user screenshot: Kajaria Tiles (₹880) + Unloading (₹199) + Delivery (must be ₹199, not ₹149)
+const kajariaScreenshotCart = calculateCartSummary({
+  items: [
+    {
+      name: 'Kajaria Double Charge Glazed Vitrified Tiles (2x2 ft)',
+      categorySlug: 'tiling-tile-adhesives',
+      price: 880,
+      quantity: 1,
+      isFragile: true
+    }
+  ],
+  deliverySpeed: 'ASAP_60', // was previously giving 149
+  unloadingOptions: { required: true, floor: 0, hasLift: true }
+});
+assert(kajariaScreenshotCart.subtotal === 880, `Screenshot Cart: Subtotal is ₹880 (Actual: ${kajariaScreenshotCart.subtotal})`);
+assert(kajariaScreenshotCart.deliveryFee === 199, `Screenshot Cart: Delivery fee is ₹199 (NOT ₹149) (Actual: ${kajariaScreenshotCart.deliveryFee})`);
+assert(kajariaScreenshotCart.handlingFee === 49, `Screenshot Cart: Handling fee is ₹49 for fragile tiles (Actual: ${kajariaScreenshotCart.handlingFee})`);
+assert(kajariaScreenshotCart.unloadingFee === 199, `Screenshot Cart: Unloading fee is ₹199 (Actual: ${kajariaScreenshotCart.unloadingFee})`);
+assert(kajariaScreenshotCart.grandTotal === 880 + 199 + 49 + 199, `Screenshot Cart: Grand Total is ₹1327 (Actual: ${kajariaScreenshotCart.grandTotal})`);
+
 // -----------------------------------------------------------------------------
 // TEST 2: COUPON CALCULATIONS & RESTRICTIONS
 // -----------------------------------------------------------------------------
@@ -80,26 +100,26 @@ assert(summaryCouponCap.couponDiscount === 1500, `10% coupon capped at max ₹15
 // -----------------------------------------------------------------------------
 console.log('\n--- TEST 3: Delivery Charge Engine ---');
 
-// Cart above ₹1,999 threshold -> Free delivery
+// Cart above ₹1,000 threshold -> Free delivery
 const summaryFreeDel = calculateCartSummary({
   items: [{ price: 2500, quantity: 1, gstRate: 18 }],
   deliverySpeed: 'STANDARD'
 });
-assert(summaryFreeDel.deliveryFee === 0, `Orders >= ₹1,999 get free standard delivery (Actual: ${summaryFreeDel.deliveryFee})`);
+assert(summaryFreeDel.deliveryFee === 0, `Orders >= ₹1,000 get free standard delivery (Actual: ${summaryFreeDel.deliveryFee})`);
 
-// ASAP_60 above threshold -> ₹49 priority dispatch
-const summaryAsapThreshold = calculateCartSummary({
-  items: [{ price: 2500, quantity: 1, gstRate: 18 }],
+// Cart boundary at exactly ₹1,000 -> Free delivery
+const summaryBoundary = calculateCartSummary({
+  items: [{ price: 1000, quantity: 1, gstRate: 18 }],
   deliverySpeed: 'ASAP_60'
 });
-assert(summaryAsapThreshold.deliveryFee === 49, `ASAP_60 orders >= ₹1,999 pay nominal ₹49 priority dispatch (Actual: ${summaryAsapThreshold.deliveryFee})`);
+assert(summaryBoundary.deliveryFee === 0, `Orders exactly at ₹1,000 get free delivery (Actual: ${summaryBoundary.deliveryFee})`);
 
-// Below threshold -> ₹149 for ASAP_60
-const summaryAsapBelow = calculateCartSummary({
+// Below threshold (₹500 < ₹1,000) -> ₹199
+const summaryBelow = calculateCartSummary({
   items: [{ price: 500, quantity: 1, gstRate: 18 }],
   deliverySpeed: 'ASAP_60'
 });
-assert(summaryAsapBelow.deliveryFee === 149, `ASAP_60 orders < ₹1,999 pay ₹149 express delivery (Actual: ${summaryAsapBelow.deliveryFee})`);
+assert(summaryBelow.deliveryFee === 199, `Orders < ₹1,000 pay standard ₹199 delivery fee (Actual: ${summaryBelow.deliveryFee})`);
 
 // -----------------------------------------------------------------------------
 // TEST 4: HANDLING CHARGES FOR CONSTRUCTION MATERIALS

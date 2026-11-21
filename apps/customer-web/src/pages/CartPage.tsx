@@ -14,7 +14,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
-  Truck
+  Truck,
+  X
 } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useLocationStore } from '../store/useLocationStore';
@@ -35,6 +36,7 @@ export const CartPage: React.FC = () => {
     coupon,
     applyCoupon,
     removeCoupon,
+    deliverySpeed,
     unloadingOptions,
     setUnloadingOptions,
     walletBalanceToUse,
@@ -138,17 +140,99 @@ export const CartPage: React.FC = () => {
     }
   };
 
-  // Checkout button handler with validations
-  const handleContinueToCheckout = () => {
+  // Checkout validation state & comprehensive checkout action
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [isValidatingCheckout, setIsValidatingCheckout] = useState(false);
+
+  const handleContinueToCheckout = async () => {
+    setCheckoutError(null);
+
+    // 1. Validate cart has items
+    if (!items || items.length === 0) {
+      setCheckoutError('Your shopping cart is empty. Please add items to proceed.');
+      return;
+    }
+
+    // 2. Validate quantities & stock
+    for (const item of items) {
+      if (item.quantity <= 0) {
+        setCheckoutError(`Invalid quantity for '${item.name}'. Quantity must be at least 1.`);
+        return;
+      }
+      if (item.maxStock && item.quantity > item.maxStock) {
+        setCheckoutError(`Quantity ${item.quantity} for '${item.name}' exceeds available warehouse stock (${item.maxStock} units).`);
+        return;
+      }
+    }
+
+    // 3. Validate address & serviceability
     if (!pincode && !selectedAddressFull) {
+      setCheckoutError('Please enter a delivery PIN code or select a saved address.');
       openLocationModal();
       return;
     }
-    if (!isServiceable) {
+
+    if (pincode && !isServiceable) {
+      setCheckoutError(`PIN code ${pincode} is currently outside our 60-minute quick delivery zone. Please choose a serviceable address.`);
       openLocationModal();
       return;
     }
-    navigate('/checkout');
+
+    // 4. Server-Side Pre-Order Validation via API (centralized authoritative check)
+    setIsValidatingCheckout(true);
+    try {
+      const activeAddr = selectedAddressFull
+        ? {
+            recipientName: user?.name || 'Customer',
+            mobile: user?.phone || '9876543210',
+            building: selectedAddressFull.split(',')[0] || 'Site Project',
+            street: locality || 'Main Road',
+            area: locality || 'Bengaluru',
+            city: 'Bengaluru',
+            state: 'Karnataka',
+            pincode: pincode || '560001'
+          }
+        : {
+            recipientName: user?.name || 'Customer',
+            mobile: user?.phone || '9876543210',
+            building: 'Site Location',
+            street: locality || 'Main Road',
+            area: locality || 'Bengaluru',
+            city: 'Bengaluru',
+            state: 'Karnataka',
+            pincode: pincode || '560001'
+          };
+
+      const valRes = await api.validateCheckout({
+        items: items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          quantity: i.quantity
+        })),
+        couponCode: coupon?.code || null,
+        deliverySpeed,
+        deliveryAddress: activeAddr,
+        isBusinessOrder: !!gstin,
+        gstin: gstin ? gstin.trim().toUpperCase() : undefined,
+        companyName: companyName ? companyName.trim() : undefined,
+        unloadingOptions,
+        walletBalanceToUse
+      });
+
+      if (!valRes.success && valRes.errors && valRes.errors.length > 0) {
+        setCheckoutError(valRes.errors.join('. '));
+        setIsValidatingCheckout(false);
+        return;
+      }
+
+      setCheckoutError(null);
+      navigate('/checkout');
+    } catch {
+      // Offline / fallback transition
+      navigate('/checkout');
+    } finally {
+      setIsValidatingCheckout(false);
+    }
   };
 
   // If cart is empty
@@ -378,209 +462,284 @@ export const CartPage: React.FC = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Sticky Summary Panel (col-span-12 lg:col-span-5 xl:col-span-4) */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-4 lg:sticky lg:top-24">
-          {/* CARD 1: Coupons (Screenshot 2) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Coupons
-            </h3>
-
-            {coupon ? (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-emerald-900 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    Coupon '{coupon.code}' Applied
-                  </div>
-                  <div className="text-[11px] text-emerald-700 mt-0.5">{coupon.description}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={removeCoupon}
-                  className="text-xs text-red-600 hover:underline font-bold cursor-pointer"
-                >
-                  Remove
-                </button>
+        {/* RIGHT COLUMN: Unified Scrollable Panel & Sticky Checkout Section (col-span-12 lg:col-span-5 xl:col-span-4) */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-3 lg:sticky lg:top-20">
+          {/* Validation Error Banner (if checkout pre-validation fails) */}
+          {checkoutError && (
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-900 flex items-start justify-between gap-2 shadow-xs animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                <span className="font-medium leading-snug">{checkoutError}</span>
               </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter coupon code"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleApplyCoupon();
-                  }}
-                  className="flex-1 px-3 py-2 text-xs font-semibold tracking-wider uppercase border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-600 bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyCoupon}
-                  disabled={isApplyingCoupon || !couponInput.trim()}
-                  className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer ${
-                    isApplyingCoupon || !couponInput.trim()
-                      ? 'bg-emerald-600/60 cursor-not-allowed'
-                      : 'bg-emerald-700 hover:bg-emerald-800 shadow-sm'
+              <button
+                type="button"
+                onClick={() => setCheckoutError(null)}
+                className="text-red-400 hover:text-red-700 p-0.5 rounded cursor-pointer"
+                aria-label="Dismiss alert"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* 1. UNIFIED RIGHT-SIDE SCROLLABLE PANEL (Parent Container for Sections 1-5) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs divide-y divide-slate-100 max-h-[calc(100vh-270px)] overflow-y-auto overscroll-contain">
+            {/* SECTION 1: Coupons */}
+            <div className="p-4 sm:p-5 space-y-3">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Coupons
+              </h3>
+
+              {coupon ? (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
+                  <div>
+                    <div className="font-bold text-emerald-900 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      Coupon '{coupon.code}' Applied
+                    </div>
+                    <div className="text-[11px] text-emerald-700 mt-0.5">{coupon.description}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    className="text-xs text-red-600 hover:underline font-bold cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter coupon code"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleApplyCoupon();
+                    }}
+                    className="flex-1 px-3 py-2 text-xs font-semibold tracking-wider uppercase border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-600 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={isApplyingCoupon || !couponInput.trim()}
+                    className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer ${
+                      isApplyingCoupon || !couponInput.trim()
+                        ? 'bg-emerald-600/60 cursor-not-allowed'
+                        : 'bg-emerald-700 hover:bg-emerald-800 shadow-sm'
+                    }`}
+                  >
+                    {isApplyingCoupon ? '...' : 'Apply'}
+                  </button>
+                </div>
+              )}
+
+              {couponFeedback && (
+                <p
+                  className={`text-[11px] font-semibold flex items-center gap-1 ${
+                    couponFeedback.type === 'success' ? 'text-emerald-700' : 'text-red-600'
                   }`}
                 >
-                  {isApplyingCoupon ? '...' : 'Apply'}
-                </button>
-              </div>
-            )}
-
-            {couponFeedback && (
-              <p
-                className={`text-[11px] font-semibold flex items-center gap-1 ${
-                  couponFeedback.type === 'success' ? 'text-emerald-700' : 'text-red-600'
-                }`}
-              >
-                {couponFeedback.type === 'success' ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-                ) : (
-                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                )}
-                {couponFeedback.text}
-              </p>
-            )}
-          </div>
-
-          {/* CARD 2: Bill Details (Collapsible Accordion matching Screenshot 2) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setIsBillDetailsOpen(!isBillDetailsOpen)}
-              className="w-full p-4 sm:p-5 flex items-center justify-between text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
-            >
-              <h3 className="text-sm font-bold text-slate-900">Bill Details</h3>
-              {isBillDetailsOpen ? (
-                <ChevronUp className="w-4 h-4 text-slate-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-slate-400" />
+                  {couponFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  )}
+                  {couponFeedback.text}
+                </p>
               )}
-            </button>
+            </div>
 
-            {isBillDetailsOpen && (
-              <div className="px-4 sm:px-5 pb-5 space-y-2.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
-                {/* Sub Total */}
-                <div className="flex justify-between">
-                  <span>Sub Total (Inclusive of GST)</span>
-                  <span className="font-semibold text-slate-900">{formatCurrency(summary.subtotal)}</span>
-                </div>
-
-                {/* Coupon Discount */}
-                {summary.couponDiscount > 0 ? (
-                  <div className="flex justify-between text-emerald-700 font-semibold">
-                    <span>Coupon Discount</span>
-                    <span>- {formatCurrency(summary.couponDiscount)}</span>
-                  </div>
+            {/* SECTION 2: Bill Details (Collapsible Accordion) */}
+            <div className="overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsBillDetailsOpen(!isBillDetailsOpen)}
+                className="w-full p-4 sm:p-5 flex items-center justify-between text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
+              >
+                <h3 className="text-sm font-bold text-slate-900">Bill Details</h3>
+                {isBillDetailsOpen ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
                 ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
+
+              {isBillDetailsOpen && (
+                <div className="px-4 sm:px-5 pb-5 space-y-2.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
+                  {/* Sub Total */}
                   <div className="flex justify-between">
-                    <span>Coupon Discount</span>
-                    <span className="font-semibold text-slate-900">₹0</span>
+                    <span>Sub Total (Inclusive of GST)</span>
+                    <span className="font-semibold text-slate-900">{formatCurrency(summary.subtotal)}</span>
                   </div>
-                )}
 
-                {/* Delivery Charge with clickable dotted underline */}
-                <div className="flex justify-between items-center">
+                  {/* Coupon Discount */}
+                  {summary.couponDiscount > 0 ? (
+                    <div className="flex justify-between text-emerald-700 font-semibold">
+                      <span>Coupon Discount</span>
+                      <span>- {formatCurrency(summary.couponDiscount)}</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span>Coupon Discount</span>
+                      <span className="font-semibold text-slate-900">₹0</span>
+                    </div>
+                  )}
+
+                  {/* Delivery Charge with clickable dotted underline */}
+                  <div className="flex justify-between items-center">
+                    <button
+                      type="button"
+                      onClick={() => setIsDeliveryModalOpen(true)}
+                      className="text-slate-600 hover:text-slate-900 border-b border-dotted border-slate-400 pb-0.5 cursor-pointer text-left transition-colors"
+                      title="Click for Delivery Charge details"
+                    >
+                      Delivery Charge
+                    </button>
+                    <span className="font-semibold text-slate-900">
+                      {summary.deliveryFee === 0 ? (
+                        <span className="text-emerald-700 font-bold">FREE</span>
+                      ) : (
+                        formatCurrency(summary.deliveryFee)
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Handling Charge with clickable dotted underline */}
+                  <div className="flex justify-between items-center">
+                    <button
+                      type="button"
+                      onClick={() => setIsHandlingModalOpen(true)}
+                      className="text-slate-600 hover:text-slate-900 border-b border-dotted border-slate-400 pb-0.5 cursor-pointer text-left transition-colors"
+                      title="Click for Handling Charge details"
+                    >
+                      Handling Charge
+                    </button>
+                    <span className="font-semibold text-slate-900">
+                      {summary.handlingFee > 0 ? formatCurrency(summary.handlingFee) : '₹0'}
+                    </span>
+                  </div>
+
+                  {/* Unloading Charge (if selected) */}
+                  {unloadingOptions.required && (
+                    <div className="flex justify-between text-slate-900 font-semibold">
+                      <span>Unloading Charge</span>
+                      <span>{formatCurrency(summary.unloadingFee || 199)}</span>
+                    </div>
+                  )}
+
+                  <div className="border-t border-slate-200 pt-2.5 my-1" />
+
+                  {/* Grand Total */}
+                  <div className="flex justify-between text-xs font-bold text-slate-900">
+                    <span>Grand Total</span>
+                    <span className="font-black text-sm">{formatCurrency(summary.grandTotal)}</span>
+                  </div>
+
+                  {/* Paying with Wallet */}
+                  <div className="flex justify-between text-slate-600">
+                    <span>Paying with wallet</span>
+                    <span className="font-semibold text-slate-900">
+                      {summary.walletUsed > 0 ? `- ${formatCurrency(summary.walletUsed)}` : '₹0'}
+                    </span>
+                  </div>
+
+                  {/* Payable Amount */}
+                  <div className="flex justify-between text-xs font-black text-slate-900 pt-1 border-t border-dashed border-slate-200">
+                    <span>Payable Amount</span>
+                    <span className="text-base text-emerald-800">{formatCurrency(payableAmount)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 3: Need help with unloading? */}
+            <div className="p-4 sm:p-5 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                        Need help with unloading?
+                      </h4>
+                      <span className="text-xs font-bold text-slate-900">{formatCurrency(199)}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-snug">
+                      A helper will unload the goods on the ground floor only
+                    </p>
+                  </div>
+                </div>
+
+                {unloadingOptions.required ? (
                   <button
                     type="button"
-                    onClick={() => setIsDeliveryModalOpen(true)}
-                    className="text-slate-600 hover:text-slate-900 border-b border-dotted border-slate-400 pb-0.5 cursor-pointer text-left transition-colors"
-                    title="Click for Delivery Charge details"
+                    onClick={handleToggleUnloading}
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 hover:border-red-400 hover:text-red-600 bg-white text-xs font-bold text-slate-700 transition-all cursor-pointer shadow-2xs flex-shrink-0"
                   >
-                    Delivery Charge
+                    Remove
                   </button>
-                  <span className="font-semibold text-slate-900">
-                    {summary.deliveryFee === 0 ? (
-                      <span className="text-emerald-700 font-bold">FREE</span>
-                    ) : (
-                      formatCurrency(summary.deliveryFee)
-                    )}
-                  </span>
-                </div>
-
-                {/* Handling Charge with clickable dotted underline */}
-                <div className="flex justify-between items-center">
+                ) : (
                   <button
                     type="button"
-                    onClick={() => setIsHandlingModalOpen(true)}
-                    className="text-slate-600 hover:text-slate-900 border-b border-dotted border-slate-400 pb-0.5 cursor-pointer text-left transition-colors"
-                    title="Click for Handling Charge details"
+                    onClick={handleToggleUnloading}
+                    className="px-4 py-1.5 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-xs font-bold transition-all cursor-pointer shadow-2xs flex-shrink-0"
                   >
-                    Handling Charge
+                    Add
                   </button>
-                  <span className="font-semibold text-slate-900">
-                    {summary.handlingFee > 0 ? formatCurrency(summary.handlingFee) : '₹0'}
-                  </span>
-                </div>
-
-                {/* Unloading Charge (if selected) */}
-                {unloadingOptions.required && (
-                  <div className="flex justify-between text-slate-900 font-semibold">
-                    <span>Unloading Charge</span>
-                    <span>{formatCurrency(summary.unloadingFee || 199)}</span>
-                  </div>
                 )}
-
-                <div className="border-t border-slate-200 pt-2.5 my-1" />
-
-                {/* Grand Total */}
-                <div className="flex justify-between text-xs font-bold text-slate-900">
-                  <span>Grand Total</span>
-                  <span className="font-black text-sm">{formatCurrency(summary.grandTotal)}</span>
-                </div>
-
-                {/* Paying with Wallet */}
-                <div className="flex justify-between text-slate-600">
-                  <span>Paying with wallet</span>
-                  <span className="font-semibold text-slate-900">
-                    {summary.walletUsed > 0 ? `- ${formatCurrency(summary.walletUsed)}` : '₹0'}
-                  </span>
-                </div>
-
-                {/* Payable Amount */}
-                <div className="flex justify-between text-xs font-black text-slate-900 pt-1 border-t border-dashed border-slate-200">
-                  <span>Payable Amount</span>
-                  <span className="text-base text-emerald-800">{formatCurrency(payableAmount)}</span>
-                </div>
               </div>
-            )}
-          </div>
 
-          {/* CARD 3: Need help with unloading? (Screenshots 2 & 3) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
+              {/* Warning if unloading is skipped */}
+              {!unloadingOptions.required && (
+                <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/70 text-[11px] text-amber-900 flex items-center gap-2 font-medium">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <span>If you skip this, unloading will be your responsibility</span>
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 4: Add GST Number */}
+            <div className="p-4 sm:p-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
-                  <Truck className="w-5 h-5" />
+                  <span className="text-[11px] font-black text-emerald-800 bg-emerald-200/60 px-1.5 py-0.5 rounded">
+                    GST
+                  </span>
                 </div>
                 <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900">
-                      Need help with unloading?
-                    </h4>
-                    <span className="text-xs font-bold text-slate-900">{formatCurrency(199)}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-snug">
-                    A helper will unload the goods on the ground floor only
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                    {gstin ? `GSTIN: ${gstin}` : 'Add GST number'}
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    {companyName ? companyName : 'Claim GST input credit on your order'}
                   </p>
                 </div>
               </div>
 
-              {unloadingOptions.required ? (
-                <button
-                  type="button"
-                  onClick={handleToggleUnloading}
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 hover:border-red-400 hover:text-red-600 bg-white text-xs font-bold text-slate-700 transition-all cursor-pointer shadow-2xs flex-shrink-0"
-                >
-                  Remove
-                </button>
+              {gstin ? (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsGstinModalOpen(true)}
+                    className="text-xs text-brand-blue-900 hover:underline font-bold cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removeGstin}
+                    className="text-xs text-red-500 hover:underline font-bold cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
               ) : (
                 <button
                   type="button"
-                  onClick={handleToggleUnloading}
+                  onClick={() => setIsGstinModalOpen(true)}
                   className="px-4 py-1.5 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-xs font-bold transition-all cursor-pointer shadow-2xs flex-shrink-0"
                 >
                   Add
@@ -588,146 +747,92 @@ export const CartPage: React.FC = () => {
               )}
             </div>
 
-            {/* Warning if unloading is skipped */}
-            {!unloadingOptions.required && (
-              <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/70 text-[11px] text-amber-900 flex items-center gap-2 font-medium">
-                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span>If you skip this, unloading will be your responsibility</span>
-              </div>
-            )}
+            {/* SECTION 5: Cancellation Policy Accordion */}
+            <div className="overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsCancellationPolicyOpen(!isCancellationPolicyOpen)}
+                className="w-full p-4 sm:p-5 flex items-center justify-between text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-slate-500" />
+                  <h4 className="text-xs sm:text-sm font-bold text-slate-900">Cancellation Policy</h4>
+                </div>
+                {isCancellationPolicyOpen ? (
+                  <ChevronUp className="w-4 h-4 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
+              </button>
+
+              {isCancellationPolicyOpen && (
+                <div className="px-4 sm:px-5 pb-5 border-t border-slate-100 pt-3 text-[11px] text-slate-500 space-y-2 leading-relaxed">
+                  <p>&bull; Orders cannot be modified once packed</p>
+                  <p>&bull; Delivery location of an order cannot be changed. INR 199 additional charges in unavoidable cases</p>
+                  <p>&bull; Orders cannot be cancelled once dispatched. Cancellation charges of INR 199 would apply</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* CARD 4: Add GST Number (Screenshots 3 & 5) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
-                <span className="text-[11px] font-black text-emerald-800 bg-emerald-200/60 px-1.5 py-0.5 rounded">
-                  GST
+          {/* 2. STICKY BOTTOM CHECKOUT SECTION (Separate card below unified panel) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-md divide-y divide-slate-100 overflow-hidden">
+            {/* Delivering To Block */}
+            <div className="p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                  <MapPin className="w-4 h-4 text-slate-700" />
+                  <span>Delivering To</span>
+                </div>
+                {/* Delivery ETA badge positioned clearly above Change Address */}
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide shadow-2xs ${
+                    !isServiceable && pincode
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-[#14532d] text-white'
+                  }`}
+                >
+                  {getEtaBadgeText()}
                 </span>
               </div>
-              <div className="space-y-0.5">
-                <h4 className="text-xs sm:text-sm font-bold text-slate-900">
-                  {gstin ? `GSTIN: ${gstin}` : 'Add GST number'}
-                </h4>
-                <p className="text-[11px] text-slate-500">
-                  {companyName ? companyName : 'Claim GST input credit on your order'}
-                </p>
-              </div>
-            </div>
 
-            {gstin ? (
-              <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Short address/locality */}
+              <p className="text-xs text-slate-600 line-clamp-1">
+                {getDisplayAddress()}
+              </p>
+
+              {/* Change Address action aligned right */}
+              <div className="flex justify-end pt-0.5">
                 <button
                   type="button"
-                  onClick={() => setIsGstinModalOpen(true)}
-                  className="text-xs text-brand-blue-900 hover:underline font-bold cursor-pointer"
+                  onClick={openLocationModal}
+                  className="text-xs font-bold text-[#15803d] hover:text-[#166534] hover:underline cursor-pointer"
                 >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={removeGstin}
-                  className="text-xs text-red-500 hover:underline font-bold cursor-pointer"
-                >
-                  Remove
+                  Change Address
                 </button>
               </div>
-            ) : (
+            </div>
+
+            {/* Payable Amount & Continue to Checkout CTA */}
+            <div className="p-4 bg-slate-50/60 flex items-center justify-between gap-3">
+              <div className="select-none">
+                <div className="text-xs text-slate-400 font-semibold leading-tight">Payable Amount</div>
+                <div className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
+                  {formatCurrency(payableAmount)}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium">Including GST</div>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setIsGstinModalOpen(true)}
-                className="px-4 py-1.5 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-xs font-bold transition-all cursor-pointer shadow-2xs flex-shrink-0"
+                onClick={handleContinueToCheckout}
+                disabled={isValidatingCheckout}
+                className="px-5 sm:px-6 py-3 rounded-xl text-xs sm:text-sm font-bold text-white bg-emerald-700 hover:bg-emerald-800 transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 flex-shrink-0 disabled:opacity-60"
               >
-                Add
-              </button>
-            )}
-          </div>
-
-          {/* CARD 5: Cancellation Policy Accordion (Screenshot 3) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setIsCancellationPolicyOpen(!isCancellationPolicyOpen)}
-              className="w-full p-4 sm:p-5 flex items-center justify-between text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-slate-500" />
-                <h4 className="text-xs sm:text-sm font-bold text-slate-900">Cancellation Policy</h4>
-              </div>
-              {isCancellationPolicyOpen ? (
-                <ChevronUp className="w-4 h-4 text-slate-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-slate-400" />
-              )}
-            </button>
-
-            {isCancellationPolicyOpen && (
-              <div className="px-4 sm:px-5 pb-5 border-t border-slate-100 pt-3 text-[11px] text-slate-500 space-y-2 leading-relaxed">
-                <p>&bull; Orders cannot be modified once packed</p>
-                <p>&bull; Delivery location of an order cannot be changed. INR 199 additional charges in unavoidable cases</p>
-                <p>&bull; Orders cannot be cancelled once dispatched. Cancellation charges of INR 199 would apply</p>
-              </div>
-            )}
-          </div>
-
-          {/* CARD 6: Delivering To (HomeRun Reference Screenshot 1) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-2.5">
-            {/* 1. Location icon + "Delivering To" & 2. Delivery ETA badge */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                <MapPin className="w-4 h-4 text-slate-700" />
-                <span>Delivering To</span>
-              </div>
-              <span
-                className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide shadow-2xs ${
-                  !isServiceable && pincode
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-[#14532d] text-white'
-                }`}
-              >
-                {getEtaBadgeText()}
-              </span>
-            </div>
-
-            {/* 3. Short address/locality */}
-            <p className="text-xs text-slate-600 line-clamp-2">
-              {getDisplayAddress()}
-            </p>
-
-            {/* 4. Change Address action aligned right matching Screenshot 1 */}
-            <div className="flex justify-end pt-0.5">
-              <button
-                type="button"
-                onClick={openLocationModal}
-                className="text-xs font-bold text-[#15803d] hover:text-[#166534] hover:underline cursor-pointer"
-              >
-                Change Address
+                <span>{isValidatingCheckout ? 'Validating...' : 'Continue to checkout'}</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-          </div>
-
-          {/* CARD 7: Bottom Total & Continue to Checkout CTA (Screenshots 2 & 3) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-md flex items-center justify-between gap-4">
-            <div className="select-none">
-              <div className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
-                {formatCurrency(payableAmount)}
-              </div>
-              <div className="text-[11px] text-slate-400 font-medium">Including GST</div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleContinueToCheckout}
-              disabled={pincode && !isServiceable}
-              className={`px-6 py-3 rounded-xl text-xs sm:text-sm font-bold text-white transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                pincode && !isServiceable
-                  ? 'bg-slate-400 cursor-not-allowed shadow-none'
-                  : 'bg-emerald-700 hover:bg-emerald-800'
-              }`}
-            >
-              <span>Continue to checkout</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </div>

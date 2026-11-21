@@ -164,13 +164,17 @@ export function calculateCartSummary(input: CartCalculationInput) {
   const freeThreshold = input.freeDeliveryThreshold ?? DEFAULT_FREE_DELIVERY_THRESHOLD;
   const stdDeliveryFee = input.standardDeliveryFee ?? DEFAULT_STANDARD_DELIVERY_FEE;
 
-  if (discountedSubtotal > 0) {
-    if (discountedSubtotal < freeThreshold) {
-      deliveryFee = input.deliverySpeed === 'ASAP_60' ? 149 : stdDeliveryFee;
-    } else if (input.deliverySpeed === 'ASAP_60') {
-      deliveryFee = 49; // Priority dispatch fee for 60-min slot
+  // Delivery rule:
+  // - Order value >= ₹1,000 -> ₹0 delivery charge (Free delivery)
+  // - Order value < ₹1,000 -> ₹199 delivery charge
+  // Threshold basis is product subtotal after item/bulk discounts, before coupon discounts
+  const deliveryEligibleSubtotal = discountedSubtotal;
+
+  if (deliveryEligibleSubtotal > 0) {
+    if (deliveryEligibleSubtotal < freeThreshold) {
+      deliveryFee = stdDeliveryFee;
     } else {
-      deliveryFee = 0; // Free delivery
+      deliveryFee = 0;
     }
   }
 

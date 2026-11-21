@@ -25,9 +25,9 @@ export const APP_CONFIG = {
     enableRealTimeTracking: true
   },
   deliveryThresholds: {
-    freeDeliveryAbove: 1999,
-    standardDeliveryFee: 99,
-    priorityAsapFee: 149,
-    asapPrioritySupplementAboveThreshold: 49
+    freeDeliveryAbove: 1000,
+    standardDeliveryFee: 199,
+    priorityAsapFee: 199,
+    asapPrioritySupplementAboveThreshold: 0
   }
 };
