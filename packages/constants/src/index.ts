@@ -1,4 +1,5 @@
 // Master constants for BUILDORA 60
+import { NewLaunchCategory } from '@buildora/types';
 
 export const APP_NAME = 'BUILDORA 60';
 export const APP_TAGLINE = 'BUILD SMART. DELIVER FAST.';
@@ -453,6 +454,115 @@ export const CONSTRUCTION_DEPARTMENTS = [
     ]
   }
 ];
+
+// Curated New Launches Category Hierarchy mapped directly to Master Categories
+export const NEW_LAUNCHES_CATEGORIES: NewLaunchCategory[] = [
+  {
+    id: 'nl-1',
+    name: 'Cabinet Hardware',
+    slug: 'cabinet-hardware',
+    masterCategorySlug: 'hinges-channels-handles',
+    icon: 'Layers',
+    image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80',
+    description: 'Soft-close hydraulic auto hinges, telescopic drawer slides, and architectural cabinet handles.',
+    badge: 'NEW ARRIVAL'
+  },
+  {
+    id: 'nl-2',
+    name: 'Kitchen Systems & Hardware',
+    slug: 'kitchen-systems-hardware',
+    masterCategorySlug: 'kitchen-systems-accessories',
+    icon: 'Box',
+    image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=600&q=80',
+    description: 'Modular SS 304 wire baskets, soft-close tandem boxes, corner carousels, and pantry pull-outs.',
+    badge: 'NEW ARRIVAL'
+  },
+  {
+    id: 'nl-3',
+    name: 'General Hardware & Tools',
+    slug: 'general-hardware-tools',
+    masterCategorySlug: 'general-hardware-tools',
+    icon: 'Wrench',
+    image: 'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=600&q=80',
+    description: 'Precision measuring tapes, spirit levels, claw hammers, screwdrivers, and fasteners.',
+    badge: 'JOB SITE ESSENTIAL'
+  },
+  {
+    id: 'nl-4',
+    name: 'Bathroom Renovation Materials',
+    slug: 'bathroom-renovation-materials',
+    masterCategorySlug: 'bathroom-renovation-materials',
+    icon: 'Feather',
+    image: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=600&q=80',
+    description: 'Concealed dual-flush cisterns, linear stainless steel floor drains, and partition channels.',
+    badge: 'HOT LAUNCH'
+  },
+  {
+    id: 'nl-5',
+    name: 'Conduits & Piping',
+    slug: 'conduits-piping',
+    masterCategorySlug: 'electrical-conduits',
+    icon: 'Columns',
+    image: 'https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?auto=format&fit=crop&w=600&q=80',
+    description: 'Rigid PVC mechanical electrical conduits, circular junction boxes, and installation bends.',
+    badge: 'FRESH BATCH'
+  },
+  {
+    id: 'nl-6',
+    name: 'PVC Pipes',
+    slug: 'pvc-pipes',
+    masterCategorySlug: 'cpvc-pipes-overhead-tanks',
+    icon: 'Compass',
+    image: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=600&q=80',
+    description: 'Hot and cold potable CPVC pipes, SDR 11 fittings, brass couplers, and heavy solvent cements.',
+    badge: '60M DISPATCH'
+  },
+  {
+    id: 'nl-7',
+    name: 'Kitchen Sinks & Faucets',
+    slug: 'kitchen-sinks-faucets',
+    masterCategorySlug: 'kitchen-sinks-faucets',
+    icon: 'Coffee',
+    image: 'https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&w=600&q=80',
+    description: 'Handmade SS 304 satin finish sinks, flexible silicone spout pull-out mixer faucets.',
+    badge: 'NEW ARRIVAL'
+  },
+  {
+    id: 'nl-8',
+    name: 'Home Appliances & Power Backup',
+    slug: 'home-appliances-power-backup',
+    masterCategorySlug: 'home-appliances-power-backup',
+    icon: 'BatteryCharging',
+    image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80',
+    description: 'Pure sine wave digital inverters, storage electric water heaters, and backup systems.',
+    badge: 'DIRECT FROM BRAND'
+  },
+  {
+    id: 'nl-9',
+    name: 'Power Tools & Equipment',
+    slug: 'power-tools-accessories',
+    masterCategorySlug: 'power-tools-accessories',
+    icon: 'Wrench',
+    image: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=600&q=80',
+    description: 'Rotary hammer drills, heavy 4-inch angle grinders, and diamond marble cutting blades.',
+    badge: 'CONTRACTOR CHOICE'
+  },
+  {
+    id: 'nl-10',
+    name: 'Modern Architectural Lighting',
+    slug: 'lighting',
+    masterCategorySlug: 'lighting',
+    icon: 'Sun',
+    image: 'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=600&q=80',
+    description: 'Slim recessed LED downlights, COB directional spotlights, and continuous cove lighting.',
+    badge: 'NEW ARRIVAL'
+  }
+];
+
+export const getNewLaunchCategoryBySlug = (slug?: string): NewLaunchCategory | undefined => {
+  if (!slug) return undefined;
+  return NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug || c.masterCategorySlug === slug);
+};
 
 export const MASTER_BRANDS = [
   {

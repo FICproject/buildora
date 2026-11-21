@@ -131,6 +131,18 @@ export interface Product {
   isBestSeller?: boolean;
   isTrending?: boolean;
   isDealOfTheDay?: boolean;
+  isNewLaunch?: boolean;
+}
+
+export interface NewLaunchCategory {
+  id: string;
+  name: string;
+  slug: string;
+  masterCategorySlug: string;
+  icon: string;
+  image: string;
+  description: string;
+  badge?: string;
 }
 
 export interface CartItem {

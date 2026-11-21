@@ -474,7 +474,8 @@ export const SEED_PRODUCTS: Product[] = [
       'Certification': 'NSF-61 and BIS (IS 15778)'
     },
     deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED', 'NEXT_DAY'],
-    isBestSeller: true
+    isBestSeller: true,
+    isNewLaunch: true
   },
 
   // 20. Power Tools
@@ -514,7 +515,8 @@ export const SEED_PRODUCTS: Product[] = [
     },
     warranty: '1 Year Bosch India Official Warranty',
     deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED', 'NEXT_DAY'],
-    isFeatured: true
+    isFeatured: true,
+    isNewLaunch: true
   },
 
   // 10. Door Locks & Hardware
@@ -551,7 +553,8 @@ export const SEED_PRODUCTS: Product[] = [
       'Levers': '8 Brass Levers'
     },
     deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED', 'NEXT_DAY'],
-    isBestSeller: true
+    isBestSeller: true,
+    isNewLaunch: true
   },
 
   // 19. Water Storage Tanks
@@ -588,7 +591,606 @@ export const SEED_PRODUCTS: Product[] = [
       'Dimensions': 'Height 1320 mm x Diameter 1050 mm',
       'Warranty': '10 Years Replacement Warranty'
     },
-    deliverySpeedAvailable: ['SCHEDULED', 'NEXT_DAY']
+    deliverySpeedAvailable: ['SCHEDULED', 'NEXT_DAY'],
+    isNewLaunch: true
+  },
+
+  // 20. New Launches - Cabinet Hardware
+  {
+    id: 'prod-cabhw-1',
+    name: 'Hafele Metalla 304 Soft-Close Hydraulic Auto Concealed Hinges (Full Overlay, Pack of 2)',
+    slug: 'hafele-metalla-304-soft-close-hydraulic-hinges',
+    sku: 'HNG-HAF-MET-304-FO',
+    brand: 'Godrej Locks',
+    brandSlug: 'godrej',
+    category: 'Hinges, Channels & Handles',
+    categorySlug: 'hinges-channels-handles',
+    subcategory: 'Soft-Close Auto Hinges (SS 304)',
+    subcategorySlug: 'auto-hinges',
+    description: 'German engineered SS 304 grade soft-close hydraulic clip-on hinges with 110-degree opening angle and integrated silent damping cylinder.',
+    shortDescription: 'SS 304 rust-proof silent soft-close hydraulic cabinet hinges.',
+    images: [
+      'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 385,
+    mrp: 480,
+    discount: 20,
+    unit: 'Pair (2 Pcs)',
+    packSize: 'Pack of 2 Hinges with Mounting Plates & Screws',
+    gstRate: 18,
+    rating: 4.9,
+    reviewCount: 114,
+    inStock: true,
+    stockCount: 450,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true,
+    isNewLaunch: true,
+    specifications: {
+      'Material': 'Stainless Steel 304 Grade',
+      'Crank Type': 'Full Overlay (0 Crank)',
+      'Opening Angle': '110 Degrees',
+      'Cycle Testing': 'Passed 50,000 Silent Cycles'
+    }
+  },
+  {
+    id: 'prod-cabhw-2',
+    name: 'Ebco Heavy Duty Telescopic Ball Bearing Drawer Slides (45kg Capacity, 18 Inch / 450mm)',
+    slug: 'ebco-heavy-duty-telescopic-drawer-slides-18-inch',
+    sku: 'CHN-EBC-45KG-18IN',
+    brand: 'Godrej Locks',
+    brandSlug: 'godrej',
+    category: 'Hinges, Channels & Handles',
+    categorySlug: 'hinges-channels-handles',
+    subcategory: 'Telescopic Drawer Channels',
+    subcategorySlug: 'telescopic-channels',
+    description: 'Full-extension triple-fold zinc-plated cold rolled steel telescopic channels with high-grade solid carbon steel ball bearings.',
+    shortDescription: '45kg rated triple-extension ball bearing drawer slide channels.',
+    images: [
+      'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 620,
+    mrp: 750,
+    discount: 17,
+    unit: 'Set (Pair for 1 Drawer)',
+    packSize: 'Left & Right Slide (18 Inch / 450mm)',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 92,
+    inStock: true,
+    stockCount: 320,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isNewLaunch: true,
+    specifications: {
+      'Length': '450 mm (18 Inch)',
+      'Load Capacity': '45 kg Dynamic Load',
+      'Extension': 'Full 100% Extension',
+      'Finish': 'Electrophoretic Zinc Plated'
+    }
+  },
+
+  // 21. New Launches - Kitchen Systems & Hardware
+  {
+    id: 'prod-kithw-1',
+    name: 'Godrej Kitchen SS 304 Heavy Duty Modular Wire Plain Basket (17x20x6 Inch)',
+    slug: 'godrej-kitchen-ss-304-wire-plain-basket-17x20x6',
+    sku: 'KIT-GDJ-BSK-172006',
+    brand: 'Godrej Locks',
+    brandSlug: 'godrej',
+    category: 'Kitchen Systems & Accessories',
+    categorySlug: 'kitchen-systems-accessories',
+    subcategory: 'SS 304 Modular Wire Baskets',
+    subcategorySlug: 'wire-baskets',
+    description: 'Precision argon-welded pure SS 304 stainless steel kitchen wire basket designed for standard 450mm base modular carcasses.',
+    shortDescription: 'Lifetime rust-free SS 304 modular kitchen pullout basket.',
+    images: [
+      'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 1850,
+    mrp: 2300,
+    discount: 20,
+    unit: 'Unit (1 Basket)',
+    packSize: '1 Basket with Universal Slide Clamps',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 78,
+    inStock: true,
+    stockCount: 160,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true,
+    isNewLaunch: true,
+    specifications: {
+      'Dimensions': 'Width 430mm x Depth 500mm x Height 150mm (17x20x6 Inch)',
+      'Grade': 'SS 304 Nickel-Chromium Stainless Steel',
+      'Wire Gauge': '6mm Outer Frame, 3mm Inner Wire Grid'
+    }
+  },
+  {
+    id: 'prod-kithw-2',
+    name: 'Hafele Matrix Box Slim Soft-Close Tandem Drawer Box System (500mm, Anthracite Grey)',
+    slug: 'hafele-matrix-box-slim-soft-close-tandem-drawer-500mm',
+    sku: 'KIT-HAF-MTX-500-ANT',
+    brand: 'Godrej Locks',
+    brandSlug: 'godrej',
+    category: 'Kitchen Systems & Accessories',
+    categorySlug: 'kitchen-systems-accessories',
+    subcategory: 'Soft-Close Tandem Drawer Boxes',
+    subcategorySlug: 'tandem-boxes',
+    description: 'Ultra-thin 13mm straight double-wall metal drawer side system with synchronized rack-and-pinion undermount soft-close slides.',
+    shortDescription: '13mm slim profile luxury soft-close tandem kitchen drawer box.',
+    images: [
+      'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 2450,
+    mrp: 2990,
+    discount: 18,
+    unit: 'Set (Drawer Box + Runners)',
+    packSize: 'Complete Set (Drawer Sides, Synchronized Runners, Back Fixings)',
+    gstRate: 18,
+    rating: 4.9,
+    reviewCount: 63,
+    inStock: true,
+    stockCount: 120,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isNewLaunch: true,
+    specifications: {
+      'Slide Length': '500 mm',
+      'Wall Thickness': '13 mm Slim Double Wall',
+      'Weight Rating': '40 kg Dynamic Weight',
+      'Damping': 'Integrated Fluid Soft-Close Mechanism'
+    }
+  },
+
+  // 22. New Launches - General Hardware & Tools
+  {
+    id: 'prod-gentool-1',
+    name: 'Stanley Short Steel Tape Rule (5m / 16ft Metric & Imperial with Tru-Zero Hook)',
+    slug: 'stanley-short-steel-tape-rule-5m',
+    sku: 'TLS-STA-TP-5M',
+    brand: 'Bosch Power Tools',
+    brandSlug: 'bosch',
+    category: 'General Hardware & Tools',
+    categorySlug: 'general-hardware-tools',
+    subcategory: 'Measuring Tapes (5m/30m) & Spirit Levels',
+    subcategorySlug: 'measuring-tools',
+    description: 'High-impact yellow ABS case with polymer-coated wear-resistant spring steel blade and Tru-Zero hook for accurate internal and external measurements.',
+    shortDescription: '5m jobsite measuring tape with polymer-coated durable blade.',
+    images: [
+      'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 299,
+    mrp: 399,
+    discount: 25,
+    unit: 'Piece',
+    packSize: '1 Tape Rule (5m / 16ft)',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 210,
+    inStock: true,
+    stockCount: 600,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true,
+    isNewLaunch: true,
+    specifications: {
+      'Blade Length': '5 Metres (16 Feet)',
+      'Blade Width': '19 mm',
+      'Case Material': 'High Impact Ergonomic ABS Polymer',
+      'Accuracy Class': 'Class II Metric & Imperial Dual Markings'
+    }
+  },
+  {
+    id: 'prod-gentool-2',
+    name: 'Taparia Drop-Forged Steel Claw Hammer with Fiberglass Handle (450g / 16 oz)',
+    slug: 'taparia-drop-forged-steel-claw-hammer-450g',
+    sku: 'TLS-TAP-HAM-450G',
+    brand: 'Bosch Power Tools',
+    brandSlug: 'bosch',
+    category: 'General Hardware & Tools',
+    categorySlug: 'general-hardware-tools',
+    subcategory: 'Hardened Hand Tools & Hammer Sets',
+    subcategorySlug: 'hand-tools',
+    description: 'Drop-forged carbon steel head hardened to 50-58 HRC with ergonomic vibration-damping fiberglass rubber-grip handle and curved claw for nail extraction.',
+    shortDescription: '450g drop-forged steel claw hammer with shockproof fiberglass grip.',
+    images: [
+      'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 445,
+    mrp: 550,
+    discount: 19,
+    unit: 'Piece',
+    packSize: '1 Claw Hammer (450 Grams)',
+    gstRate: 18,
+    rating: 4.7,
+    reviewCount: 145,
+    inStock: true,
+    stockCount: 400,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isNewLaunch: true,
+    specifications: {
+      'Head Weight': '450 Grams (16 oz)',
+      'Head Material': 'Drop-Forged High Carbon Steel',
+      'Shaft Material': 'Solid Fiberglass Core with TPR Non-Slip Rubber Grip',
+      'Hardness': 'Induction Hardened Striking Face 50-58 HRC'
+    }
+  },
+
+  // 23. New Launches - Bathroom Renovation Materials
+  {
+    id: 'prod-bathreno-1',
+    name: 'Jaquar Dual-Flush Concealed Water Cistern with Chrome Actuator Flush Plate',
+    slug: 'jaquar-dual-flush-concealed-water-cistern',
+    sku: 'SAN-JAQ-CST-DF',
+    brand: 'Astral Pipes',
+    brandSlug: 'astral',
+    category: 'Bathroom Renovation Materials',
+    categorySlug: 'bathroom-renovation-materials',
+    subcategory: 'Concealed Dual-Flush Water Cisterns',
+    subcategorySlug: 'concealed-cisterns',
+    description: 'High-density blow-molded 6/3L dual-flush HDPE tank with front actuation plate, condensation insulation sleeve, and silent fill hydraulic inlet valve.',
+    shortDescription: 'In-wall slim concealed dual-flush water cistern with actuator plate.',
+    images: [
+      'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 4150,
+    mrp: 5200,
+    discount: 20,
+    unit: 'Complete Set',
+    packSize: 'Cistern Tank + Chrome Flush Plate + Wall Brackets',
+    gstRate: 18,
+    rating: 4.9,
+    reviewCount: 88,
+    inStock: true,
+    stockCount: 95,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true,
+    isNewLaunch: true,
+    specifications: {
+      'Tank Capacity': '6 / 3 Litre Dual Flush Operation',
+      'Installation': 'Brick / Drywall In-Wall Concealed Mount (80mm Slim Frame)',
+      'Actuator Plate': 'Dual-Button Chrome Finish Included',
+      'Operating Pressure': '0.5 to 10 Bar Water Pressure'
+    }
+  },
+  {
+    id: 'prod-bathreno-2',
+    name: 'Chilly SS 304 Anti-Cockroach Linear Floor Drain Channel with Tile-Insert Grate (600mm)',
+    slug: 'chilly-ss-304-linear-floor-drain-channel-600mm',
+    sku: 'SAN-CHL-FDR-600MM',
+    brand: 'Astral Pipes',
+    brandSlug: 'astral',
+    category: 'Bathroom Renovation Materials',
+    categorySlug: 'bathroom-renovation-materials',
+    subcategory: 'Stainless Steel Linear Floor Drain Channels',
+    subcategorySlug: 'floor-drains',
+    description: 'Architectural frameless linear shower drain channel made of 1.5mm AISI 304 stainless steel with reversible tile-insert top and mechanical anti-odour trap.',
+    shortDescription: '600mm stainless steel linear shower drain with anti-cockroach trap.',
+    images: [
+      'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 1680,
+    mrp: 2100,
+    discount: 20,
+    unit: 'Set',
+    packSize: '1 Drain Channel + Reversible Grate + Odour Seal Trap',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 72,
+    inStock: true,
+    stockCount: 140,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isNewLaunch: true,
+    specifications: {
+      'Length': '600 mm (24 Inch) x 70 mm Width',
+      'Material': 'AISI 304 Electro-Polished Stainless Steel (1.5mm)',
+      'Outlet Diameter': '50 mm High Flow Center Drain Outlet',
+      'Grate Type': '2-in-1 Reversible Tile Insert & Brushed Satin SS'
+    }
+  },
+
+  // 24. New Launches - Conduits & Piping
+  {
+    id: 'prod-conduit-1',
+    name: 'Supreme Medium Mechanical Stress Rigid PVC Electrical Conduit Pipe (25mm, 3 Metres, Ivory)',
+    slug: 'supreme-rigid-pvc-electrical-conduit-pipe-25mm',
+    sku: 'CON-SUP-PVC-25MM-3M',
+    brand: 'Supreme Industries',
+    brandSlug: 'supreme',
+    category: 'Electrical Conduits',
+    categorySlug: 'electrical-conduits',
+    subcategory: 'Rigid PVC Electrical Conduits (20mm/25mm)',
+    subcategorySlug: 'pvc-conduits',
+    description: 'Fire retardant, non-conductive, chemical resistant unplasticized PVC electrical conduit pipe certified to IS 9537 Part 3 standards for embedded concrete slab casting.',
+    shortDescription: '25mm ISI rigid PVC electrical conduit pipe for concealed slab wiring.',
+    images: [
+      'https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 115,
+    mrp: 145,
+    discount: 21,
+    unit: 'Length (3 Metres)',
+    packSize: '3 Metre Pipe (25mm Outer Diameter)',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 195,
+    inStock: true,
+    stockCount: 1200,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true,
+    isNewLaunch: true,
+    specifications: {
+      'Nominal Diameter': '25 mm Outer Diameter',
+      'Length': '3 Metres Standard',
+      'Stress Class': 'Medium Mechanical Stress (Concrete Embedded)',
+      'Standard': 'IS 9537 (Part 3) Certified Fire-Retardant PVC'
+    }
+  },
+  {
+    id: 'prod-conduit-2',
+    name: 'Havells 25mm 4-Way Deep PVC Circular Junction Box with Inspection Lid',
+    slug: 'havells-25mm-4-way-deep-pvc-circular-junction-box',
+    sku: 'CON-HAV-JBOX-25MM-4W',
+    brand: 'Havells',
+    brandSlug: 'havells',
+    category: 'Electrical Conduits',
+    categorySlug: 'electrical-conduits',
+    subcategory: 'Conduit Bends & Deep Junction Boxes',
+    subcategorySlug: 'conduit-accessories',
+    description: 'Deep circular intersection junction box molded from heavy-duty impact-resistant PVC with 4 knockouts for 25mm conduit pipes and brass threaded screw inserts.',
+    shortDescription: '25mm 4-way deep PVC junction box with lid for roof casting.',
+    images: [
+      'https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 42,
+    mrp: 55,
+    discount: 24,
+    unit: 'Piece',
+    packSize: '1 Junction Box with Top Lid & Brass Screws',
+    gstRate: 18,
+    rating: 4.7,
+    reviewCount: 130,
+    inStock: true,
+    stockCount: 850,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isNewLaunch: true,
+    specifications: {
+      'Size': '25 mm Conduits (Deep Slab Box 65mm Depth)',
+      'Ways': '4-Way Intersection Entry Ports',
+      'Material': 'High-Impact Flame-Retardant Unplasticized PVC'
+    }
+  },
+
+  // 25. New Launches - Kitchen Sinks & Faucets
+  {
+    id: 'prod-sink-1',
+    name: 'Franke Maris Handmade SS 304 Single Bowl Kitchen Sink with Sound Deadening Pads (24x18 Inch)',
+    slug: 'franke-maris-handmade-ss-304-single-bowl-sink-24x18',
+    sku: 'SNK-FRK-SS-2418',
+    brand: 'Astral Pipes',
+    brandSlug: 'astral',
+    category: 'Kitchen Sinks & Faucets',
+    categorySlug: 'kitchen-sinks-faucets',
+    subcategory: 'SS 304 Handmade Single Bowl Sinks',
+    subcategorySlug: 'ss-kitchen-sinks',
+    description: 'Heavy 1.2mm gauge 18/10 surgical grade stainless steel handmade kitchen sink with R10 tight radius corners, deep 9-inch bowl, and under-bowl anti-condensation coating.',
+    shortDescription: '1.2mm thick SS 304 handmade single bowl sink with waste coupling.',
+    images: [
+      'https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 5850,
+    mrp: 7500,
+    discount: 22,
+    unit: 'Unit',
+    packSize: 'Sink Bowl + 4-Inch SS Waste Coupling + Drain Pipe Kit',
+    gstRate: 18,
+    rating: 4.9,
+    reviewCount: 94,
+    inStock: true,
+    stockCount: 85,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true,
+    isNewLaunch: true,
+    specifications: {
+      'Overall Dimensions': '610mm x 457mm x 230mm (24 x 18 x 9 Inch)',
+      'Sheet Thickness': '1.2 mm Heavy Gauge (18 Gauge)',
+      'Material': 'AISI 304 Grade Surgical Stainless Steel',
+      'Corner Radius': 'R10 Precision Laser Welded Corners'
+    }
+  },
+  {
+    id: 'prod-sink-2',
+    name: 'Kohler Purist Flexible Silicone Spout 360-Degree Swivel Kitchen Sink Mixer Tap',
+    slug: 'kohler-purist-flexible-silicone-spout-sink-mixer-tap',
+    sku: 'FAU-KOH-PUR-MIX',
+    brand: 'Astral Pipes',
+    brandSlug: 'astral',
+    category: 'Kitchen Sinks & Faucets',
+    categorySlug: 'kitchen-sinks-faucets',
+    subcategory: 'Flexible Pull-Out Kitchen Sink Faucets',
+    subcategorySlug: 'kitchen-faucets',
+    description: 'Solid forged brass body finished in multi-layer mirror chrome with magnetic docking food-grade black silicone flexible gooseneck spout and dual spray aerator.',
+    shortDescription: 'Flexible gooseneck silicone spout brass kitchen sink mixer tap.',
+    images: [
+      'https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 3990,
+    mrp: 5100,
+    discount: 22,
+    unit: 'Piece',
+    packSize: '1 Faucet + 2 Braided SS Inlet Hoses (450mm) + Mounting Clamp',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 76,
+    inStock: true,
+    stockCount: 110,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isNewLaunch: true,
+    specifications: {
+      'Body Material': 'Forged Virgin Brass (IS 319 Grade)',
+      'Spout': '360° Omnidirectional Flexible Black Silicone Hose',
+      'Cartridge': 'High-Durability 35mm Ceramic Disc Cartridge (500,000 cycles)',
+      'Water Flow Modes': 'Stream & High-Pressure Rinse Spray Modes'
+    }
+  },
+
+  // 26. New Launches - Home Appliances & Power Backup
+  {
+    id: 'prod-appliance-1',
+    name: 'Luminous Zelio+ 1100 Pure Sine Wave Intelligent Home Inverter UPS (900VA / 12V)',
+    slug: 'luminous-zelio-1100-pure-sine-wave-home-inverter',
+    sku: 'APP-LUM-ZEL-1100',
+    brand: 'Havells',
+    brandSlug: 'havells',
+    category: 'Home Appliances & Power Backup',
+    categorySlug: 'home-appliances-power-backup',
+    subcategory: 'Pure Sine Wave Inverters (1100VA)',
+    subcategorySlug: 'inverters',
+    description: 'India most intelligent sine wave UPS with 32-bit DSP processor, smart intuitive LCD display showing battery charge percentage and backup time in hours & minutes.',
+    shortDescription: '900VA / 12V pure sine wave inverter with digital backup time display.',
+    images: [
+      'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 6950,
+    mrp: 8500,
+    discount: 18,
+    unit: 'Unit',
+    packSize: '1 Inverter Unit with Battery Connecting Cables',
+    gstRate: 18,
+    rating: 4.9,
+    reviewCount: 142,
+    inStock: true,
+    stockCount: 75,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true,
+    isNewLaunch: true,
+    specifications: {
+      'Capacity': '900 VA / 12V DC Input',
+      'Rated Power Output': '756 Watts Peak Capacity',
+      'Waveform': 'Grid-Quality Pure Sine Wave Output (Safe for sensitive electronics)',
+      'Display': 'Digital LCD Display (Backup Time in Hours/Mins, Battery Level %)'
+    }
+  },
+  {
+    id: 'prod-appliance-2',
+    name: 'Havells Monza EC 25 Litre 5-Star Storage Electric Water Geyser with Feroglas Technology',
+    slug: 'havells-monza-ec-25-litre-storage-electric-water-geyser',
+    sku: 'APP-HAV-MNZ-25L',
+    brand: 'Havells',
+    brandSlug: 'havells',
+    category: 'Home Appliances & Power Backup',
+    categorySlug: 'home-appliances-power-backup',
+    subcategory: 'Storage Electric Water Geysers (25L)',
+    subcategorySlug: 'water-geysers',
+    description: 'Feroglas-coated ultra-thick cold rolled steel tank with heavy Incoloy 800 heating element, whirlpool technology for 20% more hot water, and 8-bar pressure rating suitable for high-rise buildings.',
+    shortDescription: '25L 5-star BEE rated storage water heater with Feroglas tank.',
+    images: [
+      'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 8499,
+    mrp: 11200,
+    discount: 24,
+    unit: 'Unit',
+    packSize: '1 Water Geyser + Multi-Function Safety Valve + Wall Mount Bracket',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 96,
+    inStock: true,
+    stockCount: 65,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isNewLaunch: true,
+    specifications: {
+      'Capacity': '25 Litres Storage Tank',
+      'Energy Rating': 'BEE 5-Star Energy Efficiency (PUF Insulation)',
+      'Pressure Rating': '8 Bar (Suitable for high-rise apartments up to 35 floors)',
+      'Heating Element': '2000W Incoloy 800 Glass-Coated Element'
+    }
+  },
+
+  // 27. New Launches - Modern Architectural Lighting
+  {
+    id: 'prod-light-1',
+    name: 'Havells Adore 12W Round Slim Recessed LED Downlight (Warm White 3000K, Die-Cast Aluminum)',
+    slug: 'havells-adore-12w-round-slim-recessed-led-downlight',
+    sku: 'LGT-HAV-ADR-12W-WW',
+    brand: 'Havells',
+    brandSlug: 'havells',
+    category: 'Lighting',
+    categorySlug: 'lighting',
+    subcategory: 'Slim LED Recessed Downlights',
+    subcategorySlug: 'recessed-downlights',
+    description: 'Ultra-slim profile recessed false ceiling downlight with high lumen efficacy of 105 lm/W, integrated surge protection up to 4kV, and glare-free opal diffuser.',
+    shortDescription: '12W slim false ceiling LED downlight with 4kV surge protector.',
+    images: [
+      'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 425,
+    mrp: 575,
+    discount: 26,
+    unit: 'Piece',
+    packSize: '1 LED Downlight with Pre-wired Driver & Spring Clips',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 220,
+    inStock: true,
+    stockCount: 750,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true,
+    isNewLaunch: true,
+    specifications: {
+      'Wattage': '12 Watts',
+      'Color Temperature': '3000K Warm White (1260 Lumens)',
+      'Ceiling Cutout': '135 mm Diameter Cutout',
+      'Surge Protection': 'Up to 4.0 kV Surge Defense'
+    }
+  },
+  {
+    id: 'prod-light-2',
+    name: 'Wipro Garnet 7W Trimless COB Deep Recessed Directional Spotlight (Natural White 4000K)',
+    slug: 'wipro-garnet-7w-trimless-cob-deep-recessed-spotlight',
+    sku: 'LGT-WIP-COB-7W-NW',
+    brand: 'Havells',
+    brandSlug: 'havells',
+    category: 'Lighting',
+    categorySlug: 'lighting',
+    subcategory: 'COB Directional Spotlights',
+    subcategorySlug: 'cob-spotlights',
+    description: 'Deep-set anti-glare architectural COB spotlight with 30-degree tilt angle and faceted optical reflector for accent lighting on textured walls and artwork.',
+    shortDescription: '7W anti-glare tiltable COB architectural spotlight.',
+    images: [
+      'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 560,
+    mrp: 750,
+    discount: 25,
+    unit: 'Piece',
+    packSize: '1 Spotlight with Constant Current Driver',
+    gstRate: 18,
+    rating: 4.9,
+    reviewCount: 165,
+    inStock: true,
+    stockCount: 420,
+    isBulkEligible: true,
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isNewLaunch: true,
+    specifications: {
+      'Wattage': '7 Watts COB LED',
+      'Beam Angle': '24-Degree Focused Beam with 30-Degree Tilt',
+      'Color Temperature': '4000K Natural White (700 Lumens)',
+      'CRI': '> 85 CRI for accurate interior color rendition'
+    }
   }
 ];
 

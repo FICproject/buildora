@@ -12,6 +12,7 @@ export class ProductsController {
     @Query('minPrice') minPrice?: string,
     @Query('maxPrice') maxPrice?: string,
     @Query('inStockOnly') inStockOnly?: string,
+    @Query('newLaunch') newLaunch?: string,
     @Query('sortBy') sortBy?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string
@@ -29,6 +30,9 @@ export class ProductsController {
     }
     if (inStockOnly === 'true') {
       result = result.filter((p) => p.inStock);
+    }
+    if (newLaunch === 'true') {
+      result = result.filter((p) => p.isNewLaunch);
     }
     if (minPrice) {
       result = result.filter((p) => p.price >= Number(minPrice));

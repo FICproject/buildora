@@ -133,11 +133,13 @@ export const api = {
     dealOfTheDay?: boolean;
     bestSeller?: boolean;
     trending?: boolean;
+    newLaunch?: boolean;
   }): Promise<Product[]> {
     const queryParts: string[] = [];
     if (params?.category) queryParts.push(`category=${encodeURIComponent(params.category)}`);
     if (params?.brand) queryParts.push(`brand=${encodeURIComponent(params.brand)}`);
     if (params?.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
+    if (params?.newLaunch) queryParts.push(`newLaunch=true`);
 
     const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
     let products = await request<Product[]>(`/products${queryStr}`, {}, SEED_PRODUCTS);
@@ -164,6 +166,9 @@ export const api = {
     }
     if (params.trending) {
       products = products.filter((p) => p.isTrending);
+    }
+    if (params.newLaunch) {
+      products = products.filter((p) => p.isNewLaunch);
     }
     if (params.search) {
       const q = params.search.toLowerCase().trim();

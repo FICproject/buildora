@@ -24,7 +24,8 @@ import {
   ShieldCheck,
   FolderKanban,
   Award,
-  Home
+  Home,
+  Rocket
 } from 'lucide-react';
 import { useCartStore } from '../../store/useCartStore';
 import { useLocationStore } from '../../store/useLocationStore';
@@ -32,7 +33,8 @@ import { useWishlistStore } from '../../store/useWishlistStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
   MASTER_CATEGORIES,
-  CONSTRUCTION_DEPARTMENTS
+  CONSTRUCTION_DEPARTMENTS,
+  NEW_LAUNCHES_CATEGORIES
 } from '@buildora/constants';
 import { formatCurrency } from '@buildora/utils';
 import { formatLocationDisplay } from '../../utils';
@@ -177,6 +179,7 @@ export const Header: React.FC = () => {
 
   // Active navigation route helpers
   const isHomeActive = location.pathname === '/';
+  const isNewLaunchesActive = location.pathname.startsWith('/new-launches');
   const isBrandsActive = location.pathname.startsWith('/brands');
   const isDealsActive = location.pathname.startsWith('/deals') || location.pathname.startsWith('/offers');
 
@@ -552,17 +555,47 @@ export const Header: React.FC = () => {
                 );
               })}
 
-              {/* Shortcut Links */}
-              <Link
-                to="/brands"
-                className={`py-2 px-3 rounded-xl transition-all font-bold text-xs ${
-                  isBrandsActive
-                    ? 'bg-brand-blue-900 text-white shadow-sm'
-                    : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
-                }`}
+              {/* New Launches with Mega Menu trigger */}
+              <div
+                onMouseEnter={() => handleDeptMouseEnter('new-launches')}
+                onMouseLeave={handleDeptMouseLeave}
               >
-                Top Brands
-              </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeDepartment === 'new-launches') {
+                      setActiveDepartment(null);
+                    } else {
+                      setActiveDepartment('new-launches');
+                      setSelectedParentCategorySlug('all');
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
+                    isNewLaunchesActive
+                      ? 'bg-brand-blue-900 text-white shadow-sm'
+                      : activeDepartment === 'new-launches'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
+                  }`}
+                  title="Explore New Launches"
+                >
+                  <Rocket
+                    className={`w-3.5 h-3.5 ${
+                      isNewLaunchesActive || activeDepartment === 'new-launches'
+                        ? 'text-white'
+                        : 'text-brand-orange-500'
+                    }`}
+                  />
+                  <span>New Launches</span>
+                  <ChevronDown
+                    className={`w-3 h-3 transition-transform duration-150 ${
+                      isNewLaunchesActive || activeDepartment === 'new-launches'
+                        ? 'text-white/80'
+                        : 'text-slate-400'
+                    } ${activeDepartment === 'new-launches' ? 'rotate-180' : ''}`}
+                  />
+                </button>
+              </div>
               <Link
                 to="/deals"
                 className={`py-2 px-3 rounded-xl font-black text-xs flex items-center gap-1 transition-all ${
@@ -579,6 +612,200 @@ export const Header: React.FC = () => {
 
           {/* FULL-SIZE SPACIOUS MEGA MENU CONTAINER */}
           {activeDepartment && (() => {
+            // A. Special Dedicated Mega Menu for New Launches
+            if (activeDepartment === 'new-launches') {
+              const currentCategory = NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === selectedParentCategorySlug);
+              const masterCat = currentCategory
+                ? MASTER_CATEGORIES.find((m) => m.slug === currentCategory.masterCategorySlug)
+                : null;
+              const subcategories = masterCat ? (masterCat.subcategories || []) : [];
+
+              return (
+                <div
+                  className="absolute top-full left-0 right-0 pt-2 z-50 flex justify-center px-4 sm:px-6 lg:px-8 pointer-events-auto"
+                  onMouseEnter={() => {
+                    if (hoverTimeoutRef.current) {
+                      clearTimeout(hoverTimeoutRef.current);
+                      hoverTimeoutRef.current = null;
+                    }
+                  }}
+                  onMouseLeave={handleDeptMouseLeave}
+                >
+                  <div className="w-full max-w-[1240px] xl:max-w-[1360px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in-0 slide-in-from-top-1 duration-150">
+                    <div className="flex min-h-[420px] max-h-[560px]">
+                      {/* LEFT PANEL: NEW LAUNCH CATEGORIES */}
+                      <div className="w-[280px] sm:w-[320px] flex-shrink-0 border-r border-slate-100 bg-white p-5 overflow-y-auto no-scrollbar">
+                        <div className="flex items-center justify-between mb-3 px-3">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                            NEW LAUNCH CATEGORIES
+                          </span>
+                          <span className="text-[10px] font-black bg-brand-orange-50 text-brand-orange-600 px-2 py-0.5 rounded-full border border-brand-orange-200/60">
+                            DIRECT TO SITE
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {/* ALL NEW LAUNCHES Item */}
+                          <button
+                            type="button"
+                            onMouseEnter={() => setSelectedParentCategorySlug('all')}
+                            onClick={() => {
+                              setActiveDepartment(null);
+                              navigate('/new-launches');
+                            }}
+                            className={`w-full group flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                              selectedParentCategorySlug === 'all'
+                                ? 'bg-slate-900 text-white font-black shadow-xs'
+                                : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Rocket className="w-3.5 h-3.5 text-brand-orange-400" />
+                              <span className="uppercase">ALL NEW LAUNCHES</span>
+                            </div>
+                            <ChevronRight
+                              className={`w-4 h-4 flex-shrink-0 transition-transform ${
+                                selectedParentCategorySlug === 'all'
+                                  ? 'text-brand-orange-400 translate-x-0.5'
+                                  : 'text-slate-300 group-hover:text-slate-500'
+                              }`}
+                            />
+                          </button>
+
+                          {/* Specific New Launch Categories */}
+                          {NEW_LAUNCHES_CATEGORIES.map((cat) => {
+                            const isSelected = selectedParentCategorySlug === cat.slug;
+                            return (
+                              <Link
+                                key={cat.id}
+                                to={`/new-launches/${cat.slug}`}
+                                onClick={() => setActiveDepartment(null)}
+                                onMouseEnter={() => setSelectedParentCategorySlug(cat.slug)}
+                                className={`group flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-slate-900 text-white font-black shadow-xs'
+                                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
+                                }`}
+                                title={`View ${cat.name}`}
+                              >
+                                <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-brand-orange-500 flex-shrink-0" />
+                                  <span className="truncate">{cat.name}</span>
+                                </div>
+                                <ChevronRight
+                                  className={`w-4 h-4 flex-shrink-0 transition-transform ${
+                                    isSelected
+                                      ? 'text-brand-orange-400 translate-x-0.5'
+                                      : 'text-slate-300 group-hover:text-slate-500'
+                                  }`}
+                                />
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* RIGHT PANEL: CHILD CATEGORIES */}
+                      <div className="flex-1 bg-white p-6 sm:p-8 overflow-y-auto no-scrollbar flex flex-col">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                            {selectedParentCategorySlug === 'all'
+                              ? 'CURATED NEW LAUNCH SUBCATEGORIES'
+                              : `${currentCategory?.name.toUpperCase()} — CHILD CATEGORIES`}
+                          </div>
+                          <Link
+                            to={
+                              selectedParentCategorySlug === 'all'
+                                ? '/new-launches'
+                                : `/new-launches/${currentCategory?.slug}`
+                            }
+                            onClick={() => setActiveDepartment(null)}
+                            className="text-xs font-bold text-brand-blue-900 hover:text-brand-orange-600 flex items-center gap-1 transition-colors"
+                          >
+                            <span>Browse All</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+
+                        {selectedParentCategorySlug === 'all' ? (
+                          <div className="space-y-4 flex-1">
+                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                              {NEW_LAUNCHES_CATEGORIES.map((nlCat) => {
+                                const mCat = MASTER_CATEGORIES.find((m) => m.slug === nlCat.masterCategorySlug);
+                                const firstSub = mCat?.subcategories?.[0];
+                                return (
+                                  <Link
+                                    key={nlCat.id}
+                                    to={`/new-launches/${nlCat.slug}`}
+                                    onClick={() => setActiveDepartment(null)}
+                                    className="group p-3.5 rounded-xl bg-slate-50/80 hover:bg-brand-blue-50/60 border border-slate-100 hover:border-brand-blue-200 transition-all flex flex-col justify-between min-h-[96px] shadow-2xs hover:shadow-xs"
+                                  >
+                                    <div>
+                                      <div className="flex items-center justify-between gap-1 mb-1">
+                                        <span className="text-[10px] font-black text-brand-orange-600 bg-orange-100/60 px-1.5 py-0.5 rounded-md">
+                                          {nlCat.badge || 'NEW'}
+                                        </span>
+                                        <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-blue-900 group-hover:translate-x-0.5 transition-transform" />
+                                      </div>
+                                      <div className="text-xs font-bold text-slate-800 group-hover:text-brand-blue-900 truncate">
+                                        {nlCat.name}
+                                      </div>
+                                    </div>
+                                    {firstSub && (
+                                      <div className="text-[11px] text-slate-500 truncate group-hover:text-slate-700">
+                                        e.g. {firstSub.name}
+                                      </div>
+                                    )}
+                                  </Link>
+                                );
+                              })}
+                            </div>
+
+                            <div className="p-4 bg-gradient-to-r from-brand-blue-900 to-slate-900 rounded-2xl text-white flex items-center justify-between gap-4 mt-auto">
+                              <div className="space-y-0.5">
+                                <div className="text-xs font-black flex items-center gap-1.5 text-brand-orange-400">
+                                  <Rocket className="w-3.5 h-3.5" /> Direct Mill Dispatches Active
+                                </div>
+                                <div className="text-[11px] text-slate-300">
+                                  Explore newly curated hardware, conduits, bath renovation fittings, and appliances with instant B2B GST invoices.
+                                </div>
+                              </div>
+                              <Link
+                                to="/new-launches"
+                                onClick={() => setActiveDepartment(null)}
+                                className="flex-shrink-0 px-3.5 py-2 rounded-xl bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black text-xs shadow-sm transition-all whitespace-nowrap"
+                              >
+                                View All New Launches
+                              </Link>
+                            </div>
+                          </div>
+                        ) : subcategories.length > 0 ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                            {subcategories.map((sub) => (
+                              <Link
+                                key={sub.id}
+                                to={`/categories/${masterCat?.slug}/${sub.slug}`}
+                                onClick={() => setActiveDepartment(null)}
+                                className="group flex items-center justify-between p-3.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-brand-blue-900 bg-slate-50/70 hover:bg-brand-blue-50/60 border border-slate-100/90 hover:border-brand-blue-200/70 transition-all shadow-2xs hover:shadow-xs"
+                              >
+                                <span className="truncate group-hover:font-bold">{sub.name}</span>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-blue-900 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex-1 min-h-[240px] flex items-center justify-center text-xs font-medium text-slate-400">
+                            No child categories configured for this section.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // B. Standard Construction Departments Mega Menu
             const activeDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === activeDepartment);
             if (!activeDept) return null;
             const deptCats = getDepartmentCategories(activeDept.slug);
@@ -880,15 +1107,20 @@ export const Header: React.FC = () => {
                 <span>Deals &amp; Offers</span>
               </Link>
               <Link
-                to="/brands"
+                to="/new-launches"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`block py-2 px-2.5 rounded-lg ${
-                  isBrandsActive
-                    ? 'bg-brand-blue-900 text-white shadow-sm'
+                className={`flex items-center gap-2 py-2 px-2.5 rounded-lg transition-colors ${
+                  isNewLaunchesActive
+                    ? 'bg-brand-blue-900 text-white shadow-sm font-black'
                     : 'hover:bg-slate-50 text-slate-700'
                 }`}
               >
-                Direct Authorized Brands
+                <Rocket
+                  className={`w-3.5 h-3.5 ${
+                    isNewLaunchesActive ? 'text-white' : 'text-brand-orange-500'
+                  }`}
+                />
+                <span>New Launches</span>
               </Link>
               <Link
                 to="/products"

@@ -11,6 +11,7 @@ import { ProductDetailPage } from '../pages/ProductDetailPage';
 import { CategoryPage } from '../pages/CategoryPage';
 import { SearchPage } from '../pages/SearchPage';
 import { BrandsPage } from '../pages/BrandsPage';
+import { NewLaunchesPage } from '../pages/NewLaunchesPage';
 import { DealsPage } from '../pages/DealsPage';
 import { BulkOrdersPage } from '../pages/BulkOrdersPage';
 import { CartPage } from '../pages/CartPage';
@@ -53,6 +54,9 @@ export const router = createBrowserRouter([
       { path: 'categories/:slug', element: <CategoryPage /> },
       { path: 'categories/:slug/:subcategorySlug', element: <CategoryPage /> },
       { path: 'search', element: <SearchPage /> },
+      { path: 'new-launches', element: <NewLaunchesPage /> },
+      { path: 'new-launches/:categorySlug', element: <NewLaunchesPage /> },
+      { path: 'new-launches/:categorySlug/:subcategorySlug', element: <NewLaunchesPage /> },
       { path: 'brands', element: <BrandsPage /> },
       { path: 'brands/:slug', element: <BrandsPage /> },
       { path: 'deals', element: <DealsPage /> },
