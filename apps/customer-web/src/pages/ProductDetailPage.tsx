@@ -149,9 +149,8 @@ export const ProductDetailPage: React.FC = () => {
             <img
               src={product.images[activeImageIndex] || product.images[0]}
               alt={product.name}
-              className={`max-h-full max-w-full object-contain transition-transform duration-300 ${
-                isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'
-              }`}
+              className={`max-h-full max-w-full object-contain transition-transform duration-300 ${isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'
+                }`}
               onClick={() => setIsZoomed(!isZoomed)}
             />
             {product.discount > 0 && (
@@ -164,11 +163,10 @@ export const ProductDetailPage: React.FC = () => {
             <button
               type="button"
               onClick={() => toggleItem(product)}
-              className={`absolute top-3.5 right-3.5 p-2 rounded-full shadow-md transition-colors ${
-                isWishlisted
+              className={`absolute top-3.5 right-3.5 p-2 rounded-full shadow-md transition-colors ${isWishlisted
                   ? 'bg-rose-50 text-rose-600'
                   : 'bg-white text-slate-400 hover:text-rose-500'
-              }`}
+                }`}
               title="Save to wishlist"
             >
               <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
@@ -211,9 +209,8 @@ export const ProductDetailPage: React.FC = () => {
                   key={idx}
                   type="button"
                   onClick={() => setActiveImageIndex(idx)}
-                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 overflow-hidden bg-white flex-shrink-0 ${
-                    activeImageIndex === idx ? 'border-brand-blue-600 shadow-sm' : 'border-slate-200'
-                  }`}
+                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 overflow-hidden bg-white flex-shrink-0 ${activeImageIndex === idx ? 'border-brand-blue-600 shadow-sm' : 'border-slate-200'
+                    }`}
                 >
                   <img src={img} alt="Thumbnail" className="w-full h-full object-cover" />
                 </button>
@@ -309,11 +306,10 @@ export const ProductDetailPage: React.FC = () => {
                           if (idx >= 0) setActiveImageIndex(idx);
                         }
                       }}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
-                        isSelected
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${isSelected
                           ? 'border-[#1e7e34] bg-emerald-50/60 ring-2 ring-emerald-600/20 shadow-xs'
                           : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
+                        }`}
                     >
                       {vDiscount > 0 && (
                         <span className="absolute top-2 right-2 text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.2 rounded-xs">
@@ -349,11 +345,10 @@ export const ProductDetailPage: React.FC = () => {
                   <div
                     key={idx}
                     onClick={() => setQuantity(tier.minQuantity)}
-                    className={`cursor-pointer p-2.5 rounded-xl border transition-all text-center ${
-                      quantity >= tier.minQuantity
+                    className={`cursor-pointer p-2.5 rounded-xl border transition-all text-center ${quantity >= tier.minQuantity
                         ? 'border-brand-blue-500 bg-brand-blue-50/50 text-brand-blue-900 font-semibold'
                         : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-white'
-                    }`}
+                      }`}
                   >
                     <div className="font-bold">{tier.minQuantity}+ Units</div>
                     <div className="text-[11px] text-emerald-600 font-semibold">{tier.discountPercentage}% OFF</div>
@@ -435,11 +430,10 @@ export const ProductDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCompareClick}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${
-                  inCompare
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors ${inCompare
                     ? 'border-brand-blue-500 bg-brand-blue-50 text-brand-blue-900'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <Scale className="w-3.5 h-3.5" />
                 {inCompare ? 'In Comparison' : 'Compare Specs'}
@@ -454,31 +448,28 @@ export const ProductDetailPage: React.FC = () => {
         <div className="flex gap-2 border-b border-slate-200 overflow-x-auto no-scrollbar pb-1 text-xs sm:text-sm font-bold">
           <button
             onClick={() => setActiveTab('specs')}
-            className={`pb-3 px-3 transition-colors flex-shrink-0 ${
-              activeTab === 'specs'
+            className={`pb-3 px-3 transition-colors flex-shrink-0 ${activeTab === 'specs'
                 ? 'border-b-2 border-brand-blue-900 text-brand-blue-900'
                 : 'text-slate-400 hover:text-slate-700'
-            }`}
+              }`}
           >
             Engineering Specifications
           </button>
           <button
             onClick={() => setActiveTab('applications')}
-            className={`pb-3 px-3 transition-colors flex-shrink-0 ${
-              activeTab === 'applications'
+            className={`pb-3 px-3 transition-colors flex-shrink-0 ${activeTab === 'applications'
                 ? 'border-b-2 border-brand-blue-900 text-brand-blue-900'
                 : 'text-slate-400 hover:text-slate-700'
-            }`}
+              }`}
           >
             Site Applications &amp; Standards
           </button>
           <button
             onClick={() => setActiveTab('faq')}
-            className={`pb-3 px-3 transition-colors flex-shrink-0 ${
-              activeTab === 'faq'
+            className={`pb-3 px-3 transition-colors flex-shrink-0 ${activeTab === 'faq'
                 ? 'border-b-2 border-brand-blue-900 text-brand-blue-900'
                 : 'text-slate-400 hover:text-slate-700'
-            }`}
+              }`}
           >
             Frequently Asked Questions
           </button>
