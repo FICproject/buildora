@@ -66,6 +66,18 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     setOpenDropdownId((prev) => (prev === id ? null : id));
   };
 
+  const handleCategoryToggle = (catValue: string) => {
+    const current = activeFilters.categories || [];
+    const updated = current.includes(catValue)
+      ? current.filter((c) => c !== catValue)
+      : [...current, catValue];
+
+    onChangeFilters({
+      ...activeFilters,
+      categories: updated
+    });
+  };
+
   const handleBrandToggle = (brandValue: string) => {
     const current = activeFilters.brands || [];
     const updated = current.includes(brandValue)
@@ -135,6 +147,9 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
 
   // Check if a filter dimension has active selections
   const getActiveCountForDimension = (filter: AvailableCategoryFilter): number => {
+    if (filter.id === 'category') {
+      return activeFilters.categories?.length || 0;
+    }
     if (filter.id === 'brand') {
       return activeFilters.brands?.length || 0;
     }
@@ -149,7 +164,9 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
 
   // Clear single dimension
   const handleClearDimension = (filter: AvailableCategoryFilter) => {
-    if (filter.id === 'brand') {
+    if (filter.id === 'category') {
+      onChangeFilters({ ...activeFilters, categories: [] });
+    } else if (filter.id === 'brand') {
       onChangeFilters({ ...activeFilters, brands: [] });
     } else if (filter.id === 'subcategory') {
       onChangeFilters({ ...activeFilters, subcategories: [] });
@@ -274,7 +291,9 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                             })
                             .map((opt) => {
                               let isChecked = false;
-                              if (filter.id === 'brand') {
+                              if (filter.id === 'category') {
+                                isChecked = (activeFilters.categories || []).includes(opt.value);
+                              } else if (filter.id === 'brand') {
                                 isChecked = (activeFilters.brands || []).includes(opt.value);
                               } else if (filter.id === 'subcategory') {
                                 isChecked = (activeFilters.subcategories || []).includes(opt.value);
@@ -285,7 +304,9 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                               }
 
                               const onToggle = () => {
-                                if (filter.id === 'brand') {
+                                if (filter.id === 'category') {
+                                  handleCategoryToggle(opt.value);
+                                } else if (filter.id === 'brand') {
                                   handleBrandToggle(opt.value);
                                 } else if (filter.id === 'subcategory') {
                                   handleSubcategoryToggle(opt.value);

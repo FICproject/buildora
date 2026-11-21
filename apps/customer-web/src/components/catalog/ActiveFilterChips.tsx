@@ -5,6 +5,7 @@ import { ActiveCategoryFilters, AvailableCategoryFilter } from '@buildora/consta
 interface ActiveFilterChipsProps {
   activeFilters: ActiveCategoryFilters;
   availableFilters?: AvailableCategoryFilter[];
+  onRemoveCategory?: (category: string) => void;
   onRemoveBrand: (brand: string) => void;
   onRemoveSubcategory: (sub: string) => void;
   onRemoveSpec: (dimId: string, val: string) => void;
@@ -18,6 +19,7 @@ interface ActiveFilterChipsProps {
 export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
   activeFilters,
   availableFilters = [],
+  onRemoveCategory,
   onRemoveBrand,
   onRemoveSubcategory,
   onRemoveSpec,
@@ -34,6 +36,7 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
     return map;
   }, [availableFilters]);
 
+  const hasCategories = (activeFilters.categories || []).length > 0;
   const hasBrands = (activeFilters.brands || []).length > 0;
   const hasSubcategories = (activeFilters.subcategories || []).length > 0;
   const hasPrice = activeFilters.minPrice !== undefined || activeFilters.maxPrice !== undefined;
@@ -46,6 +49,7 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
   const hasSpecs = specEntries.length > 0;
 
   const hasAnyFilter =
+    hasCategories ||
     hasBrands ||
     hasSubcategories ||
     hasPrice ||
@@ -60,6 +64,19 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
   return (
     <div className={`flex flex-wrap items-center gap-2 py-2 ${className}`}>
       <span className="text-xs font-semibold text-slate-500 mr-1">Active Filters:</span>
+
+      {/* Category chips */}
+      {activeFilters.categories?.map((cat) => (
+        <button
+          key={`cat-${cat}`}
+          onClick={() => onRemoveCategory && onRemoveCategory(cat)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue-50 text-brand-blue-900 border border-brand-blue-200 hover:bg-brand-blue-100 transition-colors"
+          title={`Remove category ${cat}`}
+        >
+          <span>Category: {cat}</span>
+          <X className="w-3.5 h-3.5 text-brand-blue-700" />
+        </button>
+      ))}
 
       {/* ASAP 60-min toggle chip */}
       {hasAsap && (

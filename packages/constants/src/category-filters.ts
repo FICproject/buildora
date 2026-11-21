@@ -8,7 +8,7 @@ export interface CategoryFilterDimension {
   type: FilterType;
   specKeys?: string[]; // Keys to look for in product.specifications
   catAttrKeys?: string[]; // Keys to look for in product.categoryAttributes
-  isStandardField?: 'brand' | 'subcategory' | 'price' | 'packSize' | 'inStock' | 'asap';
+  isStandardField?: 'category' | 'brand' | 'subcategory' | 'price' | 'packSize' | 'inStock' | 'asap';
 }
 
 export interface FilterOption {
@@ -27,6 +27,7 @@ export interface AvailableCategoryFilter {
 }
 
 export interface ActiveCategoryFilters {
+  categories?: string[]; // Category slugs or names (for catalogue pages)
   brands: string[];
   subcategories: string[];
   inStockOnly: boolean;
@@ -39,316 +40,303 @@ export interface ActiveCategoryFilters {
 }
 
 // -------------------------------------------------------------------------------------
-// CONFIGURATION FOR ALL 28 MASTER CATEGORIES (Based on HomeRun & Buildora Catalog Taxonomy)
+// CONFIGURATION FOR ALL 28 MASTER CATEGORIES (HomeRun Strict Reference Filter Taxonomy)
 // -------------------------------------------------------------------------------------
 export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> = {
   // 1. Cement & Concrete
   'cement-concrete': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Subcategory', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'cementType', name: 'Cement Type', type: 'checkbox', specKeys: ['Cement Type', 'Standard'], catAttrKeys: ['cementType'] },
+    { id: 'cementType', name: 'Type', type: 'checkbox', specKeys: ['Cement Type', 'Standard'], catAttrKeys: ['cementType'] },
     { id: 'grade', name: 'Grade', type: 'checkbox', specKeys: ['Grade', 'Compressive Strength (28 Days)'], catAttrKeys: ['grade'] },
-    { id: 'colour', name: 'Colour', type: 'checkbox', specKeys: ['Colour', 'Color'] },
-    { id: 'packSize', name: 'Pack Size / Weight', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging', 'Bag Type'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color'] },
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging', 'Bag Type'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
-  // 2. Tiling & Tile Adhesives
+  // 2. Tiling & Tile Adhesives (Matches HomeRun Tiling reference exactly)
   'tiling-tile-adhesives': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'tileType', name: 'Tile Type', type: 'checkbox', specKeys: ['Tile Type', 'Product Type'] },
-    { id: 'tileMaterial', name: 'Tile Material', type: 'checkbox', specKeys: ['Tile Material', 'Material'] },
-    { id: 'tileDimensions', name: 'Tile Size / Dimensions', type: 'checkbox', specKeys: ['Tile Dimensions', 'Dimensions', 'Size'] },
-    { id: 'surfaceFinish', name: 'Surface Finish', type: 'checkbox', specKeys: ['Surface Finish', 'Finish'] },
-    { id: 'colour', name: 'Colour', type: 'checkbox', specKeys: ['Colour', 'Color'] },
-    { id: 'adhesiveType', name: 'Adhesive Type', type: 'checkbox', specKeys: ['Adhesive Type', 'Standard'] },
-    { id: 'applicationArea', name: 'Application Area', type: 'checkbox', specKeys: ['Application Area', 'Application'] },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Coverage', 'Coverage per Box'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'tileType', name: 'Type', type: 'checkbox', specKeys: ['Tile Type', 'Product Type'] },
+    { id: 'tileDimensions', name: 'Size', type: 'checkbox', specKeys: ['Tile Dimensions', 'Dimensions', 'Size'] },
+    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color'] },
+    { id: 'tileMaterial', name: 'Material', type: 'checkbox', specKeys: ['Tile Material', 'Material'] },
+    { id: 'grade', name: 'Grade', type: 'checkbox', specKeys: ['Grade', 'Standard'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' },
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Coverage', 'Coverage per Box', 'Packaging'] }
   ],
 
   // 3. Plywood, MDF & HDHMR
   'plywood-mdf-hdhmr': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Board Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'grade', name: 'Grade', type: 'checkbox', specKeys: ['Grade', 'Preservative Treatment'] },
     { id: 'thickness', name: 'Thickness', type: 'checkbox', specKeys: ['Thickness'] },
-    { id: 'dimensions', name: 'Size / Dimensions', type: 'checkbox', specKeys: ['Dimensions', 'Size'] },
-    { id: 'surfaceFinish', name: 'Surface Finish', type: 'checkbox', specKeys: ['Surface Finish', 'Surface'] },
+    { id: 'dimensions', name: 'Size', type: 'checkbox', specKeys: ['Dimensions', 'Size'] },
+    { id: 'surfaceFinish', name: 'Finish', type: 'checkbox', specKeys: ['Surface Finish', 'Surface'] },
     { id: 'application', name: 'Application', type: 'checkbox', specKeys: ['Application', 'Density'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 4. Adhesives
   'adhesives': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Adhesive Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'compatibility', name: 'Material Compatibility', type: 'checkbox', specKeys: ['Compatibility', 'Material Compatibility'] },
-    { id: 'bondingType', name: 'Bonding Type / Water Resistance', type: 'checkbox', specKeys: ['Water Resistance', 'Setting Time'] },
-    { id: 'packSize', name: 'Pack Size / Weight', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Spread Coverage'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'compatibility', name: 'Material', type: 'checkbox', specKeys: ['Compatibility', 'Material Compatibility'] },
+    { id: 'bondingType', name: 'Type', type: 'checkbox', specKeys: ['Water Resistance', 'Setting Time'] },
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Spread Coverage', 'Packaging'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 5. Waterproofing
   'waterproofing': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Waterproofing Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'applicationArea', name: 'Application Area', type: 'checkbox', specKeys: ['Application Area', 'Compatibility'] },
-    { id: 'materialBase', name: 'Material / Base Type', type: 'checkbox', specKeys: ['Material', 'Base Type', 'Standard'] },
-    { id: 'packSize', name: 'Pack Size / Volume', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Dosage'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'applicationArea', name: 'Application', type: 'checkbox', specKeys: ['Application Area', 'Compatibility'] },
+    { id: 'materialBase', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Base Type', 'Standard'] },
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Dosage', 'Packaging'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 6. Painting & Finishes
   'painting-finishes': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Paint Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'surfaceFinish', name: 'Finish', type: 'checkbox', specKeys: ['Finish', 'Surface Finish'] },
-    { id: 'packSize', name: 'Volume / Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Coverage'] },
-    { id: 'surfaceType', name: 'Surface Type / Warranty', type: 'checkbox', specKeys: ['Surface Type', 'Warranty', 'Drying Time'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Coverage', 'Packaging'] },
+    { id: 'surfaceType', name: 'Application', type: 'checkbox', specKeys: ['Surface Type', 'Warranty', 'Drying Time'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 7. Hinges, Channels & Handles
   'hinges-channels-handles': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Hardware Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
     { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'] },
-    { id: 'length', name: 'Length / Size', type: 'checkbox', specKeys: ['Length', 'Size'] },
-    { id: 'crankType', name: 'Opening / Crank Type', type: 'checkbox', specKeys: ['Crank Type', 'Opening Angle'] },
+    { id: 'length', name: 'Size', type: 'checkbox', specKeys: ['Length', 'Size'] },
+    { id: 'crankType', name: 'Type', type: 'checkbox', specKeys: ['Crank Type', 'Opening Angle'] },
     { id: 'loadCapacity', name: 'Load Capacity', type: 'checkbox', specKeys: ['Load Capacity', 'Extension'] },
-    { id: 'cycleTesting', name: 'Cycle Testing / Damping', type: 'checkbox', specKeys: ['Cycle Testing', 'Damping'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 8. Kitchen Systems & Accessories
   'kitchen-systems-accessories': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'material', name: 'Material / Grade', type: 'checkbox', specKeys: ['Grade', 'Material'] },
-    { id: 'dimensions', name: 'Dimensions / Width', type: 'checkbox', specKeys: ['Dimensions', 'Slide Length'] },
-    { id: 'weightRating', name: 'Weight Rating / Gauge', type: 'checkbox', specKeys: ['Weight Rating', 'Wire Gauge'] },
-    { id: 'damping', name: 'Damping / Soft-Close', type: 'checkbox', specKeys: ['Damping', 'Wall Thickness'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Grade', 'Material'] },
+    { id: 'dimensions', name: 'Size', type: 'checkbox', specKeys: ['Dimensions', 'Slide Length'] },
+    { id: 'weightRating', name: 'Load Capacity', type: 'checkbox', specKeys: ['Weight Rating', 'Wire Gauge'] },
+    { id: 'damping', name: 'Features', type: 'checkbox', specKeys: ['Damping', 'Wall Thickness'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 9. Wardrobe & Bed Fittings
   'wardrobe-bed-fittings': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
     { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'] },
     { id: 'loadCapacity', name: 'Load Capacity', type: 'checkbox', specKeys: ['Load Capacity'] },
-    { id: 'mountingType', name: 'Mounting Type', type: 'checkbox', specKeys: ['Mounting Type'] },
-    { id: 'application', name: 'Application / Bed Size', type: 'checkbox', specKeys: ['Application', 'Size', 'Length'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'mountingType', name: 'Type', type: 'checkbox', specKeys: ['Mounting Type', 'Application', 'Size'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 10. Door Locks & Hardware
   'door-locks-hardware': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Hardware / Lock Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'shackleMaterial', name: 'Shackle / Cylinder Material', type: 'checkbox', specKeys: ['Shackle Material', 'Levers'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'shackleMaterial', name: 'Type', type: 'checkbox', specKeys: ['Shackle Material', 'Levers'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 11. Wires, MCB & Distribution Boards
   'wires-mcb-distribution-boards': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'conductorSize', name: 'Wire Size / Sq.mm', type: 'checkbox', specKeys: ['Conductor Size'] },
-    { id: 'currentCapacity', name: 'Current Rating', type: 'checkbox', specKeys: ['Current Carrying Capacity', 'Current Rating'] },
-    { id: 'length', name: 'Coil Length', type: 'checkbox', specKeys: ['Length'] },
-    { id: 'insulation', name: 'Insulation / Certifications', type: 'checkbox', specKeys: ['Insulation', 'Certification'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'conductorSize', name: 'Size', type: 'checkbox', specKeys: ['Conductor Size'] },
+    { id: 'currentCapacity', name: 'Rating', type: 'checkbox', specKeys: ['Current Carrying Capacity', 'Current Rating'] },
+    { id: 'length', name: 'Length', type: 'checkbox', specKeys: ['Length'] },
+    { id: 'insulation', name: 'Insulation', type: 'checkbox', specKeys: ['Insulation', 'Certification'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 12. Switches & Sockets
   'switches-sockets': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'moduleSize', name: 'Module Size', type: 'checkbox', specKeys: ['Module Size', 'Number of Modules'] },
-    { id: 'ampRating', name: 'Amp Rating', type: 'checkbox', specKeys: ['Amp Rating'] },
-    { id: 'colour', name: 'Colour', type: 'checkbox', specKeys: ['Colour', 'Color'] },
-    { id: 'seriesModel', name: 'Series / Model', type: 'checkbox', specKeys: ['Series / Model', 'Switch Type', 'Socket Type'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'moduleSize', name: 'Size', type: 'checkbox', specKeys: ['Module Size', 'Number of Modules'] },
+    { id: 'ampRating', name: 'Rating', type: 'checkbox', specKeys: ['Amp Rating'] },
+    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color'] },
+    { id: 'seriesModel', name: 'Type', type: 'checkbox', specKeys: ['Series / Model', 'Switch Type', 'Socket Type'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 13. Electrical Conduits
   'electrical-conduits': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Conduit Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'nominalDiameter', name: 'Diameter / Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Size'] },
-    { id: 'stressClass', name: 'Stress Class / Standard', type: 'checkbox', specKeys: ['Stress Class', 'Standard', 'Ways'] },
+    { id: 'nominalDiameter', name: 'Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Size'] },
+    { id: 'stressClass', name: 'Grade', type: 'checkbox', specKeys: ['Stress Class', 'Standard', 'Ways'] },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 14. Lighting
   'lighting': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Light Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'wattage', name: 'Wattage', type: 'checkbox', specKeys: ['Wattage'] },
     { id: 'colorTemperature', name: 'Color Temperature', type: 'checkbox', specKeys: ['Color Temperature', 'Colour Temperature'] },
-    { id: 'beamAngle', name: 'Beam Angle / Cutout', type: 'checkbox', specKeys: ['Beam Angle', 'Ceiling Cutout'] },
-    { id: 'surgeProtection', name: 'Surge Protection / CRI', type: 'checkbox', specKeys: ['Surge Protection', 'CRI'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'beamAngle', name: 'Size', type: 'checkbox', specKeys: ['Beam Angle', 'Ceiling Cutout'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 15. Ceiling Fans & Exhaust
   'ceiling-fans-exhaust': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'sweepSize', name: 'Sweep Size', type: 'checkbox', specKeys: ['Sweep Size'] },
-    { id: 'wattage', name: 'Wattage / Motor', type: 'checkbox', specKeys: ['Wattage'] },
-    { id: 'rpm', name: 'RPM / Air Delivery', type: 'checkbox', specKeys: ['RPM', 'Air Delivery'] },
-    { id: 'colour', name: 'Colour', type: 'checkbox', specKeys: ['Colour', 'Color'] },
-    { id: 'energyEfficiency', name: 'Energy Rating / Control', type: 'checkbox', specKeys: ['Energy Efficiency', 'Control Type'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'sweepSize', name: 'Size', type: 'checkbox', specKeys: ['Sweep Size'] },
+    { id: 'wattage', name: 'Wattage', type: 'checkbox', specKeys: ['Wattage'] },
+    { id: 'rpm', name: 'RPM', type: 'checkbox', specKeys: ['RPM', 'Air Delivery'] },
+    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 16. CPVC Pipes & Overhead Tanks
   'cpvc-pipes-overhead-tanks': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'nominalDiameter', name: 'Pipe Diameter / Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Size'] },
-    { id: 'pressureClass', name: 'Pressure Class', type: 'checkbox', specKeys: ['Pressure Class'] },
-    { id: 'temperature', name: 'Max Operating Temp', type: 'checkbox', specKeys: ['Max Operating Temp'] },
-    { id: 'certification', name: 'Certifications', type: 'checkbox', specKeys: ['Certification'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'nominalDiameter', name: 'Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Size'] },
+    { id: 'pressureClass', name: 'Grade', type: 'checkbox', specKeys: ['Pressure Class'] },
+    { id: 'temperature', name: 'Features', type: 'checkbox', specKeys: ['Max Operating Temp', 'Certification'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 17. Sanitary & Bath Fittings
   'sanitary-bath-fittings': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'finish', name: 'Finish / Colour', type: 'checkbox', specKeys: ['Finish', 'Colour'] },
-    { id: 'installationType', name: 'Installation Type', type: 'checkbox', specKeys: ['Installation Type'] },
-    { id: 'waterFlow', name: 'Water Flow / Flushing', type: 'checkbox', specKeys: ['Water Flow / Operating Type'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish', 'Colour'] },
+    { id: 'installationType', name: 'Type', type: 'checkbox', specKeys: ['Installation Type'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 18. Kitchen Sinks & Faucets
   'kitchen-sinks-faucets': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'material', name: 'Material / Body', type: 'checkbox', specKeys: ['Material', 'Body Material'] },
-    { id: 'dimensions', name: 'Overall Dimensions', type: 'checkbox', specKeys: ['Overall Dimensions', 'Dimensions'] },
-    { id: 'sheetThickness', name: 'Sheet Gauge / Cartridge', type: 'checkbox', specKeys: ['Sheet Thickness', 'Cartridge'] },
-    { id: 'spoutFeatures', name: 'Spout / Flow Features', type: 'checkbox', specKeys: ['Spout', 'Corner Radius', 'Water Flow Modes'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Body Material'] },
+    { id: 'dimensions', name: 'Size', type: 'checkbox', specKeys: ['Overall Dimensions', 'Dimensions'] },
+    { id: 'sheetThickness', name: 'Type', type: 'checkbox', specKeys: ['Sheet Thickness', 'Cartridge'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 19. Water Storage Tanks
   'water-storage-tanks': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Tank Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'capacity', name: 'Capacity (Litres)', type: 'checkbox', specKeys: ['Capacity'] },
-    { id: 'layerConstruction', name: 'Layer Construction', type: 'checkbox', specKeys: ['Layer Construction'] },
-    { id: 'dimensions', name: 'Dimensions', type: 'checkbox', specKeys: ['Dimensions'] },
-    { id: 'warranty', name: 'Warranty', type: 'checkbox', specKeys: ['Warranty'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'capacity', name: 'Capacity', type: 'checkbox', specKeys: ['Capacity'] },
+    { id: 'layerConstruction', name: 'Type', type: 'checkbox', specKeys: ['Layer Construction'] },
+    { id: 'dimensions', name: 'Size', type: 'checkbox', specKeys: ['Dimensions'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 20. Power Tools & Accessories
   'power-tools-accessories': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Tool Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'ratedPower', name: 'Rated Power / Wattage', type: 'checkbox', specKeys: ['Rated Power', 'Wattage'] },
-    { id: 'impactEnergy', name: 'Impact Energy / Tool Holder', type: 'checkbox', specKeys: ['Impact Energy', 'Tool Holder'] },
-    { id: 'drillingCapacity', name: 'Drilling Capacity in Concrete', type: 'checkbox', specKeys: ['Drilling Dia in Concrete'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'ratedPower', name: 'Wattage', type: 'checkbox', specKeys: ['Rated Power', 'Wattage'] },
+    { id: 'impactEnergy', name: 'Type', type: 'checkbox', specKeys: ['Impact Energy', 'Tool Holder'] },
+    { id: 'drillingCapacity', name: 'Capacity', type: 'checkbox', specKeys: ['Drilling Dia in Concrete'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 21. General Hardware & Tools
   'general-hardware-tools': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Tool Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'material', name: 'Material / Case', type: 'checkbox', specKeys: ['Material', 'Case Material', 'Head Material'] },
-    { id: 'dimensions', name: 'Blade Length / Head Weight', type: 'checkbox', specKeys: ['Blade Length', 'Head Weight'] },
-    { id: 'accuracyClass', name: 'Accuracy / Hardness', type: 'checkbox', specKeys: ['Accuracy Class', 'Hardness'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Case Material', 'Head Material'] },
+    { id: 'dimensions', name: 'Size', type: 'checkbox', specKeys: ['Blade Length', 'Head Weight'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 22. CCTV & Networking
   'cctv-networking': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'resolution', name: 'Resolution', type: 'checkbox', specKeys: ['Resolution'] },
-    { id: 'networkType', name: 'Network Type / Cable Length', type: 'checkbox', specKeys: ['Network Type', 'Cable Length'] },
-    { id: 'connectivity', name: 'Connectivity / Storage', type: 'checkbox', specKeys: ['Connectivity', 'Storage Compatibility'] },
-    { id: 'indoorOutdoor', name: 'Indoor / Outdoor Protection', type: 'checkbox', specKeys: ['Indoor / Outdoor'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'networkType', name: 'Type', type: 'checkbox', specKeys: ['Network Type', 'Cable Length'] },
+    { id: 'connectivity', name: 'Features', type: 'checkbox', specKeys: ['Connectivity', 'Storage Compatibility', 'Indoor / Outdoor'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 23. Home Appliances & Power Backup
   'home-appliances-power-backup': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Appliance Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'capacity', name: 'Capacity / VA Rating', type: 'checkbox', specKeys: ['Capacity'] },
-    { id: 'powerRating', name: 'Rated Power Output / Element', type: 'checkbox', specKeys: ['Rated Power Output', 'Heating Element'] },
-    { id: 'features', name: 'Features / Waveform', type: 'checkbox', specKeys: ['Waveform', 'Display', 'Energy Rating', 'Pressure Rating'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'capacity', name: 'Capacity', type: 'checkbox', specKeys: ['Capacity'] },
+    { id: 'powerRating', name: 'Power Rating', type: 'checkbox', specKeys: ['Rated Power Output', 'Heating Element'] },
+    { id: 'features', name: 'Features', type: 'checkbox', specKeys: ['Waveform', 'Display', 'Energy Rating', 'Pressure Rating'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 24. Safety & Workwear
   'safety-workwear': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'safetyCategory', name: 'Safety Standard Category', type: 'checkbox', specKeys: ['Safety Category'] },
+    { id: 'safetyCategory', name: 'Grade', type: 'checkbox', specKeys: ['Safety Category'] },
     { id: 'size', name: 'Size', type: 'checkbox', specKeys: ['Size'] },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'protectionRating', name: 'Protection Rating', type: 'checkbox', specKeys: ['Protection Rating'] },
-    { id: 'colour', name: 'Colour', type: 'checkbox', specKeys: ['Colour', 'Color'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 25. Glass Door Hardware
   'glass-door-hardware': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'glassThickness', name: 'Glass Thickness Compatibility', type: 'checkbox', specKeys: ['Glass Thickness Compatibility'] },
+    { id: 'glassThickness', name: 'Thickness', type: 'checkbox', specKeys: ['Glass Thickness Compatibility'] },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
     { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'] },
-    { id: 'mountingType', name: 'Mounting Type / Rating', type: 'checkbox', specKeys: ['Mounting Type', 'Size'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'mountingType', name: 'Type', type: 'checkbox', specKeys: ['Mounting Type', 'Size'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 26. Welding Consumables
   'welding-consumables': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'electrodeDiameter', name: 'Electrode / Disc Diameter', type: 'checkbox', specKeys: ['Electrode Diameter', 'Size'] },
-    { id: 'materialCompatibility', name: 'Material Compatibility', type: 'checkbox', specKeys: ['Material Compatibility'] },
-    { id: 'packWeight', name: 'Pack Weight / Quantity', type: 'checkbox', specKeys: ['Pack Weight'] },
-    { id: 'weldingType', name: 'Welding Type', type: 'checkbox', specKeys: ['Welding Type'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'electrodeDiameter', name: 'Size', type: 'checkbox', specKeys: ['Electrode Diameter', 'Size'] },
+    { id: 'materialCompatibility', name: 'Material', type: 'checkbox', specKeys: ['Material Compatibility'] },
+    { id: 'packWeight', name: 'Pack Size', type: 'checkbox', specKeys: ['Pack Weight'] },
+    { id: 'weldingType', name: 'Type', type: 'checkbox', specKeys: ['Welding Type'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 27. Bathroom Renovation Materials
   'bathroom-renovation-materials': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
-    { id: 'sizeLength', name: 'Size / Channel Length', type: 'checkbox', specKeys: ['Length', 'Tank Capacity', 'Size'] },
+    { id: 'sizeLength', name: 'Size', type: 'checkbox', specKeys: ['Length', 'Tank Capacity', 'Size'] },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'grateType', name: 'Grate Type / Features', type: 'checkbox', specKeys: ['Grate Type', 'Installation', 'Actuator Plate'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'grateType', name: 'Type', type: 'checkbox', specKeys: ['Grate Type', 'Installation', 'Actuator Plate'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 28. Ceiling & Flooring
   'ceiling-flooring': [
+    { id: 'subcategory', name: 'Category', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'subcategory', name: 'Product Type', type: 'checkbox', isStandardField: 'subcategory' },
     { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
     { id: 'thickness', name: 'Thickness', type: 'checkbox', specKeys: ['Thickness'] },
-    { id: 'size', name: 'Size / Dimensions', type: 'checkbox', specKeys: ['Size'] },
-    { id: 'finish', name: 'Finish / Pattern', type: 'checkbox', specKeys: ['Finish', 'Pattern'] },
-    { id: 'coverageArea', name: 'Coverage Area', type: 'checkbox', specKeys: ['Coverage Area'] },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'size', name: 'Size', type: 'checkbox', specKeys: ['Size'] },
+    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish', 'Pattern'] },
+    { id: 'coverageArea', name: 'Features', type: 'checkbox', specKeys: ['Coverage Area'] },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ]
 };
 
@@ -454,6 +442,84 @@ export function getAvailableFiltersForCategory(
   return availableFilters;
 }
 
+/**
+ * Extracts available filters across the entire product catalogue or when browsing /products.
+ * If a single category is active, includes that category's specific specification filters.
+ */
+export function getAvailableFiltersForCatalog(
+  allProducts: Product[],
+  selectedCategorySlug?: string
+): AvailableCategoryFilter[] {
+  const availableFilters: AvailableCategoryFilter[] = [];
+
+  // 1. Category Filter Dimension (HomeRun has Category dropdown first)
+  const categoryCounts = new Map<string, number>();
+  for (const p of allProducts) {
+    if (p.category) {
+      categoryCounts.set(p.category, (categoryCounts.get(p.category) || 0) + 1);
+    }
+  }
+  if (categoryCounts.size > 0) {
+    availableFilters.push({
+      id: 'category',
+      name: 'Category',
+      type: 'checkbox',
+      options: Array.from(categoryCounts.entries())
+        .map(([value, count]) => ({ value, label: value, count }))
+        .sort((a, b) => b.count - a.count)
+    });
+  }
+
+  // If a single category is selected, extract its specific filters (Brand, Type, Size, etc.)
+  if (selectedCategorySlug && CATEGORY_FILTER_CONFIGS[selectedCategorySlug]) {
+    const catProducts = allProducts.filter(
+      (p) => p.categorySlug === selectedCategorySlug || p.category === selectedCategorySlug
+    );
+    const catFilters = getAvailableFiltersForCategory(selectedCategorySlug, catProducts);
+    for (const f of catFilters) {
+      // Do not duplicate Category dropdown or Price (handled below)
+      if (f.id !== 'category' && f.id !== 'price') {
+        availableFilters.push(f);
+      }
+    }
+  } else {
+    // Catalogue overview (no single category selected): Brand filter
+    const brandCounts = new Map<string, number>();
+    for (const p of allProducts) {
+      if (p.brand) {
+        brandCounts.set(p.brand, (brandCounts.get(p.brand) || 0) + 1);
+      }
+    }
+    if (brandCounts.size > 0) {
+      availableFilters.push({
+        id: 'brand',
+        name: 'Brand',
+        type: 'checkbox',
+        options: Array.from(brandCounts.entries())
+          .map(([value, count]) => ({ value, label: value, count }))
+          .sort((a, b) => b.count - a.count)
+      });
+    }
+  }
+
+  // Price Range
+  if (allProducts.length > 0) {
+    const prices = allProducts.map((p) => p.price);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    availableFilters.push({
+      id: 'price',
+      name: 'Price',
+      type: 'range',
+      options: [],
+      minPrice: Math.floor(minPrice / 10) * 10,
+      maxPrice: Math.ceil(maxPrice / 10) * 10
+    });
+  }
+
+  return availableFilters;
+}
+
 // -------------------------------------------------------------------------------------
 // MULTI-DIMENSIONAL FILTERING ENGINE (PHASE 4)
 // -------------------------------------------------------------------------------------
@@ -470,6 +536,16 @@ export function applyCategoryFilters(
   const dimMap = new Map(dimensions.map((d) => [d.id, d]));
 
   return products.filter((p) => {
+    // 0. Category filter (OR within selected categories)
+    if (activeFilters.categories && activeFilters.categories.length > 0) {
+      const matchCat =
+        activeFilters.categories.includes(p.category) ||
+        activeFilters.categories.includes(p.categorySlug);
+      if (!matchCat) {
+        return false;
+      }
+    }
+
     // 1. Brand filter (OR within brands)
     if (activeFilters.brands && activeFilters.brands.length > 0) {
       if (!activeFilters.brands.includes(p.brand) && !activeFilters.brands.includes(p.brandSlug)) {
