@@ -774,3 +774,4 @@ export const AVAILABLE_COUPONS = [
 ];
 
 export * from './seed-data';
+export * from './category-filters';

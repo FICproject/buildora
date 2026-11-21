@@ -7,9 +7,16 @@ import {
   RotateCcw,
   Search,
   Zap,
-  Star
+  Star,
+  Check
 } from 'lucide-react';
-import { MASTER_CATEGORIES, MASTER_BRANDS, SEED_PRODUCTS } from '@buildora/constants';
+import {
+  MASTER_CATEGORIES,
+  MASTER_BRANDS,
+  SEED_PRODUCTS,
+  getAvailableFiltersForCategory,
+  CATEGORY_FILTER_CONFIGS
+} from '@buildora/constants';
 import { Category, Brand, Product } from '@buildora/types';
 import { api } from '../services/api';
 import { ProductCard } from '../components/common/ProductCard';
@@ -41,29 +48,41 @@ export const ProductListingPage: React.FC = () => {
   const [localSearch, setLocalSearch] = useState(initialSearch);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
+  // Dynamic category specification filter state: dimensionId -> values[]
+  const [selectedSpecs, setSelectedSpecs] = useState<Record<string, string[]>>({});
+
   // Fetch categories and brands from Backend API on mount
   React.useEffect(() => {
-    api.getCategories().then((c) => { if (c && c.length) setCategories(c); });
-    api.getBrands().then((b) => { if (b && b.length) setBrands(b); });
+    api.getCategories().then((c) => {
+      if (c && c.length) setCategories(c);
+    });
+    api.getBrands().then((b) => {
+      if (b && b.length) setBrands(b);
+    });
   }, []);
 
   // Fetch products from Backend API whenever filters change
   React.useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
-    api.getProducts({
-      category: selectedCategory || undefined,
-      brand: selectedBrand || undefined,
-      search: localSearch || undefined
-    }).then((data) => {
-      if (isMounted) {
-        if (data && data.length > 0) setProducts(data);
-        setIsLoading(false);
-      }
-    }).catch(() => {
-      if (isMounted) setIsLoading(false);
-    });
-    return () => { isMounted = false; };
+    api
+      .getProducts({
+        category: selectedCategory || undefined,
+        brand: selectedBrand || undefined,
+        search: localSearch || undefined
+      })
+      .then((data) => {
+        if (isMounted) {
+          if (data && data.length > 0) setProducts(data);
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, [selectedCategory, selectedBrand, localSearch]);
 
   // Synchronize when URL changes
@@ -72,6 +91,39 @@ export const ProductListingPage: React.FC = () => {
     if (searchParams.get('brand')) setSelectedBrand(searchParams.get('brand')!);
     if (searchParams.get('search')) setLocalSearch(searchParams.get('search')!);
   }, [searchParams]);
+
+  // Reset spec filters when category changes
+  const handleCategoryChange = (slug: string) => {
+    setSelectedCategory(slug);
+    setSelectedSpecs({});
+  };
+
+  // Compute category-specific specifications when a category is chosen
+  const availableCategorySpecs = useMemo(() => {
+    if (!selectedCategory) return [];
+    const catProducts = products.filter((p) => p.categorySlug === selectedCategory);
+    const filters = getAvailableFiltersForCategory(selectedCategory, catProducts);
+    // Exclude standard dimensions already handled by main filters (brand, subcategory, price)
+    return filters.filter((f) => f.id !== 'brand' && f.id !== 'subcategory' && f.id !== 'price');
+  }, [selectedCategory, products]);
+
+  // Spec toggle handler
+  const handleSpecToggle = (dimId: string, val: string) => {
+    setSelectedSpecs((prev) => {
+      const currentList = prev[dimId] || [];
+      const updatedList = currentList.includes(val)
+        ? currentList.filter((v) => v !== val)
+        : [...currentList, val];
+
+      const copy = { ...prev };
+      if (updatedList.length === 0) {
+        delete copy[dimId];
+      } else {
+        copy[dimId] = updatedList;
+      }
+      return copy;
+    });
+  };
 
   // Filtered & Sorted Products
   const filteredProducts = useMemo(() => {
@@ -109,6 +161,37 @@ export const ProductListingPage: React.FC = () => {
       );
     }
 
+    // Apply category-specific spec filters
+    if (selectedCategory && Object.keys(selectedSpecs).length > 0) {
+      const dimMap = new Map(
+        (CATEGORY_FILTER_CONFIGS[selectedCategory] || []).map((d) => [d.id, d])
+      );
+      for (const [dimId, selectedValues] of Object.entries(selectedSpecs)) {
+        if (!selectedValues || selectedValues.length === 0) continue;
+        const dim = dimMap.get(dimId);
+        if (!dim) continue;
+
+        result = result.filter((p) => {
+          const productValues: string[] = [];
+          if (dim.specKeys && p.specifications) {
+            for (const key of dim.specKeys) {
+              const val = p.specifications[key];
+              if (val) productValues.push(val.trim());
+            }
+          }
+          if (dim.catAttrKeys && p.categoryAttributes) {
+            for (const key of dim.catAttrKeys) {
+              const val = p.categoryAttributes[key];
+              if (val) productValues.push(val.trim());
+            }
+          }
+          return selectedValues.some((sv) =>
+            productValues.some((pv) => pv.toLowerCase() === sv.toLowerCase())
+          );
+        });
+      }
+    }
+
     // Sort
     if (sortBy === 'price_asc') {
       result.sort((a, b) => a.price - b.price);
@@ -122,6 +205,7 @@ export const ProductListingPage: React.FC = () => {
 
     return result;
   }, [
+    products,
     selectedCategory,
     selectedBrand,
     inStockOnly,
@@ -130,7 +214,8 @@ export const ProductListingPage: React.FC = () => {
     maxPrice,
     minRating,
     sortBy,
-    localSearch
+    localSearch,
+    selectedSpecs
   ]);
 
   const handleResetFilters = () => {
@@ -142,8 +227,11 @@ export const ProductListingPage: React.FC = () => {
     setMaxPrice('');
     setMinRating(0);
     setLocalSearch('');
+    setSelectedSpecs({});
     setSearchParams({});
   };
+
+  const activeSpecCount = Object.values(selectedSpecs).reduce((acc, v) => acc + (v ? v.length : 0), 0);
 
   const activeFilterCount =
     (selectedCategory ? 1 : 0) +
@@ -152,7 +240,8 @@ export const ProductListingPage: React.FC = () => {
     (asapOnly ? 1 : 0) +
     (minPrice !== '' || maxPrice !== '' ? 1 : 0) +
     (minRating > 0 ? 1 : 0) +
-    (localSearch ? 1 : 0);
+    (localSearch ? 1 : 0) +
+    activeSpecCount;
 
   return (
     <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6">
@@ -178,7 +267,8 @@ export const ProductListingPage: React.FC = () => {
               : 'Construction Materials Catalogue'}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Showing <strong className="text-slate-800">{filteredProducts.length}</strong> items ready for site dispatch
+            Showing <strong className="text-slate-800">{filteredProducts.length}</strong> items ready
+            for site dispatch
           </p>
         </div>
 
@@ -198,9 +288,10 @@ export const ProductListingPage: React.FC = () => {
           <div className="flex items-center gap-2 flex-1 sm:flex-initial">
             <span className="text-xs text-slate-500 hidden sm:inline">Sort:</span>
             <select
+              aria-label="Sort products by"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue-500 w-full sm:w-auto"
+              className="text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue-500 w-full sm:w-auto cursor-pointer"
             >
               <option value="relevance">Relevance</option>
               <option value="price_asc">Price: Low to High</option>
@@ -219,27 +310,56 @@ export const ProductListingPage: React.FC = () => {
           {selectedCategory && (
             <span className="inline-flex items-center gap-1 bg-brand-blue-50 text-brand-blue-900 border border-brand-blue-200 text-xs px-2.5 py-1 rounded-full font-semibold">
               Category: {categories.find((c) => c.slug === selectedCategory)?.name}
-              <X className="w-3.5 h-3.5 cursor-pointer" onClick={() => setSelectedCategory('')} />
+              <X
+                className="w-3.5 h-3.5 cursor-pointer hover:text-red-600"
+                onClick={() => handleCategoryChange('')}
+              />
             </span>
           )}
           {selectedBrand && (
             <span className="inline-flex items-center gap-1 bg-brand-blue-50 text-brand-blue-900 border border-brand-blue-200 text-xs px-2.5 py-1 rounded-full font-semibold">
               Brand: {brands.find((b) => b.slug === selectedBrand)?.name}
-              <X className="w-3.5 h-3.5 cursor-pointer" onClick={() => setSelectedBrand('')} />
+              <X
+                className="w-3.5 h-3.5 cursor-pointer hover:text-red-600"
+                onClick={() => setSelectedBrand('')}
+              />
             </span>
           )}
           {asapOnly && (
             <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-200 text-xs px-2.5 py-1 rounded-full font-semibold">
               ⚡ 60-Min Delivery Only
-              <X className="w-3.5 h-3.5 cursor-pointer" onClick={() => setAsapOnly(false)} />
+              <X
+                className="w-3.5 h-3.5 cursor-pointer hover:text-red-600"
+                onClick={() => setAsapOnly(false)}
+              />
             </span>
           )}
           {inStockOnly && (
             <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-900 border border-emerald-200 text-xs px-2.5 py-1 rounded-full font-semibold">
               In Stock Only
-              <X className="w-3.5 h-3.5 cursor-pointer" onClick={() => setInStockOnly(false)} />
+              <X
+                className="w-3.5 h-3.5 cursor-pointer hover:text-red-600"
+                onClick={() => setInStockOnly(false)}
+              />
             </span>
           )}
+
+          {/* Active Specification Chips */}
+          {Object.entries(selectedSpecs).flatMap(([dimId, vals]) =>
+            vals.map((v) => (
+              <span
+                key={`${dimId}-${v}`}
+                className="inline-flex items-center gap-1 bg-slate-100 text-slate-800 border border-slate-200 text-xs px-2.5 py-1 rounded-full font-semibold"
+              >
+                {v}
+                <X
+                  className="w-3.5 h-3.5 cursor-pointer hover:text-red-600"
+                  onClick={() => handleSpecToggle(dimId, v)}
+                />
+              </span>
+            ))
+          )}
+
           <button
             onClick={handleResetFilters}
             className="text-xs font-semibold text-red-600 hover:underline flex items-center gap-1 ml-2"
@@ -252,7 +372,7 @@ export const ProductListingPage: React.FC = () => {
       {/* Main Grid + Sidebar Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Desktop Filter Sidebar */}
-        <aside className="hidden lg:block lg:col-span-1 space-y-6 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-card h-fit sticky top-24">
+        <aside className="hidden lg:block lg:col-span-1 space-y-6 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs h-fit sticky top-24">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
               <SlidersHorizontal className="w-4 h-4 text-brand-blue-900" />
@@ -261,7 +381,7 @@ export const ProductListingPage: React.FC = () => {
             {activeFilterCount > 0 && (
               <button
                 onClick={handleResetFilters}
-                className="text-xs text-slate-400 hover:text-red-600 font-semibold"
+                className="text-xs text-slate-400 hover:text-red-600 font-semibold cursor-pointer"
               >
                 Reset
               </button>
@@ -275,7 +395,7 @@ export const ProductListingPage: React.FC = () => {
                 type="checkbox"
                 checked={asapOnly}
                 onChange={(e) => setAsapOnly(e.target.checked)}
-                className="w-4 h-4 rounded text-brand-orange-500 focus:ring-brand-orange-400 border-slate-300"
+                className="w-4 h-4 rounded text-brand-orange-500 focus:ring-brand-orange-400 border-slate-300 cursor-pointer"
               />
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
                 <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
@@ -287,7 +407,7 @@ export const ProductListingPage: React.FC = () => {
                 type="checkbox"
                 checked={inStockOnly}
                 onChange={(e) => setInStockOnly(e.target.checked)}
-                className="w-4 h-4 rounded text-brand-blue-600 focus:ring-brand-blue-500 border-slate-300"
+                className="w-4 h-4 rounded text-brand-blue-600 focus:ring-brand-blue-500 border-slate-300 cursor-pointer"
               />
               <span className="text-xs font-medium text-slate-700">In Stock Available</span>
             </label>
@@ -300,8 +420,8 @@ export const ProductListingPage: React.FC = () => {
             </div>
             <div className="max-h-48 overflow-y-auto space-y-1 pr-1 text-xs">
               <button
-                onClick={() => setSelectedCategory('')}
-                className={`w-full text-left py-1.5 px-2 rounded-lg font-medium transition-colors ${
+                onClick={() => handleCategoryChange('')}
+                className={`w-full text-left py-1.5 px-2 rounded-lg font-medium transition-colors cursor-pointer ${
                   !selectedCategory
                     ? 'bg-brand-blue-50 text-brand-blue-900 font-bold'
                     : 'text-slate-600 hover:bg-slate-50'
@@ -312,8 +432,8 @@ export const ProductListingPage: React.FC = () => {
               {categories.map((cat) => (
                 <button
                   key={cat.id}
-                  onClick={() => setSelectedCategory(cat.slug)}
-                  className={`w-full text-left py-1.5 px-2 rounded-lg font-medium transition-colors truncate ${
+                  onClick={() => handleCategoryChange(cat.slug)}
+                  className={`w-full text-left py-1.5 px-2 rounded-lg font-medium transition-colors truncate cursor-pointer ${
                     selectedCategory === cat.slug
                       ? 'bg-brand-blue-50 text-brand-blue-900 font-bold'
                       : 'text-slate-600 hover:bg-slate-50'
@@ -325,15 +445,51 @@ export const ProductListingPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Category-Specific Specifications Section (when category is selected) */}
+          {selectedCategory && availableCategorySpecs.length > 0 && (
+            <div className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="text-xs font-black text-brand-blue-900 uppercase tracking-wider">
+                {categories.find((c) => c.slug === selectedCategory)?.name} Specifications
+              </div>
+              {availableCategorySpecs.map((filter) => (
+                <div key={filter.id} className="space-y-2">
+                  <div className="text-xs font-bold text-slate-800">{filter.name}</div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {filter.options.map((opt) => {
+                      const isChecked = (selectedSpecs[filter.id] || []).includes(opt.value);
+                      return (
+                        <label
+                          key={opt.value}
+                          className="flex items-center gap-2 cursor-pointer text-xs text-slate-700 hover:text-slate-900 select-none"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleSpecToggle(filter.id, opt.value)}
+                            className="w-3.5 h-3.5 rounded text-brand-blue-900 focus:ring-brand-blue-500 border-slate-300 cursor-pointer"
+                          />
+                          <span className="flex-1 truncate">{opt.label}</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            ({opt.count})
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Brands Selector */}
           <div className="space-y-2 pt-4 border-t border-slate-100">
             <div className="text-xs font-bold text-slate-900 uppercase tracking-wider">
               Authorized Brands
             </div>
-            <div className="space-y-1 text-xs">
+            <div className="max-h-48 overflow-y-auto space-y-1 pr-1 text-xs">
               <button
                 onClick={() => setSelectedBrand('')}
-                className={`w-full text-left py-1.5 px-2 rounded-lg font-medium transition-colors ${
+                className={`w-full text-left py-1.5 px-2 rounded-lg font-medium transition-colors cursor-pointer ${
                   !selectedBrand
                     ? 'bg-brand-blue-50 text-brand-blue-900 font-bold'
                     : 'text-slate-600 hover:bg-slate-50'
@@ -345,7 +501,7 @@ export const ProductListingPage: React.FC = () => {
                 <button
                   key={brand.id}
                   onClick={() => setSelectedBrand(brand.slug)}
-                  className={`w-full text-left py-1.5 px-2 rounded-lg font-medium transition-colors truncate ${
+                  className={`w-full text-left py-1.5 px-2 rounded-lg font-medium transition-colors truncate cursor-pointer ${
                     selectedBrand === brand.slug
                       ? 'bg-brand-blue-50 text-brand-blue-900 font-bold'
                       : 'text-slate-600 hover:bg-slate-50'
@@ -368,7 +524,7 @@ export const ProductListingPage: React.FC = () => {
                 placeholder="Min"
                 value={minPrice}
                 onChange={(e) => setMinPrice(e.target.value ? Number(e.target.value) : '')}
-                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
+                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-brand-blue-500 font-medium"
               />
               <span className="text-slate-400 text-xs">-</span>
               <input
@@ -376,7 +532,7 @@ export const ProductListingPage: React.FC = () => {
                 placeholder="Max"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(e.target.value ? Number(e.target.value) : '')}
-                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
+                className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-brand-blue-500 font-medium"
               />
             </div>
           </div>
@@ -391,7 +547,7 @@ export const ProductListingPage: React.FC = () => {
                 <button
                   key={r}
                   onClick={() => setMinRating(minRating === r ? 0 : r)}
-                  className={`w-full flex items-center justify-between py-1.5 px-2 rounded-lg transition-colors ${
+                  className={`w-full flex items-center justify-between py-1.5 px-2 rounded-lg transition-colors cursor-pointer ${
                     minRating === r
                       ? 'bg-amber-50 text-amber-900 font-bold'
                       : 'text-slate-600 hover:bg-slate-50'
@@ -416,7 +572,8 @@ export const ProductListingPage: React.FC = () => {
               </div>
               <h3 className="text-lg font-bold text-slate-800">No Materials Found</h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                No items match your currently applied filters. Try clearing your filters or searching for alternative construction materials.
+                No items match your currently applied filters. Try clearing your filters or searching
+                for alternative construction materials.
               </p>
               <Button variant="primary" size="sm" onClick={handleResetFilters}>
                 Reset All Filters
@@ -436,20 +593,20 @@ export const ProductListingPage: React.FC = () => {
       {isMobileFilterOpen && (
         <div className="fixed inset-0 z-50 flex justify-end lg:hidden">
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
             onClick={() => setIsMobileFilterOpen(false)}
           />
           <div className="relative w-full max-w-xs bg-white h-full shadow-2xl flex flex-col z-10 p-5 space-y-6 overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="font-bold text-sm text-slate-900">Filters</h3>
-              <button onClick={() => setIsMobileFilterOpen(false)}>
+              <button onClick={() => setIsMobileFilterOpen(false)} className="cursor-pointer">
                 <X className="w-5 h-5 text-slate-400" />
               </button>
             </div>
 
-            {/* Same filter controls for mobile */}
+            {/* Filter controls for mobile */}
             <div className="space-y-4 text-xs">
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={asapOnly}
@@ -461,8 +618,9 @@ export const ProductListingPage: React.FC = () => {
               <div>
                 <div className="font-bold mb-1">Categories</div>
                 <select
+                  aria-label="Filter by category"
                   value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
                   className="w-full p-2 border rounded"
                 >
                   <option value="">All Categories</option>
@@ -474,9 +632,36 @@ export const ProductListingPage: React.FC = () => {
                 </select>
               </div>
 
+              {/* Mobile specs */}
+              {selectedCategory && availableCategorySpecs.length > 0 && (
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="font-black text-brand-blue-900">Specifications</div>
+                  {availableCategorySpecs.map((filter) => (
+                    <div key={filter.id} className="space-y-1">
+                      <div className="font-bold text-slate-700">{filter.name}</div>
+                      {filter.options.map((opt) => {
+                        const isChecked = (selectedSpecs[filter.id] || []).includes(opt.value);
+                        return (
+                          <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleSpecToggle(filter.id, opt.value)}
+                            />
+                            <span>{opt.label}</span>
+                            <span className="text-slate-400">({opt.count})</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div>
                 <div className="font-bold mb-1">Brands</div>
                 <select
+                  aria-label="Filter by brand"
                   value={selectedBrand}
                   onChange={(e) => setSelectedBrand(e.target.value)}
                   className="w-full p-2 border rounded"
