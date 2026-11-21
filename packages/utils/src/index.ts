@@ -73,6 +73,10 @@ export interface CartCalculationInput {
   baseUnloadingFee?: number;
 }
 
+export const DEFAULT_FREE_DELIVERY_THRESHOLD = 1000;
+export const DEFAULT_STANDARD_DELIVERY_FEE = 199;
+export const DEFAULT_BASE_UNLOADING_FEE = 199;
+
 export function calculateCartSummary(input: CartCalculationInput) {
   let subtotal = 0;
   let itemDiscount = 0;
@@ -157,8 +161,8 @@ export function calculateCartSummary(input: CartCalculationInput) {
   // 2. Delivery charge calculation
   // Reference behavior: Order value >= ₹1,000 -> Free delivery; below ₹1,000 -> ₹199 delivery (configurable)
   let deliveryFee = 0;
-  const freeThreshold = input.freeDeliveryThreshold ?? 1000;
-  const stdDeliveryFee = input.standardDeliveryFee ?? 199;
+  const freeThreshold = input.freeDeliveryThreshold ?? DEFAULT_FREE_DELIVERY_THRESHOLD;
+  const stdDeliveryFee = input.standardDeliveryFee ?? DEFAULT_STANDARD_DELIVERY_FEE;
 
   if (discountedSubtotal > 0) {
     if (discountedSubtotal < freeThreshold) {

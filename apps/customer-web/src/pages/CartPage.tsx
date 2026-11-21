@@ -19,8 +19,8 @@ import {
 import { useCartStore } from '../store/useCartStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { formatCurrency } from '@buildora/utils';
-import { GstinModal } from '../components/cart/GstinModal';
+import { formatCurrency, DEFAULT_FREE_DELIVERY_THRESHOLD, DEFAULT_STANDARD_DELIVERY_FEE } from '@buildora/utils';
+import { GstinModal, DeliveryChargeModal, HandlingChargeModal } from '../components/cart';
 import { api } from '../services/api';
 
 export const CartPage: React.FC = () => {
@@ -71,14 +71,15 @@ export const CartPage: React.FC = () => {
   // GSTIN Modal toggle
   const [isGstinModalOpen, setIsGstinModalOpen] = useState(false);
 
-  // Handling charge explanation toggle
-  const [showHandlingInfo, setShowHandlingInfo] = useState(false);
+  // Delivery & Handling Charge info modals
+  const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
+  const [isHandlingModalOpen, setIsHandlingModalOpen] = useState(false);
 
-  // Address text derivation
+  // Address text derivation matching HomeRun reference layout
   const getDisplayAddress = () => {
     if (selectedAddressFull) return selectedAddressFull;
-    if (selectedAddressLabel && pincode) return `${selectedAddressLabel}, ${locality || 'Bengaluru'} - ${pincode}`;
-    if (pincode) return `${locality || 'Bengaluru Urban'}, Karnataka - ${pincode}`;
+    if (selectedAddressLabel && pincode) return `${selectedAddressLabel} · ${locality || 'Bengaluru'} - ${pincode}`;
+    if (pincode) return `${pincode} · ${locality || 'Bengaluru Urban'}`;
     return 'Select delivery address to check serviceability';
   };
 
@@ -481,9 +482,16 @@ export const CartPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Delivery Charge */}
-                <div className="flex justify-between">
-                  <span>Delivery Charge</span>
+                {/* Delivery Charge with clickable dotted underline */}
+                <div className="flex justify-between items-center">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeliveryModalOpen(true)}
+                    className="text-slate-600 hover:text-slate-900 border-b border-dotted border-slate-400 pb-0.5 cursor-pointer text-left transition-colors"
+                    title="Click for Delivery Charge details"
+                  >
+                    Delivery Charge
+                  </button>
                   <span className="font-semibold text-slate-900">
                     {summary.deliveryFee === 0 ? (
                       <span className="text-emerald-700 font-bold">FREE</span>
@@ -493,36 +501,20 @@ export const CartPage: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Handling Charge */}
-                <div className="flex justify-between">
-                  <span className="flex items-center gap-1">
+                {/* Handling Charge with clickable dotted underline */}
+                <div className="flex justify-between items-center">
+                  <button
+                    type="button"
+                    onClick={() => setIsHandlingModalOpen(true)}
+                    className="text-slate-600 hover:text-slate-900 border-b border-dotted border-slate-400 pb-0.5 cursor-pointer text-left transition-colors"
+                    title="Click for Handling Charge details"
+                  >
                     Handling Charge
-                    {summary.handlingFee > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowHandlingInfo(!showHandlingInfo)}
-                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
-                        title="View handling details"
-                      >
-                        <ShieldCheck className="w-3 h-3 text-amber-500" />
-                      </button>
-                    )}
-                  </span>
+                  </button>
                   <span className="font-semibold text-slate-900">
                     {summary.handlingFee > 0 ? formatCurrency(summary.handlingFee) : '₹0'}
                   </span>
                 </div>
-
-                {showHandlingInfo && summary.handlingBreakdown && (
-                  <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200 text-[10px] text-amber-900 space-y-1">
-                    {summary.handlingBreakdown.map((h, i) => (
-                      <div key={i} className="flex justify-between">
-                        <span>{h.title}</span>
-                        <span className="font-bold">+{formatCurrency(h.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
 
                 {/* Unloading Charge (if selected) */}
                 {unloadingOptions.required && (
@@ -678,27 +670,36 @@ export const CartPage: React.FC = () => {
             )}
           </div>
 
-          {/* CARD 6: Delivering To (Screenshots 2 & 3) */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-2">
-            <div className="flex items-center justify-between">
+          {/* CARD 6: Delivering To (HomeRun Reference Screenshot 1) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-2.5">
+            {/* 1. Location icon + "Delivering To" & 2. Delivery ETA badge */}
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
-                <MapPin className="w-4 h-4 text-slate-600" />
+                <MapPin className="w-4 h-4 text-slate-700" />
                 <span>Delivering To</span>
               </div>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">
+              <span
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide shadow-2xs ${
+                  !isServiceable && pincode
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-[#14532d] text-white'
+                }`}
+              >
                 {getEtaBadgeText()}
               </span>
             </div>
 
+            {/* 3. Short address/locality */}
             <p className="text-xs text-slate-600 line-clamp-2">
               {getDisplayAddress()}
             </p>
 
-            <div className="pt-1">
+            {/* 4. Change Address action aligned right matching Screenshot 1 */}
+            <div className="flex justify-end pt-0.5">
               <button
                 type="button"
                 onClick={openLocationModal}
-                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                className="text-xs font-bold text-[#15803d] hover:text-[#166534] hover:underline cursor-pointer"
               >
                 Change Address
               </button>
@@ -738,6 +739,20 @@ export const CartPage: React.FC = () => {
         initialGstin={gstin || ''}
         initialCompanyName={companyName || ''}
         onConfirm={handleConfirmGst}
+      />
+
+      {/* Delivery Charge Rules Modal (HomeRun Screenshot 2) */}
+      <DeliveryChargeModal
+        isOpen={isDeliveryModalOpen}
+        onClose={() => setIsDeliveryModalOpen(false)}
+        freeThreshold={DEFAULT_FREE_DELIVERY_THRESHOLD}
+        standardFee={DEFAULT_STANDARD_DELIVERY_FEE}
+      />
+
+      {/* Handling Charge Information Modal (HomeRun Screenshot 3) */}
+      <HandlingChargeModal
+        isOpen={isHandlingModalOpen}
+        onClose={() => setIsHandlingModalOpen(false)}
       />
     </div>
   );
