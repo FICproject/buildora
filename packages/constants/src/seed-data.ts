@@ -17,7 +17,8 @@ export const SEED_PRODUCTS: Product[] = [
     shortDescription: 'Premium PPC cement with micro-fine particles for damp-proof construction.',
     images: [
       'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80'
+      'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80'
     ],
     price: 395,
     mrp: 440,
@@ -101,6 +102,90 @@ export const SEED_PRODUCTS: Product[] = [
     deliverySpeedAvailable: ['EXPRESS_90', 'SCHEDULED', 'NEXT_DAY'],
     isDealOfTheDay: true
   },
+  {
+    id: 'prod-cem-3',
+    name: 'Birla White Cement',
+    slug: 'birla-white-cement',
+    sku: 'CEM-BIR-WHT-50KG',
+    brand: 'Birla White',
+    brandSlug: 'birla-white',
+    category: 'Cement & Concrete',
+    categorySlug: 'cement-concrete',
+    subcategory: 'White Cement & Putty',
+    subcategorySlug: 'white-cement-putty',
+    description: 'Birla White Cement is India’s foremost white portland cement manufactured using superior limestone and state-of-the-art technology, offering ultimate whiteness (>89% Hunter), high compressive strength, and versatile applications across terrazzo flooring, decorative plasters, and tile joint fixing.',
+    shortDescription: 'Super-white portland cement with >89% whiteness for architectural finishes.',
+    images: [
+      'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 40,
+    mrp: 40,
+    discount: 0,
+    unit: '1 Kg',
+    packSize: '1 Kg, 5 Kg, 50 Kg',
+    gstRate: 28,
+    rating: 4.9,
+    reviewCount: 312,
+    inStock: true,
+    stockCount: 1200,
+    isBulkEligible: true,
+    bulkPricing: [
+      { minQuantity: 10, discountPercentage: 5, unitPrice: 38 },
+      { minQuantity: 50, discountPercentage: 8, unitPrice: 36 }
+    ],
+    variants: [
+      {
+        id: 'v-birla-50kg',
+        sku: 'CEM-BIR-WHT-50KG',
+        name: '50 Kg',
+        attributes: { 'Weight': '50 Kg' },
+        price: 1240,
+        mrp: 1350,
+        stock: 500,
+        inStock: true,
+        image: 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=800&q=80'
+      },
+      {
+        id: 'v-birla-5kg',
+        sku: 'CEM-BIR-WHT-5KG',
+        name: '5 Kg',
+        attributes: { 'Weight': '5 Kg' },
+        price: 140,
+        mrp: 150,
+        stock: 1200,
+        inStock: true,
+        image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80'
+      },
+      {
+        id: 'v-birla-1kg',
+        sku: 'CEM-BIR-WHT-1KG',
+        name: '1 Kg',
+        attributes: { 'Weight': '1 Kg' },
+        price: 40,
+        mrp: 40,
+        stock: 2500,
+        inStock: true,
+        image: 'https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80'
+      }
+    ],
+    specifications: {
+      'Cement Type': 'White Portland Cement',
+      'Whiteness': '> 89% (Hunter Scale)',
+      'Grade': 'White Cement 53 Grade',
+      'Standard': 'IS 8042 Compliant',
+      'Compressive Strength (28 Days)': 'Min 30 MPa (Typical 60+ MPa)'
+    },
+    categoryAttributes: {
+      cementType: 'White Cement',
+      grade: 'White Portland'
+    },
+    applications: ['Architectural Finish Plaster', 'Designer Terrazzo Flooring', 'Tile Joint Grouting', 'Ornamental Mouldings'],
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED', 'NEXT_DAY'],
+    isFeatured: true,
+    isBestSeller: true
+  },
 
   // 2. Tiling & Adhesives
   {
@@ -147,25 +232,28 @@ export const SEED_PRODUCTS: Product[] = [
   },
   {
     id: 'prod-tile-2',
-    name: 'Roff T01 Tile Bonder Polymer Adhesive (20 kg)',
-    slug: 'roff-t01-tile-bonder-adhesive-20kg',
-    sku: 'TIL-ROF-T01-20KG',
+    name: 'Roff T01 NCA Tile Adhesive, Grey, 30 Kg Bag',
+    slug: 'roff-t01-nca-tile-adhesive-30kg',
+    sku: 'TIL-ROF-T01-30KG',
     brand: 'Pidilite (Fevicol & Dr. Fixit)',
     brandSlug: 'pidilite',
     category: 'Tiling & Tile Adhesives',
     categorySlug: 'tiling-tile-adhesives',
     subcategory: 'Polymer Tile Adhesives',
     subcategorySlug: 'tile-adhesives',
-    description: 'Ready-to-use polymer-modified cementitious tile adhesive for fixing ceramic, terracotta, and vitrified tiles on internal floors and masonry walls with sag resistance.',
-    shortDescription: 'Heavy-duty polymer-modified tile adhesive for floor and wall tiles.',
+    description: 'Roff T01 New Construction Adhesive is a polymer-modified cementitious tile adhesive for fixing ceramic, vitrified tiles and natural stone on interior floors and walls with exceptional bond strength.',
+    shortDescription: 'Polymer-modified cementitious tile adhesive for durable floor and wall tiling.',
     images: [
-      'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=800&q=80'
+      'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80'
     ],
-    price: 360,
-    mrp: 420,
-    discount: 14,
-    unit: '20 kg Bag',
-    packSize: '20 kg',
+    price: 430,
+    mrp: 460,
+    discount: 7,
+    unit: '30 Kg Bag',
+    packSize: '30 kg',
     gstRate: 18,
     rating: 4.8,
     reviewCount: 162,
@@ -173,17 +261,94 @@ export const SEED_PRODUCTS: Product[] = [
     stockCount: 600,
     isBulkEligible: true,
     bulkPricing: [
-      { minQuantity: 10, discountPercentage: 5, unitPrice: 342 },
-      { minQuantity: 30, discountPercentage: 8, unitPrice: 331 }
+      { minQuantity: 10, discountPercentage: 5, unitPrice: 410 },
+      { minQuantity: 30, discountPercentage: 8, unitPrice: 395 }
     ],
     specifications: {
-      'Coverage': 'Approx 45-50 sq.ft at 3mm bed thickness',
-      'Pot Life': 'Approx 2 hours',
-      'Open Time': 'Approx 20 minutes',
-      'Standard': 'IS 15477 : 2019 Type 1'
+      'Adhesive Type': 'Polymer-modified',
+      'Standard': 'IS 15477 : 2019 Type 1',
+      'Coverage': 'Approx 55-65 sq.ft at 3mm bed thickness',
+      'Colour': 'Grey'
     },
     deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED', 'NEXT_DAY'],
     isBestSeller: true
+  },
+  {
+    id: 'prod-tile-3',
+    name: 'MYK Laticrete 303 Grey Tile Adhesive, 20Kg Bag',
+    slug: 'myk-laticrete-303-grey-tile-adhesive-20kg',
+    sku: 'TIL-MYK-303-20KG',
+    brand: 'MYK Laticrete',
+    brandSlug: 'myk-laticrete',
+    category: 'Tiling & Tile Adhesives',
+    categorySlug: 'tiling-tile-adhesives',
+    subcategory: 'Polymer Tile Adhesives',
+    subcategorySlug: 'tile-adhesives',
+    description: 'MYK Laticrete 303 is an engineered polymer-modified cementitious thin-set mortar designed for installation of ceramic, vitrified and quarry tiles on interior dry walls and floors.',
+    shortDescription: 'High strength polymer thin-set tile mortar for indoor floors and walls.',
+    images: [
+      'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 255,
+    mrp: 300,
+    discount: 15,
+    unit: '20 kg Bag',
+    packSize: '20 kg',
+    gstRate: 18,
+    rating: 4.7,
+    reviewCount: 89,
+    inStock: true,
+    stockCount: 400,
+    isBulkEligible: true,
+    bulkPricing: [
+      { minQuantity: 10, discountPercentage: 8, unitPrice: 235 },
+      { minQuantity: 30, discountPercentage: 12, unitPrice: 224 }
+    ],
+    specifications: {
+      'Adhesive Type': 'Polymer-modified',
+      'Colour': 'Grey',
+      'Standard': 'IS 15477 : 2019 Type 1',
+      'Interior / Exterior': 'Interior Dry'
+    },
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED', 'NEXT_DAY'],
+    isFeatured: true
+  },
+  {
+    id: 'prod-tile-4',
+    name: 'MYK Laticrete DWA 215 Tile Adhesive, 10 Kg',
+    slug: 'myk-laticrete-dwa-215-tile-adhesive-10kg',
+    sku: 'TIL-MYK-DWA-10KG',
+    brand: 'MYK Laticrete',
+    brandSlug: 'myk-laticrete',
+    category: 'Tiling & Tile Adhesives',
+    categorySlug: 'tiling-tile-adhesives',
+    subcategory: 'Polymer Tile Adhesives',
+    subcategorySlug: 'tile-adhesives',
+    description: 'MYK Laticrete DWA 215 is a premium water-resistant modified acrylic adhesive paste engineered for fixing tiles and stones on drywall, plywood, and plastered surfaces.',
+    shortDescription: 'Ready-to-use modified acrylic tile adhesive paste for drywalls and wood.',
+    images: [
+      'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 2025,
+    mrp: 3165,
+    discount: 36,
+    unit: '10 kg Bucket',
+    packSize: '10 kg',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 45,
+    inStock: true,
+    stockCount: 150,
+    isBulkEligible: false,
+    specifications: {
+      'Tile Dimensions': '600 x 600 mm',
+      'Adhesive Type': 'Polymer-modified Paste',
+      'Water Resistance': 'High'
+    },
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED', 'NEXT_DAY']
   },
 
   // 3. Plywood, MDF & HDHMR

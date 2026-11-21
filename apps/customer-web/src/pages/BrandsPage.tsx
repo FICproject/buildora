@@ -51,7 +51,7 @@ export const BrandsPage: React.FC = () => {
               All materials for {activeBrand.name} are currently undergoing batch testing at our warehouse. Check back shortly.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
               {brandProducts.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}

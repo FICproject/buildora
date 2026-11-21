@@ -10,6 +10,7 @@ import {
   Clock,
   CheckCircle2,
   ChevronRight,
+  ChevronLeft,
   Plus,
   Scale,
   FolderPlus,
@@ -144,20 +145,20 @@ export const ProductDetailPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12">
         {/* Left Column: Image Gallery */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="relative aspect-square rounded-3xl bg-white border border-slate-200/80 overflow-hidden shadow-card">
+          <div className="relative aspect-square rounded-3xl bg-white border border-slate-200/80 overflow-hidden shadow-card flex items-center justify-center p-4">
             <img
-              src={product.images[activeImageIndex]}
+              src={product.images[activeImageIndex] || product.images[0]}
               alt={product.name}
-              className={`w-full h-full object-cover transition-transform duration-300 ${
+              className={`max-h-full max-w-full object-contain transition-transform duration-300 ${
                 isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'
               }`}
               onClick={() => setIsZoomed(!isZoomed)}
             />
             {product.discount > 0 && (
               <div className="absolute top-3.5 left-3.5">
-                <Badge variant="orange" size="md">
-                  {product.discount}% OFF
-                </Badge>
+                <span className="bg-blue-600 text-white text-[10px] sm:text-xs font-black px-2 py-0.5 rounded shadow-xs">
+                  Save {product.discount}%
+                </span>
               </div>
             )}
             <button
@@ -172,6 +173,34 @@ export const ProductDetailPage: React.FC = () => {
             >
               <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
             </button>
+
+            {/* Prev / Next Buttons */}
+            {product.images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIndex((prev) => (prev > 0 ? prev - 1 : product.images.length - 1));
+                  }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-slate-700 shadow-md flex items-center justify-center transition-all cursor-pointer"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIndex((prev) => (prev < product.images.length - 1 ? prev + 1 : 0));
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-slate-700 shadow-md flex items-center justify-center transition-all cursor-pointer"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Thumbnails */}
@@ -257,6 +286,56 @@ export const ProductDetailPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Product Variant Options Selector */}
+          {product.variants && product.variants.length > 1 && (
+            <div className="space-y-2.5">
+              <div className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center justify-between">
+                <span>Select Available Option / Pack Size:</span>
+                <span className="text-[#1e7e34] font-bold">{selectedVariant?.name}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {product.variants.map((v) => {
+                  const isSelected = (selectedVariant?.id || '') === v.id;
+                  const vDiscount = v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedVariant(v);
+                        if (v.image) {
+                          const idx = product.images.indexOf(v.image);
+                          if (idx >= 0) setActiveImageIndex(idx);
+                        }
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
+                        isSelected
+                          ? 'border-[#1e7e34] bg-emerald-50/60 ring-2 ring-emerald-600/20 shadow-xs'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      {vDiscount > 0 && (
+                        <span className="absolute top-2 right-2 text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.2 rounded-xs">
+                          {vDiscount}% OFF
+                        </span>
+                      )}
+                      <div className="font-bold text-sm text-slate-900">{v.name}</div>
+                      <div className="flex items-baseline gap-1.5 mt-1">
+                        <span className="font-black text-sm text-slate-900">{formatCurrency(v.price)}</span>
+                        {v.mrp > v.price && (
+                          <span className="text-[10px] text-slate-400 line-through">{formatCurrency(v.mrp)}</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {v.inStock ? 'In Stock' : 'Out of Stock'}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Bulk Pricing Tiers Table */}
           {product.bulkPricing && product.bulkPricing.length > 0 && (
@@ -448,7 +527,7 @@ export const ProductDetailPage: React.FC = () => {
               View All &rarr;
             </Link>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
             {relatedProducts.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}

@@ -254,11 +254,10 @@ export const CategoryPage: React.FC = () => {
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 text-xs whitespace-nowrap">
             <Link
               to={`/categories/${category.slug}`}
-              className={`px-3 py-1.5 rounded-xl border font-bold transition-all flex-shrink-0 ${
-                !activeSubcategory
-                  ? 'bg-brand-blue-900 text-white border-brand-blue-900 shadow-sm'
-                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
+              className={`px-3 py-1.5 rounded-xl border font-bold transition-all flex-shrink-0 ${!activeSubcategory
+                ? 'bg-brand-blue-900 text-white border-brand-blue-900 shadow-sm'
+                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}
             >
               All {category.name}
             </Link>
@@ -266,11 +265,10 @@ export const CategoryPage: React.FC = () => {
               <Link
                 key={sub.id}
                 to={`/categories/${category.slug}/${sub.slug}`}
-                className={`px-3 py-1.5 rounded-xl border font-bold transition-all flex-shrink-0 ${
-                  activeSubcategory?.slug === sub.slug
-                    ? 'bg-brand-blue-900 text-white border-brand-blue-900 shadow-sm'
-                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                }`}
+                className={`px-3 py-1.5 rounded-xl border font-bold transition-all flex-shrink-0 ${activeSubcategory?.slug === sub.slug
+                  ? 'bg-brand-blue-900 text-white border-brand-blue-900 shadow-sm'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
               >
                 {sub.name}
               </Link>
@@ -392,7 +390,7 @@ export const CategoryPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
               {filteredProducts.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
