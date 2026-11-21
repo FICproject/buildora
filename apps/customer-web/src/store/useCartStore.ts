@@ -38,7 +38,7 @@ export const useCartStore = create<CartStoreState>()(
           const maxStock = variant ? variant.stock : product.stockCount;
 
           const existingIndex = state.items.findIndex(
-            (item) => item.productId === product.id && item.variantId === variantId
+            (item) => item.productId === product.id && (item.variantId || undefined) === (variantId || undefined)
           );
 
           let updatedItems: CartItem[];
@@ -90,7 +90,7 @@ export const useCartStore = create<CartStoreState>()(
       removeItem: (productId, variantId) => {
         set((state) => ({
           items: state.items.filter(
-            (item) => !(item.productId === productId && item.variantId === variantId)
+            (item) => !(item.productId === productId && (item.variantId || undefined) === (variantId || undefined))
           )
         }));
       },
@@ -100,14 +100,14 @@ export const useCartStore = create<CartStoreState>()(
           if (quantity <= 0) {
             return {
               items: state.items.filter(
-                (item) => !(item.productId === productId && item.variantId === variantId)
+                (item) => !(item.productId === productId && (item.variantId || undefined) === (variantId || undefined))
               )
             };
           }
 
           const updatedItems = state.items.map((item) => {
-            if (item.productId === productId && item.variantId === variantId) {
-              const clampedQty = Math.min(quantity, item.maxStock);
+            if (item.productId === productId && (item.variantId || undefined) === (variantId || undefined)) {
+              const clampedQty = Math.max(1, Math.min(quantity, item.maxStock));
               // Bulk discount logic
               const effectiveUnit = item.price * (1 - item.bulkDiscountPercentage / 100);
               return {

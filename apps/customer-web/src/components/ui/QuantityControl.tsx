@@ -15,22 +15,31 @@ export const QuantityControl: React.FC<QuantityControlProps> = ({
   onIncrease,
   onDecrease,
   max = 999,
-  min = 1,
+  min = 0,
   size = 'md'
 }) => {
   const isSm = size === 'sm';
 
   return (
-    <div className={`inline-flex items-center rounded-lg border border-slate-300 bg-white overflow-hidden shadow-sm ${isSm ? 'h-7' : 'h-9'}`}>
+    <div
+      className={`inline-flex items-center rounded-lg border border-slate-300 bg-white overflow-hidden shadow-2xs ${
+        isSm ? 'h-7' : 'h-9'
+      }`}
+    >
       <button
+        type="button"
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
-          onDecrease();
+          if (quantity > min) {
+            onDecrease();
+          }
         }}
         disabled={quantity <= min}
-        className={`flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-white transition-colors ${
+        className={`flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-brand-blue-900 disabled:opacity-30 disabled:hover:bg-white transition-colors cursor-pointer disabled:cursor-not-allowed select-none ${
           isSm ? 'w-7 h-7' : 'w-9 h-9'
         }`}
+        aria-label="Decrease quantity"
       >
         <Minus className={isSm ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
       </button>
@@ -42,14 +51,19 @@ export const QuantityControl: React.FC<QuantityControlProps> = ({
         {quantity}
       </span>
       <button
+        type="button"
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
-          onIncrease();
+          if (quantity < max) {
+            onIncrease();
+          }
         }}
         disabled={quantity >= max}
-        className={`flex items-center justify-center text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-white transition-colors ${
+        className={`flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-brand-blue-900 disabled:opacity-30 disabled:hover:bg-white transition-colors cursor-pointer disabled:cursor-not-allowed select-none ${
           isSm ? 'w-7 h-7' : 'w-9 h-9'
         }`}
+        aria-label="Increase quantity"
       >
         <Plus className={isSm ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
       </button>

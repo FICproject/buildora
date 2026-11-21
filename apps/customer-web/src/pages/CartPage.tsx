@@ -74,7 +74,7 @@ export const CartPage: React.FC = () => {
         </p>
         <div className="pt-2">
           <Button variant="primary" size="lg" onClick={() => navigate('/products')}>
-            Browse 28 Material Categories
+            Explore All 28 Master Categories
           </Button>
         </div>
       </div>

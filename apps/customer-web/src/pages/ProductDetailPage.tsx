@@ -322,6 +322,7 @@ export const ProductDetailPage: React.FC = () => {
                 onIncrease={() => setQuantity(quantity + 1)}
                 onDecrease={() => setQuantity(Math.max(1, quantity - 1))}
                 max={product.stockCount}
+                min={1}
                 size="md"
               />
               <span className="text-xs text-slate-500">

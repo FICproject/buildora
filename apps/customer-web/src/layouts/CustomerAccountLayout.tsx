@@ -83,7 +83,7 @@ export const CustomerAccountLayout: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-semibold text-slate-700">
                   <div className="flex items-center gap-2 text-emerald-700">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span>Browse 28+ Master Categories</span>
+                    <span>Explore All 28 Master Categories</span>
                   </div>
                   <div className="flex items-center gap-2 text-emerald-700">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />

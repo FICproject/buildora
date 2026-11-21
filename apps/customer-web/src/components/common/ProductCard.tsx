@@ -14,12 +14,36 @@ export interface ProductCardProps {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { items, addItem, updateQuantity } = useCartStore();
+  const { items, addItem, updateQuantity, removeItem } = useCartStore();
   const { isInWishlist, toggleItem } = useWishlistStore();
 
   const isWishlisted = isInWishlist(product.id);
-  const cartItem = items.find((i) => i.productId === product.id && !i.variantId);
+  const cartItem =
+    items.find((i) => i.productId === product.id && !i.variantId) ||
+    items.find((i) => i.productId === product.id);
   const inCartQty = cartItem ? cartItem.quantity : 0;
+
+  const handleDecrease = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (inCartQty <= 1) {
+      removeItem(product.id, cartItem?.variantId);
+    } else {
+      updateQuantity(product.id, inCartQty - 1, cartItem?.variantId);
+    }
+  };
+
+  const handleIncrease = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    updateQuantity(product.id, inCartQty + 1, cartItem?.variantId);
+  };
+
+  const handleAdd = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    addItem(product, 1);
+  };
 
   const isAsap = product.deliverySpeedAvailable.includes('ASAP_60');
 
@@ -128,17 +152,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             {inCartQty > 0 ? (
               <QuantityControl
                 quantity={inCartQty}
-                onIncrease={() => updateQuantity(product.id, inCartQty + 1)}
-                onDecrease={() => updateQuantity(product.id, inCartQty - 1)}
+                onIncrease={handleIncrease}
+                onDecrease={handleDecrease}
                 max={product.stockCount}
+                min={0}
                 size="sm"
               />
             ) : (
               <button
                 type="button"
-                onClick={() => addItem(product, 1)}
+                onClick={handleAdd}
                 disabled={!product.inStock}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-1 bg-brand-blue-900 hover:bg-brand-blue-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1 bg-brand-blue-900 hover:bg-brand-blue-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" /> ADD
               </button>
