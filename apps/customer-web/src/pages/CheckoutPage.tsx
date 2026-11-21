@@ -83,11 +83,24 @@ export const CheckoutPage: React.FC = () => {
   });
 
   // GSTIN State (Phase 7)
-  const [isBusinessOrder, setIsBusinessOrder] = useState<boolean>(!!user?.gstin);
-  const [gstin, setGstin] = useState<string>(user?.gstin || '');
-  const [companyName, setCompanyName] = useState<string>(user?.businessName || '');
-  const [saveGstToProfile, setSaveGstToProfile] = useState<boolean>(false);
+  const cartGstin = useCartStore((s) => s.gstin);
+  const cartCompanyName = useCartStore((s) => s.companyName);
+  const cartSaveGst = useCartStore((s) => s.saveGstToProfile);
+
+  const [isBusinessOrder, setIsBusinessOrder] = useState<boolean>(!!cartGstin || !!user?.gstin);
+  const [gstin, setGstin] = useState<string>(cartGstin || user?.gstin || '');
+  const [companyName, setCompanyName] = useState<string>(cartCompanyName || user?.businessName || '');
+  const [saveGstToProfile, setSaveGstToProfile] = useState<boolean>(cartSaveGst ?? false);
   const [gstError, setGstError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cartGstin) {
+      setIsBusinessOrder(true);
+      setGstin(cartGstin);
+      if (cartCompanyName) setCompanyName(cartCompanyName);
+      if (cartSaveGst !== undefined) setSaveGstToProfile(cartSaveGst);
+    }
+  }, [cartGstin, cartCompanyName, cartSaveGst]);
 
   // Payment Method Selection (Phase 10)
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('RAZORPAY_UPI');

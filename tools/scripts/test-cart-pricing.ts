@@ -42,9 +42,9 @@ const summary1 = calculateCartSummary({
 });
 
 assert(summary1.subtotal === 790, `Subtotal is 395 * 2 = 790 (Actual: ${summary1.subtotal})`);
-assert(summary1.deliveryFee === 99, `Below ₹1,999 standard delivery fee is ₹99 (Actual: ${summary1.deliveryFee})`);
+assert(summary1.deliveryFee === 199, `Below ₹1,000 standard delivery fee is ₹199 (Actual: ${summary1.deliveryFee})`);
 assert(summary1.handlingFee === 99, `Cement triggers Heavy Material Handling fee ₹99 (Actual: ${summary1.handlingFee})`);
-assert(summary1.grandTotal === 790 + 99 + 99, `Grand Total = 790 + 99 + 99 = 988 (Actual: ${summary1.grandTotal})`);
+assert(summary1.grandTotal === 790 + 199 + 99, `Grand Total = 790 + 199 + 99 = 1088 (Actual: ${summary1.grandTotal})`);
 
 // -----------------------------------------------------------------------------
 // TEST 2: COUPON CALCULATIONS & RESTRICTIONS
@@ -125,7 +125,7 @@ assert(summaryHeavyAndFragile.handlingFee === 99 + 49, `Heavy (₹99) + Fragile 
 // -----------------------------------------------------------------------------
 console.log('\n--- TEST 5: Optional Site Unloading Service ---');
 
-// Ground floor unloading -> ₹149
+// Ground floor unloading -> ₹199
 const unloadingGround: UnloadingServiceOptions = {
   required: true,
   floor: 0,
@@ -135,9 +135,9 @@ const summaryUnloadGround = calculateCartSummary({
   items: [{ price: 1000, quantity: 1 }],
   unloadingOptions: unloadingGround
 });
-assert(summaryUnloadGround.unloadingFee === 149, `Ground floor unloading base fee is ₹149 (Actual: ${summaryUnloadGround.unloadingFee})`);
+assert(summaryUnloadGround.unloadingFee === 199, `Ground floor unloading base fee is ₹199 (Actual: ${summaryUnloadGround.unloadingFee})`);
 
-// 3rd floor with lift -> ₹149 (no surcharge)
+// 3rd floor with lift -> ₹199 (no surcharge)
 const unloadingLift: UnloadingServiceOptions = {
   required: true,
   floor: 3,
@@ -147,9 +147,9 @@ const summaryUnloadLift = calculateCartSummary({
   items: [{ price: 1000, quantity: 1 }],
   unloadingOptions: unloadingLift
 });
-assert(summaryUnloadLift.unloadingFee === 149, `3rd floor WITH lift has NO floor surcharge: ₹149 (Actual: ${summaryUnloadLift.unloadingFee})`);
+assert(summaryUnloadLift.unloadingFee === 199, `3rd floor WITH lift has NO floor surcharge: ₹199 (Actual: ${summaryUnloadLift.unloadingFee})`);
 
-// 3rd floor NO lift -> ₹149 + (3 * 50) = ₹299
+// 3rd floor NO lift -> ₹199 + (3 * 50) = ₹349
 const unloadingNoLift: UnloadingServiceOptions = {
   required: true,
   floor: 3,
@@ -159,7 +159,7 @@ const summaryUnloadNoLift = calculateCartSummary({
   items: [{ price: 1000, quantity: 1 }],
   unloadingOptions: unloadingNoLift
 });
-assert(summaryUnloadNoLift.unloadingFee === 149 + 150, `3rd floor WITHOUT lift has surcharge 3 * 50 = ₹150; Total = ₹299 (Actual: ${summaryUnloadNoLift.unloadingFee})`);
+assert(summaryUnloadNoLift.unloadingFee === 199 + 150, `3rd floor WITHOUT lift has surcharge 3 * 50 = ₹150; Total = ₹349 (Actual: ${summaryUnloadNoLift.unloadingFee})`);
 
 // -----------------------------------------------------------------------------
 // TEST 6: COMPLETE BILL BREAKDOWN & WALLET DEDUCTION
@@ -176,15 +176,15 @@ const fullBillSummary = calculateCartSummary({
     }
   ],
   coupon: build60, // 300 off min 2500 -> 4500 - 300 = 4200
-  deliverySpeed: 'STANDARD', // subtotal 4500 >= 1999 -> delivery 0
-  unloadingOptions: unloadingNoLift, // 299
+  deliverySpeed: 'STANDARD', // subtotal 4500 >= 1000 -> delivery 0
+  unloadingOptions: unloadingNoLift, // 349
   walletBalanceToUse: 500 // wallet deduction
 });
 
-// Grand Total before wallet: 4500 - 300 + 0 + 99 + 299 = 4598
-assert(fullBillSummary.grandTotal === 4598, `Grand Total is 4598 (Actual: ${fullBillSummary.grandTotal})`);
+// Grand Total before wallet: 4500 - 300 + 0 + 99 + 349 = 4648
+assert(fullBillSummary.grandTotal === 4648, `Grand Total is 4648 (Actual: ${fullBillSummary.grandTotal})`);
 assert(fullBillSummary.walletUsed === 500, `Wallet used is 500 (Actual: ${fullBillSummary.walletUsed})`);
-assert(fullBillSummary.payableAmount === 4598 - 500, `Payable amount is 4098 (Actual: ${fullBillSummary.payableAmount})`);
+assert(fullBillSummary.payableAmount === 4648 - 500, `Payable amount is 4148 (Actual: ${fullBillSummary.payableAmount})`);
 
 console.log('\n================================================================');
 console.log(`STEP 2 VALIDATION SUMMARY: ${totalPassed} PASSED, ${totalFailed} FAILED`);

@@ -11,6 +11,11 @@ interface CartStoreState {
   deliverySpeed: DeliverySpeed;
   unloadingOptions: UnloadingServiceOptions;
   walletBalanceToUse: number;
+  gstin?: string;
+  companyName?: string;
+  saveGstToProfile?: boolean;
+  setGstin: (gstin: string, companyName?: string, saveToProfile?: boolean) => void;
+  removeGstin: () => void;
   addItem: (product: Product, quantity?: number, variant?: ProductVariant) => void;
   removeItem: (productId: string, variantId?: string) => void;
   updateQuantity: (productId: string, quantity: number, variantId?: string) => void;
@@ -169,12 +174,29 @@ export const useCartStore = create<CartStoreState>()(
 
       setWalletBalanceToUse: (amount) => set({ walletBalanceToUse: amount }),
 
+      setGstin: (gstin, companyName, saveToProfile = false) =>
+        set({
+          gstin: gstin.trim().toUpperCase(),
+          companyName: companyName?.trim() || undefined,
+          saveGstToProfile: saveToProfile
+        }),
+
+      removeGstin: () =>
+        set({
+          gstin: undefined,
+          companyName: undefined,
+          saveGstToProfile: false
+        }),
+
       clearCart: () =>
         set({
           items: [],
           coupon: null,
           unloadingOptions: { required: false, floor: 0, hasLift: true, siteInstructions: '' },
-          walletBalanceToUse: 0
+          walletBalanceToUse: 0,
+          gstin: undefined,
+          companyName: undefined,
+          saveGstToProfile: false
         }),
 
       getSummary: () => {

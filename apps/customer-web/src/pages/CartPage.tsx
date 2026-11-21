@@ -1,32 +1,32 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ShoppingBag,
+  Clock,
   Trash2,
-  Tag,
-  Zap,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  FileText,
+  AlertTriangle,
+  RotateCcw,
+  ShoppingBag,
   ArrowRight,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
-  Truck,
-  RotateCcw,
-  Info,
-  ChevronDown,
-  Building,
-  HelpCircle,
-  Check
+  Truck
 } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
+import { useLocationStore } from '../store/useLocationStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { formatCurrency } from '@buildora/utils';
-import { AVAILABLE_COUPONS } from '@buildora/constants';
-import { QuantityControl } from '../components/ui/QuantityControl';
-import { Button } from '../components/ui/Button';
+import { GstinModal } from '../components/cart/GstinModal';
 import { api } from '../services/api';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
+
+  // Stores
   const {
     items,
     updateQuantity,
@@ -35,26 +35,62 @@ export const CartPage: React.FC = () => {
     coupon,
     applyCoupon,
     removeCoupon,
-    deliverySpeed,
-    setDeliverySpeed,
     unloadingOptions,
     setUnloadingOptions,
     walletBalanceToUse,
     setWalletBalanceToUse,
+    gstin,
+    companyName,
+    setGstin,
+    removeGstin,
     getSummary
   } = useCartStore();
 
-  const { user } = useAuthStore();
+  const {
+    pincode,
+    locality,
+    selectedAddressLabel,
+    selectedAddressFull,
+    isServiceable,
+    etaMinutes,
+    openLocationModal
+  } = useLocationStore();
+
+  const { user, updateProfile } = useAuthStore();
   const summary = getSummary();
 
+  // Local State
   const [couponInput, setCouponInput] = useState('');
   const [couponFeedback, setCouponFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+
+  // Accordion toggles
+  const [isBillDetailsOpen, setIsBillDetailsOpen] = useState(true);
+  const [isCancellationPolicyOpen, setIsCancellationPolicyOpen] = useState(true);
+
+  // GSTIN Modal toggle
+  const [isGstinModalOpen, setIsGstinModalOpen] = useState(false);
+
+  // Handling charge explanation toggle
   const [showHandlingInfo, setShowHandlingInfo] = useState(false);
 
-  // Apply Coupon with Server-side validation
-  const handleApplyCoupon = async (codeToApply?: string) => {
-    const code = (codeToApply || couponInput).trim();
+  // Address text derivation
+  const getDisplayAddress = () => {
+    if (selectedAddressFull) return selectedAddressFull;
+    if (selectedAddressLabel && pincode) return `${selectedAddressLabel}, ${locality || 'Bengaluru'} - ${pincode}`;
+    if (pincode) return `${locality || 'Bengaluru Urban'}, Karnataka - ${pincode}`;
+    return 'Select delivery address to check serviceability';
+  };
+
+  const getEtaBadgeText = () => {
+    if (!isServiceable && pincode) return 'Non-Serviceable';
+    if (etaMinutes > 0) return `Delivery in ${etaMinutes} mins`;
+    return 'Delivery in 60 mins';
+  };
+
+  // Coupon handling with server-side validation
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
     if (!code) return;
 
     setIsApplyingCoupon(true);
@@ -66,7 +102,7 @@ export const CartPage: React.FC = () => {
         applyCoupon(code);
         setCouponFeedback({
           type: 'success',
-          text: backendRes.message || `Coupon ${code} applied successfully!`
+          text: backendRes.message || `Coupon '${code}' applied successfully!`
         });
         setCouponInput('');
       } else {
@@ -76,7 +112,7 @@ export const CartPage: React.FC = () => {
         });
       }
     } catch {
-      // Local fallback validation
+      // Client-side fallback check
       const res = applyCoupon(code);
       setCouponFeedback({
         type: res.success ? 'success' : 'error',
@@ -88,317 +124,269 @@ export const CartPage: React.FC = () => {
     }
   };
 
-  const handleToggleWallet = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked && user) {
-      setWalletBalanceToUse(user.walletBalance);
-    } else {
-      setWalletBalanceToUse(0);
+  // Unloading toggle handler
+  const handleToggleUnloading = () => {
+    setUnloadingOptions({ required: !unloadingOptions.required });
+  };
+
+  // GST confirmation handler
+  const handleConfirmGst = (newGstin: string, newCompanyName: string, saveToProfile: boolean) => {
+    setGstin(newGstin, newCompanyName, saveToProfile);
+    if (saveToProfile && user) {
+      updateProfile({ gstin: newGstin, businessName: newCompanyName });
     }
   };
 
+  // Checkout button handler with validations
+  const handleContinueToCheckout = () => {
+    if (!pincode && !selectedAddressFull) {
+      openLocationModal();
+      return;
+    }
+    if (!isServiceable) {
+      openLocationModal();
+      return;
+    }
+    navigate('/checkout');
+  };
+
+  // If cart is empty
   if (items.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center space-y-4">
+      <div className="max-w-4xl mx-auto px-4 py-20 text-center space-y-4">
         <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
           <ShoppingBag className="w-10 h-10" />
         </div>
-        <h1 className="text-2xl font-black text-slate-900">Your Construction Cart is Empty</h1>
+        <h1 className="text-2xl font-black text-slate-900">Your Shopping Cart is Empty</h1>
         <p className="text-sm text-slate-500 max-w-md mx-auto">
-          You haven't added any construction materials yet. Browse our catalogue of 28 categories with quick 60-minute site delivery.
+          You haven't added any construction materials yet. Explore our catalogue of 28 master categories with 60-minute site delivery across Bengaluru.
         </p>
         <div className="pt-2">
-          <Button variant="primary" size="lg" onClick={() => navigate('/products')}>
-            Explore All 28 Master Categories
-          </Button>
+          <button
+            type="button"
+            onClick={() => navigate('/products')}
+            className="px-6 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm cursor-pointer"
+          >
+            Explore All Materials
+          </button>
         </div>
       </div>
     );
   }
 
+  const payableAmount = summary.payableAmount || summary.grandTotal;
+
   return (
-    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-8">
-      {/* Header Row */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
-            Construction Shopping Cart ({summary.itemCount} items)
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Transparent site material pricing with verified B2B GST tax credit. Free delivery unlocked above ₹1,999.
-          </p>
+    <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+      {/* 1. TOP HEADER ROW: Delivery Estimate Banner */}
+      <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+              {getEtaBadgeText()}
+            </h2>
+            <p className="text-xs text-slate-500">
+              Order of {summary.itemCount} {summary.itemCount === 1 ? 'Item' : 'Items'}
+            </p>
+          </div>
         </div>
+
         <button
+          type="button"
           onClick={clearCart}
           className="text-xs text-slate-400 hover:text-red-600 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+          title="Empty entire cart"
         >
-          <RotateCcw className="w-3.5 h-3.5" /> Empty Cart
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Empty Cart</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column (8 cols): Items, Delivery Speed, Unloading Service */}
-        <div className="lg:col-span-8 space-y-5">
-          {/* Cart Item Cards */}
-          <div className="space-y-3">
-            {items.map((item) => (
-              <div
-                key={`${item.productId}-${item.variantId || 'main'}`}
-                className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row gap-4 justify-between transition-all"
-              >
-                {/* Product Image & Details */}
-                <div className="flex gap-4">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover bg-slate-50 border border-slate-100 flex-shrink-0"
-                  />
-                  <div className="space-y-1">
-                    <div className="inline-flex items-center gap-1 text-[10px] font-black tracking-wider text-brand-blue-800 uppercase bg-brand-blue-50 px-2 py-0.5 rounded">
-                      {item.brand}
-                    </div>
-                    <Link
-                      to={`/products/${item.slug}`}
-                      className="text-sm sm:text-base font-bold text-slate-900 hover:text-brand-blue-800 line-clamp-1 block"
-                    >
-                      {item.name}
-                    </Link>
-                    <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-slate-700">Pack / Unit: {item.unit}</span>
-                      <span>&bull;</span>
-                      <span className="font-mono text-slate-400">SKU: {item.sku}</span>
+      {/* 2. MAIN TWO-COLUMN LAYOUT (Left: Items List | Right: Sticky Summary) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* LEFT COLUMN: Cart Items Table (col-span-12 lg:col-span-7 xl:col-span-8) */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            {/* Table Header Row */}
+            <div className="grid grid-cols-12 px-5 py-3.5 bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
+              <div className="col-span-6 sm:col-span-7">PRODUCT</div>
+              <div className="col-span-3 sm:col-span-2 text-right">TOTAL</div>
+              <div className="col-span-3 text-right">QUANTITY</div>
+            </div>
+
+            {/* Cart Items List */}
+            <div className="divide-y divide-slate-100">
+              {items.map((item) => {
+                const itemMrpTotal = item.mrp * item.quantity;
+                const hasDiscount = itemMrpTotal > item.totalPrice;
+
+                return (
+                  <div
+                    key={`${item.productId}-${item.variantId || 'main'}`}
+                    className="grid grid-cols-12 px-4 sm:px-5 py-4 sm:py-5 items-center gap-2 sm:gap-4 transition-colors hover:bg-slate-50/40"
+                  >
+                    {/* PRODUCT Column */}
+                    <div className="col-span-6 sm:col-span-7 flex items-center gap-3 sm:gap-4 min-w-0">
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover bg-slate-50 border border-slate-100 flex-shrink-0"
+                      />
+                      <div className="min-w-0 space-y-0.5">
+                        <Link
+                          to={`/products/${item.slug}`}
+                          className="text-xs sm:text-sm font-bold text-slate-900 hover:text-emerald-700 truncate block leading-tight"
+                          title={item.name}
+                        >
+                          {item.name}
+                        </Link>
+                        <div className="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
+                          {item.mrp > item.effectiveUnitPrice && (
+                            <span className="line-through text-slate-400">
+                              {formatCurrency(item.mrp)}
+                            </span>
+                          )}
+                          <span className="font-semibold text-slate-800">
+                            {formatCurrency(item.effectiveUnitPrice)}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-normal">/ {item.unit || 'unit'}</span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-0.5">
-                      <span className="text-sm font-bold text-slate-900">
-                        {formatCurrency(item.effectiveUnitPrice)}
-                      </span>
-                      {item.mrp > item.effectiveUnitPrice && (
-                        <span className="text-xs text-slate-400 line-through">
-                          {formatCurrency(item.mrp)}
-                        </span>
+                    {/* TOTAL Column */}
+                    <div className="col-span-3 sm:col-span-2 text-right">
+                      {hasDiscount && (
+                        <div className="text-[11px] text-slate-400 line-through leading-tight">
+                          {formatCurrency(itemMrpTotal)}
+                        </div>
                       )}
-                      <span className="text-[10px] text-slate-400 font-normal">/ unit (Incl. GST)</span>
+                      <div className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
+                        {formatCurrency(item.totalPrice)}
+                      </div>
                     </div>
 
-                    {/* Stock & Delivery badges */}
-                    <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
-                      <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
-                        <Check className="w-3 h-3 text-emerald-600" /> In Stock &bull; WH-BLR
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded-full">
-                        <Zap className="w-3 h-3 text-amber-500 fill-current" /> 60-Min Dispatch Available
-                      </span>
+                    {/* QUANTITY Column */}
+                    <div className="col-span-3 flex items-center justify-end gap-1.5 sm:gap-2">
+                      {/* Compact Green Stepper Pill matching Reference Screenshot 2 */}
+                      <div className="inline-flex items-center rounded-lg bg-emerald-700 text-white shadow-xs overflow-hidden select-none">
+                        {/* -5 stepper (if qty > 5) */}
+                        {item.quantity > 5 && (
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.productId, item.quantity - 5, item.variantId)}
+                            className="px-1.5 py-1 text-[10px] font-bold hover:bg-emerald-800 transition-colors border-r border-emerald-600/60 cursor-pointer"
+                            title="Decrease by 5"
+                          >
+                            &laquo;
+                          </button>
+                        )}
+                        {/* -1 stepper */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (item.quantity <= 1) {
+                              removeItem(item.productId, item.variantId);
+                            } else {
+                              updateQuantity(item.productId, item.quantity - 1, item.variantId);
+                            }
+                          }}
+                          className="px-2 py-1 text-xs font-bold hover:bg-emerald-800 transition-colors cursor-pointer"
+                          title="Decrease by 1"
+                        >
+                          -
+                        </button>
+                        {/* Current Quantity */}
+                        <span className="px-2 py-1 text-xs font-black min-w-[20px] text-center bg-emerald-800/80">
+                          {item.quantity}
+                        </span>
+                        {/* +1 stepper */}
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.productId, item.quantity + 1, item.variantId)}
+                          disabled={item.quantity >= item.maxStock}
+                          className="px-2 py-1 text-xs font-bold hover:bg-emerald-800 transition-colors cursor-pointer disabled:opacity-40"
+                          title="Increase by 1"
+                        >
+                          +
+                        </button>
+                        {/* +5 stepper (if stock permits) */}
+                        {item.quantity + 5 <= item.maxStock && (
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.productId, item.quantity + 5, item.variantId)}
+                            className="px-1.5 py-1 text-[10px] font-bold hover:bg-emerald-800 transition-colors border-l border-emerald-600/60 cursor-pointer"
+                            title="Increase by 5"
+                          >
+                            &raquo;
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Trash Button */}
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.productId, item.variantId)}
+                        className="p-1 text-slate-300 hover:text-red-500 transition-colors cursor-pointer rounded"
+                        title="Remove item"
+                        aria-label={`Remove ${item.name}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </button>
                     </div>
                   </div>
-                </div>
+                );
+              })}
 
-                {/* Quantity Controls & Line Total */}
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <QuantityControl
-                      quantity={item.quantity}
-                      onIncrease={() => updateQuantity(item.productId, item.quantity + 1, item.variantId)}
-                      onDecrease={() => updateQuantity(item.productId, item.quantity - 1, item.variantId)}
-                      onChangeQuantity={(newQty) => updateQuantity(item.productId, newQty, item.variantId)}
-                      max={item.maxStock}
-                      size="md"
-                      showBulkSteppers={true}
-                    />
+              {/* UNLOADING SERVICE ROW (Screenshot 4: Appears in Left Section when added!) */}
+              {unloadingOptions.required && (
+                <div className="grid grid-cols-12 px-4 sm:px-5 py-4 sm:py-5 items-center gap-2 sm:gap-4 bg-emerald-50/30 border-t-2 border-emerald-500/20 animate-in fade-in duration-150">
+                  <div className="col-span-6 sm:col-span-7 flex items-center gap-3 sm:gap-4">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-white border border-emerald-200/80 flex items-center justify-center text-emerald-700 flex-shrink-0 shadow-2xs">
+                      <Truck className="w-8 h-8 text-emerald-600" />
+                    </div>
+                    <div className="space-y-0.5 min-w-0">
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
+                        Unloading Service
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        {formatCurrency(199)} &bull; Ground floor unloading assistance
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="col-span-3 sm:col-span-2 text-right font-bold text-xs sm:text-sm text-slate-900">
+                    {formatCurrency(summary.unloadingFee || 199)}
+                  </div>
+
+                  <div className="col-span-3 text-right">
                     <button
-                      onClick={() => removeItem(item.productId, item.variantId)}
-                      className="text-slate-300 hover:text-red-600 transition-colors p-1.5 cursor-pointer rounded-lg hover:bg-slate-50"
-                      title="Remove item from cart"
+                      type="button"
+                      onClick={handleToggleUnloading}
+                      className="px-3 py-1 rounded-lg border border-slate-300 hover:border-red-400 hover:text-red-600 bg-white text-xs font-semibold text-slate-700 transition-all cursor-pointer shadow-2xs"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      Remove
                     </button>
                   </div>
-
-                  <div className="text-right">
-                    <div className="text-base sm:text-lg font-black text-slate-900">
-                      {formatCurrency(item.totalPrice)}
-                    </div>
-                    {item.bulkDiscountPercentage > 0 && (
-                      <div className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full inline-block">
-                        {item.bulkDiscountPercentage}% Bulk Tier Applied
-                      </div>
-                    )}
-                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Site Delivery Speed Selection */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <Truck className="w-4 h-4 text-brand-orange-500" />
-              Site Delivery Method
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <label
-                className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                  deliverySpeed === 'ASAP_60'
-                    ? 'border-brand-blue-500 bg-brand-blue-50/50 text-brand-blue-900 font-semibold ring-1 ring-brand-blue-500'
-                    : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <input
-                    type="radio"
-                    name="deliverySpeed"
-                    checked={deliverySpeed === 'ASAP_60'}
-                    onChange={() => setDeliverySpeed('ASAP_60')}
-                    className="text-brand-blue-900 focus:ring-brand-blue-500 cursor-pointer"
-                  />
-                  <div>
-                    <div className="font-bold flex items-center gap-1 text-slate-900">
-                      <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
-                      60-Minute Quick Dispatch
-                    </div>
-                    <div className="text-[11px] text-slate-500">Dedicated express mini-truck direct from dark store</div>
-                  </div>
-                </div>
-                <span className="font-bold text-slate-900">
-                  {summary.discountedSubtotal >= 1999 ? 'FREE' : '₹149'}
-                </span>
-              </label>
-
-              <label
-                className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                  deliverySpeed === 'SCHEDULED'
-                    ? 'border-brand-blue-500 bg-brand-blue-50/50 text-brand-blue-900 font-semibold ring-1 ring-brand-blue-500'
-                    : 'border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <input
-                    type="radio"
-                    name="deliverySpeed"
-                    checked={deliverySpeed === 'SCHEDULED'}
-                    onChange={() => setDeliverySpeed('SCHEDULED')}
-                    className="text-brand-blue-900 focus:ring-brand-blue-500 cursor-pointer"
-                  />
-                  <div>
-                    <div className="font-bold text-slate-900">Standard / Next Morning Slot</div>
-                    <div className="text-[11px] text-slate-500">Tomorrow 8:00 AM - 11:00 AM scheduled slot</div>
-                  </div>
-                </div>
-                <span className="font-bold text-slate-900">
-                  {summary.discountedSubtotal >= 1999 ? 'FREE' : '₹99'}
-                </span>
-              </label>
+              )}
             </div>
-          </div>
-
-          {/* Phase 6: Optional Site Unloading Service */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <Building className="w-4 h-4 text-brand-blue-900" />
-                  Site Unloading Assistance (Optional)
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Request dedicated site labourers for offloading and material staging at your construction site.
-                </p>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={unloadingOptions.required}
-                  onChange={(e) => setUnloadingOptions({ required: e.target.checked })}
-                  className="w-4 h-4 rounded text-brand-blue-900 focus:ring-brand-blue-500 cursor-pointer"
-                />
-                <span className="text-xs font-bold text-slate-800">Add Unloading</span>
-              </label>
-            </div>
-
-            {unloadingOptions.required && (
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3.5 text-xs animate-in fade-in duration-200">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Floor Selector */}
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Delivery Floor Staging</label>
-                    <select
-                      value={unloadingOptions.floor}
-                      onChange={(e) => setUnloadingOptions({ floor: Number(e.target.value) })}
-                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-blue-500 cursor-pointer"
-                    >
-                      <option value={0}>Ground Floor / Driveway (Base Fee ₹149)</option>
-                      <option value={1}>1st Floor</option>
-                      <option value={2}>2nd Floor</option>
-                      <option value={3}>3rd Floor</option>
-                      <option value={4}>4th Floor or Higher</option>
-                    </select>
-                  </div>
-
-                  {/* Lift Availability */}
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-700">Goods Lift / Elevator Available?</label>
-                    <div className="flex gap-4 pt-1">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="hasLift"
-                          checked={unloadingOptions.hasLift}
-                          onChange={() => setUnloadingOptions({ hasLift: true })}
-                          className="text-brand-blue-900 cursor-pointer"
-                        />
-                        <span className="text-slate-700 font-medium">Yes, Lift Available (No Surcharge)</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="hasLift"
-                          checked={!unloadingOptions.hasLift}
-                          onChange={() => setUnloadingOptions({ hasLift: false })}
-                          className="text-brand-blue-900 cursor-pointer"
-                        />
-                        <span className="text-slate-700 font-medium">No Lift (+₹50/floor)</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Site Instructions */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Site Unloading Instructions (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Stack cement in ground floor dry room, call site engineer upon gate arrival"
-                    value={unloadingOptions.siteInstructions || ''}
-                    onChange={(e) => setUnloadingOptions({ siteInstructions: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
-                  />
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-xs">
-                  <span className="text-slate-500">
-                    Unloading Fee: Base ₹149{' '}
-                    {!unloadingOptions.hasLift && unloadingOptions.floor > 0
-                      ? `+ Floor Surcharge (${unloadingOptions.floor} × ₹50 = ₹${unloadingOptions.floor * 50})`
-                      : '(No floor surcharge)'}
-                  </span>
-                  <span className="font-black text-slate-900">
-                    Total: {formatCurrency(summary.unloadingFee)}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Right Column (4 cols): Coupon Box & Transparent Bill Details */}
-        <div className="lg:col-span-4 space-y-4">
-          {/* Phase 2: Coupon System */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-3">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-brand-orange-500" />
-              Apply Coupon Code
+        {/* RIGHT COLUMN: Sticky Summary Panel (col-span-12 lg:col-span-5 xl:col-span-4) */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-4 lg:sticky lg:top-24">
+          {/* CARD 1: Coupons (Screenshot 2) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Coupons
             </h3>
 
             {coupon ? (
-              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs">
                 <div>
                   <div className="font-bold text-emerald-900 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -407,6 +395,7 @@ export const CartPage: React.FC = () => {
                   <div className="text-[11px] text-emerald-700 mt-0.5">{coupon.description}</div>
                 </div>
                 <button
+                  type="button"
                   onClick={removeCoupon}
                   className="text-xs text-red-600 hover:underline font-bold cursor-pointer"
                 >
@@ -417,218 +406,339 @@ export const CartPage: React.FC = () => {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Enter code (e.g. BUILD60)"
+                  placeholder="Enter coupon code"
                   value={couponInput}
                   onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleApplyCoupon();
                   }}
-                  className="flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wider border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 bg-white"
+                  className="flex-1 px-3 py-2 text-xs font-semibold tracking-wider uppercase border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-600 bg-white"
                 />
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => handleApplyCoupon()}
-                  disabled={isApplyingCoupon}
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  disabled={isApplyingCoupon || !couponInput.trim()}
+                  className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer ${
+                    isApplyingCoupon || !couponInput.trim()
+                      ? 'bg-emerald-600/60 cursor-not-allowed'
+                      : 'bg-emerald-700 hover:bg-emerald-800 shadow-sm'
+                  }`}
                 >
-                  {isApplyingCoupon ? 'Verifying...' : 'Apply'}
-                </Button>
+                  {isApplyingCoupon ? '...' : 'Apply'}
+                </button>
               </div>
             )}
 
             {couponFeedback && (
               <p
-                className={`text-xs font-semibold flex items-center gap-1 ${
+                className={`text-[11px] font-semibold flex items-center gap-1 ${
                   couponFeedback.type === 'success' ? 'text-emerald-700' : 'text-red-600'
                 }`}
               >
                 {couponFeedback.type === 'success' ? (
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                 ) : (
-                  <AlertCircle className="w-3.5 h-3.5" />
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                 )}
                 {couponFeedback.text}
               </p>
             )}
+          </div>
 
-            {/* Quick Available Coupon Chips */}
-            {!coupon && (
-              <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                <div className="text-[10px] text-slate-400 uppercase font-bold">Available Promotions</div>
-                {AVAILABLE_COUPONS.map((c) => (
-                  <div
-                    key={c.code}
-                    onClick={() => handleApplyCoupon(c.code)}
-                    className="cursor-pointer p-2.5 rounded-lg border border-dashed border-slate-200 hover:border-brand-blue-400 hover:bg-brand-blue-50/40 text-xs flex items-center justify-between transition-colors"
-                  >
-                    <div>
-                      <span className="font-bold text-brand-blue-900">{c.code}</span>
-                      <p className="text-[10px] text-slate-500">{c.description}</p>
-                    </div>
-                    <span className="text-[10px] font-bold text-brand-blue-700 uppercase">Apply</span>
+          {/* CARD 2: Bill Details (Collapsible Accordion matching Screenshot 2) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsBillDetailsOpen(!isBillDetailsOpen)}
+              className="w-full p-4 sm:p-5 flex items-center justify-between text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
+            >
+              <h3 className="text-sm font-bold text-slate-900">Bill Details</h3>
+              {isBillDetailsOpen ? (
+                <ChevronUp className="w-4 h-4 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              )}
+            </button>
+
+            {isBillDetailsOpen && (
+              <div className="px-4 sm:px-5 pb-5 space-y-2.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
+                {/* Sub Total */}
+                <div className="flex justify-between">
+                  <span>Sub Total (Inclusive of GST)</span>
+                  <span className="font-semibold text-slate-900">{formatCurrency(summary.subtotal)}</span>
+                </div>
+
+                {/* Coupon Discount */}
+                {summary.couponDiscount > 0 ? (
+                  <div className="flex justify-between text-emerald-700 font-semibold">
+                    <span>Coupon Discount</span>
+                    <span>- {formatCurrency(summary.couponDiscount)}</span>
                   </div>
-                ))}
+                ) : (
+                  <div className="flex justify-between">
+                    <span>Coupon Discount</span>
+                    <span className="font-semibold text-slate-900">₹0</span>
+                  </div>
+                )}
+
+                {/* Delivery Charge */}
+                <div className="flex justify-between">
+                  <span>Delivery Charge</span>
+                  <span className="font-semibold text-slate-900">
+                    {summary.deliveryFee === 0 ? (
+                      <span className="text-emerald-700 font-bold">FREE</span>
+                    ) : (
+                      formatCurrency(summary.deliveryFee)
+                    )}
+                  </span>
+                </div>
+
+                {/* Handling Charge */}
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1">
+                    Handling Charge
+                    {summary.handlingFee > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowHandlingInfo(!showHandlingInfo)}
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                        title="View handling details"
+                      >
+                        <ShieldCheck className="w-3 h-3 text-amber-500" />
+                      </button>
+                    )}
+                  </span>
+                  <span className="font-semibold text-slate-900">
+                    {summary.handlingFee > 0 ? formatCurrency(summary.handlingFee) : '₹0'}
+                  </span>
+                </div>
+
+                {showHandlingInfo && summary.handlingBreakdown && (
+                  <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200 text-[10px] text-amber-900 space-y-1">
+                    {summary.handlingBreakdown.map((h, i) => (
+                      <div key={i} className="flex justify-between">
+                        <span>{h.title}</span>
+                        <span className="font-bold">+{formatCurrency(h.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Unloading Charge (if selected) */}
+                {unloadingOptions.required && (
+                  <div className="flex justify-between text-slate-900 font-semibold">
+                    <span>Unloading Charge</span>
+                    <span>{formatCurrency(summary.unloadingFee || 199)}</span>
+                  </div>
+                )}
+
+                <div className="border-t border-slate-200 pt-2.5 my-1" />
+
+                {/* Grand Total */}
+                <div className="flex justify-between text-xs font-bold text-slate-900">
+                  <span>Grand Total</span>
+                  <span className="font-black text-sm">{formatCurrency(summary.grandTotal)}</span>
+                </div>
+
+                {/* Paying with Wallet */}
+                <div className="flex justify-between text-slate-600">
+                  <span>Paying with wallet</span>
+                  <span className="font-semibold text-slate-900">
+                    {summary.walletUsed > 0 ? `- ${formatCurrency(summary.walletUsed)}` : '₹0'}
+                  </span>
+                </div>
+
+                {/* Payable Amount */}
+                <div className="flex justify-between text-xs font-black text-slate-900 pt-1 border-t border-dashed border-slate-200">
+                  <span>Payable Amount</span>
+                  <span className="text-base text-emerald-800">{formatCurrency(payableAmount)}</span>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Phase 18: Wallet Credits Option */}
-          {user && user.walletBalance > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs flex items-center justify-between text-xs">
-              <div>
-                <span className="font-bold text-slate-800">Use Buildora Wallet Balance</span>
+          {/* CARD 3: Need help with unloading? (Screenshots 2 & 3) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
+                  <Truck className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                      Need help with unloading?
+                    </h4>
+                    <span className="text-xs font-bold text-slate-900">{formatCurrency(199)}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    A helper will unload the goods on the ground floor only
+                  </p>
+                </div>
+              </div>
+
+              {unloadingOptions.required ? (
+                <button
+                  type="button"
+                  onClick={handleToggleUnloading}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 hover:border-red-400 hover:text-red-600 bg-white text-xs font-bold text-slate-700 transition-all cursor-pointer shadow-2xs flex-shrink-0"
+                >
+                  Remove
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleToggleUnloading}
+                  className="px-4 py-1.5 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-xs font-bold transition-all cursor-pointer shadow-2xs flex-shrink-0"
+                >
+                  Add
+                </button>
+              )}
+            </div>
+
+            {/* Warning if unloading is skipped */}
+            {!unloadingOptions.required && (
+              <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/70 text-[11px] text-amber-900 flex items-center gap-2 font-medium">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>If you skip this, unloading will be your responsibility</span>
+              </div>
+            )}
+          </div>
+
+          {/* CARD 4: Add GST Number (Screenshots 3 & 5) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
+                <span className="text-[11px] font-black text-emerald-800 bg-emerald-200/60 px-1.5 py-0.5 rounded">
+                  GST
+                </span>
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                  {gstin ? `GSTIN: ${gstin}` : 'Add GST number'}
+                </h4>
                 <p className="text-[11px] text-slate-500">
-                  Available Credits: {formatCurrency(user.walletBalance)}
+                  {companyName ? companyName : 'Claim GST input credit on your order'}
                 </p>
               </div>
-              <input
-                type="checkbox"
-                checked={walletBalanceToUse > 0}
-                onChange={handleToggleWallet}
-                className="w-4 h-4 rounded text-brand-blue-900 focus:ring-brand-blue-500 cursor-pointer"
-              />
-            </div>
-          )}
-
-          {/* Phase 3 & 5: Complete Transparent Bill Details */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider pb-2 border-b border-slate-100">
-              Bill Details &amp; Breakdown
-            </h3>
-
-            <div className="space-y-2.5 text-xs text-slate-600">
-              {/* Product Subtotal */}
-              <div className="flex justify-between">
-                <span>Product Subtotal</span>
-                <span className="font-semibold text-slate-900">{formatCurrency(summary.subtotal)}</span>
-              </div>
-
-              {/* Bulk / Product Discount */}
-              {summary.itemDiscount > 0 && (
-                <div className="flex justify-between text-emerald-600 font-semibold">
-                  <span>Product / Bulk Tier Discount</span>
-                  <span>- {formatCurrency(summary.itemDiscount)}</span>
-                </div>
-              )}
-
-              {/* Coupon Discount */}
-              {summary.couponDiscount > 0 && (
-                <div className="flex justify-between text-emerald-600 font-semibold">
-                  <span>Coupon Discount ({coupon?.code})</span>
-                  <span>- {formatCurrency(summary.couponDiscount)}</span>
-                </div>
-              )}
-
-              {/* Site Delivery Charge */}
-              <div className="flex justify-between">
-                <span>Site Delivery Charge</span>
-                <span className="font-semibold text-slate-900">
-                  {summary.deliveryFee === 0 ? (
-                    <strong className="text-emerald-700">FREE</strong>
-                  ) : (
-                    formatCurrency(summary.deliveryFee)
-                  )}
-                </span>
-              </div>
-
-              {/* Handling Charge (Phase 5) */}
-              {summary.handlingFee > 0 && (
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <span className="flex items-center gap-1">
-                      Material Handling Charge
-                      <button
-                        type="button"
-                        onClick={() => setShowHandlingInfo(!showHandlingInfo)}
-                        className="text-slate-400 hover:text-brand-blue-900 cursor-pointer"
-                        title="Click to view handling charge details"
-                      >
-                        <Info className="w-3.5 h-3.5" />
-                      </button>
-                    </span>
-                    <span className="font-semibold text-slate-900">
-                      {formatCurrency(summary.handlingFee)}
-                    </span>
-                  </div>
-
-                  {showHandlingInfo && summary.handlingBreakdown && (
-                    <div className="p-2.5 rounded-lg bg-amber-50/70 border border-amber-200 text-[11px] text-amber-900 space-y-1">
-                      {summary.handlingBreakdown.map((h, i) => (
-                        <div key={i} className="flex justify-between gap-2">
-                          <div>
-                            <strong>{h.title}</strong>
-                            <p className="text-[10px] text-amber-800 leading-snug">{h.explanation}</p>
-                          </div>
-                          <span className="font-bold flex-shrink-0">+{formatCurrency(h.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Unloading Charge (Phase 6) */}
-              {summary.unloadingFee > 0 && (
-                <div className="flex justify-between">
-                  <span>Site Unloading Service</span>
-                  <span className="font-semibold text-slate-900">
-                    {formatCurrency(summary.unloadingFee)}
-                  </span>
-                </div>
-              )}
-
-              {/* GST / Tax Component */}
-              <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-100">
-                <span className="flex items-center gap-1">
-                  GST / Tax Information
-                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-semibold">
-                    100% Tax Deductible ITC
-                  </span>
-                </span>
-                <span>{formatCurrency(summary.gstTotal)} (Included)</span>
-              </div>
-
-              {/* Grand Total */}
-              <div className="pt-3 border-t border-slate-200 flex justify-between items-baseline text-sm font-black text-slate-900">
-                <span>Grand Total</span>
-                <span className="text-xl text-brand-blue-900">{formatCurrency(summary.grandTotal)}</span>
-              </div>
-
-              {/* Wallet Amount Used */}
-              {summary.walletUsed > 0 && (
-                <div className="flex justify-between text-emerald-600 font-bold pt-1">
-                  <span>Wallet Amount Used</span>
-                  <span>- {formatCurrency(summary.walletUsed)}</span>
-                </div>
-              )}
-
-              {/* Final Payable Amount */}
-              {summary.walletUsed > 0 && (
-                <div className="pt-2 border-t border-dashed border-slate-200 flex justify-between items-baseline text-sm font-black text-slate-900">
-                  <span>Final Payable Amount</span>
-                  <span className="text-xl text-emerald-700">{formatCurrency(summary.payableAmount)}</span>
-                </div>
-              )}
             </div>
 
-            {/* Checkout Action Button */}
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => navigate('/checkout')}
-              className="w-full mt-4 cursor-pointer"
-              rightIcon={<ArrowRight className="w-4 h-4" />}
+            {gstin ? (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsGstinModalOpen(true)}
+                  className="text-xs text-brand-blue-900 hover:underline font-bold cursor-pointer"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={removeGstin}
+                  className="text-xs text-red-500 hover:underline font-bold cursor-pointer"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsGstinModalOpen(true)}
+                className="px-4 py-1.5 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-xs font-bold transition-all cursor-pointer shadow-2xs flex-shrink-0"
+              >
+                Add
+              </button>
+            )}
+          </div>
+
+          {/* CARD 5: Cancellation Policy Accordion (Screenshot 3) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsCancellationPolicyOpen(!isCancellationPolicyOpen)}
+              className="w-full p-4 sm:p-5 flex items-center justify-between text-left cursor-pointer hover:bg-slate-50/50 transition-colors"
             >
-              Continue to Site Checkout
-            </Button>
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-slate-500" />
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900">Cancellation Policy</h4>
+              </div>
+              {isCancellationPolicyOpen ? (
+                <ChevronUp className="w-4 h-4 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              )}
+            </button>
 
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 pt-2">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Razorpay Verified Gateway &bull; Instant GST Tax Invoice</span>
+            {isCancellationPolicyOpen && (
+              <div className="px-4 sm:px-5 pb-5 border-t border-slate-100 pt-3 text-[11px] text-slate-500 space-y-2 leading-relaxed">
+                <p>&bull; Orders cannot be modified once packed</p>
+                <p>&bull; Delivery location of an order cannot be changed. INR 199 additional charges in unavoidable cases</p>
+                <p>&bull; Orders cannot be cancelled once dispatched. Cancellation charges of INR 199 would apply</p>
+              </div>
+            )}
+          </div>
+
+          {/* CARD 6: Delivering To (Screenshots 2 & 3) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                <MapPin className="w-4 h-4 text-slate-600" />
+                <span>Delivering To</span>
+              </div>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                {getEtaBadgeText()}
+              </span>
             </div>
+
+            <p className="text-xs text-slate-600 line-clamp-2">
+              {getDisplayAddress()}
+            </p>
+
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={openLocationModal}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+              >
+                Change Address
+              </button>
+            </div>
+          </div>
+
+          {/* CARD 7: Bottom Total & Continue to Checkout CTA (Screenshots 2 & 3) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-md flex items-center justify-between gap-4">
+            <div className="select-none">
+              <div className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
+                {formatCurrency(payableAmount)}
+              </div>
+              <div className="text-[11px] text-slate-400 font-medium">Including GST</div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleContinueToCheckout}
+              disabled={pincode && !isServiceable}
+              className={`px-6 py-3 rounded-xl text-xs sm:text-sm font-bold text-white transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                pincode && !isServiceable
+                  ? 'bg-slate-400 cursor-not-allowed shadow-none'
+                  : 'bg-emerald-700 hover:bg-emerald-800'
+              }`}
+            >
+              <span>Continue to checkout</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
+
+      {/* GSTIN Modal Component */}
+      <GstinModal
+        isOpen={isGstinModalOpen}
+        onClose={() => setIsGstinModalOpen(false)}
+        initialGstin={gstin || ''}
+        initialCompanyName={companyName || ''}
+        onConfirm={handleConfirmGst}
+      />
     </div>
   );
 };

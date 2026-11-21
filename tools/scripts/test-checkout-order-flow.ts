@@ -177,7 +177,7 @@ async function runTests() {
       isBusinessOrder: true,
       gstin: '29ABCDE1234F1Z5',
       companyName: 'Buildora Infra Tech Pvt Ltd',
-      unloadingOptions: { required: true, floor: 3, hasLift: false }, // Base ₹149 + (3 floors * ₹50) = ₹299
+      unloadingOptions: { required: true, floor: 3, hasLift: false }, // Base ₹199 + (3 floors * ₹50) = ₹349
       walletBalanceToUse: 0
     })
   });
@@ -185,11 +185,11 @@ async function runTests() {
   assert(vValid.data?.success === true, 'Pre-order validation succeeds with valid cart, address, and GSTIN');
   const serverSummary = vValid.data?.data?.summary;
   assert(serverSummary?.subtotal === 395 * 4, `Server recalculated subtotal: ₹${serverSummary?.subtotal} (Expected: 1580)`);
-  assert(serverSummary?.deliveryFee === 99, `Subtotal < ₹1,999 gets ₹99 delivery fee (Actual: ${serverSummary?.deliveryFee})`);
+  assert(serverSummary?.deliveryFee === 0, `Subtotal >= ₹1,000 gets free standard delivery (Actual: ${serverSummary?.deliveryFee})`);
   assert(serverSummary?.handlingFee === 99, `Heavy cement gets ₹99 handling fee (Actual: ${serverSummary?.handlingFee})`);
-  assert(serverSummary?.unloadingFee === 299, `Floor 3 without lift gets ₹299 unloading fee (Actual: ${serverSummary?.unloadingFee})`);
-  // Grand total: 1580 + 99 + 99 + 299 = 2077
-  assert(serverSummary?.grandTotal === 1580 + 99 + 99 + 299, `Grand total accurately computed: ₹${serverSummary?.grandTotal} (Expected: 2077)`);
+  assert(serverSummary?.unloadingFee === 349, `Floor 3 without lift gets ₹349 unloading fee (Actual: ${serverSummary?.unloadingFee})`);
+  // Grand total: 1580 + 0 + 99 + 349 = 2028
+  assert(serverSummary?.grandTotal === 1580 + 0 + 99 + 349, `Grand total accurately computed: ₹${serverSummary?.grandTotal} (Expected: 2028)`);
 
   // ---------------------------------------------------------------------------
   // 5. PAYMENT ORDER & VERIFICATION (RAZORPAY)

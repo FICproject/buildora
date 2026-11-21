@@ -68,6 +68,9 @@ export interface CartCalculationInput {
   pincode?: string;
   unloadingOptions?: UnloadingServiceOptions;
   walletBalanceToUse?: number;
+  freeDeliveryThreshold?: number;
+  standardDeliveryFee?: number;
+  baseUnloadingFee?: number;
 }
 
 export function calculateCartSummary(input: CartCalculationInput) {
@@ -152,11 +155,14 @@ export function calculateCartSummary(input: CartCalculationInput) {
   }
 
   // 2. Delivery charge calculation
-  // Free delivery unlocked above ₹1,999 (configurable)
+  // Reference behavior: Order value >= ₹1,000 -> Free delivery; below ₹1,000 -> ₹199 delivery (configurable)
   let deliveryFee = 0;
+  const freeThreshold = input.freeDeliveryThreshold ?? 1000;
+  const stdDeliveryFee = input.standardDeliveryFee ?? 199;
+
   if (discountedSubtotal > 0) {
-    if (discountedSubtotal < 1999) {
-      deliveryFee = input.deliverySpeed === 'ASAP_60' ? 149 : 99;
+    if (discountedSubtotal < freeThreshold) {
+      deliveryFee = input.deliverySpeed === 'ASAP_60' ? 149 : stdDeliveryFee;
     } else if (input.deliverySpeed === 'ASAP_60') {
       deliveryFee = 49; // Priority dispatch fee for 60-min slot
     } else {
@@ -202,9 +208,10 @@ export function calculateCartSummary(input: CartCalculationInput) {
   }
 
   // 4. Optional Unloading service engine
+  // Reference price: ₹199 (Ground-floor unloading assistance only)
   let unloadingFee = 0;
   if (input.unloadingOptions?.required && discountedSubtotal > 0) {
-    const baseUnloading = 149;
+    const baseUnloading = input.baseUnloadingFee ?? 199;
     const floorSurcharge =
       !input.unloadingOptions.hasLift && input.unloadingOptions.floor > 0
         ? input.unloadingOptions.floor * 50
