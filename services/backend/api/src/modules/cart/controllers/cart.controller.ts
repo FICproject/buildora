@@ -15,12 +15,47 @@ export class CartController {
       items: body.items || [],
       coupon: coupon || null,
       deliverySpeed: body.deliverySpeed || 'ASAP_60',
+      pincode: body.pincode,
+      unloadingOptions: body.unloadingOptions,
       walletBalanceToUse: body.walletBalanceToUse || 0
     });
 
     return {
       success: true,
       data: summary
+    };
+  }
+
+  @Post('coupons/validate')
+  validateCoupon(@Body() body: { code: string; cartSubtotal?: number }) {
+    const code = (body.code || '').trim().toUpperCase();
+    const coupon = dbStore.coupons.find((c) => c.code.toUpperCase() === code);
+    if (!coupon) {
+      return {
+        success: false,
+        message: `Invalid coupon code '${code}'. Try BUILD60, CONSTRUCT10, or BULKPRO20.`
+      };
+    }
+
+    if (coupon.expiryDate && new Date(coupon.expiryDate) < new Date()) {
+      return {
+        success: false,
+        message: `Coupon code '${coupon.code}' has expired.`
+      };
+    }
+
+    const subtotal = body.cartSubtotal || 0;
+    if (subtotal > 0 && subtotal < coupon.minOrderValue) {
+      return {
+        success: false,
+        message: `Coupon '${coupon.code}' requires a minimum order value of ₹${coupon.minOrderValue}. Current subtotal is ₹${subtotal}.`
+      };
+    }
+
+    return {
+      success: true,
+      message: `Coupon '${coupon.code}' validated successfully!`,
+      data: coupon
     };
   }
 

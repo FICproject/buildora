@@ -395,9 +395,11 @@ export const ProductDetailPage: React.FC = () => {
                 quantity={quantity}
                 onIncrease={() => setQuantity(quantity + 1)}
                 onDecrease={() => setQuantity(Math.max(1, quantity - 1))}
+                onChangeQuantity={(newQty) => setQuantity(Math.max(1, newQty))}
                 max={product.stockCount}
                 min={1}
                 size="md"
+                showBulkSteppers={true}
               />
               <span className="text-xs text-slate-500">
                 Subtotal: <strong className="text-slate-900 font-black">{formatCurrency(lineTotal)}</strong>

@@ -195,6 +195,7 @@ export const api = {
     items: CartItem[];
     coupon?: string | null;
     deliverySpeed?: string;
+    unloadingOptions?: any;
     walletBalanceToUse?: number;
   }) {
     return request<any>(
@@ -205,6 +206,17 @@ export const api = {
       },
       null
     );
+  },
+
+  async validateCoupon(code: string, cartSubtotal?: number) {
+    return postJson<{ success: boolean; message: string; data?: any }>('/coupons/validate', {
+      code,
+      cartSubtotal
+    });
+  },
+
+  async validateCheckout(payload: any) {
+    return postJson<{ success: boolean; errors?: string[]; data?: any }>('/checkout/validate', payload);
   },
 
   async checkServiceability(pincode: string) {

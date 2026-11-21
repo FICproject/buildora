@@ -148,6 +148,7 @@ export interface NewLaunchCategory {
 export interface CartItem {
   productId: string;
   variantId?: string;
+  categorySlug?: string;
   sku: string;
   name: string;
   slug: string;
@@ -243,8 +244,23 @@ export interface Order {
   couponCode?: string;
   gstTotal: number;
   deliveryFee: number;
+  handlingFee?: number;
+  handlingBreakdown?: {
+    type: string;
+    title: string;
+    amount: number;
+    explanation: string;
+  }[];
+  unloadingFee?: number;
+  unloadingOptions?: {
+    required: boolean;
+    floor: number;
+    hasLift: boolean;
+    siteInstructions?: string;
+  };
   walletUsed: number;
   grandTotal: number;
+  payableAmount?: number;
   isBusinessOrder: boolean;
   gstin?: string;
   companyName?: string;

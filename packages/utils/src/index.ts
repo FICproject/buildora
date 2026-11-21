@@ -23,8 +23,27 @@ export function calculateBulkDiscount(
   return 0;
 }
 
+export interface UnloadingServiceOptions {
+  required: boolean;
+  floor: number; // 0 = Ground floor, 1 = 1st floor, etc.
+  hasLift: boolean;
+  siteInstructions?: string;
+  vehicleAccess?: 'MINI_TRUCK' | 'LARGE_TRUCK' | 'RESTRICTED_NARROW_LANE';
+}
+
+export interface HandlingFeeItem {
+  type: 'HEAVY' | 'FRAGILE' | 'OVERSIZED';
+  title: string;
+  amount: number;
+  explanation: string;
+}
+
 export interface CartCalculationInput {
   items: {
+    productId?: string;
+    categorySlug?: string;
+    sku?: string;
+    name?: string;
     price?: number;
     unitPrice?: number;
     effectiveUnitPrice?: number;
@@ -32,6 +51,10 @@ export interface CartCalculationInput {
     quantity: number;
     gstRate?: number;
     bulkDiscountPercentage?: number;
+    unit?: string;
+    isHeavy?: boolean;
+    isFragile?: boolean;
+    isOversized?: boolean;
   }[];
   coupon?: {
     code: string;
@@ -39,8 +62,11 @@ export interface CartCalculationInput {
     discountValue: number;
     minOrderValue: number;
     maxDiscount?: number;
+    expiryDate?: string;
   } | null;
   deliverySpeed?: 'ASAP_60' | 'EXPRESS_90' | 'SCHEDULED' | 'NEXT_DAY' | 'STANDARD';
+  pincode?: string;
+  unloadingOptions?: UnloadingServiceOptions;
   walletBalanceToUse?: number;
 }
 
@@ -49,68 +75,169 @@ export function calculateCartSummary(input: CartCalculationInput) {
   let itemDiscount = 0;
   let gstTotal = 0;
 
+  let hasHeavyItems = false;
+  let hasFragileItems = false;
+  let hasOversizedItems = false;
+
   for (const item of input.items || []) {
     const itemPrice = item.price ?? item.effectiveUnitPrice ?? item.unitPrice ?? item.basePrice ?? 0;
     const rawTotal = itemPrice * (item.quantity || 1);
     const bulkPct = item.bulkDiscountPercentage || 0;
     const discountAmount = rawTotal * (bulkPct / 100);
     const effectiveTotal = rawTotal - discountAmount;
-    
-    // In Indian e-commerce, prices on consumer items usually include GST or GST is calculated on effective base
-    // Here we compute GST portion
+
+    // Detect handling characteristics
+    const cat = (item.categorySlug || '').toLowerCase();
+    const name = (item.name || '').toLowerCase();
+    const unit = (item.unit || '').toLowerCase();
+
+    if (
+      item.isHeavy ||
+      cat.includes('cement') ||
+      cat.includes('concrete') ||
+      name.includes('cement') ||
+      unit.includes('50 kg') ||
+      unit.includes('25 kg') ||
+      unit.includes('ton') ||
+      unit.includes('bag')
+    ) {
+      hasHeavyItems = true;
+    }
+
+    if (
+      item.isFragile ||
+      cat.includes('tiling') ||
+      cat.includes('glass') ||
+      name.includes('vitrified') ||
+      name.includes('tile') ||
+      name.includes('mirror') ||
+      name.includes('glass')
+    ) {
+      hasFragileItems = true;
+    }
+
+    if (
+      item.isOversized ||
+      cat.includes('tank') ||
+      cat.includes('plywood') ||
+      name.includes('tank') ||
+      name.includes('plywood') ||
+      name.includes('sheet (8x4')
+    ) {
+      hasOversizedItems = true;
+    }
+
+    // In Indian e-commerce, consumer and B2B catalog prices are GST-inclusive
     const gstRate = item.gstRate ?? 18;
-    const gstPortion = Math.round(effectiveTotal * (gstRate / (100 + gstRate)));
-    
+    const gstPortion = effectiveTotal * (gstRate / (100 + gstRate));
+
     subtotal += rawTotal;
     itemDiscount += discountAmount;
     gstTotal += gstPortion;
   }
 
-  const discountedSubtotal = subtotal - itemDiscount;
+  const discountedSubtotal = Math.max(0, subtotal - itemDiscount);
 
-  // Coupon calculation
+  // 1. Coupon validation & calculation
   let couponDiscount = 0;
   if (input.coupon && discountedSubtotal >= input.coupon.minOrderValue) {
     if (input.coupon.discountType === 'PERCENTAGE') {
-      couponDiscount = Math.round(discountedSubtotal * (input.coupon.discountValue / 100));
+      couponDiscount = discountedSubtotal * (input.coupon.discountValue / 100);
       if (input.coupon.maxDiscount && couponDiscount > input.coupon.maxDiscount) {
         couponDiscount = input.coupon.maxDiscount;
       }
     } else {
-      couponDiscount = input.coupon.discountValue;
+      couponDiscount = Math.min(discountedSubtotal, input.coupon.discountValue);
     }
   }
 
-  // Delivery fee calculation
-  // Free delivery above ₹1,999
+  // 2. Delivery charge calculation
+  // Free delivery unlocked above ₹1,999 (configurable)
   let deliveryFee = 0;
   if (discountedSubtotal > 0) {
     if (discountedSubtotal < 1999) {
       deliveryFee = input.deliverySpeed === 'ASAP_60' ? 149 : 99;
     } else if (input.deliverySpeed === 'ASAP_60') {
-      deliveryFee = 49; // Nominal priority fee
+      deliveryFee = 49; // Priority dispatch fee for 60-min slot
     } else {
       deliveryFee = 0; // Free delivery
     }
   }
 
-  const taxableTotal = Math.max(0, discountedSubtotal - couponDiscount + deliveryFee);
-  
-  // Wallet usage
-  const availableWallet = input.walletBalanceToUse || 0;
-  const walletUsed = Math.min(taxableTotal, availableWallet);
-  const grandTotal = Math.max(0, taxableTotal - walletUsed);
+  // 3. Handling charge engine
+  const handlingBreakdown: HandlingFeeItem[] = [];
+  let handlingFee = 0;
+
+  if (hasHeavyItems) {
+    const fee = 99;
+    handlingFee += fee;
+    handlingBreakdown.push({
+      type: 'HEAVY',
+      title: 'Heavy Material Handling',
+      amount: fee,
+      explanation: 'Applies to bagged cement, mortar, or high-density civil loads requiring tail-lift mini-truck loading.'
+    });
+  }
+
+  if (hasFragileItems) {
+    const fee = 49;
+    handlingFee += fee;
+    handlingBreakdown.push({
+      type: 'FRAGILE',
+      title: 'Fragile Material Transit Protection',
+      amount: fee,
+      explanation: 'Corner-cushioned packaging & vertical pallet bracing for ceramic/vitrified tiles and architectural glass fittings.'
+    });
+  }
+
+  if (hasOversizedItems) {
+    const fee = 79;
+    handlingFee += fee;
+    handlingBreakdown.push({
+      type: 'OVERSIZED',
+      title: 'Oversized Material Handling',
+      amount: fee,
+      explanation: 'Dedicated tie-down strapping and rack support for 8x4 sheets, water tanks, and long conduit bundles.'
+    });
+  }
+
+  // 4. Optional Unloading service engine
+  let unloadingFee = 0;
+  if (input.unloadingOptions?.required && discountedSubtotal > 0) {
+    const baseUnloading = 149;
+    const floorSurcharge =
+      !input.unloadingOptions.hasLift && input.unloadingOptions.floor > 0
+        ? input.unloadingOptions.floor * 50
+        : 0;
+    unloadingFee = baseUnloading + floorSurcharge;
+  }
+
+  // 5. Grand Total (Before Wallet)
+  // Subtotal - Item Discount - Coupon Discount + Delivery + Handling + Unloading
+  const grandTotal = Math.max(
+    0,
+    discountedSubtotal - couponDiscount + deliveryFee + handlingFee + unloadingFee
+  );
+
+  // 6. Wallet usage
+  const availableWallet = Math.max(0, input.walletBalanceToUse || 0);
+  const walletUsed = Math.min(grandTotal, availableWallet);
+  const payableAmount = Math.max(0, grandTotal - walletUsed);
 
   return {
     subtotal: Math.round(subtotal),
     itemDiscount: Math.round(itemDiscount),
     discountedSubtotal: Math.round(discountedSubtotal),
     couponDiscount: Math.round(couponDiscount),
-    gstTotal: Math.round(gstTotal),
     deliveryFee: Math.round(deliveryFee),
-    walletUsed: Math.round(walletUsed),
+    handlingFee: Math.round(handlingFee),
+    handlingBreakdown,
+    unloadingFee: Math.round(unloadingFee),
+    gstTotal: Math.round(gstTotal),
     grandTotal: Math.round(grandTotal),
-    itemCount: input.items.reduce((acc, curr) => acc + curr.quantity, 0)
+    walletUsed: Math.round(walletUsed),
+    payableAmount: Math.round(payableAmount),
+    itemCount: (input.items || []).reduce((acc, curr) => acc + (curr.quantity || 1), 0)
   };
 }
 

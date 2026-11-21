@@ -12,6 +12,7 @@ import { ContentController } from './modules/content/controllers/content.control
 import { WalletController } from './modules/wallet/controllers/wallet.controller';
 import { CustomerController } from './modules/customer/controllers/customer.controller';
 import { ServiceabilityController } from './modules/warehouses/controllers/serviceability.controller';
+import { CheckoutController } from './modules/checkout/controllers/checkout.controller';
 
 @Module({
   imports: [],
@@ -23,6 +24,7 @@ import { ServiceabilityController } from './modules/warehouses/controllers/servi
     OrdersController,
     PaymentsController,
     CartController,
+    CheckoutController,
     SupportController,
     ContentController,
     WalletController,
