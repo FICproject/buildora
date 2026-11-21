@@ -25,7 +25,8 @@ import {
   FolderKanban,
   Award,
   Home,
-  Rocket
+  Rocket,
+  Package
 } from 'lucide-react';
 import { useCartStore } from '../../store/useCartStore';
 import { useLocationStore } from '../../store/useLocationStore';
@@ -97,7 +98,7 @@ export const Header: React.FC = () => {
     }
     hoverTimeoutRef.current = setTimeout(() => {
       setActiveDepartment(null);
-    }, 120);
+    }, 200);
   };
 
   // Close menus on route change, outside click, or escape
@@ -711,7 +712,7 @@ export const Header: React.FC = () => {
                           <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">
                             {selectedParentCategorySlug === 'all'
                               ? 'CURATED NEW LAUNCH SUBCATEGORIES'
-                              : `${currentCategory?.name.toUpperCase()} — CHILD CATEGORIES`}
+                              : 'ALL CHILD CATEGORIES'}
                           </div>
                           <Link
                             to={
@@ -728,7 +729,7 @@ export const Header: React.FC = () => {
                         </div>
 
                         {selectedParentCategorySlug === 'all' ? (
-                          <div className="space-y-4 flex-1">
+                          <div className="space-y-4 flex-1 flex flex-col justify-between">
                             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                               {NEW_LAUNCHES_CATEGORIES.map((nlCat) => {
                                 const mCat = MASTER_CATEGORIES.find((m) => m.slug === nlCat.masterCategorySlug);
@@ -738,21 +739,21 @@ export const Header: React.FC = () => {
                                     key={nlCat.id}
                                     to={`/new-launches/${nlCat.slug}`}
                                     onClick={() => setActiveDepartment(null)}
-                                    className="group p-3.5 rounded-xl bg-slate-50/80 hover:bg-brand-blue-50/60 border border-slate-100 hover:border-brand-blue-200 transition-all flex flex-col justify-between min-h-[96px] shadow-2xs hover:shadow-xs"
+                                    className="group p-3.5 rounded-2xl bg-slate-50/80 hover:bg-brand-blue-50/60 border border-slate-100 hover:border-brand-blue-200 transition-all flex flex-col justify-between min-h-[96px] shadow-2xs hover:shadow-xs"
                                   >
                                     <div>
                                       <div className="flex items-center justify-between gap-1 mb-1">
-                                        <span className="text-[10px] font-black text-brand-orange-600 bg-orange-100/60 px-1.5 py-0.5 rounded-md">
-                                          {nlCat.badge || 'NEW'}
+                                        <span className="text-[9.5px] font-black text-brand-orange-600 bg-orange-100/70 border border-orange-200/60 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                                          {nlCat.badge || 'NEW ARRIVAL'}
                                         </span>
                                         <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-blue-900 group-hover:translate-x-0.5 transition-transform" />
                                       </div>
-                                      <div className="text-xs font-bold text-slate-800 group-hover:text-brand-blue-900 truncate">
+                                      <div className="text-xs font-bold text-slate-900 group-hover:text-brand-blue-900 truncate mt-1.5">
                                         {nlCat.name}
                                       </div>
                                     </div>
                                     {firstSub && (
-                                      <div className="text-[11px] text-slate-500 truncate group-hover:text-slate-700">
+                                      <div className="text-[11px] text-slate-500 truncate group-hover:text-slate-700 mt-0.5">
                                         e.g. {firstSub.name}
                                       </div>
                                     )}
@@ -761,7 +762,7 @@ export const Header: React.FC = () => {
                               })}
                             </div>
 
-                            <div className="p-4 bg-gradient-to-r from-brand-blue-900 to-slate-900 rounded-2xl text-white flex items-center justify-between gap-4 mt-auto">
+                            <div className="p-4 bg-gradient-to-r from-brand-blue-900 to-slate-900 rounded-2xl text-white flex items-center justify-between gap-4 mt-auto shadow-md border border-slate-800">
                               <div className="space-y-0.5">
                                 <div className="text-xs font-black flex items-center gap-1.5 text-brand-orange-400">
                                   <Rocket className="w-3.5 h-3.5" /> Direct Mill Dispatches Active
@@ -773,29 +774,62 @@ export const Header: React.FC = () => {
                               <Link
                                 to="/new-launches"
                                 onClick={() => setActiveDepartment(null)}
-                                className="flex-shrink-0 px-3.5 py-2 rounded-xl bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black text-xs shadow-sm transition-all whitespace-nowrap"
+                                className="flex-shrink-0 px-4 py-2 rounded-xl bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black text-xs shadow-sm transition-all whitespace-nowrap"
                               >
                                 View All New Launches
                               </Link>
                             </div>
                           </div>
                         ) : subcategories.length > 0 ? (
-                          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                            {subcategories.map((sub) => (
+                          <div className="space-y-4 flex-1 flex flex-col justify-between">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                              {subcategories.map((sub) => (
+                                <Link
+                                  key={sub.id}
+                                  to={`/new-launches/${currentCategory?.slug}/${sub.slug}`}
+                                  onClick={() => setActiveDepartment(null)}
+                                  className="group flex items-center justify-between p-3.5 sm:p-4 rounded-xl text-xs font-semibold text-slate-800 hover:text-brand-blue-900 bg-slate-50/80 hover:bg-brand-blue-50/60 border border-slate-200/80 hover:border-brand-blue-300 transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+                                >
+                                  <span className="truncate group-hover:font-bold">{sub.name}</span>
+                                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-blue-900 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                                </Link>
+                              ))}
+                            </div>
+
+                            <div className="p-4 bg-gradient-to-r from-brand-blue-900 to-slate-900 rounded-2xl text-white flex items-center justify-between gap-4 mt-auto shadow-md border border-slate-800">
+                              <div className="space-y-0.5">
+                                <div className="text-xs font-black flex items-center gap-1.5 text-brand-orange-400">
+                                  <Rocket className="w-3.5 h-3.5" /> Direct Mill Dispatches Active
+                                </div>
+                                <div className="text-[11px] text-slate-300">
+                                  Explore newly curated {currentCategory?.name.toLowerCase()} with instant B2B GST invoices and 60-minute site dispatch.
+                                </div>
+                              </div>
                               <Link
-                                key={sub.id}
-                                to={`/categories/${masterCat?.slug}/${sub.slug}`}
+                                to={`/new-launches/${currentCategory?.slug}`}
                                 onClick={() => setActiveDepartment(null)}
-                                className="group flex items-center justify-between p-3.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-brand-blue-900 bg-slate-50/70 hover:bg-brand-blue-50/60 border border-slate-100/90 hover:border-brand-blue-200/70 transition-all shadow-2xs hover:shadow-xs"
+                                className="flex-shrink-0 px-4 py-2 rounded-xl bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black text-xs shadow-sm transition-all whitespace-nowrap"
                               >
-                                <span className="truncate group-hover:font-bold">{sub.name}</span>
-                                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-blue-900 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                                View All {currentCategory?.name}
                               </Link>
-                            ))}
+                            </div>
                           </div>
                         ) : (
-                          <div className="flex-1 min-h-[240px] flex items-center justify-center text-xs font-medium text-slate-400">
-                            No child categories configured for this section.
+                          <div className="flex-1 min-h-[240px] flex flex-col items-center justify-center text-center p-6 space-y-2">
+                            <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                              <Package className="w-6 h-6" />
+                            </div>
+                            <div className="text-xs font-bold text-slate-700">No child categories configured</div>
+                            <p className="text-[11px] text-slate-400 max-w-xs">
+                              Explore all newly launched materials in {currentCategory?.name || 'this collection'}.
+                            </p>
+                            <Link
+                              to={`/new-launches/${currentCategory?.slug}`}
+                              onClick={() => setActiveDepartment(null)}
+                              className="mt-2 px-3.5 py-2 rounded-xl bg-brand-blue-900 text-white text-xs font-bold hover:bg-brand-blue-800 transition-colors"
+                            >
+                              Browse Materials
+                            </Link>
                           </div>
                         )}
                       </div>
@@ -1089,6 +1123,101 @@ export const Header: React.FC = () => {
                     </div>
                   );
                 })}
+
+                {/* Mobile New Launches Accordion */}
+                <div className="rounded-xl border border-brand-orange-200/70 overflow-hidden bg-white shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileExpandedDept(mobileExpandedDept === 'new-launches' ? null : 'new-launches');
+                      if (mobileExpandedDept !== 'new-launches') {
+                        setMobileExpandedCat('all');
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between p-2.5 text-xs font-bold transition-colors cursor-pointer ${
+                      isNewLaunchesActive
+                        ? 'bg-brand-blue-900 text-white'
+                        : mobileExpandedDept === 'new-launches'
+                        ? 'bg-brand-orange-50/80 text-brand-blue-900'
+                        : 'hover:bg-slate-50 text-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Rocket className={`w-4 h-4 ${isNewLaunchesActive ? 'text-white' : 'text-brand-orange-500'}`} />
+                      <span>New Launches</span>
+                      <span className="text-[9px] font-black bg-brand-orange-500 text-white px-1.5 py-0.5 rounded-full">
+                        HOT
+                      </span>
+                    </div>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        isNewLaunchesActive ? 'text-white' : 'text-slate-400'
+                      } ${mobileExpandedDept === 'new-launches' ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+
+                  {mobileExpandedDept === 'new-launches' && (
+                    <div className="p-2 bg-slate-50 border-t border-slate-100 space-y-1.5 animate-in fade-in-0 duration-150">
+                      <Link
+                        to="/new-launches"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center justify-between p-2 rounded-lg bg-brand-blue-900 text-white text-xs font-bold shadow-xs"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Rocket className="w-3.5 h-3.5 text-brand-orange-400" />
+                          All New Launches
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+
+                      {NEW_LAUNCHES_CATEGORIES.map((cat) => {
+                        const isCatExpanded = mobileExpandedCat === cat.slug;
+                        const mCat = MASTER_CATEGORIES.find((m) => m.slug === cat.masterCategorySlug);
+                        const subs = mCat ? mCat.subcategories || [] : [];
+
+                        return (
+                          <div key={cat.id} className="bg-white rounded-lg border border-slate-200/70 overflow-hidden">
+                            <div className="flex items-center justify-between p-2 text-xs font-bold text-slate-800">
+                              <Link
+                                to={`/new-launches/${cat.slug}`}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="flex items-center gap-1.5 truncate text-brand-blue-950 hover:underline flex-1"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand-orange-500 flex-shrink-0" />
+                                <span className="truncate">{cat.name}</span>
+                              </Link>
+                              {subs.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setMobileExpandedCat(isCatExpanded ? null : cat.slug)}
+                                  className="p-1 text-slate-400 hover:text-slate-600 flex-shrink-0 cursor-pointer"
+                                  aria-label={`Toggle subcategories for ${cat.name}`}
+                                >
+                                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCatExpanded ? 'rotate-180' : ''}`} />
+                                </button>
+                              )}
+                            </div>
+
+                            {isCatExpanded && subs.length > 0 && (
+                              <div className="pl-6 pr-2 py-1.5 bg-slate-50/80 border-t border-slate-100 space-y-1 text-[11px]">
+                                {subs.map((sub) => (
+                                  <Link
+                                    key={sub.id}
+                                    to={`/new-launches/${cat.slug}/${sub.slug}`}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="block py-1 text-slate-600 hover:text-brand-blue-900 truncate"
+                                  >
+                                    &bull; {sub.name}
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
