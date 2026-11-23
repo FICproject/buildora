@@ -324,16 +324,16 @@ async function runTests() {
   }
 
   // -------------------------------------------------------------------------
-  // 13. ProductDetailPage quantity selector keeps minimum 1
+  // 13. ProductDetailPage quantity selector removed (cart-only quantity flow)
   // -------------------------------------------------------------------------
-  console.log('🔹 Test 13: ProductDetailPage quantity selector has min=1');
+  console.log('🔹 Test 13: ProductDetailPage quantity selector cleanly removed');
   {
     const pdpFile = fs.readFileSync(
       path.resolve(__dirname, '../../apps/customer-web/src/pages/ProductDetailPage.tsx'),
       'utf-8'
     );
-    assert(pdpFile.includes('min={1}'), 'ProductDetailPage passes min={1} to QuantityControl');
-    console.log('  ✅ PASSED: Product detail page quantity cannot be set to 0 before adding\n');
+    assert(!pdpFile.includes('<QuantityControl'), 'ProductDetailPage does not contain QuantityControl');
+    console.log('  ✅ PASSED: Product detail page quantity controls cleanly removed\n');
     passed++;
   }
 

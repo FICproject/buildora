@@ -27,15 +27,13 @@ import {
 } from 'lucide-react';
 import {
   MASTER_CATEGORIES,
-  MASTER_BRANDS,
   SEED_PRODUCTS,
   SEED_KNOWLEDGE_ARTICLES
 } from '@buildora/constants';
-import { Category, Brand, Product } from '@buildora/types';
+import { Category, Product } from '@buildora/types';
 import { api } from '../services/api';
 import { ProductCard } from '../components/common/ProductCard';
 import { CategoryCard } from '../components/common/CategoryCard';
-import { BrandCard } from '../components/common/BrandCard';
 import { Button } from '../components/ui/Button';
 import { HeroCarousel } from '../components/common/HeroCarousel';
 
@@ -45,7 +43,6 @@ export const HomePage: React.FC = () => {
   // Dynamic live backend state initialized with defaults
   const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
   const [categories, setCategories] = useState<Category[]>(MASTER_CATEGORIES);
-  const [brands, setBrands] = useState<Brand[]>(MASTER_BRANDS);
 
   // Fetch real data from Backend API on mount
   useEffect(() => {
@@ -55,9 +52,6 @@ export const HomePage: React.FC = () => {
     });
     api.getCategories().then((c) => {
       if (isMounted && c && c.length > 0) setCategories(c);
-    });
-    api.getBrands().then((b) => {
-      if (isMounted && b && b.length > 0) setBrands(b);
     });
     return () => {
       isMounted = false;
@@ -424,26 +418,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 12. DIRECT AUTHORIZED BRANDS */}
-      <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4 sm:space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg sm:text-2xl font-black text-slate-900">Direct Authorized Brands</h2>
-            <p className="text-xs text-slate-500">100% manufacturer guaranteed materials directly from tier-1 plants.</p>
-          </div>
-          <Link to="/brands" className="text-xs font-bold text-brand-blue-800 hover:underline">
-            View All ({brands.length})
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3">
-          {brands.slice(0, 10).map((brand) => (
-            <BrandCard key={brand.id} brand={brand} />
-          ))}
-        </div>
-      </section>
-
-      {/* 13. KNOWLEDGE HUB */}
+      {/* 12. KNOWLEDGE HUB */}
       <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -492,7 +467,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 14. CUSTOMER TESTIMONIALS */}
+      {/* 13. CUSTOMER TESTIMONIALS */}
       <section className="bg-slate-100/80 py-8 sm:py-12 border-y border-slate-200">
         <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 space-y-6">
           <div className="text-center max-w-xl mx-auto">
@@ -553,7 +528,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 15. MOBILE APP DOWNLOAD STRIP */}
+      {/* 14. MOBILE APP DOWNLOAD STRIP */}
       <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-gradient-to-r from-brand-blue-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-card">
           <div className="flex items-center gap-4">

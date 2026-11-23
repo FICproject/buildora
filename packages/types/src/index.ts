@@ -92,6 +92,11 @@ export interface ProductVariant {
   image?: string;
 }
 
+export interface ProductFaq {
+  question: string;
+  answer: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -126,6 +131,8 @@ export interface Product {
   safetyInstructions?: string[];
   warranty?: string;
   certifications?: string[];
+  faqs?: ProductFaq[];
+  returnPolicy?: string;
   deliverySpeedAvailable: DeliverySpeed[];
   isFeatured?: boolean;
   isBestSeller?: boolean;
