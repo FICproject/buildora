@@ -21,6 +21,7 @@ import { Button } from '../components/ui/Button';
 import { ProductCard } from '../components/common/ProductCard';
 import { ProductInfoAccordion } from '../components/common/ProductInfoAccordion';
 import { ProductDeliveryInfoBar } from '../components/common/ProductDeliveryInfoBar';
+import { BulkPriceTrigger } from '../components/common/BulkPriceTrigger';
 
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -232,6 +233,14 @@ export const ProductDetailPage: React.FC = () => {
                 </span>
               )}
             </div>
+
+            {/* Bulk Price Link (opens centralized BulkPricingModal) */}
+            {product.bulkPricing && product.bulkPricing.length > 0 && (
+              <div className="pt-0.5">
+                <BulkPriceTrigger product={product} />
+              </div>
+            )}
+
             <div className="text-xs text-slate-500">
               Unit: <strong className="text-slate-800">{product.unit}</strong> &bull; Price includes {product.gstRate}% GST
             </div>

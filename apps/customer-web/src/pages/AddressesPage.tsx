@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { Button } from '../components/ui/Button';
 import { AddressType } from '@buildora/types';
+import { checkBengaluruServiceability } from '@buildora/constants';
 
 export const AddressesPage: React.FC = () => {
   const { addresses, addAddress, deleteAddress, setDefaultAddress } = useAuthStore();
@@ -233,9 +234,20 @@ export const AddressesPage: React.FC = () => {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-900 text-sm">{addr.recipientName || 'Site Contact'}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 uppercase">
-                  {(addr.type || 'SITE').replace(/_/g, ' ')}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {addr.pincode && checkBengaluruServiceability(addr.pincode).isServiceable ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Serviceable
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                      Non-Serviceable
+                    </span>
+                  )}
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 uppercase">
+                    {(addr.type || 'SITE').replace(/_/g, ' ')}
+                  </span>
+                </div>
               </div>
               <p className="text-slate-600 leading-relaxed">
                 {[addr.building, addr.street, addr.area, addr.city].filter(Boolean).join(', ')} {addr.pincode ? `- ${addr.pincode}` : ''}

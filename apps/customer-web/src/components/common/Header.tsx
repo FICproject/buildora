@@ -87,7 +87,9 @@ export const Header: React.FC = () => {
     }
     if (activeDepartment !== deptSlug) {
       setActiveDepartment(deptSlug);
-      setSelectedParentCategorySlug('all');
+      const isNL = deptSlug === 'new-launches';
+      const cats = isNL ? NEW_LAUNCHES_CATEGORIES : getDepartmentCategories(deptSlug);
+      setSelectedParentCategorySlug(cats[0]?.slug || 'all');
     }
   };
 
@@ -532,7 +534,8 @@ export const Header: React.FC = () => {
                           setActiveDepartment(null);
                         } else {
                           setActiveDepartment(dept.slug);
-                          setSelectedParentCategorySlug('all');
+                          const cats = getDepartmentCategories(dept.slug);
+                          setSelectedParentCategorySlug(cats[0]?.slug || 'all');
                         }
                       }}
                       className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs ${
@@ -567,7 +570,7 @@ export const Header: React.FC = () => {
                       setActiveDepartment(null);
                     } else {
                       setActiveDepartment('new-launches');
-                      setSelectedParentCategorySlug('all');
+                      setSelectedParentCategorySlug(NEW_LAUNCHES_CATEGORIES[0]?.slug || 'all');
                     }
                   }}
                   className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
@@ -628,17 +631,44 @@ export const Header: React.FC = () => {
             const currentCat = menuCategories.find((c) => c.slug === selectedParentCategorySlug);
 
             // Subcategories for right panel
-            let subcategories: { id: string; name: string; slug: string }[] = [];
+            let subcategories: { id: string; name: string; slug: string; targetMasterSlug: string }[] = [];
             if (currentCat) {
               if (isNewLaunches) {
                 const nlCat = currentCat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
                 const masterCat = MASTER_CATEGORIES.find((m) => m.slug === nlCat.masterCategorySlug);
-                subcategories = masterCat?.subcategories || [];
+                subcategories = (masterCat?.subcategories || []).map((sub) => ({
+                  ...sub,
+                  targetMasterSlug: masterCat?.slug || nlCat.masterCategorySlug || nlCat.slug
+                }));
               } else {
                 const deptCat = currentCat as (typeof MASTER_CATEGORIES)[0];
-                subcategories = deptCat.subcategories || [];
+                subcategories = (deptCat.subcategories || []).map((sub) => ({
+                  ...sub,
+                  targetMasterSlug: deptCat.slug
+                }));
               }
             }
+
+            // All subcategories when 'all' is selected
+            const allSubcategories = menuCategories.flatMap((cat) => {
+              if (isNewLaunches) {
+                const nlCat = cat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
+                const masterCat = MASTER_CATEGORIES.find((m) => m.slug === nlCat.masterCategorySlug);
+                return (masterCat?.subcategories || []).map((sub) => ({
+                  ...sub,
+                  targetMasterSlug: masterCat?.slug || nlCat.masterCategorySlug || nlCat.slug
+                }));
+              } else {
+                const deptCat = cat as (typeof MASTER_CATEGORIES)[0];
+                return (deptCat.subcategories || []).map((sub) => ({
+                  ...sub,
+                  targetMasterSlug: deptCat.slug
+                }));
+              }
+            });
+
+            const displayedSubcategories =
+              selectedParentCategorySlug === 'all' ? allSubcategories : subcategories;
 
             return (
               <div
@@ -687,7 +717,7 @@ export const Header: React.FC = () => {
                         {menuCategories.map((cat) => {
                           const isSelected = selectedParentCategorySlug === cat.slug;
                           const targetUrl = isNewLaunches
-                            ? `/new-launches/${cat.slug}`
+                            ? `/categories/${(cat as (typeof NEW_LAUNCHES_CATEGORIES)[0]).masterCategorySlug || cat.slug}`
                             : `/categories/${cat.slug}`;
 
                           return (
@@ -723,16 +753,14 @@ export const Header: React.FC = () => {
                         ALL CHILD CATEGORIES
                       </div>
 
-                      {selectedParentCategorySlug !== 'all' && subcategories.length > 0 ? (
+                      {displayedSubcategories.length > 0 ? (
                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                          {subcategories.map((sub) => {
-                            const subUrl = isNewLaunches
-                              ? `/new-launches/${currentCat?.slug}/${sub.slug}`
-                              : `/categories/${currentCat?.slug}/${sub.slug}`;
+                          {displayedSubcategories.map((sub) => {
+                            const subUrl = `/categories/${sub.targetMasterSlug}/${sub.slug}`;
 
                             return (
                               <Link
-                                key={sub.id}
+                                key={`${sub.targetMasterSlug}-${sub.id}`}
                                 to={subUrl}
                                 onClick={() => setActiveDepartment(null)}
                                 className="group flex items-center justify-between p-3.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-brand-blue-900 bg-slate-50/70 hover:bg-brand-blue-50/60 border border-slate-100/90 hover:border-brand-blue-200/70 transition-all shadow-2xs hover:shadow-xs"
@@ -935,7 +963,7 @@ export const Header: React.FC = () => {
                     onClick={() => {
                       setMobileExpandedDept(mobileExpandedDept === 'new-launches' ? null : 'new-launches');
                       if (mobileExpandedDept !== 'new-launches') {
-                        setMobileExpandedCat('all');
+                        setMobileExpandedCat(NEW_LAUNCHES_CATEGORIES[0]?.slug || null);
                       }
                     }}
                     className={`w-full flex items-center justify-between p-2.5 text-xs font-bold transition-colors cursor-pointer ${
@@ -978,12 +1006,13 @@ export const Header: React.FC = () => {
                         const isCatExpanded = mobileExpandedCat === cat.slug;
                         const mCat = MASTER_CATEGORIES.find((m) => m.slug === cat.masterCategorySlug);
                         const subs = mCat ? mCat.subcategories || [] : [];
+                        const targetCategorySlug = mCat?.slug || cat.masterCategorySlug || cat.slug;
 
                         return (
                           <div key={cat.id} className="bg-white rounded-lg border border-slate-200/70 overflow-hidden">
                             <div className="flex items-center justify-between p-2 text-xs font-bold text-slate-800">
                               <Link
-                                to={`/new-launches/${cat.slug}`}
+                                to={`/categories/${targetCategorySlug}`}
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className="flex items-center gap-1.5 truncate text-brand-blue-950 hover:underline flex-1"
                               >
@@ -1007,7 +1036,7 @@ export const Header: React.FC = () => {
                                 {subs.map((sub) => (
                                   <Link
                                     key={sub.id}
-                                    to={`/new-launches/${cat.slug}/${sub.slug}`}
+                                    to={`/categories/${targetCategorySlug}/${sub.slug}`}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="block py-1 text-slate-600 hover:text-brand-blue-900 truncate"
                                   >

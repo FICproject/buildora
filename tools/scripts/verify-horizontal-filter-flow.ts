@@ -79,7 +79,7 @@ const cementProds = SEED_PRODUCTS.filter((p) => p.categorySlug === 'cement-concr
 const cementFilters = getAvailableFiltersForCategory('cement-concrete', cementProds);
 console.log(`  Cement Filters Produced: ${cementFilters.map((f) => f.name).join(', ')}`);
 
-assert(cementFilters.some((f) => f.name === 'Category'), 'Cement has Category/Subcategory filter');
+assert(!cementFilters.some((f) => f.id === 'subcategory' || f.id === 'category' || f.name.toLowerCase() === 'category'), 'Cement has NO redundant Category/Subcategory filter on PLP');
 assert(cementFilters.some((f) => f.name === 'Brand'), 'Cement has Brand filter');
 assert(cementFilters.some((f) => f.name === 'Type'), 'Cement has Type filter');
 assert(cementFilters.some((f) => f.name === 'Grade'), 'Cement has Grade filter');
@@ -123,7 +123,7 @@ const tilingFilters = getAvailableFiltersForCategory('tiling-tile-adhesives', ti
 console.log(`  Tiling Filters Produced: ${tilingFilters.map((f) => f.name).join(', ')}`);
 
 // HomeRun Tiling reference filter names: Category, Brand, Type, Size, Colors, Material, Grade, Price, Pack Size
-assert(tilingFilters.some((f) => f.name === 'Category'), 'Tiling has Category filter');
+assert(!tilingFilters.some((f) => f.id === 'subcategory' || f.id === 'category' || f.name.toLowerCase() === 'category'), 'Tiling has NO redundant Category/Subcategory filter on PLP');
 assert(tilingFilters.some((f) => f.name === 'Brand'), 'Tiling has Brand filter');
 assert(tilingFilters.some((f) => f.name === 'Size'), 'Tiling has Size filter');
 assert(tilingFilters.some((f) => f.name === 'Colors'), 'Tiling has Colors filter');

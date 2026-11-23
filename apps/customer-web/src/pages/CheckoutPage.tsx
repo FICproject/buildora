@@ -27,6 +27,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useOrderStore } from '../store/useOrderStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { formatCurrency } from '@buildora/utils';
+import { checkBengaluruServiceability } from '@buildora/constants';
 import { Address, PaymentMethod, DeliverySpeed, Order } from '@buildora/types';
 import { Button } from '../components/ui/Button';
 import { api } from '../services/api';
@@ -48,7 +49,7 @@ export const CheckoutPage: React.FC = () => {
 
   const { isAuthenticated, user, addresses, addAddress, updateProfile, verifyOtp } = useAuthStore();
   const { placeOrder } = useOrderStore();
-  const { pincode: defaultPincode, cityName: defaultCity, selectSavedAddress } = useLocationStore();
+  const { pincode: defaultPincode, cityName: defaultCity, selectedAddressId: locationSelectedAddrId, selectSavedAddress } = useLocationStore();
 
   const summary = getSummary();
 
@@ -60,9 +61,12 @@ export const CheckoutPage: React.FC = () => {
   const [otpInput, setOtpInput] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
 
-  // Address State (Phase 8)
+  // Address State (Phase 8) - synchronize with locationSelectedAddrId if available
   const [selectedAddressId, setSelectedAddressId] = useState<string>(
-    addresses.find((a) => a && a.isDefault)?.id || addresses[0]?.id || ''
+    (locationSelectedAddrId && addresses.some((a) => a && a.id === locationSelectedAddrId) ? locationSelectedAddrId : null) ||
+    addresses.find((a) => a && a.isDefault)?.id ||
+    addresses[0]?.id ||
+    ''
   );
   const [isChangingAddress, setIsChangingAddress] = useState(false);
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
@@ -213,10 +217,16 @@ export const CheckoutPage: React.FC = () => {
       }
     }
 
-    // 2. Address must be selected
+    // 2. Address must be selected and serviceable
     const deliveryAddr = activeAddress || (addresses.length > 0 ? addresses[0] : null);
     if (!deliveryAddr) {
       setValidationErrors(['Please add or select a delivery address before proceeding to payment.']);
+      return;
+    }
+
+    const pinCheck = checkBengaluruServiceability(deliveryAddr.pincode);
+    if (!pinCheck.isServiceable) {
+      setValidationErrors([pinCheck.message || `PIN code ${deliveryAddr.pincode} is outside our Bengaluru delivery zone. Please choose a serviceable address.`]);
       return;
     }
 
@@ -702,10 +712,20 @@ export const CheckoutPage: React.FC = () => {
                     {activeAddress.building}, {activeAddress.street}, {activeAddress.area}, {activeAddress.city} -{' '}
                     <strong>{activeAddress.pincode}</strong>
                   </p>
-                  <div className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 pt-0.5">
-                    <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
-                    Serviceable by Bengaluru Dark Store WH-BLR-01 &bull; ETA: Within 60 Mins
-                  </div>
+                  {(() => {
+                    const pinStatus = checkBengaluruServiceability(activeAddress.pincode);
+                    return pinStatus.isServiceable ? (
+                      <div className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 pt-0.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                        <span>Serviceable by {pinStatus.warehouseName || pinStatus.warehouseId} &bull; ETA: Within {pinStatus.etaMinutes || 60} Mins</span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-amber-700 font-semibold flex items-center gap-1 pt-0.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                        <span>{pinStatus.message}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <Button
@@ -730,6 +750,16 @@ export const CheckoutPage: React.FC = () => {
                           onClick={() => {
                             setSelectedAddressId(a.id);
                             setIsChangingAddress(false);
+                            const area = a.area || a.street || 'Bengaluru';
+                            const label = a.type === 'HOME' ? 'Home' : a.type === 'WORK' ? 'Office' : 'Job Site';
+                            selectSavedAddress({
+                              id: a.id,
+                              label,
+                              fullAddress: `${label} - ${area}, ${a.pincode}`,
+                              pincode: a.pincode,
+                              locality: area,
+                              city: a.city || 'Bengaluru'
+                            });
                           }}
                           className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all space-y-1 ${
                             selectedAddressId === a.id

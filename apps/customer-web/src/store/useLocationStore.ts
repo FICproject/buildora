@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { SERVICEABLE_PINCODES } from '@buildora/constants';
+import { SERVICEABLE_PINCODES, checkBengaluruServiceability, ServiceabilityResult } from '@buildora/constants';
 import { api } from '../services/api';
 
 export interface LocationState {
@@ -22,7 +22,7 @@ export interface LocationState {
   selectedAddressLabel?: string | null;
   selectedAddressFull?: string | null;
 
-  checkAndSetPincode: (code: string) => Promise<{ serviceable: boolean; message: string; locality: string; etaMinutes: number }>;
+  checkAndSetPincode: (code: string, preserveAddressDetails?: boolean) => Promise<{ serviceable: boolean; message: string; locality: string; etaMinutes: number }>;
   detectCurrentLocation: () => Promise<{ success: boolean; message: string }>;
   selectSavedAddress: (address: { id?: string; label?: string; fullAddress?: string; pincode: string; locality?: string; city?: string }) => Promise<void>;
   openLocationModal: () => void;
@@ -33,14 +33,14 @@ export const useLocationStore = create<LocationState>()(
   persist(
     (set, get) => ({
       pincode: '560072',
-      locality: 'Nagarabhavi',
+      locality: 'Nagarabhavi / Bengaluru West',
       cityName: 'Bengaluru',
       state: 'Karnataka',
       isServiceable: true,
       etaMinutes: 60,
       etaText: 'Estimated delivery: 60 minutes',
       warehouse: 'WH-BLR-04',
-      warehouseName: 'Bengaluru West Hub (Nagarabhavi / Peenya)',
+      warehouseName: 'Bengaluru West Dark Store (Nagarabhavi / Peenya)',
       dispatchStatus: 'ACTIVE_DISPATCH',
       selectedAddressId: null,
       selectedAddressLabel: null,
@@ -49,8 +49,8 @@ export const useLocationStore = create<LocationState>()(
       isLoading: false,
       lastVerifiedAt: new Date().toISOString(),
 
-      checkAndSetPincode: async (code: string) => {
-        const cleaned = code.trim();
+      checkAndSetPincode: async (code: string, preserveAddressDetails = false) => {
+        const cleaned = (code || '').toString().trim();
         if (!/^[1-9][0-9]{5}$/.test(cleaned)) {
           return {
             serviceable: false,
@@ -62,169 +62,77 @@ export const useLocationStore = create<LocationState>()(
 
         set({
           isLoading: true,
-          selectedAddressId: null,
-          selectedAddressLabel: null,
-          selectedAddressFull: null
+          ...(preserveAddressDetails
+            ? {}
+            : {
+                selectedAddressId: null,
+                selectedAddressLabel: null,
+                selectedAddressFull: null
+              })
         });
 
         // 1. Try Backend API first
         try {
           const remote = await api.checkServiceability(cleaned);
           if (remote && remote.pincode === cleaned) {
-            const loc = remote.locality || 'Bengaluru Urban';
-            const city = remote.cityName || 'Bengaluru';
-            const eta = typeof remote.etaMinutes === 'number' ? remote.etaMinutes : 60;
+            const loc = remote.locality || remote.cityName || remote.city || 'Bengaluru Urban';
+            const city = remote.cityName || remote.city || 'Bengaluru';
+            const eta = typeof remote.etaMinutes === 'number' ? remote.etaMinutes : (typeof remote.estimatedMinutes === 'number' ? remote.estimatedMinutes : 60);
+            const serviceable = typeof remote.isServiceable === 'boolean'
+              ? remote.isServiceable
+              : (typeof remote.serviceable === 'boolean' ? remote.serviceable : false);
+            const wh = remote.warehouseId || remote.warehouse || 'WH-BLR-01';
+            const whName = remote.warehouseName || (wh === 'WH-BLR-04' ? 'Bengaluru West Hub (Nagarabhavi / Peenya)' : 'Bengaluru Central Dark Store');
+            const dispatch = remote.dispatchStatus || (serviceable ? (eta <= 90 ? 'ACTIVE_DISPATCH' : 'SCHEDULED_DISPATCH') : 'UNSERVICEABLE');
 
             set({
               pincode: cleaned,
               locality: loc,
               cityName: city,
               state: remote.state || 'Karnataka',
-              isServiceable: Boolean(remote.isServiceable),
+              isServiceable: serviceable,
               etaMinutes: eta,
-              etaText: remote.etaText || (eta > 0 ? `Estimated delivery: ${eta} minutes` : 'Verification In Progress'),
-              warehouse: remote.warehouseId || 'WH-BLR-01',
-              warehouseName: remote.warehouseName || 'Bengaluru Quick Commerce Dark Store',
-              dispatchStatus: remote.dispatchStatus || (remote.isServiceable ? 'ACTIVE_DISPATCH' : 'UNDER_VERIFICATION'),
+              etaText: remote.etaText || (serviceable ? `Estimated delivery: ${eta} minutes` : 'Non-Serviceable Location'),
+              warehouse: wh,
+              warehouseName: whName,
+              dispatchStatus: dispatch,
               isLoading: false,
               lastVerifiedAt: new Date().toISOString()
             });
 
             return {
-              serviceable: Boolean(remote.isServiceable),
-              message: remote.message || `Delivery available in ${eta} minutes to ${loc}!`,
+              serviceable,
+              message: remote.message || (serviceable ? `Delivery available in ${eta} minutes to ${loc}!` : `PIN code ${cleaned} is outside our Bengaluru delivery network.`),
               locality: loc,
               etaMinutes: eta
             };
           }
         } catch {
-          // Backend call failed or offline; gracefully fall back to client database
+          // Backend call failed or offline; gracefully fall back to centralized client lookup
         }
 
-        // 2. Direct match in local Master Pincodes Registry
-        const known = (SERVICEABLE_PINCODES as Record<string, any>)[cleaned];
-        if (known) {
-          const eta = known.etaMinutes || 60;
-          const loc = known.locality || (known.city ? String(known.city).split(',')[0].trim() : 'Bengaluru');
-          const city = known.city || 'Bengaluru';
-          set({
-            pincode: cleaned,
-            locality: loc,
-            cityName: city,
-            state: known.state || 'Karnataka',
-            isServiceable: true,
-            etaMinutes: eta,
-            etaText: `Estimated delivery: ${eta} minutes`,
-            warehouse: known.warehouse || 'WH-BLR-01',
-            warehouseName: known.warehouse === 'WH-BLR-04' ? 'Bengaluru West Hub (Nagarabhavi)' : 'Bengaluru Central Dark Store',
-            dispatchStatus: 'ACTIVE_DISPATCH',
-            isLoading: false,
-            lastVerifiedAt: new Date().toISOString()
-          });
-
-          return {
-            serviceable: true,
-            message: `Delivery available in ${eta} minutes to ${loc}!`,
-            locality: loc,
-            etaMinutes: eta
-          };
-        }
-
-        // 3. Fallback for any Bengaluru Metro PIN (560xxx)
-        if (cleaned.startsWith('560')) {
-          const sub = parseInt(cleaned.substring(3), 10);
-          let locality = 'Bengaluru Urban';
-          let wh = 'WH-BLR-01';
-          let eta = 60;
-
-          if (sub >= 10 && sub <= 22) {
-            locality = 'Bengaluru West (Rajajinagar / Yeshwanthpur)';
-            wh = 'WH-BLR-04';
-          } else if (sub >= 23 && sub <= 33) {
-            locality = 'Bengaluru North (Hebbal / RT Nagar)';
-            wh = 'WH-BLR-05';
-          } else if (sub >= 34 && sub <= 45) {
-            locality = 'Bengaluru South (Koramangala / Banaswadi)';
-            wh = 'WH-BLR-02';
-          } else if (sub >= 60 && sub <= 75) {
-            locality = 'Bengaluru West (Nagarabhavi / Kengeri)';
-            wh = 'WH-BLR-04';
-          } else if (sub >= 76 && sub <= 104) {
-            locality = 'Bengaluru South (Bannerghatta / HSR / Electronic City)';
-            wh = 'WH-BLR-02';
-            eta = 90;
-          }
-
-          set({
-            pincode: cleaned,
-            locality,
-            cityName: 'Bengaluru',
-            state: 'Karnataka',
-            isServiceable: true,
-            etaMinutes: eta,
-            etaText: `Estimated delivery: ${eta} minutes`,
-            warehouse: wh,
-            warehouseName: 'Bengaluru Quick Commerce Dark Store',
-            dispatchStatus: 'ACTIVE_DISPATCH',
-            isLoading: false,
-            lastVerifiedAt: new Date().toISOString()
-          });
-
-          return {
-            serviceable: true,
-            message: `Delivery available in ~${eta} minutes from nearest Bengaluru hub.`,
-            locality,
-            etaMinutes: eta
-          };
-        }
-
-        // 4. Greater Bengaluru Rural (562xxx)
-        if (cleaned.startsWith('562')) {
-          const locality = 'Bengaluru Rural Growth Corridor';
-          set({
-            pincode: cleaned,
-            locality,
-            cityName: 'Bengaluru Rural',
-            state: 'Karnataka',
-            isServiceable: true,
-            etaMinutes: 120,
-            etaText: 'Estimated delivery: 120 minutes',
-            warehouse: 'WH-BLR-05',
-            warehouseName: 'Bengaluru Peripheral Logistics Dark Store',
-            dispatchStatus: 'SCHEDULED_DISPATCH',
-            isLoading: false,
-            lastVerifiedAt: new Date().toISOString()
-          });
-
-          return {
-            serviceable: true,
-            message: 'Scheduled site delivery available in 120 minutes.',
-            locality,
-            etaMinutes: 120
-          };
-        }
-
-        // 5. Outside Bengaluru / Regional
+        // 2. Authoritative client fallback using centralized Bengaluru Coverage logic
+        const local = checkBengaluruServiceability(cleaned);
         set({
           pincode: cleaned,
-          locality: 'Regional Location',
-          cityName: 'Outside Bengaluru',
-          state: 'India',
-          isServiceable: false,
-          etaMinutes: 0,
-          etaText: 'Verification In Progress',
-          warehouse: '',
-          warehouseName: '',
-          dispatchStatus: 'UNDER_VERIFICATION',
+          locality: local.locality,
+          cityName: local.cityName,
+          state: local.state,
+          isServiceable: local.isServiceable,
+          etaMinutes: local.etaMinutes,
+          etaText: local.etaText,
+          warehouse: local.warehouseId || '',
+          warehouseName: local.warehouseName || '',
+          dispatchStatus: local.dispatchStatus,
           isLoading: false,
           lastVerifiedAt: new Date().toISOString()
         });
 
         return {
-          serviceable: false,
-          message: 'Delivery availability is being verified for your location.',
-          locality: 'Regional Location',
-          etaMinutes: 0
+          serviceable: local.isServiceable,
+          message: local.message,
+          locality: local.locality,
+          etaMinutes: local.etaMinutes
         };
       },
 
@@ -297,13 +205,13 @@ export const useLocationStore = create<LocationState>()(
           const label = address.label || 'Job Site';
           const area = address.locality || address.city || 'Bengaluru';
           const full = address.fullAddress || `${label} - ${area}, ${address.pincode}`;
-          await get().checkAndSetPincode(address.pincode);
           set({
             selectedAddressId: address.id || null,
             selectedAddressLabel: label,
             selectedAddressFull: full,
             isModalOpen: false
           });
+          await get().checkAndSetPincode(address.pincode, true);
         }
       },
 

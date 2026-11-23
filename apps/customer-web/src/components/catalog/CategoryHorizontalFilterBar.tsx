@@ -201,8 +201,15 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
             <span>Filter:</span>
           </div>
 
-          {/* Dynamic Category-Specific Dropdowns */}
-          {availableFilters.map((filter) => {
+          {/* Dynamic Category-Specific Dropdowns (Redundant Category Filter strictly excluded) */}
+          {availableFilters
+            .filter(
+              (f) =>
+                f.id !== 'category' &&
+                f.id !== 'subcategory' &&
+                f.name.toLowerCase() !== 'category'
+            )
+            .map((filter) => {
             const activeCount = getActiveCountForDimension(filter);
             const isOpen = openDropdownId === filter.id;
 

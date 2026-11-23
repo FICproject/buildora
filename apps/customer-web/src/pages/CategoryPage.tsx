@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import {
   MASTER_CATEGORIES,
+  NEW_LAUNCHES_CATEGORIES,
   SEED_PRODUCTS,
   getAvailableFiltersForCategory,
   applyCategoryFilters,
@@ -23,9 +24,20 @@ import {
 export const CategoryPage: React.FC = () => {
   const { slug, subcategorySlug } = useParams<{ slug: string; subcategorySlug?: string }>();
 
-  const [category, setCategory] = useState<Category>(
-    MASTER_CATEGORIES.find((c) => c.slug === slug) || MASTER_CATEGORIES[0]
-  );
+  // Resolve master category slug if a new launch category slug was passed
+  const effectiveCategorySlug = useMemo(() => {
+    if (!slug) return '';
+    const nlCat = NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug);
+    return nlCat ? nlCat.masterCategorySlug : slug;
+  }, [slug]);
+
+  const [category, setCategory] = useState<Category>(() => {
+    const targetSlug = effectiveCategorySlug || slug;
+    return (
+      MASTER_CATEGORIES.find((c) => c.slug === targetSlug) ||
+      MASTER_CATEGORIES[0]
+    );
+  });
   const [productList, setProductList] = useState<Product[]>(SEED_PRODUCTS);
 
   // Active filter state
@@ -40,32 +52,35 @@ export const CategoryPage: React.FC = () => {
 
   // Load category details and products
   useEffect(() => {
-    if (slug) {
-      const fallbackCat = MASTER_CATEGORIES.find((c) => c.slug === slug);
+    const targetSlug = effectiveCategorySlug || slug;
+    if (targetSlug) {
+      const fallbackCat = MASTER_CATEGORIES.find((c) => c.slug === targetSlug);
       if (fallbackCat) setCategory(fallbackCat);
 
-      api.getCategoryBySlug(slug).then((cat) => {
+      api.getCategoryBySlug(targetSlug).then((cat) => {
         if (cat) setCategory(cat);
       });
 
-      api.getProducts({ category: slug }).then((prods) => {
+      api.getProducts({ category: targetSlug }).then((prods) => {
         if (prods && prods.length > 0) {
           setProductList(prods);
         } else {
           // Fallback to seed products for this category
-          const categorySeed = SEED_PRODUCTS.filter((p) => p.categorySlug === slug);
+          const categorySeed = SEED_PRODUCTS.filter((p) => p.categorySlug === targetSlug);
           if (categorySeed.length > 0) {
             setProductList(categorySeed);
           }
         }
       });
     }
-  }, [slug]);
+  }, [slug, effectiveCategorySlug]);
 
   // Sync subcategory route param with activeFilters
   useEffect(() => {
     if (subcategorySlug && category) {
-      const foundSub = category.subcategories?.find((s) => s.slug === subcategorySlug);
+      const foundSub = category.subcategories?.find(
+        (s) => s.slug === subcategorySlug || s.name.toLowerCase() === subcategorySlug.toLowerCase()
+      );
       const subValue = foundSub ? foundSub.name : subcategorySlug;
       setActiveFilters((prev) => ({
         ...prev,
@@ -80,7 +95,9 @@ export const CategoryPage: React.FC = () => {
   }, [subcategorySlug, category]);
 
   const activeSubcategory = subcategorySlug
-    ? category.subcategories?.find((s) => s.slug === subcategorySlug)
+    ? category.subcategories?.find(
+        (s) => s.slug === subcategorySlug || s.name.toLowerCase() === subcategorySlug.toLowerCase()
+      )
     : null;
 
   // All products belonging to this category

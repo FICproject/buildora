@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, Query } from '@nestjs/common';
 import { calculateCartSummary } from '@buildora/utils';
+import { checkBengaluruServiceability } from '@buildora/constants';
 import { dbStore } from '../../../database/store';
 
 @Controller('api/v1')
@@ -66,31 +67,13 @@ export class CartController {
     }
 
     const cleanCode = pincode.trim();
-    const info = dbStore.pincodes[cleanCode];
+    const result = checkBengaluruServiceability(cleanCode);
 
-    if (info) {
-      return {
-        success: true,
-        data: {
-          pincode: cleanCode,
-          city: info.city,
-          state: info.state,
-          serviceable: true,
-          estimatedMinutes: info.etaMinutes,
-          warehouse: info.warehouse,
-          freeDeliveryThreshold: 1000
-        }
-      };
-    } else {
-      return {
-        success: true,
-        data: {
-          pincode: cleanCode,
-          serviceable: false,
-          message: 'Pincode currently outside 60-minute quick-commerce delivery zone.'
-        }
-      };
-    }
+    return {
+      success: result.isServiceable,
+      data: result,
+      ...result
+    };
   }
 
   @Post('estimators/calculate')

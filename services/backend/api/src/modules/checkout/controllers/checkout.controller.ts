@@ -1,5 +1,6 @@
 import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
 import { calculateCartSummary } from '@buildora/utils';
+import { checkBengaluruServiceability } from '@buildora/constants';
 import { dbStore } from '../../../database/store';
 
 export interface CheckoutValidatePayload {
@@ -126,9 +127,9 @@ export class CheckoutController {
         errors.push('Delivery pincode is required.');
       } else {
         const pin = addr.pincode.trim();
-        const pinInfo = dbStore.pincodes[pin];
-        if (!pinInfo) {
-          errors.push(`Pincode ${pin} is outside our 60-minute quick dispatch network. Please select an eligible Bengaluru site address.`);
+        const pinCheck = checkBengaluruServiceability(pin);
+        if (!pinCheck.isServiceable) {
+          errors.push(pinCheck.message || `Pincode ${pin} is outside our Bengaluru delivery network. Please select an eligible Bengaluru site address.`);
         }
       }
     }

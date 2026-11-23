@@ -176,16 +176,19 @@ export const NewLaunchesPage: React.FC = () => {
     if (slug === 'all') {
       navigate('/new-launches');
     } else {
-      navigate(`/new-launches/${slug}`);
+      const nlCat = NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug);
+      const targetSlug = nlCat ? nlCat.masterCategorySlug : slug;
+      navigate(`/categories/${targetSlug}`);
     }
   };
 
   const handleSubcategoryChange = (subSlug: string) => {
     if (!activeCategory) return;
+    const targetSlug = activeCategory.masterCategorySlug || activeCategory.slug;
     if (subSlug === 'all') {
-      navigate(`/new-launches/${activeCategory.slug}`);
+      navigate(`/categories/${targetSlug}`);
     } else {
-      navigate(`/new-launches/${activeCategory.slug}/${subSlug}`);
+      navigate(`/categories/${targetSlug}/${subSlug}`);
     }
   };
 
@@ -218,7 +221,7 @@ export const NewLaunchesPage: React.FC = () => {
           <>
             <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
             <Link
-              to={`/new-launches/${activeCategory.slug}`}
+              to={`/categories/${activeCategory.masterCategorySlug || activeCategory.slug}`}
               className={`flex-shrink-0 transition-colors ${
                 activeSubcategorySlug === 'all'
                   ? 'font-bold text-brand-blue-900'

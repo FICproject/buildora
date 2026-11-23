@@ -1,5 +1,6 @@
 import React from 'react';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
+import { NEW_LAUNCHES_CATEGORIES } from '@buildora/constants';
 import { RootLayout } from '../layouts/RootLayout';
 import { PublicStoreLayout } from '../layouts/PublicStoreLayout';
 import { CustomerAccountLayout } from '../layouts/CustomerAccountLayout';
@@ -39,6 +40,19 @@ import {
 } from '../pages/StaticPages';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
+const NewLaunchesCategoryRedirect: React.FC = () => {
+  const { categorySlug, subcategorySlug } = useParams<{
+    categorySlug?: string;
+    subcategorySlug?: string;
+  }>();
+  const nlCat = NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === categorySlug);
+  const targetCategorySlug = nlCat ? nlCat.masterCategorySlug : (categorySlug || '');
+  if (subcategorySlug) {
+    return <Navigate to={`/categories/${targetCategorySlug}/${subcategorySlug}`} replace />;
+  }
+  return <Navigate to={`/categories/${targetCategorySlug}`} replace />;
+};
+
 export const router = createBrowserRouter([
   {
     element: <RootLayout />,
@@ -55,8 +69,8 @@ export const router = createBrowserRouter([
       { path: 'categories/:slug/:subcategorySlug', element: <CategoryPage /> },
       { path: 'search', element: <SearchPage /> },
       { path: 'new-launches', element: <NewLaunchesPage /> },
-      { path: 'new-launches/:categorySlug', element: <NewLaunchesPage /> },
-      { path: 'new-launches/:categorySlug/:subcategorySlug', element: <NewLaunchesPage /> },
+      { path: 'new-launches/:categorySlug', element: <NewLaunchesCategoryRedirect /> },
+      { path: 'new-launches/:categorySlug/:subcategorySlug', element: <NewLaunchesCategoryRedirect /> },
       { path: 'brands', element: <BrandsPage /> },
       { path: 'brands/:slug', element: <BrandsPage /> },
       { path: 'deals', element: <DealsPage /> },

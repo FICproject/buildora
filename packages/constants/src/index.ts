@@ -673,8 +673,11 @@ export const SERVICEABLE_PINCODES: Record<string, { city: string; locality: stri
   '560084': { city: 'Bengaluru', locality: 'Richards Town / Cooke Town', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-01', zone: 'CENTRAL_BLR' },
 
   // South & South-East Bengaluru (WH-BLR-02 - Koramangala & HSR Hub)
+  '560029': { city: 'Bengaluru', locality: 'Tavarekere / SG Palya / Hosur Road', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560030': { city: 'Bengaluru', locality: 'Adugodi / Dairy Circle', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
   '560034': { city: 'Bengaluru', locality: 'Koramangala', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
   '560041': { city: 'Bengaluru', locality: 'Jayanagar 4th Block', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560062': { city: 'Bengaluru', locality: 'Doddakallasandra / Konanakunte', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
   '560068': { city: 'Bengaluru', locality: 'Madivala / Bommanahalli', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
   '560069': { city: 'Bengaluru', locality: 'Jayanagar East / Byrasandra', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
   '560076': { city: 'Bengaluru', locality: 'Bannerghatta Road / Hulimavu', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
@@ -686,6 +689,10 @@ export const SERVICEABLE_PINCODES: Record<string, { city: string; locality: stri
   '560102': { city: 'Bengaluru', locality: 'HSR Layout', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
   '560103': { city: 'Bengaluru', locality: 'Bellandur / Outer Ring Road', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
   '560104': { city: 'Bengaluru', locality: 'Begur / Hongasandra', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560105': { city: 'Bengaluru', locality: 'Bellandur EcoWorld / Sarjapur', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560106': { city: 'Bengaluru', locality: 'BTM Layout 2nd Stage', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560109': { city: 'Bengaluru', locality: 'Kanakapura Road / Thalaghattapura', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
+  '560110': { city: 'Bengaluru', locality: 'ISRO Layout / Bikasipura', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-02', zone: 'SOUTH_BLR' },
 
   // East & North-East Bengaluru (WH-BLR-03 - Whitefield & IT Corridor Hub)
   '560016': { city: 'Bengaluru', locality: 'Ramamurthy Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
@@ -699,6 +706,8 @@ export const SERVICEABLE_PINCODES: Record<string, { city: string; locality: stri
   '560067': { city: 'Bengaluru', locality: 'Kadugodi / ITPL', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
   '560087': { city: 'Bengaluru', locality: 'Varthur / Gunjur', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
   '560093': { city: 'Bengaluru', locality: 'CV Raman Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560111': { city: 'Bengaluru', locality: 'Doddakannelli / Carmelaram', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
+  '560113': { city: 'Bengaluru', locality: 'Babusapalya / Horamavu', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-03', zone: 'EAST_BLR' },
 
   // West & North-West Bengaluru (WH-BLR-04 - Nagarabhavi & Rajajinagar Hub)
   '560003': { city: 'Bengaluru', locality: 'Malleshwaram', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
@@ -712,14 +721,19 @@ export const SERVICEABLE_PINCODES: Record<string, { city: string; locality: stri
   '560056': { city: 'Bengaluru', locality: 'Bangalore University / Jnana Bharati', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560058': { city: 'Bengaluru', locality: 'Peenya Industrial Area', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560060': { city: 'Bengaluru', locality: 'Kengeri Satellite Town', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560061': { city: 'Bengaluru', locality: 'Subramanyapura / Uttarahalli', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560070': { city: 'Bengaluru', locality: 'Banashankari 2nd Stage', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560072': { city: 'Bengaluru', locality: 'Nagarabhavi / Bengaluru West', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560073': { city: 'Bengaluru', locality: 'Bagalagunte / Nagasandra', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560074': { city: 'Bengaluru', locality: 'Kumbalgodu Industrial Area', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560079': { city: 'Bengaluru', locality: 'Basaveshwaranagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560085': { city: 'Bengaluru', locality: 'Banashankari 3rd Stage', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560086': { city: 'Bengaluru', locality: 'Mahalakshmipuram / West of Chord Road', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560091': { city: 'Bengaluru', locality: 'Viswaneedam / Magadi Road', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560096': { city: 'Bengaluru', locality: 'Mahalakshmi Layout', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
   '560098': { city: 'Bengaluru', locality: 'Rajarajeshwari Nagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560107': { city: 'Bengaluru', locality: 'Rajagopalnagar / Peenya 3rd Phase', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
+  '560108': { city: 'Bengaluru', locality: 'Peenya 2nd Stage / NTTF', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-04', zone: 'WEST_BLR' },
 
   // North Bengaluru (WH-BLR-05 - Hebbal & Yelahanka Hub)
   '560024': { city: 'Bengaluru', locality: 'Hebbal / Ganganagar', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
@@ -730,9 +744,11 @@ export const SERVICEABLE_PINCODES: Record<string, { city: string; locality: stri
   '560064': { city: 'Bengaluru', locality: 'Yelahanka New Town', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
   '560065': { city: 'Bengaluru', locality: 'Yelahanka Old Town', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
   '560077': { city: 'Bengaluru', locality: 'Kothanur / Hennur Road', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560090': { city: 'Bengaluru', locality: 'Chikkabanavara / Hessarghatta Road', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
   '560092': { city: 'Bengaluru', locality: 'Sahakara Nagar / Byatarayanapura', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
   '560094': { city: 'Bengaluru', locality: 'Sanjaynagar / RMV 2nd Stage', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
   '560097': { city: 'Bengaluru', locality: 'Vidyaranyapura', state: 'Karnataka', etaMinutes: 90, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
+  '560112': { city: 'Bengaluru', locality: 'Thanisandra / Kogilu', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
   '560114': { city: 'Bengaluru', locality: 'Manyata Tech Park / Nagavara', state: 'Karnataka', etaMinutes: 60, warehouse: 'WH-BLR-05', zone: 'NORTH_BLR' },
 
   // Outer Bengaluru & Key Construction Corridors
@@ -741,6 +757,217 @@ export const SERVICEABLE_PINCODES: Record<string, { city: string; locality: stri
   '562157': { city: 'Bengaluru Rural', locality: 'Nelamangala Highway Corridor', state: 'Karnataka', etaMinutes: 120, warehouse: 'WH-BLR-04', zone: 'OUTER_BLR' },
   '562106': { city: 'Bengaluru Rural', locality: 'Anekal / Attibele Industrial Area', state: 'Karnataka', etaMinutes: 120, warehouse: 'WH-BLR-02', zone: 'OUTER_BLR' }
 };
+
+export const BENGALURU_WAREHOUSES: Record<string, { id: string; name: string; zone: string; avgDispatchMins: number }> = {
+  'WH-BLR-01': { id: 'WH-BLR-01', name: 'Bengaluru Central / East Dark Store (Indiranagar)', zone: 'CENTRAL_BLR', avgDispatchMins: 38 },
+  'WH-BLR-02': { id: 'WH-BLR-02', name: 'Bengaluru South Dark Store (Koramangala & HSR)', zone: 'SOUTH_BLR', avgDispatchMins: 42 },
+  'WH-BLR-03': { id: 'WH-BLR-03', name: 'Bengaluru IT Corridor Dark Store (Whitefield)', zone: 'EAST_BLR', avgDispatchMins: 45 },
+  'WH-BLR-04': { id: 'WH-BLR-04', name: 'Bengaluru West Dark Store (Nagarabhavi / Peenya)', zone: 'WEST_BLR', avgDispatchMins: 40 },
+  'WH-BLR-05': { id: 'WH-BLR-05', name: 'Bengaluru North Dark Store (Hebbal / Yelahanka)', zone: 'NORTH_BLR', avgDispatchMins: 50 }
+};
+
+export interface ServiceabilityResult {
+  pincode: string;
+  locality: string;
+  cityName: string;
+  city: string;
+  state: string;
+  isServiceable: boolean;
+  serviceable: boolean;
+  deliveryZone: string;
+  zone: string;
+  warehouseId: string | null;
+  warehouse: string | null;
+  warehouseName: string | null;
+  etaMinutes: number;
+  estimatedMinutes: number;
+  etaText: string;
+  dispatchStatus: 'ACTIVE_DISPATCH' | 'SCHEDULED_DISPATCH' | 'UNDER_VERIFICATION' | 'UNSERVICEABLE';
+  deliveryModes: string[];
+  freeDeliveryThreshold: number;
+  message: string;
+}
+
+export function checkBengaluruServiceability(pincode: string): ServiceabilityResult {
+  const cleaned = (pincode || '').toString().trim();
+
+  // 1. Format check: Must be a valid 6-digit Indian PIN code
+  if (!/^[1-9][0-9]{5}$/.test(cleaned)) {
+    return {
+      pincode: cleaned,
+      locality: '',
+      cityName: '',
+      city: '',
+      state: '',
+      isServiceable: false,
+      serviceable: false,
+      deliveryZone: 'INVALID',
+      zone: 'INVALID',
+      warehouseId: null,
+      warehouse: null,
+      warehouseName: null,
+      etaMinutes: 0,
+      estimatedMinutes: 0,
+      etaText: 'Invalid PIN code',
+      dispatchStatus: 'UNSERVICEABLE',
+      deliveryModes: [],
+      freeDeliveryThreshold: 1000,
+      message: 'Please provide a valid 6-digit Indian Pincode.'
+    };
+  }
+
+  // 2. Direct match in curated high-precision registry
+  const known = SERVICEABLE_PINCODES[cleaned];
+  if (known) {
+    const whInfo = BENGALURU_WAREHOUSES[known.warehouse];
+    const whName = whInfo ? whInfo.name : 'Bengaluru Quick Commerce Dark Store';
+    return {
+      pincode: cleaned,
+      locality: known.locality,
+      cityName: known.city,
+      city: known.city,
+      state: known.state,
+      isServiceable: true,
+      serviceable: true,
+      deliveryZone: known.zone || 'BLR_METRO',
+      zone: known.zone || 'BLR_METRO',
+      warehouseId: known.warehouse,
+      warehouse: known.warehouse,
+      warehouseName: whName,
+      etaMinutes: known.etaMinutes,
+      estimatedMinutes: known.etaMinutes,
+      etaText: `Estimated delivery: ${known.etaMinutes} minutes`,
+      dispatchStatus: known.etaMinutes <= 90 ? 'ACTIVE_DISPATCH' : 'SCHEDULED_DISPATCH',
+      deliveryModes: known.etaMinutes <= 60 ? ['EXPRESS_60_MIN', 'SCHEDULED_SLOT'] : ['SCHEDULED_SLOT'],
+      freeDeliveryThreshold: 1000,
+      message: `Express ${known.etaMinutes}-minute dispatch available to ${known.locality}!`
+    };
+  }
+
+  // 3. All Bengaluru Urban / BBMP / Metropolitan PIN codes (560001 - 560114+)
+  if (cleaned.startsWith('560')) {
+    const subCode = parseInt(cleaned.substring(3), 10);
+    let assignedWarehouse = 'WH-BLR-01';
+    let zone = 'CENTRAL_BLR';
+    let eta = 60;
+    let approxArea = 'Bengaluru Urban';
+
+    if (subCode >= 1 && subCode <= 9) {
+      assignedWarehouse = 'WH-BLR-01';
+      zone = 'CENTRAL_BLR';
+      approxArea = 'Bengaluru Central / Core Metro';
+      eta = 60;
+    } else if (subCode >= 10 && subCode <= 22) {
+      assignedWarehouse = 'WH-BLR-04';
+      zone = 'WEST_BLR';
+      approxArea = 'Bengaluru West / Rajajinagar Region';
+      eta = 60;
+    } else if (subCode >= 23 && subCode <= 33) {
+      assignedWarehouse = 'WH-BLR-05';
+      zone = 'NORTH_BLR';
+      approxArea = 'Bengaluru North / Hebbal Region';
+      eta = 60;
+    } else if (subCode >= 34 && subCode <= 45) {
+      assignedWarehouse = 'WH-BLR-02';
+      zone = 'SOUTH_BLR';
+      approxArea = 'Bengaluru South / Koramangala Region';
+      eta = 60;
+    } else if (subCode >= 46 && subCode <= 55) {
+      assignedWarehouse = 'WH-BLR-03';
+      zone = 'EAST_BLR';
+      approxArea = 'Bengaluru East / Outer Ring Road';
+      eta = 60;
+    } else if (subCode >= 56 && subCode <= 75) {
+      assignedWarehouse = 'WH-BLR-04';
+      zone = 'WEST_BLR';
+      approxArea = 'Bengaluru West / Nagarabhavi Region';
+      eta = 60;
+    } else if (subCode >= 76 && subCode <= 105) {
+      assignedWarehouse = 'WH-BLR-02';
+      zone = 'SOUTH_BLR';
+      approxArea = 'Bengaluru South / Electronic City Corridor';
+      eta = 90;
+    } else {
+      assignedWarehouse = 'WH-BLR-05';
+      zone = 'NORTH_BLR';
+      approxArea = 'Bengaluru Metropolitan Area';
+      eta = 90;
+    }
+
+    const whInfo = BENGALURU_WAREHOUSES[assignedWarehouse];
+    const whName = whInfo ? whInfo.name : 'Bengaluru Quick Commerce Dark Store';
+
+    return {
+      pincode: cleaned,
+      locality: approxArea,
+      cityName: 'Bengaluru',
+      city: 'Bengaluru',
+      state: 'Karnataka',
+      isServiceable: true,
+      serviceable: true,
+      deliveryZone: zone,
+      zone: zone,
+      warehouseId: assignedWarehouse,
+      warehouse: assignedWarehouse,
+      warehouseName: whName,
+      etaMinutes: eta,
+      estimatedMinutes: eta,
+      etaText: `Estimated delivery: ${eta} minutes`,
+      dispatchStatus: 'ACTIVE_DISPATCH',
+      deliveryModes: ['EXPRESS_60_MIN', 'SCHEDULED_SLOT'],
+      freeDeliveryThreshold: 1000,
+      message: `Delivery available in ~${eta} minutes to ${approxArea} from nearest hub.`
+    };
+  }
+
+  // 4. Greater Bengaluru Rural / Metropolitan Corridor (562xxx)
+  if (cleaned.startsWith('562')) {
+    return {
+      pincode: cleaned,
+      locality: 'Bengaluru Rural Growth Corridor',
+      cityName: 'Bengaluru Rural',
+      city: 'Bengaluru Rural',
+      state: 'Karnataka',
+      isServiceable: true,
+      serviceable: true,
+      deliveryZone: 'OUTER_BLR',
+      zone: 'OUTER_BLR',
+      warehouseId: 'WH-BLR-05',
+      warehouse: 'WH-BLR-05',
+      warehouseName: 'Bengaluru Peripheral Logistics Dark Store',
+      etaMinutes: 120,
+      estimatedMinutes: 120,
+      etaText: 'Estimated delivery: 120 minutes',
+      dispatchStatus: 'SCHEDULED_DISPATCH',
+      deliveryModes: ['SCHEDULED_SLOT'],
+      freeDeliveryThreshold: 1000,
+      message: 'Scheduled site delivery available in 120 minutes across Bengaluru Rural Corridor.'
+    };
+  }
+
+  // 5. Outside Bengaluru (Non-serviceable)
+  return {
+    pincode: cleaned,
+    locality: 'Outside Bengaluru Delivery Zone',
+    cityName: 'Outside Bengaluru',
+    city: 'Outside Bengaluru',
+    state: 'India',
+    isServiceable: false,
+    serviceable: false,
+    deliveryZone: 'NON_BLR',
+    zone: 'NON_BLR',
+    warehouseId: null,
+    warehouse: null,
+    warehouseName: null,
+    etaMinutes: 0,
+    estimatedMinutes: 0,
+    etaText: 'Non-Serviceable Location',
+    dispatchStatus: 'UNSERVICEABLE',
+    deliveryModes: ['FREIGHT_INQUIRY'],
+    freeDeliveryThreshold: 1000,
+    message: `Pincode ${cleaned} is outside our Bengaluru delivery network. Buildora 60 currently serves all Bengaluru Urban & Metropolitan site locations.`
+  };
+}
 
 export const AVAILABLE_COUPONS = [
   {

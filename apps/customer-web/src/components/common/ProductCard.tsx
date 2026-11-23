@@ -7,6 +7,7 @@ import { useCartStore } from '../../store/useCartStore';
 import { useWishlistStore } from '../../store/useWishlistStore';
 import { QuantityControl } from '../ui/QuantityControl';
 import { VariantSelectionModal } from './VariantSelectionModal';
+import { BulkPriceTrigger } from './BulkPriceTrigger';
 
 export interface ProductCardProps {
   product: Product;
@@ -110,8 +111,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   };
 
   const isAsap = product.deliverySpeedAvailable?.includes('ASAP_60');
-  const hasBulk = product.bulkPricing && product.bulkPricing.length > 0;
-  const lowestBulkPrice = hasBulk ? product.bulkPricing![0].unitPrice : null;
 
   // Subtitle / specification highlight
   const specSubtitle =
@@ -237,15 +236,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               </span>
             </div>
 
-            {/* Bulk Price Link (if applicable) */}
-            {lowestBulkPrice && (
-              <div
-                onClick={() => navigate(`/products/${product.slug}`)}
-                className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer truncate"
-              >
-                Bulk price {formatCurrency(lowestBulkPrice)} &gt;
-              </div>
-            )}
+            {/* Bulk Price Link (opens centralized BulkPricingModal) */}
+            <BulkPriceTrigger product={product} />
 
             {/* Product Title */}
             <Link

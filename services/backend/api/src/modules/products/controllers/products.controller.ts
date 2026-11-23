@@ -12,6 +12,9 @@ export class ProductsController {
     @Query('minPrice') minPrice?: string,
     @Query('maxPrice') maxPrice?: string,
     @Query('inStockOnly') inStockOnly?: string,
+    @Query('asapOnly') asapOnly?: string,
+    @Query('rating') rating?: string,
+    @Query('specifications') specifications?: string,
     @Query('newLaunch') newLaunch?: string,
     @Query('sortBy') sortBy?: string,
     @Query('page') page?: string,
@@ -20,16 +23,31 @@ export class ProductsController {
     let result = [...dbStore.products];
 
     if (category) {
-      result = result.filter((p) => p.categorySlug === category);
+      result = result.filter((p) => p.categorySlug === category || p.category === category);
     }
     if (subcategory) {
-      result = result.filter((p) => p.subcategorySlug === subcategory);
+      const subs = subcategory.split(',').map((s) => s.trim().toLowerCase());
+      result = result.filter(
+        (p) => subs.includes(p.subcategorySlug.toLowerCase()) || subs.includes(p.subcategory.toLowerCase())
+      );
     }
     if (brand) {
-      result = result.filter((p) => p.brandSlug === brand);
+      const brands = brand.split(',').map((b) => b.trim().toLowerCase());
+      result = result.filter(
+        (p) => brands.includes(p.brandSlug.toLowerCase()) || brands.includes(p.brand.toLowerCase())
+      );
     }
     if (inStockOnly === 'true') {
       result = result.filter((p) => p.inStock);
+    }
+    if (asapOnly === 'true') {
+      result = result.filter((p) => p.deliverySpeedAvailable?.includes('ASAP_60'));
+    }
+    if (rating) {
+      const minRating = Number(rating);
+      if (!isNaN(minRating)) {
+        result = result.filter((p) => p.rating >= minRating);
+      }
     }
     if (newLaunch === 'true') {
       result = result.filter((p) => p.isNewLaunch);
@@ -39,6 +57,26 @@ export class ProductsController {
     }
     if (maxPrice) {
       result = result.filter((p) => p.price <= Number(maxPrice));
+    }
+    if (specifications) {
+      try {
+        const parsed = JSON.parse(specifications);
+        for (const [key, values] of Object.entries(parsed)) {
+          if (Array.isArray(values) && values.length > 0) {
+            result = result.filter((p) => {
+              const specVal = p.specifications?.[key];
+              const attrVal = p.categoryAttributes?.[key];
+              return values.some(
+                (v) =>
+                  (specVal && String(specVal).toLowerCase() === String(v).toLowerCase()) ||
+                  (attrVal && String(attrVal).toLowerCase() === String(v).toLowerCase())
+              );
+            });
+          }
+        }
+      } catch {
+        // Ignore invalid specifications JSON
+      }
     }
     if (search) {
       const q = search.toLowerCase().trim();

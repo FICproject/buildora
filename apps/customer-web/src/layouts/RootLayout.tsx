@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet, ScrollRestoration } from 'react-router-dom';
 import { ScrollToTop } from '../components/common/ScrollToTop';
+import { BulkPricingModal } from '../components/common/BulkPricingModal';
 
 /**
  * Root Application Layout for BUILDORA 60
@@ -14,6 +15,7 @@ export const RootLayout: React.FC = () => {
       <ScrollToTop />
       <ScrollRestoration getKey={(location) => location.pathname} />
       <Outlet />
+      <BulkPricingModal />
     </>
   );
 };
