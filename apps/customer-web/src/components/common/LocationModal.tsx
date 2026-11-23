@@ -1,21 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   MapPin,
-  CheckCircle2,
-  AlertCircle,
-  Navigation,
-  Clock,
-  Loader2,
   Plus,
   Home,
   Briefcase,
-  HardHat
+  HardHat,
+  Search,
+  Crosshair,
+  ChevronRight,
+  ArrowLeft,
+  X,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { useLocationStore } from '../../store/useLocationStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { Address, AddressType } from '@buildora/types';
+import { locationService, LocationSuggestion, GeocodedLocation } from '../../services/locationService';
+import { DeliveryLocationMap } from './DeliveryLocationMap';
+
+export type AddressModalStep = 'SELECT_ADDRESS' | 'SEARCH_LOCATION' | 'LOCATION_DETAILS';
 
 export const LocationModal: React.FC = () => {
   const {
@@ -23,595 +30,706 @@ export const LocationModal: React.FC = () => {
     closeLocationModal,
     pincode,
     locality,
-    isServiceable,
-    etaMinutes,
-    isLoading,
-    checkAndSetPincode,
-    detectCurrentLocation,
-    selectSavedAddress,
-    selectedAddressId
+    cityName,
+    selectedAddressId,
+    selectSavedAddress
   } = useLocationStore();
 
   const { user, addresses, addAddress } = useAuthStore();
 
-  // Modal view modes: 'CHECK_PINCODE' (Reference 2) | 'SAVED_ADDRESSES' (Reference 3) | 'ADD_ADDRESS'
-  const [modalMode, setModalMode] = useState<'SAVED_ADDRESSES' | 'CHECK_PINCODE' | 'ADD_ADDRESS'>('CHECK_PINCODE');
+  // Active Wizard Step: SELECT_ADDRESS (1) | SEARCH_LOCATION (2 & 3) | LOCATION_DETAILS (4)
+  const [step, setStep] = useState<AddressModalStep>('SELECT_ADDRESS');
   const [selectedAddrId, setSelectedAddrId] = useState<string>('');
-  const [inputPincode, setInputPincode] = useState('');
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string; data?: any } | null>(null);
-  const [isGpsLoading, setIsGpsLoading] = useState(false);
-  const [isSavingAddress, setIsSavingAddress] = useState(false);
 
-  // Add Address Form State
-  const [newAddrType, setNewAddrType] = useState<AddressType>('CONSTRUCTION_SITE');
-  const [newRecipient, setNewRecipient] = useState('');
-  const [newMobile, setNewMobile] = useState('');
-  const [newBuilding, setNewBuilding] = useState('');
-  const [newStreet, setNewStreet] = useState('');
-  const [newArea, setNewArea] = useState('');
-  const [newPincode, setNewPincode] = useState('');
-  const [newInstructions, setNewInstructions] = useState('');
-  const [formError, setFormError] = useState('');
+  // Step 2: Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync state whenever the modal opens or addresses change
+  // Step 3: Location Details & Address Form State
+  const [selectedLat, setSelectedLat] = useState<number>(12.9647);
+  const [selectedLng, setSelectedLng] = useState<number>(77.5113);
+  const [selectedAddressText, setSelectedAddressText] = useState('Bengaluru, Karnataka 560072, India');
+  const [selectedLocalityText, setSelectedLocalityText] = useState('2nd Stage, Nagarbhavi, Bengaluru, Karnataka 560072');
+  const [selectedPincode, setSelectedPincode] = useState('560072');
+
+  // Form Fields (Screenshot 4)
+  const [addrType, setAddrType] = useState<AddressType>('HOME');
+  const [building, setBuilding] = useState('');
+  const [areaLocality, setAreaLocality] = useState('');
+  const [receiverName, setReceiverName] = useState('');
+  const [receiverPhone, setReceiverPhone] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+
+  // Synchronize state whenever modal opens or addresses change
   useEffect(() => {
     if (isModalOpen) {
-      setInputPincode(pincode || '');
-      setFeedback(null);
-      setFormError('');
+      setFormError(null);
+      setSearchError(null);
+      setSaveSuccessMessage(null);
+      setSearchQuery('');
+      setSuggestions([]);
 
-      // If user has saved addresses, show saved addresses view (Reference Screenshot 3)
-      if (addresses && addresses.length > 0) {
-        setModalMode('SAVED_ADDRESSES');
-        const activeAddr =
-          addresses.find((a) => a && a.id === selectedAddressId) ||
-          addresses.find((a) => a && a.isDefault) ||
-          addresses[0];
-        setSelectedAddrId(activeAddr?.id || '');
+      const validAddrs = (addresses || []).filter(Boolean);
+      if (validAddrs.length > 0) {
+        setStep('SELECT_ADDRESS');
+        const active =
+          validAddrs.find((a) => a.id === selectedAddressId) ||
+          validAddrs.find((a) => a.isDefault) ||
+          validAddrs[0];
+        setSelectedAddrId(active?.id || '');
       } else {
-        // First-time visitor / no saved addresses: show clean Pincode-Only modal (Reference Screenshot 2)
-        setModalMode('CHECK_PINCODE');
+        // If no addresses yet, present Select Address with prominent Add New Address option
+        setStep('SELECT_ADDRESS');
+        setSelectedAddrId('');
       }
-    }
-  }, [isModalOpen, pincode, addresses, selectedAddressId]);
 
-  // Handle Verify Pincode
-  const handleVerify = async (codeToVerify?: string) => {
-    const code = (codeToVerify || inputPincode || '').trim();
-    if (!/^[1-9][0-9]{5}$/.test(code)) {
-      setFeedback({ type: 'error', message: 'Please enter a valid 6-digit Indian PIN code.' });
+      // Pre-fill user defaults
+      setReceiverName(user?.name || 'Arjun Verma');
+      setReceiverPhone(user?.phone ? user.phone.replace(/\D/g, '').slice(-10) : '6379789641');
+    }
+  }, [isModalOpen, addresses, selectedAddressId, user]);
+
+  // Handle Search Input with debounce
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSuggestions([]);
+      setIsSearching(false);
       return;
     }
 
-    try {
-      const res = await checkAndSetPincode(code);
-      if (res && res.serviceable) {
-        setFeedback({
-          type: 'success',
-          message: res.message || `Delivery available in ${res.etaMinutes || 60} mins to ${res.locality || code}!`,
-          data: res
-        });
-        setTimeout(() => {
-          closeLocationModal();
-        }, 800);
-      } else {
-        setFeedback({
-          type: 'warning',
-          message: res?.message || 'Delivery is currently not available for this pincode. Buildora 60 operates across Bengaluru.',
-          data: res
-        });
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await locationService.searchLocations(searchQuery);
+        setSuggestions(results);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setIsSearching(false);
       }
-    } catch {
-      setFeedback({
-        type: 'error',
-        message: 'Unable to verify this location right now. Please try again.'
-      });
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Focus search input when navigating to SEARCH_LOCATION
+  useEffect(() => {
+    if (step === 'SEARCH_LOCATION') {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
     }
+  }, [step]);
+
+  // Handle Suggestion Click (transitions to Step 3: LOCATION_DETAILS)
+  const handleSelectSuggestion = (suggestion: LocationSuggestion) => {
+    setSelectedLat(suggestion.lat);
+    setSelectedLng(suggestion.lng);
+    setSelectedAddressText(suggestion.fullAddress);
+    setSelectedLocalityText(suggestion.secondaryText || suggestion.locality || `${suggestion.area}, Bengaluru`);
+    setSelectedPincode(suggestion.pincode || '560072');
+    setAreaLocality(suggestion.secondaryText || suggestion.fullAddress);
+    setFormError(null);
+    setStep('LOCATION_DETAILS');
   };
 
-  // Handle GPS detection (requested explicitly by user click)
-  const handleDetectGPS = async () => {
-    setIsGpsLoading(true);
-    setFeedback(null);
+  // Handle "Use current location" button click
+  const handleUseCurrentLocation = async () => {
+    setIsDetectingGps(true);
+    setSearchError(null);
     try {
-      const result = await detectCurrentLocation();
-      if (result && result.success) {
-        setFeedback({ type: 'success', message: result.message || 'Location detected within Bengaluru site dispatch network!' });
-        setTimeout(() => {
-          closeLocationModal();
-        }, 1000);
+      const result = await locationService.getCurrentPosition();
+      if (result.success && result.lat && result.lng) {
+        const geocoded = await locationService.reverseGeocode(result.lat, result.lng);
+        setSelectedLat(result.lat);
+        setSelectedLng(result.lng);
+        setSelectedAddressText(geocoded.fullAddress);
+        setSelectedLocalityText(geocoded.locality || `${geocoded.area}, ${geocoded.city}`);
+        setSelectedPincode(geocoded.pincode || '560072');
+        setAreaLocality(geocoded.locality || geocoded.fullAddress);
+        setStep('LOCATION_DETAILS');
       } else {
-        setFeedback({
-          type: 'error',
-          message: result?.message || 'Unable to detect GPS position. Please enter pincode manually.'
-        });
+        setSearchError(result.message || 'Unable to access your current GPS location. Please search manually.');
       }
     } catch {
-      setFeedback({
-        type: 'error',
-        message: 'Unable to access device location. Please enter pincode manually.'
-      });
+      setSearchError('Location permission denied or timed out. Please search for your delivery location.');
     } finally {
-      setIsGpsLoading(false);
+      setIsDetectingGps(false);
     }
   };
 
-  // Confirm selected saved address (Reference Screenshot 3)
-  const handleConfirmSavedAddress = async () => {
-    const validAddresses = (addresses || []).filter(Boolean);
-    const targetAddr = validAddresses.find((a) => a.id === selectedAddrId) || validAddresses[0];
-    if (targetAddr) {
-      const area = targetAddr.area || targetAddr.street || 'Bengaluru';
-      const label = targetAddr.type === 'HOME' ? 'Home' : targetAddr.type === 'WORK' ? 'Office' : 'Job Site';
-      const full = `${label} - ${area}, ${targetAddr.pincode}`;
-      await selectSavedAddress({
-        id: targetAddr.id,
-        label,
-        fullAddress: full,
-        pincode: targetAddr.pincode,
-        locality: area,
-        city: targetAddr.city || 'Bengaluru'
-      });
-      closeLocationModal();
-    }
+  // Handle Map Pin Drag / Click Update
+  const handleMapLocationChange = (loc: GeocodedLocation) => {
+    setSelectedLat(loc.lat);
+    setSelectedLng(loc.lng);
+    setSelectedAddressText(loc.fullAddress);
+    setSelectedLocalityText(loc.locality || `${loc.area}, ${loc.city}`);
+    setSelectedPincode(loc.pincode || '560072');
+    setAreaLocality(loc.locality || loc.fullAddress);
   };
 
-  // Save new site delivery address
-  const handleSaveNewAddress = async (e: React.FormEvent) => {
+  // Step 3: Handle Save Address Submission
+  const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError('');
+    setFormError(null);
 
-    const cleanPin = newPincode.trim();
+    // 1. Validation: Apartment / House / Building
+    const cleanBuilding = building.trim();
+    if (!cleanBuilding) {
+      setFormError('Please enter apartment, house number, or building name.');
+      return;
+    }
+
+    // 2. Validation: Area / Sector / Locality
+    const cleanArea = areaLocality.trim();
+    if (!cleanArea) {
+      setFormError('Please enter area, sector, or locality.');
+      return;
+    }
+
+    // 3. Validation: Receiver Name
+    const cleanName = receiverName.trim();
+    if (!cleanName) {
+      setFormError("Please enter the receiver's name.");
+      return;
+    }
+
+    // 4. Validation: 10-digit Indian mobile number
+    const cleanPhone = receiverPhone.replace(/\D/g, '').slice(-10);
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setFormError('Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.');
+      return;
+    }
+
+    // 5. Validation: 6-digit Indian PIN code
+    const cleanPin = selectedPincode.replace(/\D/g, '').slice(-6);
     if (!/^[1-9][0-9]{5}$/.test(cleanPin)) {
-      setFormError('Please enter a valid 6-digit Indian PIN code.');
-      return;
-    }
-    if (!newBuilding.trim() || !newStreet.trim() || !newArea.trim()) {
-      setFormError('Please fill in building, street, and area details.');
+      setFormError('Please verify a valid 6-digit Indian PIN code.');
       return;
     }
 
-    setIsSavingAddress(true);
+    setIsSaving(true);
     try {
       const isFirst = !addresses || addresses.length === 0;
-      const newAddr: Omit<Address, 'id'> = {
-        type: newAddrType,
-        recipientName: newRecipient.trim() || user?.name || 'Site Contact',
-        mobile: newMobile.trim() || user?.phone || '9876543210',
-        building: newBuilding.trim(),
-        street: newStreet.trim(),
-        area: newArea.trim(),
+      const formattedFull = `${cleanBuilding}, ${cleanArea}, ${cleanPin}`;
+
+      const newAddrPayload: Omit<Address, 'id'> = {
+        type: addrType,
+        recipientName: cleanName,
+        mobile: cleanPhone,
+        building: cleanBuilding,
+        street: cleanArea.split(',')[0]?.trim() || cleanArea,
+        area: cleanArea,
         city: 'Bengaluru',
         state: 'Karnataka',
         pincode: cleanPin,
-        deliveryInstructions: newInstructions.trim(),
         isDefault: isFirst,
-        isConstructionSite: newAddrType === 'CONSTRUCTION_SITE'
+        isConstructionSite: addrType === 'CONSTRUCTION_SITE',
+        latitude: selectedLat,
+        longitude: selectedLng,
+        fullAddress: formattedFull
       };
 
-      await addAddress(newAddr);
+      await addAddress(newAddrPayload);
 
-      const label = newAddrType === 'HOME' ? 'Home' : newAddrType === 'WORK' ? 'Office' : 'Job Site';
-      const full = `${label} - ${newArea.trim()}, ${cleanPin}`;
+      // Fetch the updated addresses to find the new ID or fall back to newest
+      const updatedList = useAuthStore.getState().addresses;
+      const newlyAdded = updatedList[updatedList.length - 1];
 
-      await selectSavedAddress({
-        label,
-        fullAddress: full,
-        pincode: cleanPin,
-        locality: newArea.trim(),
-        city: 'Bengaluru'
-      });
+      if (newlyAdded?.id) {
+        setSelectedAddrId(newlyAdded.id);
+      }
 
-      setIsSavingAddress(false);
-      closeLocationModal();
+      setSaveSuccessMessage('Address saved successfully!');
+      setIsSaving(false);
+
+      // Return to Select Delivery Address screen with the new address pre-selected
+      setTimeout(() => {
+        setStep('SELECT_ADDRESS');
+        setSaveSuccessMessage(null);
+      }, 500);
     } catch {
-      setIsSavingAddress(false);
-      setFormError('Failed to save address. Please try again.');
+      setIsSaving(false);
+      setFormError('Unable to save address. Please try again.');
     }
+  };
+
+  // Step 4: Handle "Confirm location and continue"
+  const handleConfirmLocationAndContinue = async () => {
+    const validAddresses = (addresses || []).filter(Boolean);
+    const targetAddr = validAddresses.find((a) => a.id === selectedAddrId) || validAddresses[0];
+
+    if (!targetAddr) {
+      // If no address saved, move to search location
+      setStep('SEARCH_LOCATION');
+      return;
+    }
+
+    const label =
+      targetAddr.type === 'HOME'
+        ? 'Home'
+        : targetAddr.type === 'CONSTRUCTION_SITE'
+        ? 'Project'
+        : targetAddr.type === 'WORK'
+        ? 'Office'
+        : 'Other';
+
+    const full =
+      targetAddr.fullAddress ||
+      `${targetAddr.building ? targetAddr.building + ', ' : ''}${targetAddr.area || targetAddr.street || 'Bengaluru'}, ${targetAddr.pincode}`;
+
+    await selectSavedAddress({
+      id: targetAddr.id,
+      label,
+      fullAddress: full,
+      pincode: targetAddr.pincode,
+      locality: targetAddr.area || targetAddr.street || 'Bengaluru',
+      city: targetAddr.city || 'Bengaluru'
+    });
+
+    closeLocationModal();
+  };
+
+  // Address card icon selector
+  const getAddressIcon = (type: AddressType) => {
+    switch (type) {
+      case 'HOME':
+        return Home;
+      case 'CONSTRUCTION_SITE':
+        return HardHat;
+      case 'WORK':
+        return Briefcase;
+      default:
+        return MapPin;
+    }
+  };
+
+  const getAddressLabel = (type: AddressType) => {
+    switch (type) {
+      case 'HOME':
+        return 'Home';
+      case 'CONSTRUCTION_SITE':
+        return 'Project';
+      case 'WORK':
+        return 'Office';
+      default:
+        return 'Other';
+    }
+  };
+
+  // Custom modal header matching reference screenshots
+  const renderModalHeader = () => {
+    if (step === 'SELECT_ADDRESS') {
+      return (
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <h3 className="text-lg font-bold text-slate-900 leading-tight">Select Delivery Address</h3>
+          <button
+            onClick={closeLocationModal}
+            className="p-1.5 -mr-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Close modal"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (step === 'LOCATION_DETAILS') {
+                setStep('SEARCH_LOCATION');
+              } else {
+                setStep('SELECT_ADDRESS');
+              }
+            }}
+            className="p-1 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h3 className="text-lg font-bold text-slate-900 leading-tight">Add Address Details</h3>
+        </div>
+        <button
+          onClick={closeLocationModal}
+          className="p-1.5 -mr-1 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          aria-label="Close modal"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+    );
   };
 
   return (
     <Modal
       isOpen={isModalOpen}
       onClose={closeLocationModal}
-      title={
-        modalMode === 'SAVED_ADDRESSES'
-          ? 'Select Delivery Address'
-          : modalMode === 'ADD_ADDRESS'
-          ? 'Add Delivery Address'
-          : 'Delivery Time'
-      }
-      subtitle={
-        modalMode === 'SAVED_ADDRESSES'
-          ? 'Select a delivery address or add a new address'
-          : modalMode === 'ADD_ADDRESS'
-          ? 'Enter your address details for material dispatch'
-          : 'Please enter Pincode to check delivery time & serviceability'
-      }
-      maxWidth={modalMode === 'CHECK_PINCODE' ? 'md' : 'md'}
+      maxWidth={step === 'LOCATION_DETAILS' ? '4xl' : 'md'}
+      customHeader={renderModalHeader()}
     >
       <div className="pt-1">
         {/* ========================================================================= */}
-        {/* VIEW 1: FIRST-TIME VISITOR — PINCODE-ONLY MODAL (REFERENCE SCREENSHOT 2)  */}
+        {/* STEP 1: SELECT DELIVERY ADDRESS MODAL (REFERENCE SCREENSHOT 1)            */}
         {/* ========================================================================= */}
-        {modalMode === 'CHECK_PINCODE' && (
+        {step === 'SELECT_ADDRESS' && (
           <div className="space-y-4 animate-in fade-in duration-150">
-            {/* Pincode Input & Apply Row */}
-            <div className="flex gap-2.5 items-stretch">
-              <div className="relative flex-1">
-                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoFocus
-                  maxLength={6}
-                  value={inputPincode}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '');
-                    setInputPincode(val);
-                    setFeedback(null);
-                  }}
-                  placeholder="Enter Pincode"
-                  className="w-full pl-10 pr-3 py-3 text-sm font-semibold tracking-wider border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600 transition-all placeholder:text-slate-400"
-                  onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
-                />
-              </div>
-              <Button
-                onClick={() => handleVerify()}
-                disabled={isLoading || inputPincode.length !== 6}
-                className="px-6 py-3 font-black text-sm bg-brand-blue-900 hover:bg-brand-blue-800 text-white rounded-xl shadow-xs transition-all flex items-center justify-center min-w-[96px]"
-              >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
-              </Button>
-            </div>
-
-            {/* GPS Detection Button */}
-            <button
-              type="button"
-              onClick={handleDetectGPS}
-              disabled={isGpsLoading || isLoading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 border border-slate-200 hover:border-brand-blue-400 bg-slate-50/50 hover:bg-brand-blue-50/30 rounded-xl text-xs font-bold text-slate-700 hover:text-brand-blue-900 transition-all shadow-2xs group"
-            >
-              {isGpsLoading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 text-brand-blue-700 animate-spin" />
-                  <span>Detecting device GPS...</span>
-                </>
-              ) : (
-                <>
-                  <Navigation className="w-3.5 h-3.5 text-brand-orange-500 group-hover:rotate-45 transition-transform" />
-                  <span>Detect My Current Location (GPS)</span>
-                </>
-              )}
-            </button>
-
-            {/* Feedback Status Box */}
-            {feedback && (
-              <div
-                className={`p-3.5 rounded-2xl text-xs font-medium space-y-2 border transition-all ${
-                  feedback.type === 'success'
-                    ? 'bg-emerald-50 text-emerald-950 border-emerald-300 animate-in fade-in'
-                    : feedback.type === 'warning'
-                    ? 'bg-amber-50 text-amber-950 border-amber-300 animate-in fade-in'
-                    : 'bg-rose-50 text-rose-950 border-rose-300 animate-in fade-in'
-                }`}
-              >
-                <div className="flex items-start gap-2.5">
-                  {feedback.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                  ) : feedback.type === 'warning' ? (
-                    <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1">
-                    <p className="font-extrabold text-sm">{feedback.message}</p>
-                    {feedback.type === 'success' && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="bg-emerald-700 text-white font-black text-[10px] px-2 py-0.5 rounded-md">
-                          🟢 {etaMinutes > 0 ? `${etaMinutes}-minute delivery` : 'Serviceable'}
-                        </span>
-                        <span className="text-emerald-800 text-[11px] font-semibold">
-                          Available for direct site material dispatch
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            {saveSuccessMessage && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>{saveSuccessMessage}</span>
               </div>
             )}
 
-            {/* If customer has saved addresses, provide navigation back to saved addresses view */}
-            {addresses && addresses.length > 0 && (
-              <div className="pt-2 border-t border-slate-100 text-center">
-                <button
-                  type="button"
-                  onClick={() => setModalMode('SAVED_ADDRESSES')}
-                  className="text-xs font-bold text-brand-blue-800 hover:text-brand-blue-900 hover:underline inline-flex items-center gap-1"
-                >
-                  <span>&larr; Back to saved delivery addresses</span>
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* VIEW 2: RETURNING CUSTOMER — SAVED ADDRESS SELECTION (SCREENSHOT 3)       */}
-        {/* ========================================================================= */}
-        {modalMode === 'SAVED_ADDRESSES' && (
-          <div className="space-y-4 animate-in fade-in duration-150">
-            {/* Top '+ Add new address' Button (HomeRun reference style) */}
+            {/* + Add New Address Button (Green outlined/tinted button matching screenshot 1) */}
             <button
               type="button"
               onClick={() => {
-                setModalMode('ADD_ADDRESS');
-                setNewPincode(pincode || '');
-                setFormError('');
+                setStep('SEARCH_LOCATION');
+                setSearchQuery('');
+                setSuggestions([]);
+                setSearchError(null);
               }}
-              className="w-full py-3 px-4 rounded-xl border border-dashed border-brand-blue-600 bg-brand-blue-50/70 hover:bg-brand-blue-100/70 text-brand-blue-900 font-extrabold text-xs flex items-center justify-center gap-2 transition-colors shadow-2xs"
+              className="w-full py-3.5 px-4 rounded-xl border border-dashed border-emerald-600 bg-emerald-50/50 hover:bg-emerald-100/70 text-emerald-800 font-extrabold text-sm flex items-center justify-center gap-2 transition-all shadow-2xs"
             >
-              <Plus className="w-4 h-4 text-brand-blue-900 stroke-[2.5]" />
-              <span>+ Add new address</span>
+              <Plus className="w-4 h-4 text-emerald-700 stroke-[2.5]" />
+              <span>+ add new address</span>
             </button>
 
-            {/* Saved Addresses List */}
-            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-              {(addresses || []).filter(Boolean).map((addr) => {
-                const isSelected = selectedAddrId === addr.id;
-                const Icon =
-                  addr.type === 'HOME'
-                    ? Home
-                    : addr.type === 'WORK'
-                    ? Briefcase
-                    : HardHat;
-
-                const addressLine = [addr.building, addr.street, addr.area, addr.city, addr.state]
-                  .filter(Boolean)
-                  .join(', ');
-
-                return (
-                  <div
-                    key={addr.id}
-                    onClick={() => setSelectedAddrId(addr.id)}
-                    className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
-                      isSelected
-                        ? 'border-brand-blue-700 bg-brand-blue-50/50 shadow-sm'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
-                    }`}
-                  >
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                        isSelected
-                          ? 'bg-brand-blue-900 text-white'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-black text-xs text-slate-900 flex items-center gap-1.5">
-                          {addr.type === 'HOME' ? 'Home' : addr.type === 'WORK' ? 'Office / Commercial' : 'Job Site'}
-                          {addr.isDefault && (
-                            <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded">
-                              DEFAULT
-                            </span>
-                          )}
-                        </span>
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                            isSelected
-                              ? 'border-brand-blue-700 bg-brand-blue-700'
-                              : 'border-slate-300'
-                          }`}
-                        >
-                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-slate-700 mt-1 leading-relaxed">
-                        {addressLine || 'Address on file'} <strong className="text-slate-900 font-extrabold">{addr.pincode}</strong>
-                      </p>
-
-                      {addr.recipientName && (
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Contact: {addr.recipientName} {addr.mobile ? `(${addr.mobile})` : ''}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            {/* "or" divider with center text */}
+            <div className="relative my-3">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-white px-3 text-slate-500 font-semibold">or</span>
+              </div>
             </div>
 
-            {/* Bottom Confirm Action Button */}
-            <div className="pt-2 space-y-2">
+            {/* Saved Addresses List */}
+            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+              {(addresses || []).filter(Boolean).length === 0 ? (
+                <div className="text-center py-6 px-4 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+                  <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-slate-700">No saved delivery addresses yet</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                    Add your site or home address to check 60-minute dispatch availability across Bengaluru.
+                  </p>
+                </div>
+              ) : (
+                (addresses || []).filter(Boolean).map((addr) => {
+                  const isSelected = selectedAddrId === addr.id;
+                  const Icon = getAddressIcon(addr.type);
+                  const label = getAddressLabel(addr.type);
+
+                  const fullText =
+                    addr.fullAddress ||
+                    [addr.building, addr.street, addr.area, addr.city, addr.state, addr.pincode]
+                      .filter(Boolean)
+                      .join(', ');
+
+                  return (
+                    <div
+                      key={addr.id}
+                      onClick={() => setSelectedAddrId(addr.id)}
+                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
+                        isSelected
+                          ? 'border-emerald-600 bg-white shadow-xs'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      {/* Left icon container with soft background */}
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 text-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5 border border-amber-100">
+                        <Icon className="w-5 h-5 text-slate-800" />
+                      </div>
+
+                      {/* Address Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                            {label}
+                            {addr.isDefault && (
+                              <span className="text-[9px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                                DEFAULT
+                              </span>
+                            )}
+                          </h4>
+                        </div>
+
+                        <p className="text-xs text-slate-600 mt-1 leading-relaxed line-clamp-2">
+                          {fullText}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Bottom "Confirm location and continue" Primary Button */}
+            <div className="pt-2">
               <Button
                 variant="primary"
                 size="lg"
-                onClick={handleConfirmSavedAddress}
-                className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-black shadow-md text-sm py-3 rounded-xl transition-all"
+                onClick={handleConfirmLocationAndContinue}
+                className="w-full bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 font-bold shadow-md text-sm py-3.5 rounded-2xl transition-all"
               >
                 Confirm location and continue
               </Button>
-
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setModalMode('CHECK_PINCODE');
-                    setInputPincode(pincode || '');
-                  }}
-                  className="text-xs font-bold text-brand-blue-800 hover:underline inline-flex items-center gap-1"
-                >
-                  <MapPin className="w-3.5 h-3.5 text-brand-orange-500" />
-                  <span>Change Pincode / Enter another location &rarr;</span>
-                </button>
-              </div>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* VIEW 3: ADD NEW DELIVERY ADDRESS                                          */}
+        {/* STEP 2: SEARCH LOCATION MODAL (REFERENCE SCREENSHOTS 2 & 3)               */}
         {/* ========================================================================= */}
-        {modalMode === 'ADD_ADDRESS' && (
-          <form onSubmit={handleSaveNewAddress} className="space-y-3.5 animate-in fade-in duration-150">
+        {step === 'SEARCH_LOCATION' && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            {searchError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>{searchError}</span>
+              </div>
+            )}
+
+            {/* Location Search Bar with Search Icon / Clear Button */}
+            <div className="relative">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search delivery location or nearby landmark"
+                className="w-full pl-4 pr-10 py-3 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600 transition-all placeholder:text-slate-400 shadow-2xs"
+              />
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-slate-400">
+                {isSearching ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-brand-blue-600" />
+                ) : searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSuggestions([]);
+                    }}
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <Search className="w-4 h-4 text-slate-400" />
+                )}
+              </div>
+
+              {/* Autocomplete Suggestions Dropdown (Screenshot 3) */}
+              {suggestions.length > 0 && (
+                <div className="mt-2 border border-slate-200 rounded-xl bg-white shadow-lg overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150">
+                  {suggestions.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleSelectSuggestion(item)}
+                      className="p-3 flex items-start gap-3 hover:bg-slate-50 transition-colors cursor-pointer group"
+                    >
+                      <MapPin className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 flex-shrink-0 mt-0.5 transition-colors" />
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-xs text-slate-900 leading-snug">
+                          <strong className="font-bold">{item.mainText}</strong>{' '}
+                          <span className="text-slate-600">{item.secondaryText}</span>
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Google Attribution (Screenshot 3) */}
+                  <div className="p-2.5 bg-slate-50/70 border-t border-slate-100 flex items-center justify-end gap-1.5 text-[10px] text-slate-400 font-medium">
+                    <span>powered by</span>
+                    <span className="font-bold text-slate-600">Google</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* "Use current location" option (Screenshot 2) */}
+            {suggestions.length === 0 && (
+              <div
+                onClick={handleUseCurrentLocation}
+                className="border border-slate-200 hover:border-emerald-500 rounded-2xl p-4 bg-white flex items-center justify-between cursor-pointer group transition-all shadow-2xs hover:shadow-xs"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                    {isDetectingGps ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                    ) : (
+                      <Crosshair className="w-4 h-4 text-emerald-600 group-hover:rotate-45 transition-transform" />
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-emerald-700 group-hover:text-emerald-800">
+                      Use current location
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {isDetectingGps
+                        ? 'Detecting GPS position...'
+                        : '2nd Stage, Nagarbhavi, Bengaluru, Karnataka 560072'}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 3: LOCATION SELECTION & ADDRESS DETAILS (SCREENSHOT 4)               */}
+        {/* ========================================================================= */}
+        {step === 'LOCATION_DETAILS' && (
+          <div className="animate-in fade-in duration-150">
             {formError && (
-              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
-            {/* Address Type Tag */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5">
-                Location Type
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { type: 'CONSTRUCTION_SITE', label: 'Job Site', icon: HardHat },
-                  { type: 'HOME', label: 'Home', icon: Home },
-                  { type: 'WORK', label: 'Office', icon: Briefcase }
-                ].map((item) => {
-                  const isSel = newAddrType === item.type;
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.type}
-                      type="button"
-                      onClick={() => setNewAddrType(item.type as AddressType)}
-                      className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                        isSel
-                          ? 'border-brand-blue-700 bg-brand-blue-50 text-brand-blue-900 shadow-xs'
-                          : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-                      }`}
+            {/* Responsive 2-Panel Split Layout (Desktop: Side-by-side | Mobile: Stacked) */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+              {/* LEFT PANEL: Interactive Map with Pin, Speech Bubble & Search Overlay */}
+              <div className="md:col-span-6 lg:col-span-6 flex flex-col min-h-[360px] md:min-h-[460px]">
+                <DeliveryLocationMap
+                  lat={selectedLat}
+                  lng={selectedLng}
+                  selectedAddressText={selectedAddressText}
+                  localityBadgeText={selectedLocalityText}
+                  onLocationChange={handleMapLocationChange}
+                  onClearSearch={() => setStep('SEARCH_LOCATION')}
+                  className="flex-1 w-full"
+                />
+              </div>
+
+              {/* RIGHT PANEL: Address Form (Screenshot 4) */}
+              <div className="md:col-span-6 lg:col-span-6 flex flex-col justify-between">
+                <form onSubmit={handleSaveAddress} className="space-y-4">
+                  {/* SAVE ADDRESS AS (Pills: Home, Project, Other) */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2">
+                      SAVE ADDRESS AS
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {[
+                        { type: 'HOME' as AddressType, label: 'Home', icon: Home },
+                        { type: 'CONSTRUCTION_SITE' as AddressType, label: 'Project', icon: Briefcase },
+                        { type: 'OTHER' as AddressType, label: 'Other', icon: MapPin }
+                      ].map((item) => {
+                        const isSel = addrType === item.type;
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.type}
+                            type="button"
+                            onClick={() => setAddrType(item.type)}
+                            className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                              isSel
+                                ? 'border-amber-400 bg-amber-100/80 text-slate-900 shadow-2xs ring-1 ring-amber-400'
+                                : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                            <span>{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* APARTMENT / HOUSE NUMBER / BUILDING NAME */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      APARTMENT/HOUSE NUMBER/BUILDING NAME
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={building}
+                      onChange={(e) => setBuilding(e.target.value)}
+                      placeholder="e.g. Flat 302, Sunshine Heights / Plot 89"
+                      className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600"
+                    />
+                  </div>
+
+                  {/* AREA / SECTOR / LOCALITY */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      AREA/SECTOR/LOCALITY
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={areaLocality}
+                      onChange={(e) => setAreaLocality(e.target.value)}
+                      placeholder="Kalyan Nagar, Nagarbhavi, Bengaluru, Karnataka 560072"
+                      className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600 bg-slate-50/50"
+                    />
+                  </div>
+
+                  {/* RECEIVER'S NAME */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      RECEIVER'S NAME
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={receiverName}
+                      onChange={(e) => setReceiverName(e.target.value)}
+                      placeholder="Full Name"
+                      className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600"
+                    />
+                  </div>
+
+                  {/* RECEIVER'S PHONE NUMBER */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      RECEIVER'S PHONE NUMBER
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        required
+                        maxLength={10}
+                        value={receiverPhone}
+                        onChange={(e) => setReceiverPhone(e.target.value.replace(/\D/g, ''))}
+                        placeholder="10-digit mobile number"
+                        className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-600 focus:border-brand-blue-600 font-mono tracking-wider"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Save Address Button (Amber/Yellow Full Width Button) */}
+                  <div className="pt-2">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="lg"
+                      disabled={isSaving}
+                      className="w-full bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 font-bold shadow-md text-sm py-3.5 rounded-2xl transition-all"
                     >
-                      <Icon className="w-3.5 h-3.5" />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Save Address'}
+                    </Button>
+                  </div>
+                </form>
               </div>
             </div>
-
-            {/* Recipient & Phone */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Contact Name / Site Engineer</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Arjun Verma"
-                  value={newRecipient}
-                  onChange={(e) => setNewRecipient(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue-600 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Mobile Number</label>
-                <input
-                  type="tel"
-                  required
-                  maxLength={10}
-                  placeholder="10-digit mobile"
-                  value={newMobile}
-                  onChange={(e) => setNewMobile(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue-600 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Building & Street */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Building / Plot / Flat No.</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Plot 89, 2nd Stage"
-                  value={newBuilding}
-                  onChange={(e) => setNewBuilding(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue-600 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Street / Landmark</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Near BDA Complex"
-                  value={newStreet}
-                  onChange={(e) => setNewStreet(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue-600 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Locality & Pincode */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Area / Locality</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Nagarabhavi"
-                  value={newArea}
-                  onChange={(e) => setNewArea(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue-600 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Pincode (Bengaluru)</label>
-                <input
-                  type="text"
-                  required
-                  maxLength={6}
-                  placeholder="6-digit PIN (e.g. 560072)"
-                  value={newPincode}
-                  onChange={(e) => setNewPincode(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl font-mono font-bold tracking-wider focus:ring-2 focus:ring-brand-blue-600 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Unloading / Gate Instructions */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Unloading / Site Instructions (Optional)</label>
-              <input
-                type="text"
-                placeholder="e.g. Enter via Gate 2, crane unloading space ready"
-                value={newInstructions}
-                onChange={(e) => setNewInstructions(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-blue-600 focus:outline-none"
-              />
-            </div>
-
-            {/* Form Actions */}
-            <div className="flex items-center gap-2 pt-2">
-              <Button
-                type="submit"
-                variant="primary"
-                size="md"
-                disabled={isSavingAddress}
-                className="flex-1 bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs py-2.5"
-              >
-                {isSavingAddress ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save & Deliver Here'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="md"
-                onClick={() => setModalMode(addresses.length > 0 ? 'SAVED_ADDRESSES' : 'CHECK_PINCODE')}
-                className="text-xs px-4"
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
+          </div>
         )}
       </div>
     </Modal>

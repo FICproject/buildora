@@ -42,6 +42,20 @@ const DEFAULT_DEMO_USER: CustomerProfile = {
 const DEFAULT_DEMO_ADDRESSES: Address[] = [
   {
     id: 'addr-1',
+    type: 'HOME',
+    recipientName: 'Arjun Verma',
+    mobile: '9876543210',
+    building: 'ikuytredsfghj',
+    street: '2nd Stage, Nagarbhavi',
+    area: 'Nagarbhavi',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    pincode: '560072',
+    fullAddress: 'ikuytredsfghj, 2nd Stage, Nagarbhavi, Bengaluru, Karnataka 560072, Bengaluru, 560072',
+    isDefault: true
+  },
+  {
+    id: 'addr-2',
     type: 'CONSTRUCTION_SITE',
     recipientName: 'Arjun Verma (Site Engineer)',
     mobile: '9876543210',
@@ -52,12 +66,13 @@ const DEFAULT_DEMO_ADDRESSES: Address[] = [
     city: 'Bengaluru',
     state: 'Karnataka',
     pincode: '560038',
+    fullAddress: 'Plot 42, Green Horizon Enclave, 14th Cross, 4th Main Road, Indiranagar, Bengaluru 560038',
     deliveryInstructions: 'Enter through Gate 2. Inform gate security for material truck unloading.',
-    isDefault: true,
+    isDefault: false,
     isConstructionSite: true
   },
   {
-    id: 'addr-2',
+    id: 'addr-3',
     type: 'WORK',
     recipientName: 'Arjun Verma',
     mobile: '9876543210',
@@ -67,6 +82,7 @@ const DEFAULT_DEMO_ADDRESSES: Address[] = [
     city: 'Bengaluru',
     state: 'Karnataka',
     pincode: '560103',
+    fullAddress: 'BuildTech Solutions, Office 302, Outer Ring Road, Bellandur, Bengaluru 560103',
     isDefault: false
   }
 ];
@@ -74,10 +90,10 @@ const DEFAULT_DEMO_ADDRESSES: Address[] = [
 export const useAuthStore = create<AuthStoreState>()(
   persist(
     (set, get) => ({
-      isAuthenticated: false,
-      user: null,
-      token: null,
-      addresses: [],
+      isAuthenticated: true,
+      user: DEFAULT_DEMO_USER,
+      token: 'demo-jwt-token-buildora-60',
+      addresses: DEFAULT_DEMO_ADDRESSES,
       isAuthModalOpen: false,
       authPromptReason: null,
       intendedDestination: null,

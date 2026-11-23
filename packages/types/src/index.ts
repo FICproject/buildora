@@ -199,6 +199,9 @@ export interface Address {
   deliveryInstructions?: string;
   isDefault: boolean;
   isConstructionSite?: boolean;
+  latitude?: number;
+  longitude?: number;
+  fullAddress?: string;
 }
 
 export interface CustomerProfile {

@@ -84,6 +84,20 @@ let mockProfile: CustomerProfile = {
 let mockAddresses: Address[] = [
   {
     id: 'addr-1',
+    type: 'HOME',
+    recipientName: 'Arjun Verma',
+    mobile: '9876543210',
+    building: 'ikuytredsfghj',
+    street: '2nd Stage, Nagarbhavi',
+    area: 'Nagarbhavi',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    pincode: '560072',
+    fullAddress: 'ikuytredsfghj, 2nd Stage, Nagarbhavi, Bengaluru, Karnataka 560072, Bengaluru, 560072',
+    isDefault: true
+  },
+  {
+    id: 'addr-2',
     type: 'CONSTRUCTION_SITE',
     recipientName: 'Arjun Verma (Site Engineer)',
     mobile: '9876543210',
@@ -94,12 +108,13 @@ let mockAddresses: Address[] = [
     city: 'Bengaluru',
     state: 'Karnataka',
     pincode: '560038',
+    fullAddress: 'Plot 42, Green Horizon Enclave, 14th Cross, 4th Main Road, Indiranagar, Bengaluru 560038',
     deliveryInstructions: 'Enter through Gate 2. Inform gate security for material truck unloading.',
-    isDefault: true,
+    isDefault: false,
     isConstructionSite: true
   },
   {
-    id: 'addr-2',
+    id: 'addr-3',
     type: 'WORK',
     recipientName: 'Arjun Verma',
     mobile: '9876543210',
@@ -109,6 +124,7 @@ let mockAddresses: Address[] = [
     city: 'Bengaluru',
     state: 'Karnataka',
     pincode: '560103',
+    fullAddress: 'BuildTech Solutions, Office 302, Outer Ring Road, Bellandur, Bengaluru 560103',
     isDefault: false
   }
 ];
@@ -172,6 +188,31 @@ export class CustomerController {
       success: true,
       message: 'Address removed successfully'
     };
+  }
+
+  @Put('addresses/:id')
+  updateAddress(@Param('id') id: string, @Body() body: Partial<Address>) {
+    const index = mockAddresses.findIndex((a) => a.id === id);
+    if (index === -1) {
+      return { success: false, message: 'Address not found' };
+    }
+    mockAddresses[index] = { ...mockAddresses[index], ...body, id };
+    if (body.isDefault) {
+      mockAddresses = mockAddresses.map((a) => ({
+        ...a,
+        isDefault: a.id === id
+      }));
+    }
+    return {
+      success: true,
+      message: 'Address updated successfully',
+      data: mockAddresses[index]
+    };
+  }
+
+  @Patch('addresses/:id')
+  patchAddress(@Param('id') id: string, @Body() body: Partial<Address>) {
+    return this.updateAddress(id, body);
   }
 
   // ========================================================

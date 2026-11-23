@@ -7,7 +7,8 @@ export interface ModalProps {
   title?: string;
   subtitle?: string;
   children: React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
+  customHeader?: React.ReactNode;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -16,7 +17,8 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   subtitle,
   children,
-  maxWidth = 'md'
+  maxWidth = 'md',
+  customHeader
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -39,7 +41,9 @@ export const Modal: React.FC<ModalProps> = ({
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-xl',
-    '2xl': 'max-w-2xl'
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl'
   }[maxWidth];
 
   return (
@@ -54,7 +58,9 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className={`relative w-full ${maxWidthClass} max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl z-10 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200`}
       >
-        {title && (
+        {customHeader ? (
+          customHeader
+        ) : title ? (
           <div className="flex items-start justify-between px-5 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0">
             <div>
               <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">{title}</h3>
@@ -68,7 +74,7 @@ export const Modal: React.FC<ModalProps> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
-        )}
+        ) : null}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>

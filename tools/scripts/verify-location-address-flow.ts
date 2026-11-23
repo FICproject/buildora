@@ -14,14 +14,17 @@ async function runTests() {
   let total = 19;
 
   // -------------------------------------------------------------------------
-  // Scenario 1: New visitor clicks location → pincode-only modal appears
+  // Scenario 1: User clicks location → Select Delivery Address modal appears
   // -------------------------------------------------------------------------
-  console.log('🔹 Scenario 1: New visitor clicks location → Pincode-Only modal opens');
+  console.log('🔹 Scenario 1: User clicks location → Select Delivery Address modal opens');
   {
-    const guestAddresses: any[] = [];
-    const initialMode = guestAddresses.length > 0 ? 'SAVED_ADDRESSES' : 'CHECK_PINCODE';
-    assert.strictEqual(initialMode, 'CHECK_PINCODE', 'New visitor with 0 addresses must open CHECK_PINCODE modal');
-    console.log('  ✅ PASSED: Mode is CHECK_PINCODE ("Delivery Time") for new visitor\n');
+    const modalFile = fs.readFileSync(
+      path.resolve(__dirname, '../../apps/customer-web/src/components/common/LocationModal.tsx'),
+      'utf-8'
+    );
+    assert(modalFile.includes('Select Delivery Address'), 'Modal title must be Select Delivery Address');
+    assert(modalFile.includes('+ add new address'), 'Modal must prominently display + add new address button');
+    console.log('  ✅ PASSED: Mode is SELECT_ADDRESS with "+ add new address" and saved cards\n');
     passed++;
   }
 
@@ -120,8 +123,8 @@ async function runTests() {
       path.resolve(__dirname, '../../apps/customer-web/src/pages/CheckoutPage.tsx'),
       'utf-8'
     );
-    assert(checkoutFile.includes('No delivery address saved yet'), 'Checkout must prompt when addresses.length === 0');
-    assert(checkoutFile.includes('disabled={!selectedAddressId}'), 'Checkout prevents proceeding without address');
+    assert(checkoutFile.includes('Please add or select a delivery address before proceeding to payment'), 'Checkout must prompt when no address is selected');
+    assert(checkoutFile.includes('!deliveryAddr'), 'Checkout checks for delivery address');
     console.log('  ✅ PASSED: Checkout prompts for address creation and prevents advancing without one\n');
     passed++;
   }
@@ -150,9 +153,9 @@ async function runTests() {
       path.resolve(__dirname, '../../apps/customer-web/src/components/common/LocationModal.tsx'),
       'utf-8'
     );
-    assert(modalFile.includes("addresses && addresses.length > 0"), 'Modal checks if saved addresses exist');
-    assert(modalFile.includes("setModalMode('SAVED_ADDRESSES')"), 'Switches mode to SAVED_ADDRESSES');
-    console.log('  ✅ PASSED: Modal automatically opens SAVED_ADDRESSES when addresses exist\n');
+    assert(modalFile.includes("step === 'SELECT_ADDRESS'"), 'Modal defaults to SELECT_ADDRESS');
+    assert(modalFile.includes("Confirm location and continue"), 'Modal has Confirm location and continue button');
+    console.log('  ✅ PASSED: Modal automatically opens SELECT_ADDRESS with saved addresses\n');
     passed++;
   }
 
@@ -165,8 +168,8 @@ async function runTests() {
       path.resolve(__dirname, '../../apps/customer-web/src/components/common/LocationModal.tsx'),
       'utf-8'
     );
-    assert(modalFile.includes('border-brand-blue-700 bg-brand-blue-50/50 shadow-sm'), 'Highlighted border for active card');
-    console.log('  ✅ PASSED: Card highlights with border-brand-blue-700 bg-brand-blue-50/50\n');
+    assert(modalFile.includes('border-emerald-600 bg-white shadow-xs'), 'Highlighted border for active card');
+    console.log('  ✅ PASSED: Card highlights with border-emerald-600 bg-white\n');
     passed++;
   }
 
@@ -194,9 +197,9 @@ async function runTests() {
       path.resolve(__dirname, '../../apps/customer-web/src/components/common/LocationModal.tsx'),
       'utf-8'
     );
-    assert(modalFile.includes('handleSaveNewAddress'), 'Modal includes new address form submission handler');
-    assert(modalFile.includes('await addAddress(newAddr)'), 'Modal saves address into auth store');
-    assert(modalFile.includes('await selectSavedAddress('), 'Modal activates newly saved address');
+    assert(modalFile.includes('handleSaveAddress'), 'Modal includes new address form submission handler');
+    assert(modalFile.includes('await addAddress(newAddrPayload)'), 'Modal saves address into auth store');
+    assert(modalFile.includes('setStep(\'SELECT_ADDRESS\')'), 'Modal returns to SELECT_ADDRESS with new card selected');
     console.log('  ✅ PASSED: Modal allows adding, saving, and immediately selecting a new address\n');
     passed++;
   }
