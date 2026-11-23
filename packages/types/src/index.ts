@@ -399,3 +399,247 @@ export interface FaqItem {
   question: string;
   answer: string;
 }
+
+// ========================================================
+// VENDOR PORTAL TYPES & INTERFACES (BUILDORA 60)
+// ========================================================
+
+export type BulkPricingTier = BulkPriceTier;
+
+export type VendorAccountStatus =
+  | 'DRAFT'
+  | 'REGISTERED'
+  | 'PENDING_VERIFICATION'
+  | 'KYC_PENDING'
+  | 'PENDING_APPROVAL'
+  | 'APPROVED'
+  | 'ACTIVE'
+  | 'REJECTED'
+  | 'SUSPENDED'
+  | 'DISABLED';
+
+export type VendorRole =
+  | 'VENDOR_OWNER'
+  | 'VENDOR_ADMIN'
+  | 'CATALOG_MANAGER'
+  | 'INVENTORY_MANAGER'
+  | 'ORDER_MANAGER'
+  | 'FINANCE_VIEWER';
+
+export interface VendorBankDetails {
+  accountHolderName: string;
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+  branch: string;
+  isVerified: boolean;
+}
+
+export interface VendorBusinessAddress {
+  building: string;
+  street: string;
+  area: string;
+  city: string;
+  state: string;
+  pincode: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface VendorBusinessInfo {
+  businessName: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  businessType: 'PROPRIETORSHIP' | 'PARTNERSHIP' | 'LLP' | 'PRIVATE_LIMITED' | 'PUBLIC_LIMITED';
+  description?: string;
+  logo?: string;
+  gstin?: string;
+  pan?: string;
+  businessRegNumber?: string;
+  address: VendorBusinessAddress;
+  bankDetails: VendorBankDetails;
+  categories: string[]; // category slugs from master catalog
+  storeName: string;
+  storeDescription?: string;
+  warehouseAddress?: string;
+  pickupPincode?: string;
+  assignedDarkStoreId?: string;
+  dispatchCutoff?: string;
+  preparationTimeMins?: number;
+  documents?: {
+    type: string;
+    name: string;
+    url: string;
+    uploadedAt: string;
+  }[];
+}
+
+export interface VendorProfile {
+  id: string;
+  tenantId: string;
+  businessInfo: VendorBusinessInfo;
+  status: VendorAccountStatus;
+  rejectionReason?: string;
+  rating: number;
+  productCount: number;
+  orderCount: number;
+  createdAt: string;
+  updatedAt: string;
+  // Convenience top-level mirrors
+  storeName?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  categories?: string[];
+  business?: any;
+  bankDetails?: any;
+}
+
+export interface VendorProduct {
+  id: string;
+  vendorId: string;
+  tenantId: string;
+  name: string;
+  slug: string;
+  sku: string;
+  brand: string;
+  brandSlug: string;
+  category: string;
+  categorySlug: string;
+  subcategory: string;
+  subcategorySlug: string;
+  subCategory?: string;
+  description: string;
+  shortDescription?: string;
+  images: string[];
+  price: number;
+  mrp: number;
+  discount: number;
+  unit: string;
+  packSize?: string;
+  gstRate: number;
+  rating: number;
+  reviewCount: number;
+  inStock: boolean;
+  stockCount: number;
+  stock?: number;
+  lowStockThreshold: number;
+  isBulkEligible: boolean;
+  bulkPricing?: BulkPriceTier[];
+  variants?: ProductVariant[];
+  specifications: Record<string, string>;
+  deliverySpeedAvailable: DeliverySpeed[];
+  approvalStatus: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+  isActive: boolean;
+  status?: 'ACTIVE' | 'DRAFT' | 'OUT_OF_STOCK';
+  warehouseLocation?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type VendorOrderStatus =
+  | 'NEW'
+  | 'ACCEPTED'
+  | 'PROCESSING'
+  | 'READY_FOR_DISPATCH'
+  | 'DISPATCHED'
+  | 'DELIVERED'
+  | 'CANCELLED'
+  | 'RETURNED';
+
+export interface VendorOrderItem {
+  productId: string;
+  sku: string;
+  name: string;
+  variantName?: string;
+  image: string;
+  unitPrice: number;
+  quantity: number;
+  gstAmount: number;
+  totalAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  netPayout: number;
+}
+
+export interface VendorOrder {
+  id: string;
+  orderNumber: string;
+  customerOrderId: string;
+  vendorId: string;
+  tenantId: string;
+  createdAt: string;
+  status: VendorOrderStatus;
+  items: VendorOrderItem[];
+  subtotal: number;
+  gstTotal: number;
+  commissionTotal: number;
+  netPayout: number;
+  deliveryAddress: Address;
+  pickupAddress?: Address;
+  deliveryOption: DeliverySpeed;
+  estimatedDispatchTime?: string;
+  totalAmount?: number;
+  customerName?: string;
+  customerPhone?: string;
+  timeline: {
+    status: VendorOrderStatus;
+    title: string;
+    description?: string;
+    timestamp: string;
+  }[];
+}
+
+export interface VendorSettlement {
+  id: string;
+  settlementNumber: string;
+  vendorId: string;
+  period: string;
+  orderCount: number;
+  grossRevenue: number;
+  platformCommission: number;
+  taxDeductions: number;
+  netPayable: number;
+  status: 'PENDING' | 'PROCESSING' | 'PAID';
+  paidAt?: string;
+  paymentReference?: string;
+  createdAt: string;
+  periodStart?: string;
+  periodEnd?: string;
+  grossAmount?: number;
+  commission?: number;
+  deductions?: number;
+  netAmount?: number;
+  utr?: string;
+}
+
+export interface VendorNotification {
+  id: string;
+  vendorId: string;
+  type: 'ORDER' | 'STOCK' | 'PRODUCT_APPROVAL' | 'SETTLEMENT' | 'SYSTEM';
+  title: string;
+  message: string;
+  read: boolean;
+  actionUrl?: string;
+  createdAt: string;
+}
+
+export interface VendorDashboardMetrics {
+  totalProducts: number;
+  activeProducts: number;
+  pendingApprovalProducts: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+  totalOrders: number;
+  pendingOrders: number;
+  processingOrders: number;
+  dispatchedOrders: number;
+  deliveredOrders: number;
+  grossRevenue: number;
+  netEarnings: number;
+  pendingSettlement: number;
+  completedPayouts: number;
+}
+

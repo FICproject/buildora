@@ -13,6 +13,7 @@ import { WalletController } from './modules/wallet/controllers/wallet.controller
 import { CustomerController } from './modules/customer/controllers/customer.controller';
 import { ServiceabilityController } from './modules/warehouses/controllers/serviceability.controller';
 import { CheckoutController } from './modules/checkout/controllers/checkout.controller';
+import { VendorController } from './modules/vendors/controllers/vendor.controller';
 
 @Module({
   imports: [],
@@ -30,6 +31,7 @@ import { CheckoutController } from './modules/checkout/controllers/checkout.cont
     WalletController,
     CustomerController,
     ServiceabilityController,
+    VendorController,
   ],
   providers: [DatabaseService],
   exports: [DatabaseService],
