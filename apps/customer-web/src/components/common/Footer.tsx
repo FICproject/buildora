@@ -161,8 +161,8 @@ export const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/bulk-orders" className="text-slate-400 hover:text-white transition-colors">
-                  Bulk Commercial Orders
+                <Link to="/tools/home-construction-calculator" className="text-slate-400 hover:text-white transition-colors">
+                  Home Construction Calculator
                 </Link>
               </li>
               <li>
@@ -171,8 +171,8 @@ export const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/price-lists" className="text-slate-400 hover:text-white transition-colors">
-                  Daily Price Lists
+                <Link to="/products" className="text-slate-400 hover:text-white transition-colors">
+                  Catalog &amp; Materials
                 </Link>
               </li>
               <li>

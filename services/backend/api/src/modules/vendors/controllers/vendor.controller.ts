@@ -17,9 +17,11 @@ import {
   VendorSettlement,
   VendorNotification,
   VendorDashboardMetrics,
-  BulkPriceTier
+  BulkPriceTier,
+  Product
 } from '@buildora/types';
 import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES } from '@buildora/constants';
+import { dbStore } from '../../../database/store';
 
 // Initial Demo Vendor Profile
 const DEFAULT_VENDOR_ID = 'vnd-apex-01';
@@ -289,6 +291,72 @@ let vendorNotifications: VendorNotification[] = [
   }
 ];
 
+function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
+  const targetSku = vp.sku;
+  const targetSlug = vp.slug;
+  const targetId = vp.id.replace(/^vp-/, '');
+
+  let custProd = dbStore.products.find(
+    (p) => p.sku === targetSku || p.slug === targetSlug || p.id === targetId || p.id === vp.id
+  );
+
+  if (custProd) {
+    custProd.price = vp.price;
+    custProd.mrp = vp.mrp;
+    custProd.discount = vp.discount;
+    custProd.stockCount = vp.stockCount;
+    custProd.inStock = vp.inStock;
+    if (vp.variants && vp.variants.length > 0) {
+      custProd.variants = vp.variants;
+    }
+    if (vp.attributes && vp.attributes.length > 0) {
+      custProd.attributes = vp.attributes;
+    }
+    if (vp.bulkPricing) {
+      custProd.bulkPricing = vp.bulkPricing;
+    }
+    if (vp.isBulkEligible !== undefined) {
+      custProd.isBulkEligible = vp.isBulkEligible;
+    }
+  } else if (vp.approvalStatus === 'APPROVED' || vp.isActive) {
+    const newCustomerProd: Product = {
+      id: targetId,
+      name: vp.name,
+      slug: vp.slug,
+      sku: vp.sku,
+      brand: vp.brand,
+      brandSlug: vp.brandSlug,
+      category: vp.category,
+      categorySlug: vp.categorySlug,
+      subcategory: vp.subcategory,
+      subcategorySlug: vp.subcategorySlug,
+      description: vp.description,
+      shortDescription: vp.shortDescription,
+      images: vp.images,
+      price: vp.price,
+      mrp: vp.mrp,
+      discount: vp.discount,
+      unit: vp.unit,
+      packSize: vp.packSize,
+      gstRate: vp.gstRate,
+      rating: vp.rating,
+      reviewCount: vp.reviewCount,
+      inStock: vp.inStock,
+      stockCount: vp.stockCount,
+      isBulkEligible: vp.isBulkEligible,
+      bulkPricing: vp.bulkPricing,
+      variants: vp.variants,
+      attributes: vp.attributes,
+      specifications: vp.specifications,
+      deliverySpeedAvailable: vp.deliverySpeedAvailable,
+      applications: [],
+      installationTips: [],
+      safetyInstructions: []
+    };
+    dbStore.products.unshift(newCustomerProd);
+  }
+}
+
 @Controller('api/v1/vendor')
 export class VendorController {
   // ==========================================
@@ -545,6 +613,7 @@ export class VendorController {
     };
 
     vendorProducts.unshift(newProd);
+    syncVendorProductToCustomerCatalog(newProd);
     return {
       success: true,
       message: 'Product submitted for review successfully.',
@@ -570,6 +639,8 @@ export class VendorController {
       updatedAt: new Date().toISOString()
     };
 
+    syncVendorProductToCustomerCatalog(vendorProducts[idx]);
+
     return {
       success: true,
       message: 'Product updated successfully',
@@ -579,7 +650,14 @@ export class VendorController {
 
   @Delete('products/:id')
   deleteProduct(@Param('id') id: string) {
+    const prod = vendorProducts.find((p) => p.id === id);
     vendorProducts = vendorProducts.filter((p) => p.id !== id);
+    if (prod) {
+      const custIdx = dbStore.products.findIndex((p) => p.sku === prod.sku || p.slug === prod.slug || p.id === prod.id);
+      if (custIdx !== -1) {
+        dbStore.products.splice(custIdx, 1);
+      }
+    }
     return {
       success: true,
       message: 'Product removed from vendor catalog'
@@ -624,6 +702,7 @@ export class VendorController {
       prod.isBulkEligible = body.isBulkEligible;
     }
     prod.updatedAt = new Date().toISOString();
+    syncVendorProductToCustomerCatalog(prod);
 
     return {
       success: true,
@@ -676,6 +755,7 @@ export class VendorController {
 
     prod.inStock = prod.stockCount > 0;
     prod.updatedAt = new Date().toISOString();
+    syncVendorProductToCustomerCatalog(prod);
 
     return {
       success: true,

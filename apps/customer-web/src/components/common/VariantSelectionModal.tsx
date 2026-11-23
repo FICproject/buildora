@@ -144,12 +144,23 @@ export const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                         </span>
                       )}
                     </div>
+                    <div className={`text-[10px] font-bold ${v.inStock && (v.stock === undefined || v.stock > 0) ? 'text-slate-500' : 'text-rose-600'}`}>
+                      {v.inStock && (v.stock === undefined || v.stock > 0) ? (v.stock ? `${v.stock} units available` : 'In Stock') : 'Out of Stock'}
+                    </div>
                   </div>
                 </div>
 
                 {/* Right: Add Button or Variant-Specific Quantity Control */}
                 <div className="flex-shrink-0">
-                  {inCartQty > 0 ? (
+                  {!v.inStock || (v.stock !== undefined && v.stock <= 0) ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-24 sm:w-28 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none shadow-2xs flex items-center justify-center"
+                    >
+                      Out of Stock
+                    </button>
+                  ) : inCartQty > 0 ? (
                     <div className="flex items-center gap-1.5">
                       <QuantityControl
                         quantity={inCartQty}
@@ -169,9 +180,8 @@ export const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                   ) : (
                     <button
                       type="button"
-                      disabled={!v.inStock}
                       onClick={() => addItem(product, 1, v)}
-                      className="w-24 sm:w-28 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#1e7e34] hover:bg-[#18682a] text-white transition-colors shadow-xs flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer"
+                      className="w-24 sm:w-28 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-[#1e7e34] hover:bg-[#18682a] text-white transition-colors shadow-xs flex items-center justify-center select-none cursor-pointer"
                     >
                       Add
                     </button>

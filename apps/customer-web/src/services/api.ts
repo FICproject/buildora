@@ -7,8 +7,16 @@ import {
   Address,
   CustomerProfile,
   Order,
-  CartItem
+  CartItem,
+  ConstructionCalculatorInput,
+  ConstructionCalculatorResult,
+  SavedConstructionProject,
+  ConstructionQuotationRequest
 } from '@buildora/types';
+import {
+  calculateFullConstructionEstimate,
+  SUPPORTED_INDIAN_LOCATIONS
+} from '@buildora/utils';
 import {
   MASTER_CATEGORIES,
   MASTER_BRANDS,
@@ -97,6 +105,23 @@ async function postJson<T>(endpoint: string, body: any): Promise<T> {
   }
 }
 
+function applyLocalOverrides(products: Product[]): Product[] {
+  try {
+    const raw = localStorage.getItem('buildora_vendor_product_overrides');
+    if (!raw) return products;
+    const overrides: Record<string, Partial<Product>> = JSON.parse(raw);
+    return products.map((p) => {
+      const match = overrides[p.id] || overrides[p.sku] || overrides[p.slug];
+      if (match) {
+        return { ...p, ...match };
+      }
+      return p;
+    });
+  } catch {
+    return products;
+  }
+}
+
 export const api = {
   // Health & Diagnostics
   async getHealth() {
@@ -143,6 +168,7 @@ export const api = {
 
     const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
     let products = await request<Product[]>(`/products${queryStr}`, {}, SEED_PRODUCTS);
+    products = applyLocalOverrides(products);
 
     if (!params) return products;
 
@@ -205,6 +231,15 @@ export const api = {
         body: JSON.stringify(payload)
       },
       null
+    );
+  },
+
+  async validateCartItems(
+    items: Array<{ productId: string; variantId?: string; quantity: number; unitPrice?: number }>
+  ) {
+    return postJson<{ success: boolean; isValid: boolean; issues: any[]; validatedItems: any[] }>(
+      '/cart/validate',
+      { items }
     );
   },
 
@@ -437,5 +472,197 @@ export const api = {
       { method: 'GET' },
       null
     );
+  },
+
+  // ==========================================
+  // Construction Calculator API Methods
+  // ==========================================
+
+  async getConstructionCalculatorConfig(): Promise<any> {
+    return request<any>(
+      '/construction-calculator/config',
+      {},
+      {
+        success: true,
+        locations: SUPPORTED_INDIAN_LOCATIONS
+      }
+    );
+  },
+
+  async calculateConstructionCost(
+    input: ConstructionCalculatorInput
+  ): Promise<ConstructionCalculatorResult> {
+    try {
+      const res = await request<{ success: boolean; data: ConstructionCalculatorResult }>(
+        '/construction-calculator/calculate',
+        {
+          method: 'POST',
+          body: JSON.stringify(input)
+        },
+        null
+      );
+      if (res && res.data) {
+        return res.data;
+      }
+    } catch (e) {
+      // Fallback to client-side engine
+    }
+    return calculateFullConstructionEstimate(input);
+  },
+
+  async getSavedConstructionProjects(userId?: string): Promise<SavedConstructionProject[]> {
+    try {
+      const res = await request<{ success: boolean; data: SavedConstructionProject[] }>(
+        userId ? `/construction-calculator/projects?userId=${encodeURIComponent(userId)}` : '/construction-calculator/projects',
+        {},
+        null
+      );
+      if (res && res.data) return res.data;
+    } catch (e) {
+      // Fallback to localStorage
+    }
+    const local = localStorage.getItem('buildora_saved_construction_projects');
+    return local ? JSON.parse(local) : [];
+  },
+
+  async saveConstructionProject(payload: {
+    projectName: string;
+    input: ConstructionCalculatorInput;
+    userId?: string;
+  }): Promise<SavedConstructionProject> {
+    const localProjects = await api.getSavedConstructionProjects(payload.userId);
+    const resultSnapshot = calculateFullConstructionEstimate(payload.input);
+    const newProj: SavedConstructionProject = {
+      id: `proj-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      userId: payload.userId || 'usr-customer-1',
+      projectName: payload.projectName,
+      input: payload.input,
+      resultSnapshot,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      const res = await request<{ success: boolean; data: SavedConstructionProject }>(
+        '/construction-calculator/projects',
+        {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        },
+        null
+      );
+      if (res && res.data) {
+        localProjects.unshift(res.data);
+        localStorage.setItem('buildora_saved_construction_projects', JSON.stringify(localProjects));
+        return res.data;
+      }
+    } catch (e) {
+      // Fallback save in localStorage
+    }
+
+    localProjects.unshift(newProj);
+    localStorage.setItem('buildora_saved_construction_projects', JSON.stringify(localProjects));
+    return newProj;
+  },
+
+  async updateConstructionProject(
+    id: string,
+    payload: { projectName?: string; input?: ConstructionCalculatorInput }
+  ): Promise<SavedConstructionProject | null> {
+    const localProjects = await api.getSavedConstructionProjects();
+    const idx = localProjects.findIndex((p) => p.id === id);
+
+    try {
+      const res = await request<{ success: boolean; data: SavedConstructionProject }>(
+        `/construction-calculator/projects/${id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        },
+        null
+      );
+      if (res && res.data) {
+        if (idx !== -1) {
+          localProjects[idx] = res.data;
+          localStorage.setItem('buildora_saved_construction_projects', JSON.stringify(localProjects));
+        }
+        return res.data;
+      }
+    } catch (e) {
+      // Local fallback
+    }
+
+    if (idx !== -1) {
+      const current = localProjects[idx];
+      const updatedInput = payload.input || current.input;
+      const updatedProj: SavedConstructionProject = {
+        ...current,
+        projectName: payload.projectName || current.projectName,
+        input: updatedInput,
+        resultSnapshot: payload.input ? calculateFullConstructionEstimate(payload.input) : current.resultSnapshot,
+        updatedAt: new Date().toISOString()
+      };
+      localProjects[idx] = updatedProj;
+      localStorage.setItem('buildora_saved_construction_projects', JSON.stringify(localProjects));
+      return updatedProj;
+    }
+    return null;
+  },
+
+  async deleteConstructionProject(id: string): Promise<boolean> {
+    const localProjects = await api.getSavedConstructionProjects();
+    const filtered = localProjects.filter((p) => p.id !== id);
+    localStorage.setItem('buildora_saved_construction_projects', JSON.stringify(filtered));
+
+    try {
+      await request(
+        `/construction-calculator/projects/${id}`,
+        { method: 'DELETE' },
+        null
+      );
+      return true;
+    } catch (e) {
+      return true;
+    }
+  },
+
+  async requestConstructionQuotation(payload: {
+    customerName: string;
+    phone: string;
+    email?: string;
+    state: string;
+    city: string;
+    builtUpArea: number;
+    categoriesRequested: string[];
+    notes?: string;
+  }): Promise<ConstructionQuotationRequest> {
+    const fallbackQuote: ConstructionQuotationRequest = {
+      id: `quote-${Date.now()}`,
+      customerName: payload.customerName,
+      phone: payload.phone,
+      email: payload.email,
+      state: payload.state,
+      city: payload.city,
+      builtUpArea: payload.builtUpArea,
+      categoriesRequested: payload.categoriesRequested,
+      notes: payload.notes,
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      const res = await request<{ success: boolean; data: ConstructionQuotationRequest }>(
+        '/construction-calculator/quotes',
+        {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        },
+        null
+      );
+      if (res && res.data) return res.data;
+    } catch (e) {
+      // Fallback
+    }
+    return fallbackQuote;
   }
 };

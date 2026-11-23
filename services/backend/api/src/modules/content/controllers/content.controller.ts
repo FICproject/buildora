@@ -43,22 +43,4 @@ export class ContentController {
       data: inquiry
     };
   }
-
-  @Post('bulk-orders/quotation')
-  submitBulkQuotation(@Body() body: any) {
-    const quote = {
-      id: 'quo-' + Date.now(),
-      quoteNumber: 'QUO-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000),
-      ...body,
-      status: 'PENDING',
-      receivedAt: new Date().toISOString()
-    };
-    dbStore.bulkQuotations.push(quote);
-
-    return {
-      success: true,
-      message: 'Bulk quotation request submitted successfully.',
-      data: quote
-    };
-  }
 }

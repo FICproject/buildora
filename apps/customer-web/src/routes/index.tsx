@@ -14,7 +14,7 @@ import { SearchPage } from '../pages/SearchPage';
 import { BrandsPage } from '../pages/BrandsPage';
 import { NewLaunchesPage } from '../pages/NewLaunchesPage';
 import { DealsPage } from '../pages/DealsPage';
-import { BulkOrdersPage } from '../pages/BulkOrdersPage';
+import { HomeConstructionCalculatorPage } from '../pages/HomeConstructionCalculatorPage';
 import { CartPage } from '../pages/CartPage';
 import { CheckoutPage } from '../pages/CheckoutPage';
 import { AccountDashboardPage } from '../pages/AccountDashboardPage';
@@ -75,8 +75,9 @@ export const router = createBrowserRouter([
       { path: 'brands/:slug', element: <BrandsPage /> },
       { path: 'deals', element: <DealsPage /> },
       { path: 'offers', element: <DealsPage /> },
-      { path: 'bulk-orders', element: <BulkOrdersPage /> },
-      { path: 'price-lists', element: <BulkOrdersPage /> },
+      { path: 'tools/home-construction-calculator', element: <HomeConstructionCalculatorPage /> },
+      { path: 'home-construction-calculator', element: <HomeConstructionCalculatorPage /> },
+      { path: 'construction-calculator', element: <HomeConstructionCalculatorPage /> },
       { path: 'cart', element: <CartPage /> },
       { path: 'wishlist', element: <WishlistPage /> },
       { path: 'compare', element: <ComparePage /> },

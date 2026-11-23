@@ -124,7 +124,7 @@ export const BulkPricingModal: React.FC = () => {
           </ul>
 
           <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-500 leading-relaxed">
-            Bulk discounts apply automatically in your cart as quantities increase. For site truckload orders, request institutional pricing at <a href="/bulk-orders" className="text-brand-blue-700 font-bold hover:underline">/bulk-orders</a>.
+            Tiered volume discounts apply automatically to your order as item quantities increase in the cart.
           </div>
         </div>
       </div>

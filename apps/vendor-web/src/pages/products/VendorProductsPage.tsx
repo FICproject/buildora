@@ -18,7 +18,24 @@ import { Card, CardHeader, CardContent } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Modal } from '../../components/common/Modal';
-import { VendorProduct } from '@buildora/types';
+import { VendorProduct, AttributeSelectorType } from '@buildora/types';
+
+interface FormAttribute {
+  id: string;
+  name: string;
+  uiType: AttributeSelectorType;
+  optionsStr: string;
+}
+
+interface FormVariant {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  mrp: number;
+  stock: number;
+  inStock: boolean;
+}
 
 export const VendorProductsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -52,6 +69,13 @@ export const VendorProductsPage: React.FC = () => {
   const [lowStockThreshold, setLowStockThreshold] = useState('40');
   const [description, setDescription] = useState('');
 
+  // Attribute & Variant configuration states (Phase 7)
+  const [hasVariants, setHasVariants] = useState(false);
+  const [formAttributes, setFormAttributes] = useState<FormAttribute[]>([
+    { id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'M6, M8' }
+  ]);
+  const [formVariants, setFormVariants] = useState<FormVariant[]>([]);
+
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -69,6 +93,9 @@ export const VendorProductsPage: React.FC = () => {
     setStock('250');
     setLowStockThreshold('40');
     setDescription('High-strength grade cement manufactured directly at tier-1 plants for structural RCC work.');
+    setHasVariants(false);
+    setFormAttributes([{ id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'M6, M8' }]);
+    setFormVariants([]);
     setIsModalOpen(true);
   };
 
@@ -85,11 +112,100 @@ export const VendorProductsPage: React.FC = () => {
     setStock(p.stock.toString());
     setLowStockThreshold((p.lowStockThreshold || 30).toString());
     setDescription(p.description || '');
+
+    const hasV = Boolean((p.variants && p.variants.length > 1) || (p.attributes && p.attributes.length > 0));
+    setHasVariants(hasV);
+
+    if (p.attributes && p.attributes.length > 0) {
+      setFormAttributes(
+        p.attributes.map((a, i) => ({
+          id: a.id || `attr-${i}`,
+          name: a.name,
+          uiType: a.uiType || 'cards',
+          optionsStr: a.options
+            .map((o: any) => (typeof o === 'string' ? o : o.value || ''))
+            .join(', ')
+        }))
+      );
+    } else {
+      setFormAttributes([{ id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard' }]);
+    }
+
+    if (p.variants && p.variants.length > 0) {
+      setFormVariants(
+        p.variants.map((v) => ({
+          id: v.id,
+          name: v.name,
+          sku: v.sku,
+          price: v.price,
+          mrp: v.mrp,
+          stock: v.stock || 50,
+          inStock: v.inStock !== false
+        }))
+      );
+    } else {
+      setFormVariants([]);
+    }
+
     setIsModalOpen(true);
+  };
+
+  const handleAddVariantRow = () => {
+    const newIdx = formVariants.length + 1;
+    setFormVariants([
+      ...formVariants,
+      {
+        id: `v-custom-${Date.now()}-${newIdx}`,
+        name: `Option ${newIdx}`,
+        sku: `${sku}-V${newIdx}`,
+        price: Number(price) || 100,
+        mrp: Number(mrp) || 150,
+        stock: 50,
+        inStock: true
+      }
+    ]);
+  };
+
+  const handleRemoveVariantRow = (idx: number) => {
+    setFormVariants(formVariants.filter((_, i) => i !== idx));
+  };
+
+  const handleVariantChange = (idx: number, field: keyof FormVariant, val: any) => {
+    const updated = [...formVariants];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setFormVariants(updated);
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const finalAttributes = hasVariants
+      ? formAttributes.map((a) => ({
+          id: a.id,
+          name: a.name,
+          uiType: a.uiType,
+          options: a.optionsStr
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        }))
+      : undefined;
+
+    const finalVariants =
+      hasVariants && formVariants.length > 0
+        ? formVariants.map((v) => ({
+            id: v.id,
+            name: v.name,
+            sku: v.sku,
+            attributes: { [formAttributes[0]?.name || 'Size']: v.name },
+            price: Number(v.price),
+            mrp: Number(v.mrp),
+            stock: Number(v.stock),
+            inStock: v.inStock && Number(v.stock) > 0,
+            discount: v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0
+          }))
+        : undefined;
+
     const productData = {
       name,
       sku,
@@ -113,10 +229,12 @@ export const VendorProductsPage: React.FC = () => {
         { minQuantity: 50, discountPercentage: 8, unitPrice: Math.round(Number(price) * 0.92) },
       ],
       warehouseLocation: 'WH-BLR-04 Peenya Hub',
+      attributes: finalAttributes,
+      variants: finalVariants
     };
 
     if (editingProduct) {
-      await updateProduct(editingProduct.id, productData);
+      await updateProduct(editingProduct.id, productData as any);
     } else {
       await addProduct(productData as any);
     }
@@ -506,6 +624,189 @@ export const VendorProductsPage: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+
+            {/* Attributes & Variant Configuration (HomeRun Parity) */}
+            <div className="md:col-span-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-slate-900">
+                    Variant & Attribute Configuration
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Configure selectable sizes, colours, pack sizes, and UI presentation type (Cards, Dropdown, Pills).
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={hasVariants}
+                    onChange={(e) => setHasVariants(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                  />
+                  <span>Has Options / Variants</span>
+                </label>
+              </div>
+
+              {hasVariants && (
+                <div className="space-y-4 pt-2 border-t border-slate-200">
+                  {/* Attribute Settings */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Attribute Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formAttributes[0]?.name || ''}
+                        onChange={(e) => {
+                          const updated = [...formAttributes];
+                          if (updated[0]) updated[0].name = e.target.value;
+                          setFormAttributes(updated);
+                        }}
+                        placeholder="e.g. Size, Pack Size, Colour"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        UI Presentation Selector
+                      </label>
+                      <select
+                        value={formAttributes[0]?.uiType || 'cards'}
+                        onChange={(e) => {
+                          const updated = [...formAttributes];
+                          if (updated[0]) updated[0].uiType = e.target.value as AttributeSelectorType;
+                          setFormAttributes(updated);
+                        }}
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="cards">Option Cards (e.g. Size / Pack Size)</option>
+                        <option value="dropdown">Dropdown Selector (e.g. Module Sizes)</option>
+                        <option value="pills">Pill Buttons (e.g. Colours, Finish)</option>
+                        <option value="radio">Radio Buttons</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Options (comma-separated)
+                      </label>
+                      <input
+                        type="text"
+                        value={formAttributes[0]?.optionsStr || ''}
+                        onChange={(e) => {
+                          const updated = [...formAttributes];
+                          if (updated[0]) updated[0].optionsStr = e.target.value;
+                          setFormAttributes(updated);
+                        }}
+                        placeholder="e.g. 2 Module, 4 Module, 6 Module"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Variant Matrix Table */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-700">Variant Inventory & Pricing Matrix</span>
+                      <button
+                        type="button"
+                        onClick={handleAddVariantRow}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Variant
+                      </button>
+                    </div>
+
+                    {formVariants.length === 0 ? (
+                      <div className="text-center py-3 text-xs text-slate-400 bg-white rounded-lg border border-dashed border-slate-300">
+                        No individual variants added yet. Click "+ Add Variant" to configure custom pricing/stock per option.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs bg-white rounded-lg border border-slate-200">
+                          <thead className="bg-slate-100 text-[10px] uppercase font-bold text-slate-600 border-b border-slate-200">
+                            <tr>
+                              <th className="p-2">Variant Name</th>
+                              <th className="p-2">SKU</th>
+                              <th className="p-2">Price (₹)</th>
+                              <th className="p-2">MRP (₹)</th>
+                              <th className="p-2">Stock</th>
+                              <th className="p-2 text-center">In Stock</th>
+                              <th className="p-2 text-center">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {formVariants.map((v, vIdx) => (
+                              <tr key={v.id || vIdx}>
+                                <td className="p-1.5">
+                                  <input
+                                    type="text"
+                                    value={v.name}
+                                    onChange={(e) => handleVariantChange(vIdx, 'name', e.target.value)}
+                                    className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs"
+                                  />
+                                </td>
+                                <td className="p-1.5">
+                                  <input
+                                    type="text"
+                                    value={v.sku}
+                                    onChange={(e) => handleVariantChange(vIdx, 'sku', e.target.value)}
+                                    className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs font-mono"
+                                  />
+                                </td>
+                                <td className="p-1.5">
+                                  <input
+                                    type="number"
+                                    value={v.price}
+                                    onChange={(e) => handleVariantChange(vIdx, 'price', Number(e.target.value))}
+                                    className="w-16 px-1.5 py-1 border border-slate-200 rounded text-xs"
+                                  />
+                                </td>
+                                <td className="p-1.5">
+                                  <input
+                                    type="number"
+                                    value={v.mrp}
+                                    onChange={(e) => handleVariantChange(vIdx, 'mrp', Number(e.target.value))}
+                                    className="w-16 px-1.5 py-1 border border-slate-200 rounded text-xs"
+                                  />
+                                </td>
+                                <td className="p-1.5">
+                                  <input
+                                    type="number"
+                                    value={v.stock}
+                                    onChange={(e) => handleVariantChange(vIdx, 'stock', Number(e.target.value))}
+                                    className="w-16 px-1.5 py-1 border border-slate-200 rounded text-xs"
+                                  />
+                                </td>
+                                <td className="p-1.5 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={v.inStock}
+                                    onChange={(e) => handleVariantChange(vIdx, 'inStock', e.target.checked)}
+                                    className="w-3.5 h-3.5 text-blue-600 rounded"
+                                  />
+                                </td>
+                                <td className="p-1.5 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveVariantRow(vIdx)}
+                                    className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

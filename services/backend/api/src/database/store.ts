@@ -7,7 +7,17 @@ import {
   SERVICEABLE_PINCODES,
   AVAILABLE_COUPONS
 } from '@buildora/constants';
-import { Product, Order, SupportTicket, Category, Brand, Address, WalletTransaction } from '@buildora/types';
+import {
+  Product,
+  Order,
+  SupportTicket,
+  Category,
+  Brand,
+  Address,
+  WalletTransaction,
+  SavedConstructionProject,
+  ConstructionQuotationRequest
+} from '@buildora/types';
 
 class DataStore {
   public categories: Category[] = [...MASTER_CATEGORIES];
@@ -179,7 +189,8 @@ class DataStore {
   ];
 
   public contactInquiries: any[] = [];
-  public bulkQuotations: any[] = [];
+  public constructionProjects: SavedConstructionProject[] = [];
+  public constructionQuotes: ConstructionQuotationRequest[] = [];
 }
 
 export const dbStore = new DataStore();

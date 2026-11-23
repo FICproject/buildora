@@ -80,16 +80,28 @@ export interface BulkPriceTier {
   unitPrice: number;
 }
 
+export type AttributeSelectorType = 'cards' | 'pills' | 'dropdown' | 'color_swatches' | 'radio';
+
+export interface ProductAttribute {
+  id: string;
+  name: string; // e.g., "Size", "Colour", "Pack Size"
+  uiType: AttributeSelectorType;
+  options: string[]; // e.g., ["20mm - 50 meters", "25mm - 25 meters"]
+}
+
 export interface ProductVariant {
   id: string;
   sku: string;
   name: string;
-  attributes: Record<string, string>; // e.g., { "Bag Weight": "50 kg", "Grade": "OPC 53" }
+  attributes: Record<string, string>; // e.g., { "Size": "20mm - 50 meters", "Colour": "Grey" }
   price: number;
   mrp: number;
+  discount?: number;
   stock: number;
   inStock: boolean;
   image?: string;
+  bulkPricing?: BulkPriceTier[];
+  unit?: string;
 }
 
 export interface ProductFaq {
@@ -123,6 +135,7 @@ export interface Product {
   stockCount: number;
   isBulkEligible: boolean;
   bulkPricing?: BulkPriceTier[];
+  attributes?: ProductAttribute[];
   variants?: ProductVariant[];
   specifications: Record<string, string>;
   categoryAttributes?: Record<string, any>;
@@ -527,6 +540,7 @@ export interface VendorProduct {
   lowStockThreshold: number;
   isBulkEligible: boolean;
   bulkPricing?: BulkPriceTier[];
+  attributes?: ProductAttribute[];
   variants?: ProductVariant[];
   specifications: Record<string, string>;
   deliverySpeedAvailable: DeliverySpeed[];
@@ -642,4 +656,144 @@ export interface VendorDashboardMetrics {
   pendingSettlement: number;
   completedPayouts: number;
 }
+
+// ========================================================
+// HOME CONSTRUCTION CALCULATOR TYPES (Reference-Based 13 Categories)
+// ========================================================
+
+export type ConstructionQualityTier = 'BASIC' | 'STANDARD' | 'PREMIUM';
+
+export type ConstructionPropertyType =
+  | 'INDEPENDENT_HOUSE'
+  | 'VILLA'
+  | 'APARTMENT'
+  | 'COMMERCIAL_BUILDING'
+  | 'RENOVATION';
+
+export type ConstructionStageType =
+  | 'FULL_CONSTRUCTION'
+  | 'FOUNDATION'
+  | 'STRUCTURAL'
+  | 'BRICKWORK'
+  | 'ROOFING'
+  | 'INTERIOR_FINISHING';
+
+export type ConstructionAreaUnit = 'SQ_FT' | 'SQ_M';
+
+export type ConstructionCategoryKey =
+  | 'cement'
+  | 'steel'
+  | 'bricks'
+  | 'aggregate'
+  | 'sand'
+  | 'tiles_flooring'
+  | 'windows_grills'
+  | 'doors'
+  | 'electrical_wiring'
+  | 'paint_putty'
+  | 'sanitaryware'
+  | 'modular_kitchen'
+  | 'contractor_labour';
+
+export interface ConstructionCategoryItem {
+  key: ConstructionCategoryKey;
+  name: string;
+  iconName: string;
+  quantity: number;
+  unit: string;
+  specification: string;
+  quality: ConstructionQualityTier;
+  cost: number;
+  percentage: number;
+  isDeliverable: boolean;
+  categorySlug?: string;
+  recommendedProductSlug?: string;
+  isExcluded: boolean;
+  hasOverride: boolean;
+}
+
+export interface ConstructionAdvancedDetails {
+  bedrooms?: number;
+  bathrooms?: number;
+  kitchens?: number;
+  siteCondition?: 'PLAIN' | 'SLOPED_ROCKY' | 'BLACK_COTTON';
+  brandPreference?: string;
+  additionalInclusions?: {
+    compoundWall?: boolean;
+    sumpAndTank?: boolean;
+    rooftopSolar?: boolean;
+    falseCeiling?: boolean;
+  };
+}
+
+export interface ConstructionCalculatorInput {
+  state: string;
+  city: string;
+  builtUpArea: number;
+  areaUnit: ConstructionAreaUnit;
+  propertyType: ConstructionPropertyType;
+  floors: number;
+  stage: ConstructionStageType;
+  globalQuality: ConstructionQualityTier;
+  categoryOverrides?: Partial<Record<ConstructionCategoryKey, ConstructionQualityTier>>;
+  excludedCategories?: ConstructionCategoryKey[];
+  advancedDetails?: ConstructionAdvancedDetails;
+}
+
+export interface ConstructionCostChartSegment {
+  key: ConstructionCategoryKey;
+  name: string;
+  amount: number;
+  percentage: number;
+  color: string;
+  isDeliverable: boolean;
+}
+
+export interface ConstructionCalculatorResult {
+  summary: {
+    builtUpAreaSqFt: number;
+    state: string;
+    city: string;
+    propertyType: ConstructionPropertyType;
+    floors: number;
+    stage: ConstructionStageType;
+    globalQuality: ConstructionQualityTier;
+    totalEstimatedCost: number;
+    costPerSqFt: number;
+    materialCost: number;
+    labourCost: number;
+    architecturalCost: number;
+    categoriesIncludedCount: number;
+    deliverableCategoriesCount: number;
+    currency: string;
+  };
+  categories: ConstructionCategoryItem[];
+  chartData: ConstructionCostChartSegment[];
+  calculationTimestamp: string;
+}
+
+export interface SavedConstructionProject {
+  id: string;
+  userId?: string;
+  projectName: string;
+  input: ConstructionCalculatorInput;
+  resultSnapshot: ConstructionCalculatorResult;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConstructionQuotationRequest {
+  id: string;
+  customerName: string;
+  phone: string;
+  email?: string;
+  state: string;
+  city: string;
+  builtUpArea: number;
+  categoriesRequested: string[];
+  notes?: string;
+  status: 'PENDING' | 'CONTACTED' | 'QUOTED' | 'CLOSED';
+  createdAt: string;
+}
+
 

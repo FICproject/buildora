@@ -120,9 +120,9 @@ export const SEED_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80'
     ],
-    price: 40,
-    mrp: 40,
-    discount: 0,
+    price: 1240,
+    mrp: 1350,
+    discount: 8,
     unit: '1 Kg',
     packSize: '1 Kg, 5 Kg, 50 Kg',
     gstRate: 28,
@@ -135,12 +135,20 @@ export const SEED_PRODUCTS: Product[] = [
       { minQuantity: 10, discountPercentage: 5, unitPrice: 38 },
       { minQuantity: 50, discountPercentage: 8, unitPrice: 36 }
     ],
+    attributes: [
+      {
+        id: 'attr-pack-size',
+        name: 'Pack Size',
+        uiType: 'cards',
+        options: ['50 Kg', '5 Kg', '1 Kg']
+      }
+    ],
     variants: [
       {
         id: 'v-birla-50kg',
         sku: 'CEM-BIR-WHT-50KG',
         name: '50 Kg',
-        attributes: { 'Weight': '50 Kg' },
+        attributes: { 'Pack Size': '50 Kg' },
         price: 1240,
         mrp: 1350,
         stock: 500,
@@ -151,7 +159,7 @@ export const SEED_PRODUCTS: Product[] = [
         id: 'v-birla-5kg',
         sku: 'CEM-BIR-WHT-5KG',
         name: '5 Kg',
-        attributes: { 'Weight': '5 Kg' },
+        attributes: { 'Pack Size': '5 Kg' },
         price: 140,
         mrp: 150,
         stock: 1200,
@@ -162,7 +170,7 @@ export const SEED_PRODUCTS: Product[] = [
         id: 'v-birla-1kg',
         sku: 'CEM-BIR-WHT-1KG',
         name: '1 Kg',
-        attributes: { 'Weight': '1 Kg' },
+        attributes: { 'Pack Size': '1 Kg' },
         price: 40,
         mrp: 40,
         stock: 2500,
@@ -2026,6 +2034,308 @@ export const SEED_PRODUCTS: Product[] = [
       'Pattern': 'Wood Plank Grain',
       'Coverage Area': '21.5 sq.ft per Box (8 Planks)',
       'Application': 'Residential Bedroom & Living Room Floors'
+    }
+  },
+
+  // 52. Reference Product A: Ebco Mounting Screw Kit (Option Cards UI)
+  {
+    id: 'prod-ebco-screw-kit',
+    name: 'Ebco Mounting Screw Kit for Pro-Lift Bed Fittings',
+    slug: 'ebco-mounting-screw-kit-for-pro-lift-bed-fittings',
+    sku: 'PLBF-M6K',
+    brand: 'Ebco',
+    brandSlug: 'ebco',
+    category: 'Wardrobe & Bed Fittings',
+    categorySlug: 'wardrobe-bed-fittings',
+    subcategory: 'Bed & Cabinet Hydraulics',
+    subcategorySlug: 'bed-cabinet-hydraulics',
+    description: 'High-tensile zinc-plated carbon steel hex bolts, nylon-insert lock nuts, and load-spreading washers manufactured specifically for Ebco Pro-Lift and Pro-Lift Heavy Bed Fittings. Engineered to withstand cyclic hydraulic gas lift stress without shearing or loosening.',
+    shortDescription: 'High-tensile mounting hardware kit for hydraulic bed lift mechanisms.',
+    images: [
+      'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 44,
+    mrp: 64,
+    discount: 31,
+    unit: '1 Set (6N Bolt, 6N Nut, 6N Washer)',
+    packSize: '1 Set',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 142,
+    inStock: true,
+    stockCount: 250,
+    isBulkEligible: true,
+    bulkPricing: [
+      { minQuantity: 10, discountPercentage: 5, unitPrice: 42 },
+      { minQuantity: 50, discountPercentage: 10, unitPrice: 39 }
+    ],
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    attributes: [
+      {
+        id: 'attr-screw-size',
+        name: 'Size',
+        uiType: 'cards',
+        options: ['M6, PLBF-M6K', 'M8, PLBF-M8K']
+      }
+    ],
+    variants: [
+      {
+        id: 'v-ebco-m6',
+        sku: 'PLBF-M6K',
+        name: 'M6, PLBF-M6K',
+        attributes: { 'Size': 'M6, PLBF-M6K' },
+        price: 44,
+        mrp: 64,
+        discount: 31,
+        stock: 150,
+        inStock: true,
+        image: 'https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?auto=format&fit=crop&w=800&q=80'
+      },
+      {
+        id: 'v-ebco-m8',
+        sku: 'PLBF-M8K',
+        name: 'M8, PLBF-M8K',
+        attributes: { 'Size': 'M8, PLBF-M8K' },
+        price: 67,
+        mrp: 85,
+        discount: 21,
+        stock: 100,
+        inStock: true,
+        image: 'https://images.unsplash.com/photo-1541888946425-d0fbb1861593?auto=format&fit=crop&w=800&q=80'
+      }
+    ],
+    specifications: {
+      'Product Type': 'Mounting Screw Kit for Pro-Lift Bed Fittings',
+      'Material': 'Grade 8.8 High-Tensile Carbon Steel',
+      'Finish': 'Yellow Zinc Passivated Anti-Corrosion',
+      'Thread Type': 'Metric Coarse ISO Thread',
+      'Contents': '6 N Hex Bolts, 6 N Nyloc Nuts, 6 N Flat Washers',
+      'Application': 'Pro-Lift Bed Frame & Gas Spring Mounting'
+    }
+  },
+
+  // 53. Reference Product B: Anchor GI Metal Back Box (Dropdown Selector UI)
+  {
+    id: 'prod-anchor-gi-box',
+    name: 'Anchor GI Metal Back Box',
+    slug: 'anchor-gi-metal-back-box',
+    sku: 'ANC-GI-2MOD',
+    brand: 'Anchor',
+    brandSlug: 'anchor',
+    category: 'Wires, MCB & Distribution Boards',
+    categorySlug: 'wires-mcb-distribution-boards',
+    subcategory: 'Electrical Conduits & GI Boxes',
+    subcategorySlug: 'conduits-gi-boxes',
+    description: 'Heavy gauge 20-SWG pre-galvanized sheet steel electrical flush concealed modular metal box. Features rust-inhibiting zinc coating, precision brass earth terminal, multiple 20mm and 25mm conduit knockouts, and standard modular mounting screws for modular switch plates.',
+    shortDescription: 'Heavy-duty 20-SWG pre-galvanized concealed modular switch box.',
+    images: [
+      'https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 45,
+    mrp: 93,
+    discount: 52,
+    unit: '1 Piece',
+    packSize: '1 Piece',
+    gstRate: 18,
+    rating: 4.7,
+    reviewCount: 189,
+    inStock: true,
+    stockCount: 400,
+    isBulkEligible: true,
+    bulkPricing: [
+      { minQuantity: 20, discountPercentage: 6, unitPrice: 42 },
+      { minQuantity: 100, discountPercentage: 12, unitPrice: 39 }
+    ],
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    attributes: [
+      {
+        id: 'attr-anchor-size',
+        name: 'Size',
+        uiType: 'dropdown',
+        options: ['2 Module', '4 Module', '6 Module', '8 Module']
+      }
+    ],
+    variants: [
+      {
+        id: 'v-anchor-2m',
+        sku: 'ANC-GI-2MOD',
+        name: '2 Module',
+        attributes: { 'Size': '2 Module' },
+        price: 45,
+        mrp: 93,
+        discount: 52,
+        stock: 400,
+        inStock: true
+      },
+      {
+        id: 'v-anchor-4m',
+        sku: 'ANC-GI-4MOD',
+        name: '4 Module',
+        attributes: { 'Size': '4 Module' },
+        price: 75,
+        mrp: 130,
+        discount: 42,
+        stock: 250,
+        inStock: true
+      },
+      {
+        id: 'v-anchor-6m',
+        sku: 'ANC-GI-6MOD',
+        name: '6 Module',
+        attributes: { 'Size': '6 Module' },
+        price: 110,
+        mrp: 180,
+        discount: 39,
+        stock: 180,
+        inStock: true
+      },
+      {
+        id: 'v-anchor-8m',
+        sku: 'ANC-GI-8MOD',
+        name: '8 Module',
+        attributes: { 'Size': '8 Module' },
+        price: 145,
+        mrp: 220,
+        discount: 34,
+        stock: 0,
+        inStock: false // Out of stock example
+      }
+    ],
+    specifications: {
+      'Product Type': 'Concealed Metal Switch Back Box',
+      'Material': '20-SWG Pre-Galvanized Sheet Steel',
+      'Coating': '120 GSM Zinc Galvanization',
+      'Earthing': 'Solid Brass M4 Grounding Terminal Screw',
+      'Knockouts': '4x 20mm, 2x 25mm Conduit Entry Knockouts',
+      'Standard': 'IS 513 / IS 277 Compliant'
+    }
+  },
+
+  // 54. Reference Product C: Flexible PVC Electrical Conduit Pipe Roll (Multi-attribute: Pills + Cards)
+  {
+    id: 'prod-conduit-pipe-roll',
+    name: 'Flexible PVC Electrical Conduit Pipe Roll',
+    slug: 'flexible-pvc-electrical-conduit-pipe-roll',
+    sku: 'CON-PVC-GRY-20MM',
+    brand: 'Astral',
+    brandSlug: 'astral',
+    category: 'Wires, MCB & Distribution Boards',
+    categorySlug: 'wires-mcb-distribution-boards',
+    subcategory: 'Electrical Conduits & GI Boxes',
+    subcategorySlug: 'conduits-gi-boxes',
+    description: 'Heavy duty corrugated flexible PVC electrical conduit pipe roll with high compressive strength, UV stabilization, and flame-retardant properties. Ideal for false ceiling electrical wiring, slab drops, curved column runs, and surface conduit routing without requiring angle bends.',
+    shortDescription: 'Corrugated flame-retardant flexible PVC conduit pipe roll.',
+    images: [
+      'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 280,
+    mrp: 350,
+    discount: 20,
+    unit: '1 Roll',
+    packSize: '50 Metres Roll',
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 97,
+    inStock: true,
+    stockCount: 145,
+    isBulkEligible: true,
+    bulkPricing: [
+      { minQuantity: 5, discountPercentage: 5, unitPrice: 266 },
+      { minQuantity: 20, discountPercentage: 10, unitPrice: 252 }
+    ],
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    attributes: [
+      {
+        id: 'attr-conduit-color',
+        name: 'Colour',
+        uiType: 'pills',
+        options: ['Grey', 'White', 'Black']
+      },
+      {
+        id: 'attr-conduit-size',
+        name: 'Size',
+        uiType: 'cards',
+        options: ['20mm - 50 meters', '25mm - 25 meters']
+      }
+    ],
+    variants: [
+      {
+        id: 'v-conduit-gry-20',
+        sku: 'CON-PVC-GRY-20MM',
+        name: 'Grey / 20mm - 50 meters',
+        attributes: { 'Colour': 'Grey', 'Size': '20mm - 50 meters' },
+        price: 280,
+        mrp: 350,
+        discount: 20,
+        stock: 80,
+        inStock: true
+      },
+      {
+        id: 'v-conduit-gry-25',
+        sku: 'CON-PVC-GRY-25MM',
+        name: 'Grey / 25mm - 25 meters',
+        attributes: { 'Colour': 'Grey', 'Size': '25mm - 25 meters' },
+        price: 260,
+        mrp: 320,
+        discount: 19,
+        stock: 65,
+        inStock: true
+      },
+      {
+        id: 'v-conduit-wht-20',
+        sku: 'CON-PVC-WHT-20MM',
+        name: 'White / 20mm - 50 meters',
+        attributes: { 'Colour': 'White', 'Size': '20mm - 50 meters' },
+        price: 290,
+        mrp: 360,
+        discount: 19,
+        stock: 50,
+        inStock: true
+      },
+      {
+        id: 'v-conduit-wht-25',
+        sku: 'CON-PVC-WHT-25MM',
+        name: 'White / 25mm - 25 meters',
+        attributes: { 'Colour': 'White', 'Size': '25mm - 25 meters' },
+        price: 270,
+        mrp: 330,
+        discount: 18,
+        stock: 40,
+        inStock: true
+      },
+      {
+        id: 'v-conduit-blk-20',
+        sku: 'CON-PVC-BLK-20MM',
+        name: 'Black / 20mm - 50 meters',
+        attributes: { 'Colour': 'Black', 'Size': '20mm - 50 meters' },
+        price: 280,
+        mrp: 350,
+        discount: 20,
+        stock: 35,
+        inStock: true
+      },
+      {
+        id: 'v-conduit-blk-25',
+        sku: 'CON-PVC-BLK-25MM',
+        name: 'Black / 25mm - 25 meters',
+        attributes: { 'Colour': 'Black', 'Size': '25mm - 25 meters' },
+        price: 260,
+        mrp: 320,
+        discount: 19,
+        stock: 0,
+        inStock: false // Out of stock combination
+      }
+    ],
+    specifications: {
+      'Product Type': 'Corrugated Flexible Electrical Conduit Pipe',
+      'Material': 'Rigid Unplasticized PVC (uPVC) with Flame Retardant Additives',
+      'Fire Rating': 'Self-Extinguishing V-0 Grade as per UL 94',
+      'Working Temperature': '-5°C to +60°C',
+      'Compressive Strength': '> 750 N Medium Duty',
+      'Standard': 'IS 9537 Part-3 / IEC 61386 Compliant'
     }
   }
 ];

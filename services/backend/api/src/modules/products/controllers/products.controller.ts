@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, BadRequestException } from '@nestjs/common';
 import { dbStore } from '../../../database/store';
 
 @Controller('api/v1')
@@ -155,6 +155,114 @@ export class ProductsController {
         categories: matchedCategories,
         brands: matchedBrands
       }
+    };
+  }
+
+  @Post('cart/validate')
+  validateCartItems(
+    @Body()
+    body: {
+      items: Array<{
+        productId: string;
+        variantId?: string;
+        quantity: number;
+        unitPrice?: number;
+      }>;
+    }
+  ) {
+    if (!body || !Array.isArray(body.items)) {
+      throw new BadRequestException('Items array is required for cart validation.');
+    }
+
+    const issues: Array<{ productId: string; variantId?: string; code: string; message: string }> = [];
+    const validatedItems: any[] = [];
+
+    for (const item of body.items) {
+      const prod = dbStore.products.find((p) => p.id === item.productId || p.sku === item.productId);
+      if (!prod) {
+        issues.push({
+          productId: item.productId,
+          variantId: item.variantId,
+          code: 'PRODUCT_NOT_FOUND',
+          message: `Product is no longer available in the catalog.`
+        });
+        continue;
+      }
+
+      if (!prod.inStock || prod.stockCount <= 0) {
+        issues.push({
+          productId: prod.id,
+          variantId: item.variantId,
+          code: 'OUT_OF_STOCK',
+          message: `${prod.name} is currently out of stock.`
+        });
+        continue;
+      }
+
+      let currentPrice = prod.price;
+      let availableStock = prod.stockCount;
+
+      if (item.variantId && prod.variants) {
+        const variant = prod.variants.find((v) => v.id === item.variantId || v.sku === item.variantId);
+        if (!variant) {
+          issues.push({
+            productId: prod.id,
+            variantId: item.variantId,
+            code: 'VARIANT_NOT_FOUND',
+            message: `Selected option for ${prod.name} is no longer available.`
+          });
+          continue;
+        }
+
+        if (!variant.inStock || (variant.stock !== undefined && variant.stock <= 0)) {
+          issues.push({
+            productId: prod.id,
+            variantId: variant.id,
+            code: 'VARIANT_OUT_OF_STOCK',
+            message: `${prod.name} (${variant.name}) is out of stock.`
+          });
+          continue;
+        }
+
+        currentPrice = variant.price;
+        if (variant.stock !== undefined) {
+          availableStock = variant.stock;
+        }
+      }
+
+      if (item.quantity > availableStock) {
+        issues.push({
+          productId: prod.id,
+          variantId: item.variantId,
+          code: 'INSUFFICIENT_STOCK',
+          message: `Only ${availableStock} units available for ${prod.name}. Requested: ${item.quantity}.`
+        });
+      }
+
+      if (item.unitPrice !== undefined && item.unitPrice !== currentPrice) {
+        issues.push({
+          productId: prod.id,
+          variantId: item.variantId,
+          code: 'PRICE_CHANGED',
+          message: `Price for ${prod.name} changed from ₹${item.unitPrice} to ₹${currentPrice}.`
+        });
+      }
+
+      validatedItems.push({
+        productId: prod.id,
+        variantId: item.variantId,
+        name: prod.name,
+        currentPrice,
+        availableStock,
+        inStock: true
+      });
+    }
+
+    return {
+      success: true,
+      isValid: issues.length === 0,
+      issues,
+      validatedItems
     };
   }
 }

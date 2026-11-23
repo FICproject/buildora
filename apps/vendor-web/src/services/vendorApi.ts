@@ -403,6 +403,39 @@ async function request<T>(path: string, options: RequestInit = {}, fallbackData?
   throw new Error(`API call failed for ${path}`);
 }
 
+function broadcastProductChange(prod: any) {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('buildora_product_sync');
+      bc.postMessage({
+        type: 'PRODUCT_UPDATED',
+        productId: prod.id,
+        sku: prod.sku,
+        slug: prod.slug,
+        timestamp: Date.now()
+      });
+      bc.close();
+    }
+    const raw = localStorage.getItem('buildora_vendor_product_overrides');
+    const overrides = raw ? JSON.parse(raw) : {};
+    const key = prod.id.replace(/^vp-/, '');
+    overrides[key] = {
+      price: prod.price,
+      mrp: prod.mrp,
+      discount: prod.discount,
+      stockCount: prod.stockCount || prod.stock,
+      inStock: prod.inStock,
+      variants: prod.variants,
+      attributes: prod.attributes,
+      bulkPricing: prod.bulkPricing,
+      isBulkEligible: prod.isBulkEligible
+    };
+    if (prod.sku) overrides[prod.sku] = overrides[key];
+    if (prod.slug) overrides[prod.slug] = overrides[key];
+    localStorage.setItem('buildora_vendor_product_overrides', JSON.stringify(overrides));
+  } catch {}
+}
+
 export const vendorApi = {
   getStoredProfile(): VendorProfile {
     return localVendor;
@@ -550,6 +583,7 @@ export const vendorApi = {
       });
       if (res.ok) {
         const json = await res.json();
+        broadcastProductChange(json.data);
         return json.data;
       }
     } catch {}
@@ -570,6 +604,7 @@ export const vendorApi = {
       updatedAt: new Date().toISOString(),
     };
     localProducts.unshift(newP);
+    broadcastProductChange(newP);
     return newP;
   },
 
@@ -582,6 +617,7 @@ export const vendorApi = {
       });
       if (res.ok) {
         const json = await res.json();
+        broadcastProductChange(json.data);
         return json.data;
       }
     } catch {}
@@ -594,6 +630,7 @@ export const vendorApi = {
         stockCount: updates.stock !== undefined ? updates.stock : localProducts[idx].stockCount,
         updatedAt: new Date().toISOString(),
       };
+      broadcastProductChange(localProducts[idx]);
       return localProducts[idx];
     }
     throw new Error('Product not found');
@@ -617,6 +654,7 @@ export const vendorApi = {
       });
       if (res.ok) {
         const json = await res.json();
+        broadcastProductChange(json.data);
         return json.data;
       }
     } catch {}
@@ -625,6 +663,7 @@ export const vendorApi = {
     if (prod) {
       prod.bulkPricing = bulkPricing;
       prod.isBulkEligible = bulkPricing.length > 0;
+      broadcastProductChange(prod);
       return prod;
     }
     throw new Error('Product not found');

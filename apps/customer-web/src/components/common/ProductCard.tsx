@@ -272,9 +272,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </div>
           </div>
 
-          {/* Action Button: Options vs Add vs Quantity Selector */}
+          {/* Action Button: Options vs Add vs Quantity Selector vs Out of Stock */}
           <div className="pt-1.5">
-            {hasMultipleVariants ? (
+            {!product.inStock || product.stockCount <= 0 || (hasMultipleVariants && product.variants?.every((v) => !v.inStock || (v.stock !== undefined && v.stock <= 0))) ? (
+              // Entire Product or All Variants are Out of Stock
+              <button
+                type="button"
+                disabled
+                className="w-full py-1.5 sm:py-2 px-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed flex items-center justify-center select-none shadow-2xs"
+              >
+                Out of Stock
+              </button>
+            ) : hasMultipleVariants ? (
               // Multi-Variant: Show '[N] Options' Button
               <button
                 type="button"

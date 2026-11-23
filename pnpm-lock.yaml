@@ -438,6 +438,10 @@ importers:
         version: 5.9.3
 
   packages/utils:
+    dependencies:
+      '@buildora/types':
+        specifier: workspace:*
+        version: link:../types
     devDependencies:
       typescript:
         specifier: ^5.4.0

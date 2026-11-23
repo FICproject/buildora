@@ -23,7 +23,8 @@ import {
   Wrench,
   Compass,
   FolderKanban,
-  FileText
+  FileText,
+  Home
 } from 'lucide-react';
 import {
   MASTER_CATEGORIES,
@@ -131,11 +132,11 @@ export const HomePage: React.FC = () => {
                   </Button>
 
                   <Link
-                    to="/bulk-orders"
-                    className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-amber-300 hover:text-white px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
+                    to="/tools/home-construction-calculator"
+                    className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-amber-300 hover:text-white px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 transition-all shadow-xs"
                   >
-                    <Truck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Bulk Site Orders &rarr;</span>
+                    <Calculator className="w-4 h-4 text-brand-orange-400" />
+                    <span>Home Construction Calculator &rarr;</span>
                   </Link>
                 </div>
 
@@ -272,37 +273,62 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 8. PROMOTIONAL BANNER: CONTRACTOR CLUB SAVINGS */}
+      {/* 8. PROMOTIONAL BANNER: HOME CONSTRUCTION CALCULATOR */}
       <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
-        <div className="bg-gradient-to-r from-brand-blue-950 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl relative overflow-hidden border border-white/10">
-          <div className="space-y-2 z-10 max-w-xl">
-            <span className="bg-amber-400 text-slate-900 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              Contractor &amp; Builder Club
-            </span>
-            <h3 className="text-xl sm:text-2xl lg:text-3xl font-black">
-              Unlock Tiered Bulk Discounts Up To 15%
-            </h3>
-            <p className="text-xs text-slate-300">
-              Procuring for full residential floors or multi-apartment fit-outs? Get dedicated trade credit terms, tiered unit pricing, and a personal project dispatch manager.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 z-10 w-full sm:w-auto">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => navigate('/bulk-orders')}
-              className="font-bold text-xs"
-            >
-              Request Trade Pricing
-            </Button>
-            <Button
-              variant="outline"
-              size="md"
-              onClick={() => navigate('/account/projects')}
-              className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-xs"
-            >
-              My Projects
-            </Button>
+        <div className="bg-gradient-to-r from-brand-blue-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 lg:p-10 shadow-xl relative overflow-hidden border border-brand-orange-500/20">
+          <div className="absolute -right-10 -bottom-10 w-80 h-80 bg-brand-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 relative z-10">
+            <div className="space-y-4 max-w-2xl">
+              <span className="inline-flex items-center gap-1.5 bg-brand-orange-500 text-white text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
+                <Sparkles className="w-3.5 h-3.5" /> SMART CONSTRUCTION PLANNING
+              </span>
+              <h3 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white">
+                Plan Your Dream Home. Know Your Budget.
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
+                Estimate your home construction cost, material quantities, labour expenses and category-wise budget before starting construction.
+              </p>
+
+              {/* Highlights */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs text-slate-300">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange-400 flex-shrink-0" />
+                  <span>Instant Cost &amp; Qty</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange-400 flex-shrink-0" />
+                  <span>Basic/Std/Premium</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange-400 flex-shrink-0" />
+                  <span>13 Categories</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-brand-orange-400 flex-shrink-0" />
+                  <span>Download PDF</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => navigate('/tools/home-construction-calculator')}
+                className="font-black text-xs sm:text-sm px-6 py-3 bg-brand-orange-500 hover:bg-brand-orange-600 text-white shadow-lg shadow-orange-500/25"
+                rightIcon={<ArrowRight className="w-4 h-4" />}
+              >
+                Calculate Construction Cost
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => navigate('/products')}
+                className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-xs sm:text-sm font-bold px-5 py-3"
+              >
+                Explore Materials
+              </Button>
+            </div>
           </div>
         </div>
       </section>
@@ -335,7 +361,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 10. CATEGORY SPOTLIGHT: ELECTRICAL */}
+      {/* 9. CATEGORY SPOTLIGHT: ELECTRICAL */}
       <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="bg-slate-100/80 rounded-3xl p-4 sm:p-8 border border-slate-200">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4 sm:mb-6">
@@ -363,7 +389,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 11. ESTIMATOR & COMMERCIAL BOQ */}
+      {/* 10. ESTIMATOR & HOME CONSTRUCTION CALCULATOR */}
       <section className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <div className="bg-gradient-to-br from-brand-blue-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-card relative overflow-hidden">
@@ -384,34 +410,34 @@ export const HomePage: React.FC = () => {
                 size="md"
                 onClick={() => navigate('/tools/material-estimator')}
                 rightIcon={<ArrowRight className="w-4 h-4" />}
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto font-bold"
               >
                 Launch Estimator Suite
               </Button>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-card relative overflow-hidden">
+          <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-card relative overflow-hidden border border-white/10">
             <div className="space-y-3 z-10">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white">
-                <Building2 className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-xl bg-brand-orange-500 flex items-center justify-center text-white">
+                <Home className="w-5 h-5" />
               </div>
               <h3 className="text-lg sm:text-2xl font-black">
-                Commercial Projects &amp; BOQ Quotations
+                Home Construction Calculator
               </h3>
               <p className="text-xs sm:text-sm text-slate-300 max-w-md">
-                Ordering full truckloads for towers, villas, or commercial fit-outs? Submit your material list for mill-direct pricing and dedicated logistics dispatch.
+                Planning to build an independent house, villa, or floors? Calculate total estimated cost, stage-wise budget, cement bags, steel tonnage, and add matching catalog materials to cart.
               </p>
             </div>
             <div className="pt-6 z-10">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="md"
-                onClick={() => navigate('/bulk-orders')}
-                className="w-full sm:w-auto bg-white/10 text-white border-white/20 hover:bg-white/20"
+                onClick={() => navigate('/tools/home-construction-calculator')}
+                className="w-full sm:w-auto font-bold"
                 rightIcon={<ArrowRight className="w-4 h-4" />}
               >
-                Request Bulk Quotation
+                Calculate Construction Cost
               </Button>
             </div>
           </div>
