@@ -20,6 +20,7 @@ import { RatingStars } from '../components/ui/RatingStars';
 import { Button } from '../components/ui/Button';
 import { ProductCard } from '../components/common/ProductCard';
 import { ProductInfoAccordion } from '../components/common/ProductInfoAccordion';
+import { ProductDeliveryInfoBar } from '../components/common/ProductDeliveryInfoBar';
 
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -188,7 +189,10 @@ export const ProductDetailPage: React.FC = () => {
         </div>
 
         {/* Right Column: Details & Purchasing */}
-        <div className="lg:col-span-7 space-y-5 sm:space-y-6">
+        <div className="lg:col-span-7 space-y-4 sm:space-y-5">
+          {/* Quick Delivery & Payment Information Bar */}
+          <ProductDeliveryInfoBar product={product} />
+
           {/* Brand & Title */}
           <div>
             <Link
