@@ -361,6 +361,78 @@ export const SEED_PRODUCTS: Product[] = [
 
   // 3. Plywood, MDF & HDHMR
   {
+    id: 'prod-ply-century-sainik',
+    name: 'Century Sainik MR 303 Plywood',
+    slug: 'century-sainik-mr-303-plywood',
+    sku: 'PLY-CEN-SAINIK-303',
+    brand: 'CenturyPly',
+    brandSlug: 'centuryply',
+    category: 'Plywood, MDF & HDHMR',
+    categorySlug: 'plywood-mdf-hdhmr',
+    subcategory: 'BWR Commercial Plywood',
+    subcategorySlug: 'bwr-commercial-plywood',
+    description: 'Century Sainik MR 303 is an authentic moisture resistant commercial plywood manufactured with chemically treated select hardwood and high-grade resin. Borer and termite resistant with 5 years warranty.',
+    shortDescription: 'Original Century Sainik MR 303 plywood with calibrated thickness for furniture and interiors.',
+    images: [
+      'https://images.unsplash.com/photo-1546484396-fb3fc6f95f98?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&w=800&q=80'
+    ],
+    price: 1455,
+    mrp: 1547,
+    discount: 6,
+    unit: 'Sheet',
+    packSize: "8' X 4' Sheet",
+    gstRate: 18,
+    rating: 4.8,
+    reviewCount: 142,
+    inStock: true,
+    stockCount: 120,
+    isBulkEligible: true,
+    bulkPricing: [
+      { minQuantity: 10, discountPercentage: 5, unitPrice: 1382 },
+      { minQuantity: 25, discountPercentage: 8, unitPrice: 1338 }
+    ],
+    attributes: [
+      {
+        id: 'attr-ply-thickness',
+        name: 'Thickness',
+        uiType: 'pills',
+        options: ['6mm', '8mm', '12mm', '16mm (Maxima)', '18mm', '19mm Blockboard', '25mm Blockboard']
+      },
+      {
+        id: 'attr-ply-size',
+        name: 'Size',
+        uiType: 'cards',
+        options: ["8' X 4'", "7' X 4'"]
+      }
+    ],
+    variants: [
+      { id: 'v-cen-6mm-8x4', sku: 'PLY-CEN-6MM-8X4', name: "6mm, 8' X 4'", attributes: { 'Thickness': '6mm', 'Size': "8' X 4'" }, price: 1455, mrp: 1547, discount: 6, stock: 120, inStock: true },
+      { id: 'v-cen-6mm-7x4', sku: 'PLY-CEN-6MM-7X4', name: "6mm, 7' X 4'", attributes: { 'Thickness': '6mm', 'Size': "7' X 4'" }, price: 1259, mrp: 1340, discount: 6, stock: 80, inStock: true },
+      { id: 'v-cen-8mm-8x4', sku: 'PLY-CEN-8MM-8X4', name: "8mm, 8' X 4'", attributes: { 'Thickness': '8mm', 'Size': "8' X 4'" }, price: 1820, mrp: 1950, discount: 7, stock: 95, inStock: true },
+      { id: 'v-cen-8mm-7x4', sku: 'PLY-CEN-8MM-7X4', name: "8mm, 7' X 4'", attributes: { 'Thickness': '8mm', 'Size': "7' X 4'" }, price: 1560, mrp: 1680, discount: 7, stock: 60, inStock: true },
+      { id: 'v-cen-12mm-8x4', sku: 'PLY-CEN-12MM-8X4', name: "12mm, 8' X 4'", attributes: { 'Thickness': '12mm', 'Size': "8' X 4'" }, price: 2220, mrp: 2380, discount: 7, stock: 75, inStock: true },
+      { id: 'v-cen-12mm-7x4', sku: 'PLY-CEN-12MM-7X4', name: "12mm, 7' X 4'", attributes: { 'Thickness': '12mm', 'Size': "7' X 4'" }, price: 1910, mrp: 2050, discount: 7, stock: 45, inStock: true },
+      { id: 'v-cen-16mm-8x4', sku: 'PLY-CEN-16MM-8X4', name: "16mm (Maxima), 8' X 4'", attributes: { 'Thickness': '16mm (Maxima)', 'Size': "8' X 4'" }, price: 2690, mrp: 2890, discount: 7, stock: 50, inStock: true },
+      { id: 'v-cen-16mm-7x4', sku: 'PLY-CEN-16MM-7X4', name: "16mm (Maxima), 7' X 4'", attributes: { 'Thickness': '16mm (Maxima)', 'Size': "7' X 4'" }, price: 2320, mrp: 2490, discount: 7, stock: 30, inStock: true },
+      { id: 'v-cen-18mm-8x4', sku: 'PLY-CEN-18MM-8X4', name: "18mm, 8' X 4'", attributes: { 'Thickness': '18mm', 'Size': "8' X 4'" }, price: 2980, mrp: 3200, discount: 7, stock: 110, inStock: true },
+      { id: 'v-cen-18mm-7x4', sku: 'PLY-CEN-18MM-7X4', name: "18mm, 7' X 4'", attributes: { 'Thickness': '18mm', 'Size': "7' X 4'" }, price: 2560, mrp: 2750, discount: 7, stock: 40, inStock: true },
+      { id: 'v-cen-19mm-8x4', sku: 'PLY-CEN-19MM-8X4', name: "19mm Blockboard, 8' X 4'", attributes: { 'Thickness': '19mm Blockboard', 'Size': "8' X 4'" }, price: 3190, mrp: 3450, discount: 8, stock: 65, inStock: true },
+      { id: 'v-cen-19mm-7x4', sku: 'PLY-CEN-19MM-7X4', name: "19mm Blockboard, 7' X 4'", attributes: { 'Thickness': '19mm Blockboard', 'Size': "7' X 4'" }, price: 2750, mrp: 2980, discount: 8, stock: 25, inStock: true },
+      { id: 'v-cen-25mm-8x4', sku: 'PLY-CEN-25MM-8X4', name: "25mm Blockboard, 8' X 4'", attributes: { 'Thickness': '25mm Blockboard', 'Size': "8' X 4'" }, price: 3890, mrp: 4200, discount: 7, stock: 40, inStock: true },
+      { id: 'v-cen-25mm-7x4', sku: 'PLY-CEN-25MM-7X4', name: "25mm Blockboard, 7' X 4'", attributes: { 'Thickness': '25mm Blockboard', 'Size': "7' X 4'" }, price: 3350, mrp: 3600, discount: 7, stock: 0, inStock: false, isAvailable: false }
+    ],
+    specifications: {
+      'Dimensions': "8' X 4'",
+      'Thickness': '6mm',
+      'Grade': 'IS:303 Moisture Resistant',
+      'Preservative Treatment': 'Borer and Termite Resistant'
+    },
+    applications: ['Home Furniture', 'Wardrobes & Shelves', 'Partitions', 'Panelling Work'],
+    deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+    isFeatured: true
+  },
+  {
     id: 'prod-ply-1',
     name: 'Greenply Club BWP Marine Grade Plywood (19mm, 8x4 ft)',
     slug: 'greenply-club-bwp-marine-plywood-19mm-8x4',
@@ -378,7 +450,7 @@ export const SEED_PRODUCTS: Product[] = [
     ],
     price: 3150,
     mrp: 3600,
-    discount: 12,
+    discount: 13,
     unit: 'Sheet (8x4 ft)',
     packSize: '32 Sq.ft Sheet',
     gstRate: 18,
@@ -390,6 +462,32 @@ export const SEED_PRODUCTS: Product[] = [
     bulkPricing: [
       { minQuantity: 5, discountPercentage: 4, unitPrice: 3024 },
       { minQuantity: 15, discountPercentage: 7, unitPrice: 2929 }
+    ],
+    attributes: [
+      {
+        id: 'attr-gre-thickness',
+        name: 'Thickness',
+        uiType: 'pills',
+        options: ['6mm', '9mm', '12mm', '16mm', '19mm']
+      },
+      {
+        id: 'attr-gre-size',
+        name: 'Size',
+        uiType: 'cards',
+        options: ["8' X 4'", "7' X 4'"]
+      }
+    ],
+    variants: [
+      { id: 'v-gre-6mm-8x4', sku: 'PLY-GRE-6MM-8X4', name: "6mm, 8' X 4'", attributes: { 'Thickness': '6mm', 'Size': "8' X 4'" }, price: 1680, mrp: 1920, discount: 13, stock: 80, inStock: true },
+      { id: 'v-gre-6mm-7x4', sku: 'PLY-GRE-6MM-7X4', name: "6mm, 7' X 4'", attributes: { 'Thickness': '6mm', 'Size': "7' X 4'" }, price: 1450, mrp: 1650, discount: 12, stock: 50, inStock: true },
+      { id: 'v-gre-9mm-8x4', sku: 'PLY-GRE-9MM-8X4', name: "9mm, 8' X 4'", attributes: { 'Thickness': '9mm', 'Size': "8' X 4'" }, price: 2100, mrp: 2400, discount: 13, stock: 90, inStock: true },
+      { id: 'v-gre-9mm-7x4', sku: 'PLY-GRE-9MM-7X4', name: "9mm, 7' X 4'", attributes: { 'Thickness': '9mm', 'Size': "7' X 4'" }, price: 1820, mrp: 2080, discount: 13, stock: 40, inStock: true },
+      { id: 'v-gre-12mm-8x4', sku: 'PLY-GRE-12MM-8X4', name: "12mm, 8' X 4'", attributes: { 'Thickness': '12mm', 'Size': "8' X 4'" }, price: 2550, mrp: 2900, discount: 12, stock: 70, inStock: true },
+      { id: 'v-gre-12mm-7x4', sku: 'PLY-GRE-12MM-7X4', name: "12mm, 7' X 4'", attributes: { 'Thickness': '12mm', 'Size': "7' X 4'" }, price: 2200, mrp: 2500, discount: 12, stock: 35, inStock: true },
+      { id: 'v-gre-16mm-8x4', sku: 'PLY-GRE-16MM-8X4', name: "16mm, 8' X 4'", attributes: { 'Thickness': '16mm', 'Size': "8' X 4'" }, price: 2850, mrp: 3250, discount: 12, stock: 60, inStock: true },
+      { id: 'v-gre-16mm-7x4', sku: 'PLY-GRE-16MM-7X4', name: "16mm, 7' X 4'", attributes: { 'Thickness': '16mm', 'Size': "7' X 4'" }, price: 2480, mrp: 2800, discount: 11, stock: 30, inStock: true },
+      { id: 'v-gre-19mm-8x4', sku: 'PLY-GRE-BWP-19MM', name: "19mm, 8' X 4'", attributes: { 'Thickness': '19mm', 'Size': "8' X 4'" }, price: 3150, mrp: 3600, discount: 13, stock: 220, inStock: true },
+      { id: 'v-gre-19mm-7x4', sku: 'PLY-GRE-19MM-7X4', name: "19mm, 7' X 4'", attributes: { 'Thickness': '19mm', 'Size': "7' X 4'" }, price: 2720, mrp: 3100, discount: 12, stock: 65, inStock: true }
     ],
     specifications: {
       'Dimensions': '2440 mm x 1220 mm (8 ft x 4 ft)',
@@ -552,6 +650,30 @@ export const SEED_PRODUCTS: Product[] = [
     isBulkEligible: true,
     bulkPricing: [
       { minQuantity: 3, discountPercentage: 5, unitPrice: 6507 }
+    ],
+    attributes: [
+      {
+        id: 'attr-pnt-finish',
+        name: 'Finish',
+        uiType: 'pills',
+        options: ['Rich Sheen', 'Matt Finish']
+      },
+      {
+        id: 'attr-pnt-pack',
+        name: 'Pack Size',
+        uiType: 'cards',
+        options: ['20 Litre Bucket', '10 Litre Bucket', '4 Litre Can', '1 Litre Can']
+      }
+    ],
+    variants: [
+      { id: 'v-pnt-sheen-20l', sku: 'PNT-AP-ULT-20L-SHN', name: 'Rich Sheen, 20 Litre Bucket', attributes: { 'Finish': 'Rich Sheen', 'Pack Size': '20 Litre Bucket' }, price: 6850, mrp: 7800, discount: 12, stock: 180, inStock: true },
+      { id: 'v-pnt-sheen-10l', sku: 'PNT-AP-ULT-10L-SHN', name: 'Rich Sheen, 10 Litre Bucket', attributes: { 'Finish': 'Rich Sheen', 'Pack Size': '10 Litre Bucket' }, price: 3650, mrp: 4150, discount: 12, stock: 120, inStock: true },
+      { id: 'v-pnt-sheen-4l', sku: 'PNT-AP-ULT-4L-SHN', name: 'Rich Sheen, 4 Litre Can', attributes: { 'Finish': 'Rich Sheen', 'Pack Size': '4 Litre Can' }, price: 1540, mrp: 1750, discount: 12, stock: 95, inStock: true },
+      { id: 'v-pnt-sheen-1l', sku: 'PNT-AP-ULT-1L-SHN', name: 'Rich Sheen, 1 Litre Can', attributes: { 'Finish': 'Rich Sheen', 'Pack Size': '1 Litre Can' }, price: 420, mrp: 480, discount: 12, stock: 150, inStock: true },
+      { id: 'v-pnt-matt-20l', sku: 'PNT-AP-ULT-20L-MAT', name: 'Matt Finish, 20 Litre Bucket', attributes: { 'Finish': 'Matt Finish', 'Pack Size': '20 Litre Bucket' }, price: 6650, mrp: 7600, discount: 12, stock: 80, inStock: true },
+      { id: 'v-pnt-matt-10l', sku: 'PNT-AP-ULT-10L-MAT', name: 'Matt Finish, 10 Litre Bucket', attributes: { 'Finish': 'Matt Finish', 'Pack Size': '10 Litre Bucket' }, price: 3520, mrp: 4000, discount: 12, stock: 60, inStock: true },
+      { id: 'v-pnt-matt-4l', sku: 'PNT-AP-ULT-4L-MAT', name: 'Matt Finish, 4 Litre Can', attributes: { 'Finish': 'Matt Finish', 'Pack Size': '4 Litre Can' }, price: 1480, mrp: 1680, discount: 11, stock: 45, inStock: true },
+      { id: 'v-pnt-matt-1l', sku: 'PNT-AP-ULT-1L-MAT', name: 'Matt Finish, 1 Litre Can', attributes: { 'Finish': 'Matt Finish', 'Pack Size': '1 Litre Can' }, price: 395, mrp: 450, discount: 12, stock: 70, inStock: true }
     ],
     specifications: {
       'Finish': 'Rich Sheen',

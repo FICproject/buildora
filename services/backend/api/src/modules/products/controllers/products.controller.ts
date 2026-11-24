@@ -1,8 +1,32 @@
 import { Controller, Get, Post, Body, Param, Query, BadRequestException } from '@nestjs/common';
 import { dbStore } from '../../../database/store';
+import { CATEGORY_ATTRIBUTE_TEMPLATES, getAttributeTemplatesForCategory } from '@buildora/constants';
 
 @Controller('api/v1')
 export class ProductsController {
+  @Get('categories/:slug/attribute-templates')
+  getCategoryAttributeTemplates(@Param('slug') slug: string) {
+    const templates = getAttributeTemplatesForCategory(slug);
+    return {
+      success: true,
+      categorySlug: slug,
+      data: templates
+    };
+  }
+
+  @Get('category-attribute-templates')
+  getAllCategoryAttributeTemplates(@Query('category') category?: string) {
+    if (category) {
+      return {
+        success: true,
+        data: getAttributeTemplatesForCategory(category)
+      };
+    }
+    return {
+      success: true,
+      data: CATEGORY_ATTRIBUTE_TEMPLATES
+    };
+  }
   @Get('products')
   getProducts(
     @Query('category') category?: string,
@@ -232,6 +256,16 @@ export class ProductsController {
             variantId: item.variantId,
             code: 'VARIANT_NOT_FOUND',
             message: `Selected option for ${prod.name} is no longer available.`
+          });
+          continue;
+        }
+
+        if (variant.isAvailable === false) {
+          issues.push({
+            productId: prod.id,
+            variantId: variant.id,
+            code: 'VARIANT_UNAVAILABLE',
+            message: `${prod.name} (${variant.name}) is no longer an available option.`
           });
           continue;
         }

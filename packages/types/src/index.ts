@@ -82,18 +82,39 @@ export interface BulkPriceTier {
 
 export type AttributeSelectorType = 'cards' | 'pills' | 'dropdown' | 'color_swatches' | 'radio';
 
+export interface CategoryAttributeTemplate {
+  id: string;
+  categorySlug: string;
+  categoryName: string;
+  name: string; // e.g. "Thickness", "Size", "Colour", "Module", "Grade"
+  suggestedUiType: AttributeSelectorType;
+  suggestedOptions: string[];
+  description?: string;
+  isRequired?: boolean;
+}
+
+export interface ProductAttributeOption {
+  value: string;
+  label?: string;
+  colorHex?: string;
+  image?: string;
+  priceOffset?: number;
+}
+
 export interface ProductAttribute {
   id: string;
-  name: string; // e.g., "Size", "Colour", "Pack Size"
+  name: string; // e.g., "Thickness", "Size", "Colour", "Pack Size"
   uiType: AttributeSelectorType;
-  options: string[]; // e.g., ["20mm - 50 meters", "25mm - 25 meters"]
+  options: (string | ProductAttributeOption)[];
+  required?: boolean;
+  defaultValue?: string;
 }
 
 export interface ProductVariant {
   id: string;
   sku: string;
   name: string;
-  attributes: Record<string, string>; // e.g., { "Size": "20mm - 50 meters", "Colour": "Grey" }
+  attributes: Record<string, string>; // e.g., { "Thickness": "6mm", "Size": "8' X 4'" }
   price: number;
   mrp: number;
   discount?: number;
@@ -102,6 +123,12 @@ export interface ProductVariant {
   image?: string;
   bulkPricing?: BulkPriceTier[];
   unit?: string;
+  barcode?: string;
+  weight?: string;
+  dimensions?: string;
+  warehouseId?: string;
+  status?: 'ACTIVE' | 'INACTIVE';
+  isAvailable?: boolean;
 }
 
 export interface ProductFaq {
@@ -185,6 +212,8 @@ export interface CartItem {
   effectiveUnitPrice: number;
   totalPrice: number;
   maxStock: number;
+  selectedOptions?: Record<string, string>;
+  warehouseLocation?: string;
 }
 
 export interface Coupon {

@@ -93,7 +93,8 @@ export const useCartStore = create<CartStoreState>()(
               bulkDiscountPercentage: bulkDiscount,
               effectiveUnitPrice: Math.round(effectiveUnit),
               totalPrice: Math.round(effectiveUnit * initialQty),
-              maxStock
+              maxStock,
+              selectedOptions: variant?.attributes || (variant ? { Option: variant.name } : undefined)
             };
             updatedItems = [...state.items, newItem];
           }

@@ -12,6 +12,10 @@ import {
   AlertCircle,
   Eye,
   Boxes,
+  Sliders,
+  Sparkles,
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { useVendorProductStore } from '../../store/useVendorProductStore';
 import { Card, CardHeader, CardContent } from '../../components/common/Card';
@@ -19,22 +23,31 @@ import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Modal } from '../../components/common/Modal';
 import { VendorProduct, AttributeSelectorType } from '@buildora/types';
+import { getAttributeTemplatesForCategory } from '@buildora/constants';
+import { vendorApi } from '../../services/vendorApi';
 
 interface FormAttribute {
   id: string;
   name: string;
   uiType: AttributeSelectorType;
   optionsStr: string;
+  required?: boolean;
 }
 
 interface FormVariant {
   id: string;
   name: string;
   sku: string;
+  attributes: Record<string, string>;
   price: number;
   mrp: number;
   stock: number;
   inStock: boolean;
+  isAvailable?: boolean;
+  barcode?: string;
+  weight?: string;
+  dimensions?: string;
+  image?: string;
 }
 
 export const VendorProductsPage: React.FC = () => {
@@ -100,7 +113,9 @@ export const VendorProductsPage: React.FC = () => {
     setSize('50 Kg Bag');
     setIsNewLaunch(false);
     setHasVariants(false);
-    setFormAttributes([{ id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'M6, M8' }]);
+    setFormAttributes([
+      { id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard', required: true }
+    ]);
     setFormVariants([]);
     setIsModalOpen(true);
   };
@@ -133,11 +148,12 @@ export const VendorProductsPage: React.FC = () => {
           uiType: a.uiType || 'cards',
           optionsStr: a.options
             .map((o: any) => (typeof o === 'string' ? o : o.value || ''))
-            .join(', ')
+            .join(', '),
+          required: a.required ?? true
         }))
       );
     } else {
-      setFormAttributes([{ id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard' }]);
+      setFormAttributes([{ id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard', required: true }]);
     }
 
     if (p.variants && p.variants.length > 0) {
@@ -146,10 +162,16 @@ export const VendorProductsPage: React.FC = () => {
           id: v.id,
           name: v.name,
           sku: v.sku,
+          attributes: v.attributes || { [p.attributes?.[0]?.name || 'Option']: v.name },
           price: v.price,
           mrp: v.mrp,
           stock: v.stock || 50,
-          inStock: v.inStock !== false
+          inStock: v.inStock !== false,
+          isAvailable: v.isAvailable !== false,
+          barcode: v.barcode,
+          weight: v.weight,
+          dimensions: v.dimensions,
+          image: v.image
         }))
       );
     } else {
@@ -157,6 +179,93 @@ export const VendorProductsPage: React.FC = () => {
     }
 
     setIsModalOpen(true);
+  };
+
+  const handleAddOptionGroup = () => {
+    const newId = `attr-${Date.now()}`;
+    setFormAttributes([
+      ...formAttributes,
+      { id: newId, name: `Option ${formAttributes.length + 1}`, uiType: 'cards', optionsStr: 'Option A, Option B', required: true }
+    ]);
+  };
+
+  const handleRemoveOptionGroup = (id: string) => {
+    setFormAttributes(formAttributes.filter((a) => a.id !== id));
+  };
+
+  const handleOptionGroupChange = (idx: number, field: keyof FormAttribute, val: any) => {
+    const updated = [...formAttributes];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setFormAttributes(updated);
+  };
+
+  const handleAddTemplateOption = (tpl: any) => {
+    const newAttr: FormAttribute = {
+      id: `attr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      name: tpl.name,
+      uiType: tpl.suggestedUiType || 'cards',
+      optionsStr: (tpl.suggestedOptions || []).join(', '),
+      required: true
+    };
+    setFormAttributes([...formAttributes, newAttr]);
+  };
+
+  const handleGenerateVariantMatrix = () => {
+    const activeAttrs = formAttributes
+      .map((a) => ({
+        name: a.name.trim(),
+        options: a.optionsStr.split(',').map((s) => s.trim()).filter(Boolean)
+      }))
+      .filter((a) => a.name && a.options.length > 0);
+
+    if (activeAttrs.length === 0) return;
+
+    let combos: Array<Record<string, string>> = [{}];
+
+    for (const attr of activeAttrs) {
+      const nextCombos: Array<Record<string, string>> = [];
+      for (const combo of combos) {
+        for (const opt of attr.options) {
+          nextCombos.push({ ...combo, [attr.name]: opt });
+        }
+      }
+      combos = nextCombos;
+    }
+
+    const generated: FormVariant[] = combos.map((c, idx) => {
+      const comboName = Object.values(c).join(' / ');
+      const existing = formVariants.find((v) => {
+        if (!v.attributes) return v.name === comboName;
+        return Object.entries(c).every(([k, val]) => v.attributes[k] === val);
+      });
+
+      if (existing) {
+        return {
+          ...existing,
+          name: comboName,
+          attributes: c
+        };
+      }
+
+      const cleanSkuPart = Object.values(c)
+        .join('-')
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .toUpperCase();
+
+      return {
+        id: `v-matrix-${Date.now()}-${idx + 1}`,
+        name: comboName,
+        sku: `${sku || 'SKU'}-${cleanSkuPart || idx + 1}`,
+        attributes: c,
+        price: Number(price) || 100,
+        mrp: Number(mrp) || 150,
+        stock: Number(stock) || 50,
+        inStock: true,
+        isAvailable: true
+      };
+    });
+
+    setFormVariants(generated);
   };
 
   const handleAddVariantRow = () => {
@@ -167,10 +276,12 @@ export const VendorProductsPage: React.FC = () => {
         id: `v-custom-${Date.now()}-${newIdx}`,
         name: `Option ${newIdx}`,
         sku: `${sku}-V${newIdx}`,
+        attributes: { [formAttributes[0]?.name || 'Option']: `Option ${newIdx}` },
         price: Number(price) || 100,
         mrp: Number(mrp) || 150,
         stock: 50,
-        inStock: true
+        inStock: true,
+        isAvailable: true
       }
     ]);
   };
@@ -191,13 +302,14 @@ export const VendorProductsPage: React.FC = () => {
     const finalAttributes = hasVariants
       ? formAttributes.map((a) => ({
           id: a.id,
-          name: a.name,
+          name: a.name.trim(),
           uiType: a.uiType,
           options: a.optionsStr
             .split(',')
             .map((s) => s.trim())
-            .filter(Boolean)
-        }))
+            .filter(Boolean),
+          required: a.required ?? true
+        })).filter((a) => a.name && a.options.length > 0)
       : undefined;
 
     const finalVariants =
@@ -206,12 +318,17 @@ export const VendorProductsPage: React.FC = () => {
             id: v.id,
             name: v.name,
             sku: v.sku,
-            attributes: { [formAttributes[0]?.name || 'Size']: v.name },
+            attributes: v.attributes || { [formAttributes[0]?.name || 'Option']: v.name },
             price: Number(v.price),
             mrp: Number(v.mrp),
             stock: Number(v.stock),
-            inStock: v.inStock && Number(v.stock) > 0,
-            discount: v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0
+            inStock: Boolean(v.inStock && Number(v.stock) > 0),
+            isAvailable: v.isAvailable !== false,
+            discount: v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0,
+            barcode: v.barcode,
+            weight: v.weight,
+            dimensions: v.dimensions,
+            image: v.image
           }))
         : undefined;
 
@@ -250,6 +367,9 @@ export const VendorProductsPage: React.FC = () => {
 
     if (editingProduct) {
       await updateProduct(editingProduct.id, productData as any);
+      if (finalVariants && finalVariants.length > 0) {
+        await vendorApi.updateProductVariants(editingProduct.id, finalVariants, finalAttributes);
+      }
     } else {
       await addProduct(productData as any);
     }
@@ -693,185 +813,369 @@ export const VendorProductsPage: React.FC = () => {
               />
             </div>
 
-            {/* Attributes & Variant Configuration (HomeRun Parity) */}
-            <div className="md:col-span-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
-              <div className="flex items-center justify-between">
+            {/* Dedicated Product Variants & Options Configuration Engine (Phases 3 & 4) */}
+            <div className="md:col-span-2 p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <div className="text-xs font-bold text-slate-900">
-                    Variant & Attribute Configuration
+                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 text-blue-600" />
+                    <span>Product Variants & Configurable Options</span>
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    Configure selectable sizes, colours, pack sizes, and UI presentation type (Cards, Dropdown, Pills).
+                    Configure option groups (Thickness, Size, Colour, Finish, Model) with custom display selectors and price matrix.
                   </div>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs select-none">
                   <input
                     type="checkbox"
                     checked={hasVariants}
                     onChange={(e) => setHasVariants(e.target.checked)}
                     className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                   />
-                  <span>Has Options / Variants</span>
+                  <span>Enable Product Options / Variants</span>
                 </label>
               </div>
 
               {hasVariants && (
-                <div className="space-y-4 pt-2 border-t border-slate-200">
-                  {/* Attribute Settings */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Attribute Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formAttributes[0]?.name || ''}
-                        onChange={(e) => {
-                          const updated = [...formAttributes];
-                          if (updated[0]) updated[0].name = e.target.value;
-                          setFormAttributes(updated);
-                        }}
-                        placeholder="e.g. Size, Pack Size, Colour"
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
+                <div className="space-y-4 pt-3 border-t border-slate-200">
+                  {/* Category Template Suggestions */}
+                  {(() => {
+                    const templates = getAttributeTemplatesForCategory(category);
+                    if (templates.length === 0) return null;
+                    return (
+                      <div className="p-3 bg-blue-50/80 rounded-xl border border-blue-200/80 space-y-1.5">
+                        <div className="text-[11px] font-bold text-blue-900 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Suggested Option Templates for {category}:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {templates.map((tpl) => {
+                            const isAdded = formAttributes.some(
+                              (a) => a.name.toLowerCase() === tpl.name.toLowerCase()
+                            );
+                            return (
+                              <button
+                                key={tpl.id}
+                                type="button"
+                                disabled={isAdded}
+                                onClick={() => handleAddTemplateOption(tpl)}
+                                className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all ${
+                                  isAdded
+                                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                    : 'bg-white text-blue-700 border-blue-300 hover:bg-blue-100 cursor-pointer shadow-2xs'
+                                }`}
+                              >
+                                + {tpl.name} ({tpl.suggestedUiType})
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        UI Presentation Selector
-                      </label>
-                      <select
-                        value={formAttributes[0]?.uiType || 'cards'}
-                        onChange={(e) => {
-                          const updated = [...formAttributes];
-                          if (updated[0]) updated[0].uiType = e.target.value as AttributeSelectorType;
-                          setFormAttributes(updated);
-                        }}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  {/* Option Groups Builder */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                        Configured Option Groups ({formAttributes.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddOptionGroup}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
                       >
-                        <option value="cards">Option Cards (e.g. Size / Pack Size)</option>
-                        <option value="dropdown">Dropdown Selector (e.g. Module Sizes)</option>
-                        <option value="pills">Pill Buttons (e.g. Colours, Finish)</option>
-                        <option value="radio">Radio Buttons</option>
-                      </select>
+                        <Plus className="w-3.5 h-3.5" /> Add Option Group
+                      </button>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Options (comma-separated)
-                      </label>
-                      <input
-                        type="text"
-                        value={formAttributes[0]?.optionsStr || ''}
-                        onChange={(e) => {
-                          const updated = [...formAttributes];
-                          if (updated[0]) updated[0].optionsStr = e.target.value;
-                          setFormAttributes(updated);
-                        }}
-                        placeholder="e.g. 2 Module, 4 Module, 6 Module"
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
+                    <div className="space-y-2.5">
+                      {formAttributes.map((attr, idx) => (
+                        <div
+                          key={attr.id}
+                          className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-slate-800">
+                              Option Group {idx + 1}
+                            </span>
+                            {formAttributes.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOptionGroup(attr.id)}
+                                className="text-rose-500 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Remove Option Group"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
+                            <div className="md:col-span-4">
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Option Group Name *
+                              </label>
+                              <input
+                                type="text"
+                                value={attr.name}
+                                onChange={(e) => handleOptionGroupChange(idx, 'name', e.target.value)}
+                                placeholder="e.g. Thickness, Size, Colour"
+                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                              />
+                            </div>
+
+                            <div className="md:col-span-3">
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Customer Display Style *
+                              </label>
+                              <select
+                                value={attr.uiType}
+                                onChange={(e) =>
+                                  handleOptionGroupChange(idx, 'uiType', e.target.value as AttributeSelectorType)
+                                }
+                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                              >
+                                <option value="cards">Cards with Price (e.g. Size, Pack)</option>
+                                <option value="pills">Pill Buttons (e.g. Thickness, Finish)</option>
+                                <option value="dropdown">Dropdown Selector (e.g. Modules)</option>
+                                <option value="color_swatches">Colour Swatches (e.g. Paint)</option>
+                                <option value="radio">Radio Buttons</option>
+                              </select>
+                            </div>
+
+                            <div className="md:col-span-5">
+                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
+                                Option Values (Comma Separated) *
+                              </label>
+                              <input
+                                type="text"
+                                value={attr.optionsStr}
+                                onChange={(e) => handleOptionGroupChange(idx, 'optionsStr', e.target.value)}
+                                placeholder="e.g. 6mm, 8mm, 12mm, 16mm, 18mm"
+                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-1 flex items-center justify-between flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleGenerateVariantMatrix}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3.5 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        Generate / Sync Variant Combinations Matrix
+                      </button>
+                      <span className="text-[11px] text-slate-500">
+                        Generates combination rows while preserving customized prices and stock.
+                      </span>
                     </div>
                   </div>
 
                   {/* Variant Matrix Table */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-2 border-t border-slate-200">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-700">Variant Inventory & Pricing Matrix</span>
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                          Variant Combination Matrix ({formVariants.length} Combinations)
+                        </span>
+                        <p className="text-[10px] text-slate-500">
+                          Configure price, MRP, stock, and toggle "Available" to disable unsupported combinations (e.g. 25mm in 7' X 4').
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={handleAddVariantRow}
                         className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Add Variant
+                        <Plus className="w-3.5 h-3.5" /> Add Custom Variant
                       </button>
                     </div>
 
                     {formVariants.length === 0 ? (
-                      <div className="text-center py-3 text-xs text-slate-400 bg-white rounded-lg border border-dashed border-slate-300">
-                        No individual variants added yet. Click "+ Add Variant" to configure custom pricing/stock per option.
+                      <div className="text-center py-6 text-xs text-slate-400 bg-white rounded-xl border border-dashed border-slate-300 space-y-2">
+                        <Package className="w-8 h-8 mx-auto text-slate-300" />
+                        <div>
+                          Click <strong>"Generate / Sync Variant Combinations Matrix"</strong> above to auto-create variant rows from your configured option groups.
+                        </div>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs bg-white rounded-lg border border-slate-200">
-                          <thead className="bg-slate-100 text-[10px] uppercase font-bold text-slate-600 border-b border-slate-200">
+                      <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-slate-200">
+                        <table className="w-full text-left text-xs bg-white">
+                          <thead className="bg-slate-100 text-[10px] uppercase font-bold text-slate-600 border-b border-slate-200 sticky top-0 z-10">
                             <tr>
-                              <th className="p-2">Variant Name</th>
-                              <th className="p-2">SKU</th>
-                              <th className="p-2">Price (₹)</th>
-                              <th className="p-2">MRP (₹)</th>
-                              <th className="p-2">Stock</th>
-                              <th className="p-2 text-center">In Stock</th>
-                              <th className="p-2 text-center">Action</th>
+                              <th className="p-2.5">Combination</th>
+                              <th className="p-2.5">SKU</th>
+                              <th className="p-2.5">Selling Price (₹)</th>
+                              <th className="p-2.5">MRP (₹)</th>
+                              <th className="p-2.5">Stock</th>
+                              <th className="p-2.5 text-center" title="If unchecked, combination is marked Unavailable on Customer PDP">
+                                Available?
+                              </th>
+                              <th className="p-2.5 text-center">In Stock?</th>
+                              <th className="p-2.5 text-center">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {formVariants.map((v, vIdx) => (
-                              <tr key={v.id || vIdx}>
-                                <td className="p-1.5">
-                                  <input
-                                    type="text"
-                                    value={v.name}
-                                    onChange={(e) => handleVariantChange(vIdx, 'name', e.target.value)}
-                                    className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs"
-                                  />
-                                </td>
-                                <td className="p-1.5">
-                                  <input
-                                    type="text"
-                                    value={v.sku}
-                                    onChange={(e) => handleVariantChange(vIdx, 'sku', e.target.value)}
-                                    className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs font-mono"
-                                  />
-                                </td>
-                                <td className="p-1.5">
-                                  <input
-                                    type="number"
-                                    value={v.price}
-                                    onChange={(e) => handleVariantChange(vIdx, 'price', Number(e.target.value))}
-                                    className="w-16 px-1.5 py-1 border border-slate-200 rounded text-xs"
-                                  />
-                                </td>
-                                <td className="p-1.5">
-                                  <input
-                                    type="number"
-                                    value={v.mrp}
-                                    onChange={(e) => handleVariantChange(vIdx, 'mrp', Number(e.target.value))}
-                                    className="w-16 px-1.5 py-1 border border-slate-200 rounded text-xs"
-                                  />
-                                </td>
-                                <td className="p-1.5">
-                                  <input
-                                    type="number"
-                                    value={v.stock}
-                                    onChange={(e) => handleVariantChange(vIdx, 'stock', Number(e.target.value))}
-                                    className="w-16 px-1.5 py-1 border border-slate-200 rounded text-xs"
-                                  />
-                                </td>
-                                <td className="p-1.5 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={v.inStock}
-                                    onChange={(e) => handleVariantChange(vIdx, 'inStock', e.target.checked)}
-                                    className="w-3.5 h-3.5 text-blue-600 rounded"
-                                  />
-                                </td>
-                                <td className="p-1.5 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveVariantRow(vIdx)}
-                                    className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
+                            {formVariants.map((v, vIdx) => {
+                              const isAvail = v.isAvailable !== false;
+                              return (
+                                <tr
+                                  key={v.id || vIdx}
+                                  className={`hover:bg-slate-50/80 transition-colors ${
+                                    !isAvail ? 'bg-slate-50/50 opacity-60' : ''
+                                  }`}
+                                >
+                                  <td className="p-2 font-semibold text-slate-800">
+                                    <input
+                                      type="text"
+                                      value={v.name}
+                                      onChange={(e) => handleVariantChange(vIdx, 'name', e.target.value)}
+                                      className="w-36 px-2 py-1 border border-slate-200 rounded text-xs"
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="text"
+                                      value={v.sku}
+                                      onChange={(e) => handleVariantChange(vIdx, 'sku', e.target.value)}
+                                      className="w-32 px-2 py-1 border border-slate-200 rounded text-xs font-mono"
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="number"
+                                      value={v.price}
+                                      onChange={(e) => handleVariantChange(vIdx, 'price', Number(e.target.value))}
+                                      className="w-20 px-2 py-1 border border-slate-200 rounded text-xs font-bold"
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="number"
+                                      value={v.mrp}
+                                      onChange={(e) => handleVariantChange(vIdx, 'mrp', Number(e.target.value))}
+                                      className="w-20 px-2 py-1 border border-slate-200 rounded text-xs text-slate-500"
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="number"
+                                      value={v.stock}
+                                      onChange={(e) => handleVariantChange(vIdx, 'stock', Number(e.target.value))}
+                                      className="w-16 px-2 py-1 border border-slate-200 rounded text-xs"
+                                    />
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={isAvail}
+                                      onChange={(e) => handleVariantChange(vIdx, 'isAvailable', e.target.checked)}
+                                      className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                                      title="Toggle whether this combination is sellable"
+                                    />
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={v.inStock}
+                                      onChange={(e) => handleVariantChange(vIdx, 'inStock', e.target.checked)}
+                                      className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                                    />
+                                  </td>
+                                  <td className="p-2 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveVariantRow(vIdx)}
+                                      className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                                      title="Delete Variant Row"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
                     )}
                   </div>
+
+                  {/* Customer PDP Interactive Preview Card */}
+                  {formAttributes.length > 0 && formVariants.length > 0 && (
+                    <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
+                      <div className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Customer PDP Live Preview</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          Simulating how options will render on customer PDP
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100 space-y-3">
+                        {formAttributes.map((attr) => {
+                          const options = attr.optionsStr.split(',').map((s) => s.trim()).filter(Boolean);
+                          if (options.length === 0) return null;
+
+                          return (
+                            <div key={attr.id} className="space-y-1.5">
+                              <span className="text-[11px] font-bold text-slate-800">{attr.name}</span>
+                              {attr.uiType === 'pills' ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {options.map((opt, oIdx) => (
+                                    <span
+                                      key={opt}
+                                      className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${
+                                        oIdx === 0
+                                          ? 'bg-black text-white border-black'
+                                          : 'bg-white text-slate-800 border-slate-300'
+                                      }`}
+                                    >
+                                      {opt}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : attr.uiType === 'cards' ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  {options.map((opt, oIdx) => (
+                                    <div
+                                      key={opt}
+                                      className={`p-2 rounded-xl border text-left ${
+                                        oIdx === 0
+                                          ? 'border-[#f59e0b] bg-[#fef9c3] ring-1 ring-amber-500/20'
+                                          : 'border-slate-200 bg-white'
+                                      }`}
+                                    >
+                                      <div className="font-bold text-xs text-slate-900">{opt}</div>
+                                      <div className="font-black text-xs text-slate-800 mt-0.5">
+                                        ₹{Number(price) || 100}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <select
+                                  disabled
+                                  className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
+                                >
+                                  {options.map((opt) => (
+                                    <option key={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

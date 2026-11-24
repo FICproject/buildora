@@ -38,7 +38,7 @@ import {
   VendorInvoice,
   VendorSupportTicket
 } from '@buildora/types';
-import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES } from '@buildora/constants';
+import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES, CATEGORY_ATTRIBUTE_TEMPLATES, getAttributeTemplatesForCategory } from '@buildora/constants';
 import { dbStore } from '../../../database/store';
 import { vendorSecurityService } from '../services/vendor-security.service';
 import { vendorNotificationService } from '../services/vendor-notification.service';
@@ -498,7 +498,7 @@ export function getVendorFromAuthHeader(authHeader?: string): BackendVendorRecor
 }
 
 // Seed Vendor Products derived from SEED_PRODUCTS
-let vendorProducts: VendorProduct[] = SEED_PRODUCTS.slice(0, 12).map((p, idx) => ({
+let vendorProducts: VendorProduct[] = SEED_PRODUCTS.map((p, idx) => ({
   id: `vp-${p.id}`,
   vendorId: DEFAULT_VENDOR_ID,
   tenantId: DEFAULT_TENANT_ID,
@@ -531,10 +531,11 @@ let vendorProducts: VendorProduct[] = SEED_PRODUCTS.slice(0, 12).map((p, idx) =>
     { minQuantity: 30, discountPercentage: 8, unitPrice: Math.round(p.price * 0.92) },
     { minQuantity: 60, discountPercentage: 12, unitPrice: Math.round(p.price * 0.88) }
   ],
+  attributes: p.attributes,
   variants: p.variants,
   specifications: p.specifications || {},
   deliverySpeedAvailable: p.deliverySpeedAvailable,
-  approvalStatus: idx === 11 ? 'PENDING_APPROVAL' : 'APPROVED',
+  approvalStatus: idx >= 50 ? 'PENDING_APPROVAL' : 'APPROVED',
   isActive: true,
   createdAt: '2026-01-15T10:00:00.000Z',
   updatedAt: new Date().toISOString()
@@ -2264,6 +2265,20 @@ export class VendorController {
     return { success: true, templates: attributeTemplates };
   }
 
+  @Get('categories/attribute-templates')
+  getAllCategoryAttributeTemplates(@Query('category') category?: string) {
+    if (category) {
+      return {
+        success: true,
+        data: getAttributeTemplatesForCategory(category)
+      };
+    }
+    return {
+      success: true,
+      data: CATEGORY_ATTRIBUTE_TEMPLATES
+    };
+  }
+
   // ==========================================
   // 5. PRODUCTS & VARIANTS MANAGEMENT
   // ==========================================
@@ -2513,7 +2528,7 @@ export class VendorController {
 
   @Put('products/:id/variants')
   updateProductVariants(@Param('id') id: string, @Body() body: { variants: any[]; attributes?: any[] }) {
-    const prod = vendorProducts.find((p) => p.id === id);
+    const prod = vendorProducts.find((p) => p.id === id || p.id === `vp-${id}` || p.sku === id);
     if (!prod) throw new NotFoundException('Product not found');
 
     prod.variants = body.variants || [];

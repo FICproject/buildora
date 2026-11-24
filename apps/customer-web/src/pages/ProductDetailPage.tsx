@@ -57,11 +57,11 @@ function findVariantForAttributes(
   });
   if (rev) return rev;
 
-  // 3. Fallback to maximum matching attribute score
-  let best = variants[0];
-  let maxScore = -1;
+  // 3. Score-based fallback only among valid and available variants
+  let best: ProductVariant | undefined = undefined;
+  let maxScore = 0;
   for (const v of variants) {
-    if (!v.attributes) continue;
+    if (!v.attributes || v.isAvailable === false) continue;
     let score = 0;
     for (const [k, val] of Object.entries(attrs)) {
       if (v.attributes[k] === val) score++;
@@ -72,6 +72,19 @@ function findVariantForAttributes(
     }
   }
   return best;
+}
+
+function getExactVariantForAttrs(
+  attrs: Record<string, string>,
+  variants?: ProductVariant[]
+): ProductVariant | undefined {
+  if (!variants || variants.length === 0) return undefined;
+  const entries = Object.entries(attrs);
+  if (entries.length === 0) return undefined;
+  return variants.find((v) => {
+    if (!v.attributes) return false;
+    return entries.every(([k, val]) => v.attributes[k] === val);
+  });
 }
 
 export const ProductDetailPage: React.FC = () => {
@@ -162,6 +175,12 @@ export const ProductDetailPage: React.FC = () => {
       ? Math.round(((activeMrp - activePrice) / activeMrp) * 100)
       : (product.discount || 0);
 
+  const isUnavailableCombination = Boolean(
+    product.variants &&
+    product.variants.length > 0 &&
+    (!selectedVariant || selectedVariant.isAvailable === false || selectedVariant.status === 'INACTIVE')
+  );
+
   const isOutOfStock =
     !product.inStock ||
     product.stockCount <= 0 ||
@@ -177,18 +196,20 @@ export const ProductDetailPage: React.FC = () => {
   const handleAttributeChange = (attrName: string, val: string) => {
     const next = { ...selectedAttributes, [attrName]: val };
     setSelectedAttributes(next);
-    const matched = findVariantForAttributes(next, product.variants);
+    const matched = getExactVariantForAttrs(next, product.variants) || findVariantForAttributes(next, product.variants);
     if (matched) {
       setSelectedVariant(matched);
       if (matched.image) {
         const idx = product.images.indexOf(matched.image);
         if (idx >= 0) setActiveImageIndex(idx);
       }
+    } else {
+      setSelectedVariant(undefined);
     }
   };
 
   const handleAddToCart = () => {
-    if (isOutOfStock) return;
+    if (isUnavailableCombination || isOutOfStock) return;
     addItem(product, 1, selectedVariant);
   };
 
@@ -354,14 +375,14 @@ export const ProductDetailPage: React.FC = () => {
             )}
           </div>
 
-          {/* Dynamic Attribute & Variant Presentation Engine (Phases 2 & 5) */}
+          {/* Dynamic Attribute & Variant Presentation Engine (Phases 1, 2 & 5) */}
           {product.attributes && product.attributes.length > 0 ? (
             <div className="space-y-4 pt-1">
               {product.attributes.map((attr) => {
                 const options = attr.options;
 
                 if (attr.uiType === 'pills') {
-                  // Pills UI (e.g. Colour: Grey, White, Black - Screenshot 3)
+                  // Pills UI (e.g. Thickness: 6mm, 8mm, 12mm - Screenshot 1; Colour: Grey, White, Black - Screenshot 5)
                   return (
                     <div key={attr.id} className="space-y-2">
                       <div className="text-xs font-bold text-slate-900">{attr.name}</div>
@@ -370,15 +391,26 @@ export const ProductDetailPage: React.FC = () => {
                           const optVal = getOptVal(optRaw);
                           const optLabel = getOptLabel(optRaw);
                           const isSelected = selectedAttributes[attr.name] === optVal;
+
+                          const prospectiveAttrs = { ...selectedAttributes, [attr.name]: optVal };
+                          const prospectiveVariant =
+                            getExactVariantForAttrs(prospectiveAttrs, product.variants) ||
+                            findVariantForAttributes(prospectiveAttrs, product.variants);
+                          const isAvailable = prospectiveVariant
+                            ? prospectiveVariant.isAvailable !== false && prospectiveVariant.status !== 'INACTIVE'
+                            : true;
+
                           return (
                             <button
                               key={optVal}
                               type="button"
                               onClick={() => handleAttributeChange(attr.name, optVal)}
-                              className={`px-6 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer select-none ${
+                              className={`px-5 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all select-none ${
                                 isSelected
-                                  ? 'bg-black text-white shadow-xs'
-                                  : 'bg-white text-slate-800 border border-slate-300 hover:border-slate-500'
+                                  ? 'bg-black text-white shadow-xs cursor-pointer'
+                                  : isAvailable
+                                  ? 'bg-white text-slate-800 border border-slate-300 hover:border-slate-500 cursor-pointer'
+                                  : 'bg-slate-50 text-slate-400 border border-slate-200 line-through opacity-50 cursor-pointer'
                               }`}
                             >
                               {optLabel}
@@ -390,8 +422,64 @@ export const ProductDetailPage: React.FC = () => {
                   );
                 }
 
+                if (attr.uiType === 'color_swatches') {
+                  // Colour Swatches UI
+                  const colorMap: Record<string, string> = {
+                    'grey': '#6b7280',
+                    'white': '#ffffff',
+                    'black': '#1f2937',
+                    'red': '#ef4444',
+                    'blue': '#3b82f6',
+                    'yellow': '#eab308',
+                    'green': '#22c55e',
+                    'brilliant white': '#f8fafc',
+                    'morning mist grey': '#94a3b8',
+                    'warm almond': '#fed7aa',
+                    'soft ivory': '#fef3c7',
+                    'earthy beige': '#d7ccc8',
+                    'slate blue': '#475569'
+                  };
+
+                  return (
+                    <div key={attr.id} className="space-y-2">
+                      <div className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                        <span>{attr.name}</span>
+                        <span className="text-xs text-brand-blue-700 font-semibold">{selectedAttributes[attr.name]}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        {options.map((optRaw: any) => {
+                          const optVal = getOptVal(optRaw);
+                          const optLabel = getOptLabel(optRaw);
+                          const isSelected = selectedAttributes[attr.name] === optVal;
+                          const hex = (optRaw as any)?.colorHex || colorMap[optVal.toLowerCase()] || '#cbd5e1';
+
+                          return (
+                            <button
+                              key={optVal}
+                              type="button"
+                              onClick={() => handleAttributeChange(attr.name, optVal)}
+                              title={optLabel}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all cursor-pointer select-none ${
+                                isSelected
+                                  ? 'border-brand-blue-600 bg-brand-blue-50 text-brand-blue-900 ring-2 ring-brand-blue-500/20'
+                                  : 'border-slate-300 hover:border-slate-400 bg-white text-slate-700'
+                              }`}
+                            >
+                              <span
+                                className="w-4 h-4 rounded-full border border-slate-300 flex-shrink-0"
+                                style={{ backgroundColor: hex }}
+                              />
+                              <span>{optLabel}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
                 if (attr.uiType === 'dropdown') {
-                  // Dropdown Selector UI (e.g. Size: 2 Module, 4 Module - Screenshot 2)
+                  // Dropdown Selector UI (e.g. Size: 2 Module, 4 Module - Screenshot 4)
                   return (
                     <div key={attr.id} className="space-y-1.5 max-w-md">
                       <label htmlFor={`attr-select-${attr.id}`} className="block text-xs font-bold text-slate-900">
@@ -407,17 +495,20 @@ export const ProductDetailPage: React.FC = () => {
                           {options.map((optRaw: any) => {
                             const optVal = getOptVal(optRaw);
                             const optLabel = getOptLabel(optRaw);
-                            const prospectiveVariant = findVariantForAttributes(
-                              { ...selectedAttributes, [attr.name]: optVal },
-                              product.variants
-                            );
+                            const prospectiveAttrs = { ...selectedAttributes, [attr.name]: optVal };
+                            const prospectiveVariant =
+                              getExactVariantForAttrs(prospectiveAttrs, product.variants) ||
+                              findVariantForAttributes(prospectiveAttrs, product.variants);
+
                             const isVOutOfStock =
                               prospectiveVariant &&
                               (!prospectiveVariant.inStock ||
                                 (prospectiveVariant.stock !== undefined && prospectiveVariant.stock <= 0));
+                            const isVUnavailable = prospectiveVariant && prospectiveVariant.isAvailable === false;
+
                             return (
                               <option key={optVal} value={optVal}>
-                                {optLabel} {isVOutOfStock ? '(Out of Stock)' : ''}
+                                {optLabel} {isVUnavailable ? '(Unavailable)' : isVOutOfStock ? '(Out of Stock)' : ''}
                               </option>
                             );
                           })}
@@ -428,7 +519,41 @@ export const ProductDetailPage: React.FC = () => {
                   );
                 }
 
-                // Default: 'cards' UI (Screenshot 1 & 4)
+                if (attr.uiType === 'radio') {
+                  // Radio Selection UI
+                  return (
+                    <div key={attr.id} className="space-y-2">
+                      <div className="text-xs font-bold text-slate-900">{attr.name}</div>
+                      <div className="space-y-2">
+                        {options.map((optRaw: any) => {
+                          const optVal = getOptVal(optRaw);
+                          const optLabel = getOptLabel(optRaw);
+                          const isSelected = selectedAttributes[attr.name] === optVal;
+                          return (
+                            <label
+                              key={optVal}
+                              onClick={() => handleAttributeChange(attr.name, optVal)}
+                              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                                isSelected ? 'border-brand-blue-500 bg-brand-blue-50/50' : 'border-slate-200 bg-white'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name={`attr-${attr.id}`}
+                                checked={isSelected}
+                                onChange={() => handleAttributeChange(attr.name, optVal)}
+                                className="w-4 h-4 text-brand-blue-600 focus:ring-brand-blue-500"
+                              />
+                              <span className="text-xs font-bold text-slate-800">{optLabel}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Default: 'cards' UI (Screenshot 1: Size 8' X 4' ₹1,455, 7' X 4' ₹1,259; Screenshot 3 & 5)
                 return (
                   <div key={attr.id} className="space-y-2">
                     <div className="text-xs font-bold text-slate-900">{attr.name}</div>
@@ -438,10 +563,15 @@ export const ProductDetailPage: React.FC = () => {
                         const optLabel = getOptLabel(optRaw);
                         const isSelected = selectedAttributes[attr.name] === optVal;
 
-                        const prospectiveVariant = findVariantForAttributes(
-                          { ...selectedAttributes, [attr.name]: optVal },
-                          product.variants
-                        );
+                        const prospectiveAttrs = { ...selectedAttributes, [attr.name]: optVal };
+                        const prospectiveVariant =
+                          getExactVariantForAttrs(prospectiveAttrs, product.variants) ||
+                          findVariantForAttributes(prospectiveAttrs, product.variants);
+
+                        const isCombinationValid =
+                          prospectiveVariant &&
+                          prospectiveVariant.isAvailable !== false &&
+                          prospectiveVariant.status !== 'INACTIVE';
                         const cardPrice = prospectiveVariant ? prospectiveVariant.price : activePrice;
                         const cardMrp = prospectiveVariant ? prospectiveVariant.mrp : activeMrp;
                         const cardInStock = prospectiveVariant
@@ -455,31 +585,38 @@ export const ProductDetailPage: React.FC = () => {
                           <button
                             key={optVal}
                             type="button"
+                            disabled={!isCombinationValid}
                             onClick={() => handleAttributeChange(attr.name, optVal)}
-                            className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
-                              isSelected
-                                ? 'border-[#f59e0b] bg-[#fef9c3]/50 ring-2 ring-amber-500/20 shadow-xs'
-                                : 'border-slate-200 hover:border-slate-300 bg-white'
+                            className={`p-3 rounded-2xl border text-left transition-all relative ${
+                              !isCombinationValid
+                                ? 'border-dashed border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'
+                                : isSelected
+                                ? 'border-[#f59e0b] bg-[#fef9c3]/70 ring-2 ring-amber-500/20 shadow-xs cursor-pointer'
+                                : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'
                             }`}
                           >
-                            {cardDiscount > 0 && (
-                              <span className="absolute top-2 right-2 text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.2 rounded-xs">
+                            {cardDiscount > 0 && isCombinationValid && (
+                              <span className="absolute top-2 right-2 text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded-xs">
                                 {cardDiscount}% OFF
                               </span>
                             )}
                             <div className="font-bold text-xs sm:text-sm text-slate-900 pr-8">{optLabel}</div>
-                            <div className="flex items-baseline gap-1.5 mt-1">
-                              <span className="font-black text-sm sm:text-base text-slate-900">
-                                {formatCurrency(cardPrice)}
-                              </span>
-                              {cardMrp > cardPrice && (
-                                <span className="text-[10px] sm:text-xs text-slate-400 line-through">
-                                  {formatCurrency(cardMrp)}
+                            {isCombinationValid ? (
+                              <div className="flex items-baseline gap-1.5 mt-1">
+                                <span className="font-black text-sm sm:text-base text-slate-900">
+                                  {formatCurrency(cardPrice)}
                                 </span>
-                              )}
-                            </div>
-                            {!cardInStock && (
-                              <div className="text-[10px] text-rose-600 font-bold mt-1">
+                                {cardMrp > cardPrice && (
+                                  <span className="text-[10px] sm:text-xs text-slate-400 line-through">
+                                    {formatCurrency(cardMrp)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-slate-400 font-medium mt-1">Unavailable</div>
+                            )}
+                            {isCombinationValid && !cardInStock && (
+                              <div className="text-[10px] text-rose-600 font-bold mt-0.5">
                                 Out of Stock
                               </div>
                             )}
@@ -503,10 +640,13 @@ export const ProductDetailPage: React.FC = () => {
                   const isSelected = (selectedVariant?.id || '') === v.id;
                   const vDiscount = v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0;
                   const vInStock = v.inStock && (v.stock === undefined || v.stock > 0);
+                  const isAvail = v.isAvailable !== false && v.status !== 'INACTIVE';
+
                   return (
                     <button
                       key={v.id}
                       type="button"
+                      disabled={!isAvail}
                       onClick={() => {
                         setSelectedVariant(v);
                         if (v.image) {
@@ -514,14 +654,16 @@ export const ProductDetailPage: React.FC = () => {
                           if (idx >= 0) setActiveImageIndex(idx);
                         }
                       }}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative ${
-                        isSelected
-                          ? 'border-[#f59e0b] bg-[#fef9c3]/50 ring-2 ring-amber-500/20 shadow-xs'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                      className={`p-3 rounded-2xl border text-left transition-all relative ${
+                        !isAvail
+                          ? 'border-dashed border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'
+                          : isSelected
+                          ? 'border-[#f59e0b] bg-[#fef9c3]/70 ring-2 ring-amber-500/20 shadow-xs cursor-pointer'
+                          : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'
                       }`}
                     >
-                      {vDiscount > 0 && (
-                        <span className="absolute top-2 right-2 text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.2 rounded-xs">
+                      {vDiscount > 0 && isAvail && (
+                        <span className="absolute top-2 right-2 text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded-xs">
                           {vDiscount}% OFF
                         </span>
                       )}
@@ -532,8 +674,8 @@ export const ProductDetailPage: React.FC = () => {
                           <span className="text-[10px] text-slate-400 line-through">{formatCurrency(v.mrp)}</span>
                         )}
                       </div>
-                      <div className={`text-[10px] font-semibold mt-0.5 ${vInStock ? 'text-slate-500' : 'text-rose-600 font-bold'}`}>
-                        {vInStock ? 'In Stock' : 'Out of Stock'}
+                      <div className={`text-[10px] font-semibold mt-0.5 ${!isAvail ? 'text-slate-400' : vInStock ? 'text-slate-500' : 'text-rose-600 font-bold'}`}>
+                        {!isAvail ? 'Unavailable' : vInStock ? 'In Stock' : 'Out of Stock'}
                       </div>
                     </button>
                   );
@@ -542,9 +684,23 @@ export const ProductDetailPage: React.FC = () => {
             </div>
           ) : null}
 
-          {/* Full-Width Add to Cart & Out of Stock Interaction (Phase 6 & 9) */}
+          {/* Full-Width Add to Cart & Out of Stock Interaction */}
           <div className="space-y-3 pt-2">
-            {isOutOfStock ? (
+            {isUnavailableCombination ? (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  disabled
+                  className="w-full py-3.5 sm:py-4 rounded-xl text-base font-bold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed flex items-center justify-center gap-2 select-none shadow-2xs"
+                >
+                  Selected Option Unavailable
+                </button>
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span>This specific combination of options is not manufactured or currently unavailable. Please select another combination.</span>
+                </div>
+              </div>
+            ) : isOutOfStock ? (
               <div className="space-y-2">
                 <button
                   type="button"

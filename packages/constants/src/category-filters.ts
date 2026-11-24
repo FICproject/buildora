@@ -463,6 +463,40 @@ export function getAvailableFiltersForCategory(
             valuesFound.push((p as any).size.trim());
           }
         }
+
+        // Check dynamic product attributes & variants
+        if (p.attributes && Array.isArray(p.attributes)) {
+          for (const attr of p.attributes) {
+            const isMatch =
+              attr.name.toLowerCase() === dim.name.toLowerCase() ||
+              attr.name.toLowerCase() === dim.id.toLowerCase() ||
+              Boolean(dim.specKeys?.some((k) => k.toLowerCase() === attr.name.toLowerCase()));
+            if (isMatch && Array.isArray(attr.options)) {
+              for (const opt of attr.options) {
+                const optStr = typeof opt === 'string' ? opt : opt.value || opt.label;
+                if (optStr && typeof optStr === 'string' && optStr.trim()) {
+                  valuesFound.push(optStr.trim());
+                }
+              }
+            }
+          }
+        }
+
+        if (p.variants && Array.isArray(p.variants)) {
+          for (const v of p.variants) {
+            if (v.attributes) {
+              for (const [attrK, attrV] of Object.entries(v.attributes)) {
+                const isMatch =
+                  attrK.toLowerCase() === dim.name.toLowerCase() ||
+                  attrK.toLowerCase() === dim.id.toLowerCase() ||
+                  Boolean(dim.specKeys?.some((k) => k.toLowerCase() === attrK.toLowerCase()));
+                if (isMatch && typeof attrV === 'string' && attrV.trim()) {
+                  valuesFound.push(attrV.trim());
+                }
+              }
+            }
+          }
+        }
       }
 
       // De-duplicate within the same product
@@ -705,6 +739,40 @@ export function applyCategoryFilters(
         if (dim.id === 'size' || dim.name.toLowerCase() === 'size') {
           if ((p as any).size && typeof (p as any).size === 'string') {
             productValues.push((p as any).size.trim());
+          }
+        }
+
+        // Check dynamic product attributes & variants
+        if (p.attributes && Array.isArray(p.attributes)) {
+          for (const attr of p.attributes) {
+            const isMatch =
+              attr.name.toLowerCase() === dim.name.toLowerCase() ||
+              attr.name.toLowerCase() === dim.id.toLowerCase() ||
+              Boolean(dim.specKeys?.some((k) => k.toLowerCase() === attr.name.toLowerCase()));
+            if (isMatch && Array.isArray(attr.options)) {
+              for (const opt of attr.options) {
+                const optStr = typeof opt === 'string' ? opt : opt.value || opt.label;
+                if (optStr && typeof optStr === 'string' && optStr.trim()) {
+                  productValues.push(optStr.trim());
+                }
+              }
+            }
+          }
+        }
+
+        if (p.variants && Array.isArray(p.variants)) {
+          for (const v of p.variants) {
+            if (v.attributes) {
+              for (const [attrK, attrV] of Object.entries(v.attributes)) {
+                const isMatch =
+                  attrK.toLowerCase() === dim.name.toLowerCase() ||
+                  attrK.toLowerCase() === dim.id.toLowerCase() ||
+                  Boolean(dim.specKeys?.some((k) => k.toLowerCase() === attrK.toLowerCase()));
+                if (isMatch && typeof attrV === 'string' && attrV.trim()) {
+                  productValues.push(attrV.trim());
+                }
+              }
+            }
           }
         }
 

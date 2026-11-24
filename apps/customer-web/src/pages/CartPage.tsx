@@ -344,6 +344,18 @@ export const CartPage: React.FC = () => {
                           </span>
                           <span className="text-[10px] text-slate-400 font-normal">/ {item.unit || 'unit'}</span>
                         </div>
+                        {item.selectedOptions && Object.keys(item.selectedOptions).length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {Object.entries(item.selectedOptions).map(([k, v]) => (
+                              <span
+                                key={k}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                              >
+                                {k}: {v}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 

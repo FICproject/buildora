@@ -42,11 +42,30 @@ export interface BulkPriceTier {
     unitPrice: number;
 }
 export type AttributeSelectorType = 'cards' | 'pills' | 'dropdown' | 'color_swatches' | 'radio';
+export interface CategoryAttributeTemplate {
+    id: string;
+    categorySlug: string;
+    categoryName: string;
+    name: string;
+    suggestedUiType: AttributeSelectorType;
+    suggestedOptions: string[];
+    description?: string;
+    isRequired?: boolean;
+}
+export interface ProductAttributeOption {
+    value: string;
+    label?: string;
+    colorHex?: string;
+    image?: string;
+    priceOffset?: number;
+}
 export interface ProductAttribute {
     id: string;
     name: string;
     uiType: AttributeSelectorType;
-    options: string[];
+    options: (string | ProductAttributeOption)[];
+    required?: boolean;
+    defaultValue?: string;
 }
 export interface ProductVariant {
     id: string;
@@ -61,6 +80,12 @@ export interface ProductVariant {
     image?: string;
     bulkPricing?: BulkPriceTier[];
     unit?: string;
+    barcode?: string;
+    weight?: string;
+    dimensions?: string;
+    warehouseId?: string;
+    status?: 'ACTIVE' | 'INACTIVE';
+    isAvailable?: boolean;
 }
 export interface ProductFaq {
     question: string;
@@ -140,6 +165,8 @@ export interface CartItem {
     effectiveUnitPrice: number;
     totalPrice: number;
     maxStock: number;
+    selectedOptions?: Record<string, string>;
+    warehouseLocation?: string;
 }
 export interface Coupon {
     code: string;
