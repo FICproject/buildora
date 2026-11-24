@@ -9,6 +9,7 @@ import { VendorLoginPage } from '../pages/auth/VendorLoginPage';
 import { VendorRegisterPage } from '../pages/auth/VendorRegisterPage';
 import { VendorForgotPasswordPage } from '../pages/auth/VendorForgotPasswordPage';
 import { VendorApplicationStatusPage } from '../pages/auth/VendorApplicationStatusPage';
+import { VendorReviewPage } from '../pages/auth/VendorReviewPage';
 import { VendorRejectionPage } from '../pages/auth/VendorRejectionPage';
 import { VendorRestrictedPage } from '../pages/auth/VendorRestrictedPage';
 
@@ -35,7 +36,7 @@ import { VendorSupportPage } from '../pages/support/VendorSupportPage';
 
 export const AppRoutes: React.FC = () => {
   const { isAuthenticated, vendor } = useVendorAuthStore();
-  const defaultHome = isAuthenticated ? getVendorRedirect(vendor?.status) : '/login';
+  const defaultHome = isAuthenticated ? getVendorRedirect(vendor?.status, vendor?.applicationId) : '/login';
 
   return (
     <Routes>
@@ -45,10 +46,15 @@ export const AppRoutes: React.FC = () => {
       {/* Public & Auth Layout Routes */}
       <Route element={<VendorAuthLayout />}>
         <Route path="/register" element={<VendorRegisterPage />} />
+        <Route path="/vendor/register" element={<VendorRegisterPage />} />
         <Route path="/forgot-password" element={<VendorForgotPasswordPage />} />
         
-        {/* Status Views under Brand Auth Layout */}
-        <Route path="/application-status" element={<VendorApplicationStatusPage />} />
+        {/* Status & Review Views under Brand Auth Layout */}
+        <Route path="/registration/review/:applicationId" element={<VendorReviewPage />} />
+        <Route path="/registration/review" element={<VendorReviewPage />} />
+        <Route path="/vendor/registration/review/:applicationId" element={<VendorReviewPage />} />
+        <Route path="/vendor/registration/review" element={<VendorReviewPage />} />
+        <Route path="/application-status" element={<VendorReviewPage />} />
         <Route path="/rejection-details" element={<VendorRejectionPage />} />
         <Route path="/account-restricted" element={<VendorRestrictedPage />} />
       </Route>

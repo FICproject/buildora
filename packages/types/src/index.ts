@@ -759,6 +759,8 @@ export interface VendorProfile {
   isEmailVerified?: boolean;
   isPhoneVerified?: boolean;
   registrationStep?: number;
+  applicationId?: string;
+  submittedAt?: string;
   warehouses?: VendorWarehouse[];
   kycDocuments?: VendorKycDocument[];
   auditLogs?: VendorAuditLog[];

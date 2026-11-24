@@ -256,6 +256,27 @@ export class VendorSecurityService {
   }
 
   /**
+   * Verify an access token and extract the vendorId and email.
+   */
+  verifyToken(token: string): { vendorId: string; email: string } | null {
+    if (!token || typeof token !== 'string') return null;
+    const parts = token.replace(/^Bearer\s+/i, '').trim().split('.');
+    if (parts.length !== 3) return null;
+    try {
+      const [header, payload, signature] = parts;
+      const secret = process.env.JWT_SECRET || 'buildora-vendor-enterprise-secret-key-2026';
+      const expectedSig = crypto.createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url');
+      if (signature !== expectedSig) return null;
+      const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+      const now = Math.floor(Date.now() / 1000);
+      if (data.exp && data.exp < now) return null;
+      return { vendorId: data.sub, email: data.email };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Validate password complexity requirements.
    */
   validatePasswordStrength(password: string): { isValid: boolean; message?: string } {

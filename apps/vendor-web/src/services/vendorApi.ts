@@ -593,6 +593,22 @@ export const vendorApi = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to submit vendor application.');
+    if (data.token) {
+      localStorage.setItem('buildora_vendor_token', data.token);
+    }
+    return data;
+  },
+
+  async getApplicationDetails(applicationId: string) {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/application/${applicationId}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to fetch application details.');
     return data;
   },
 

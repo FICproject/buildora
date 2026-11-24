@@ -11,6 +11,7 @@ import {
   BadRequestException,
   NotFoundException,
   UnauthorizedException,
+  ForbiddenException,
   HttpException,
   HttpStatus
 } from '@nestjs/common';
@@ -61,7 +62,7 @@ const SEED_PASSWORD_HASH = vendorSecurityService.hashPassword('Vendor@123');
 export const vendorRecords: Map<string, BackendVendorRecord> = new Map();
 
 // Helper to determine route redirection based on vendor account status
-export function getVendorRedirectUrl(status: VendorAccountStatus): string {
+export function getVendorRedirectUrl(status: VendorAccountStatus, applicationId?: string): string {
   switch (status) {
     case 'APPROVED':
     case 'ACTIVE':
@@ -70,13 +71,13 @@ export function getVendorRedirectUrl(status: VendorAccountStatus): string {
       return '/register';
     case 'SUBMITTED':
     case 'UNDER_REVIEW':
-      return '/application-status';
+      return applicationId ? `/registration/review/${applicationId}` : '/application-status';
     case 'REJECTED':
       return '/rejection-details';
     case 'SUSPENDED':
       return '/account-restricted';
     default:
-      return '/application-status';
+      return applicationId ? `/registration/review/${applicationId}` : '/application-status';
   }
 }
 
@@ -495,6 +496,23 @@ export function getVendorFromAuthHeader(authHeader?: string): BackendVendorRecor
     }
   }
   return vendorRecords.get(DEFAULT_VENDOR_ID)!;
+}
+
+// Helper to strictly resolve authenticated vendor without falling back to default
+export function getAuthenticatedVendor(authHeader?: string): BackendVendorRecord | null {
+  if (!authHeader) return null;
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  const verified = vendorSecurityService.verifyToken(token);
+  if (verified?.vendorId && vendorRecords.has(verified.vendorId)) {
+    return vendorRecords.get(verified.vendorId)!;
+  }
+  for (const v of vendorRecords.values()) {
+    if (token.includes(v.id) || token.includes(v.email)) {
+      return v;
+    }
+  }
+  return null;
 }
 
 // Seed Vendor Products derived from SEED_PRODUCTS
@@ -1795,6 +1813,35 @@ export class VendorController {
       throw new NotFoundException('Vendor registration draft not found.');
     }
 
+    // Check if already submitted (duplicate submission prevention)
+    if (vendor.status === 'SUBMITTED' || vendor.status === 'UNDER_REVIEW') {
+      const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
+      vendor.refreshToken = tokens.refreshToken;
+      return {
+        success: true,
+        message: 'Your application has already been submitted and is currently under review.',
+        applicationId: vendor.applicationId || `APP-BLR-2026-${vendor.id.slice(-6)}`,
+        status: vendor.status,
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresIn: tokens.expiresIn,
+        redirectTo: `/registration/review/${vendor.applicationId || `APP-BLR-2026-${vendor.id.slice(-6)}`}`,
+        vendor: {
+          id: vendor.id,
+          tenantId: vendor.tenantId,
+          storeName: vendor.storeName,
+          name: vendor.name,
+          email: vendor.email,
+          phone: vendor.phone,
+          status: vendor.status,
+          applicationId: vendor.applicationId,
+          submittedAt: vendor.submittedAt,
+          registrationStep: vendor.registrationStep,
+          businessInfo: vendor.businessInfo
+        }
+      };
+    }
+
     const data = body.wizardData || (vendor.registrationData as VendorRegistrationWizardData);
     if (!data) {
       throw new BadRequestException('Registration wizard data is required for submission.');
@@ -1824,11 +1871,53 @@ export class VendorController {
       throw new BadRequestException('You must review and accept the BUILDORA 60 Supplier Terms and Privacy Policy.');
     }
 
-    // Transition status to SUBMITTED
+    // Generate unique Application ID if not present
+    if (!vendor.applicationId) {
+      vendor.applicationId = `APP-BLR-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    }
+    vendor.submittedAt = new Date().toISOString();
     vendor.status = 'SUBMITTED';
     vendor.rejectionReason = undefined;
     vendor.updatedAt = new Date().toISOString();
     vendor.registrationStep = 5;
+    vendor.registrationData = data;
+
+    if (data.ownerName) vendor.name = data.ownerName;
+    if (data.storeName) vendor.storeName = data.storeName;
+    if (data.phone) vendor.phone = data.phone;
+    if (data.email) vendor.email = data.email;
+    if (data.documents && data.documents.length > 0) {
+      vendor.kycDocuments = data.documents;
+    }
+
+    vendor.businessInfo = {
+      ...vendor.businessInfo,
+      businessName: data.legalBusinessName || vendor.businessInfo?.businessName,
+      contactPerson: data.ownerName || vendor.name,
+      phone: data.phone || vendor.phone,
+      email: data.email || vendor.email,
+      businessType: (data.businessRegistrationType || vendor.businessInfo?.businessType || 'PRIVATE_LIMITED') as any,
+      description: data.description || vendor.businessInfo?.description,
+      gstin: data.gstin || vendor.businessInfo?.gstin,
+      pan: data.pan || vendor.businessInfo?.pan,
+      categories: data.productCategories || vendor.categories || [],
+      address: {
+        building: data.completeAddress || vendor.businessInfo?.address?.building || '',
+        street: data.area || vendor.businessInfo?.address?.street || '',
+        area: data.area || vendor.businessInfo?.address?.area || '',
+        city: data.city || vendor.businessInfo?.address?.city || '',
+        state: data.state || vendor.businessInfo?.address?.state || '',
+        pincode: data.pincode || vendor.businessInfo?.address?.pincode || ''
+      },
+      bankDetails: {
+        accountHolderName: data.bankDetails?.accountHolderName || '',
+        bankName: data.bankDetails?.bankName || '',
+        accountNumber: data.bankDetails?.accountNumber || '',
+        ifsc: data.bankDetails?.ifsc || '',
+        branch: data.bankDetails?.bankName ? `${data.bankDetails.bankName} Branch` : 'Main Branch',
+        isVerified: false
+      }
+    };
 
     // Record audit log
     if (!vendor.auditLogs) vendor.auditLogs = [];
@@ -1837,7 +1926,7 @@ export class VendorController {
       action: 'APPLICATION_SUBMITTED',
       performedBy: vendor.name || 'Vendor Owner',
       performedAt: new Date().toISOString(),
-      details: 'Vendor completed all 5 registration wizard steps. Application queued for Compliance & KYC review.',
+      details: `Vendor submitted registration with application ID ${vendor.applicationId}. Application queued for Compliance & KYC review.`,
       oldStatus: 'DRAFT',
       newStatus: 'SUBMITTED'
     });
@@ -1847,17 +1936,143 @@ export class VendorController {
       vendor.id,
       'APPLICATION_SUBMITTED',
       'Supplier Application Submitted',
-      'Thank you for applying to BUILDORA 60 Supplier Network. Your documents and commercial details have been queued for administrative compliance verification.',
-      '/application-status',
+      `Thank you for applying to BUILDORA 60 Supplier Network. Your application ${vendor.applicationId} is under administrative compliance verification.`,
+      `/registration/review/${vendor.applicationId}`,
       { email: vendor.email, phone: vendor.phone }
     );
+
+    // Issue JWT token immediately so vendor is authenticated without having to log in again
+    const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
+    vendor.refreshToken = tokens.refreshToken;
+
+    const redirectTo = `/registration/review/${vendor.applicationId}`;
 
     return {
       success: true,
       message: 'Your vendor application has been submitted successfully for administrative review.',
+      applicationId: vendor.applicationId,
       status: vendor.status,
-      redirectTo: '/application-status',
-      vendor
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+      redirectTo,
+      vendor: {
+        id: vendor.id,
+        tenantId: vendor.tenantId,
+        storeName: vendor.storeName,
+        name: vendor.name,
+        email: vendor.email,
+        phone: vendor.phone,
+        status: vendor.status,
+        applicationId: vendor.applicationId,
+        submittedAt: vendor.submittedAt,
+        registrationStep: vendor.registrationStep,
+        businessInfo: vendor.businessInfo
+      }
+    };
+  }
+
+  @Get('registration/application/:applicationId')
+  getApplicationDetails(
+    @Param('applicationId') applicationId: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    if (!applicationId) {
+      throw new BadRequestException('Application ID is required.');
+    }
+
+    // 1. Find the application in vendor records
+    let targetVendor: BackendVendorRecord | undefined;
+    for (const v of vendorRecords.values()) {
+      if (v.applicationId === applicationId || v.id === applicationId) {
+        targetVendor = v;
+        break;
+      }
+    }
+
+    if (!targetVendor) {
+      throw new NotFoundException(`Application "${applicationId}" was not found.`);
+    }
+
+    // 2. Security & Ownership check
+    const caller = getAuthenticatedVendor(authHeader);
+    if (!caller) {
+      throw new UnauthorizedException('Authentication token is required to view application details.');
+    }
+
+    if (caller.id !== targetVendor.id && caller.applicationId !== targetVendor.applicationId) {
+      throw new ForbiddenException('You are not authorized to view this vendor application.');
+    }
+
+    // 3. Mask sensitive information (PAN, Bank account)
+    const rawPan = targetVendor.registrationData?.pan || targetVendor.businessInfo?.pan || '';
+    const maskedPan = rawPan.length >= 6 ? `${rawPan.slice(0, 5)}••••${rawPan.slice(-1)}` : (rawPan ? '••••••••••' : 'Not Provided');
+
+    const rawBankAcc = targetVendor.registrationData?.bankDetails?.accountNumber || targetVendor.businessInfo?.bankDetails?.accountNumber || '';
+    const maskedBankAcc = rawBankAcc.length >= 4 ? `••••••••${rawBankAcc.slice(-4)}` : (rawBankAcc ? '••••••••' : 'Not Provided');
+
+    const regData = targetVendor.registrationData;
+
+    return {
+      success: true,
+      application: {
+        applicationId: targetVendor.applicationId || applicationId,
+        vendorId: targetVendor.id,
+        status: targetVendor.status,
+        submittedAt: targetVendor.submittedAt || targetVendor.createdAt,
+        updatedAt: targetVendor.updatedAt,
+        storeName: targetVendor.storeName || regData?.storeName || 'N/A',
+        businessName: targetVendor.businessInfo?.businessName || regData?.legalBusinessName || 'N/A',
+        ownerName: targetVendor.name || regData?.ownerName || 'N/A',
+        email: targetVendor.email,
+        phone: targetVendor.phone,
+        accountDetails: {
+          ownerName: targetVendor.name || regData?.ownerName || '',
+          email: targetVendor.email,
+          phone: targetVendor.phone,
+          isEmailVerified: !!targetVendor.isEmailVerified,
+          isPhoneVerified: !!targetVendor.isPhoneVerified
+        },
+        businessDetails: {
+          legalBusinessName: targetVendor.businessInfo?.businessName || regData?.legalBusinessName || '',
+          storeName: targetVendor.storeName || regData?.storeName || '',
+          businessType: targetVendor.businessInfo?.businessType || regData?.businessType || 'N/A',
+          businessRegistrationType: regData?.businessRegistrationType || 'N/A',
+          yearOfEstablishment: regData?.yearOfEstablishment || '',
+          description: targetVendor.businessInfo?.description || regData?.description || '',
+          categories: targetVendor.categories || regData?.productCategories || []
+        },
+        addressDetails: {
+          completeAddress: regData?.completeAddress || targetVendor.businessInfo?.address?.building || '',
+          city: regData?.city || targetVendor.businessInfo?.address?.city || '',
+          state: regData?.state || targetVendor.businessInfo?.address?.state || '',
+          district: regData?.district || '',
+          pincode: regData?.pincode || targetVendor.businessInfo?.address?.pincode || '',
+          dispatchAddress: regData?.dispatchAddress || ''
+        },
+        kycDetails: {
+          gstin: regData?.gstin || targetVendor.businessInfo?.gstin || 'Not Provided',
+          pan: maskedPan
+        },
+        bankDetails: {
+          accountHolderName: regData?.bankDetails?.accountHolderName || targetVendor.businessInfo?.bankDetails?.accountHolderName || '',
+          bankName: regData?.bankDetails?.bankName || targetVendor.businessInfo?.bankDetails?.bankName || '',
+          accountNumber: maskedBankAcc,
+          ifsc: regData?.bankDetails?.ifsc || targetVendor.businessInfo?.bankDetails?.ifsc || '',
+          accountType: regData?.bankDetails?.accountType || 'CURRENT'
+        },
+        documents: (targetVendor.kycDocuments || regData?.documents || []).map((doc) => ({
+          id: doc.id,
+          type: doc.type,
+          title: doc.title,
+          fileName: doc.fileName,
+          fileSize: doc.fileSize,
+          mimeType: doc.mimeType,
+          fileUrl: doc.fileUrl,
+          uploadedAt: doc.uploadedAt,
+          verificationStatus: doc.verificationStatus || 'PENDING'
+        }))
+      }
     };
   }
 
@@ -1907,17 +2122,32 @@ export class VendorController {
   @Get('registration/status')
   getRegistrationStatus(@Headers('authorization') authHeader?: string) {
     const vendor = getVendorFromAuthHeader(authHeader);
+    const rawPan = vendor.registrationData?.pan || vendor.businessInfo?.pan || '';
+    const maskedPan = rawPan.length >= 6 ? `${rawPan.slice(0, 5)}••••${rawPan.slice(-1)}` : (rawPan ? '••••••••••' : undefined);
+
+    const rawBankAcc = vendor.registrationData?.bankDetails?.accountNumber || vendor.businessInfo?.bankDetails?.accountNumber || '';
+    const maskedBankAcc = rawBankAcc.length >= 4 ? `••••••••${rawBankAcc.slice(-4)}` : undefined;
+
     return {
       success: true,
       status: vendor.status,
+      applicationId: vendor.applicationId || (vendor.status === 'SUBMITTED' ? `APP-BLR-2026-${vendor.id.slice(-6)}` : undefined),
+      submittedAt: vendor.submittedAt || vendor.createdAt,
       rejectionReason: vendor.rejectionReason,
       registrationStep: vendor.registrationStep || 1,
       storeName: vendor.storeName,
       legalName: vendor.businessInfo?.businessName,
-      kycDocuments: vendor.kycDocuments || [],
+      email: vendor.email,
+      phone: vendor.phone,
+      maskedPan,
+      maskedBankAcc,
+      kycDocuments: (vendor.kycDocuments || []).map((doc) => ({
+        ...doc,
+        verificationStatus: doc.verificationStatus || 'PENDING'
+      })),
       auditLogs: vendor.auditLogs || [],
       updatedAt: vendor.updatedAt,
-      redirectTo: getVendorRedirectUrl(vendor.status)
+      redirectTo: getVendorRedirectUrl(vendor.status, vendor.applicationId)
     };
   }
 

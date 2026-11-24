@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useVendorAuthStore } from '../store/useVendorAuthStore';
 import { VendorAccountStatus } from '@buildora/types';
 
-export function getVendorRedirect(status?: VendorAccountStatus): string {
+export function getVendorRedirect(status?: VendorAccountStatus, applicationId?: string): string {
   switch (status) {
     case 'APPROVED':
     case 'ACTIVE':
@@ -12,7 +12,7 @@ export function getVendorRedirect(status?: VendorAccountStatus): string {
       return '/register';
     case 'SUBMITTED':
     case 'UNDER_REVIEW':
-      return '/application-status';
+      return applicationId ? `/registration/review/${applicationId}` : '/registration/review';
     case 'REJECTED':
       return '/rejection-details';
     case 'SUSPENDED':
@@ -34,7 +34,7 @@ export const ProtectedRoute: React.FC = () => {
 
   // Only APPROVED or ACTIVE vendors can access the main Vendor App & Dashboard
   if (status !== 'APPROVED' && status !== 'ACTIVE') {
-    const targetRoute = getVendorRedirect(status);
+    const targetRoute = getVendorRedirect(status, vendor?.applicationId);
     return <Navigate to={targetRoute} replace />;
   }
 
@@ -47,10 +47,17 @@ export const PublicRoute: React.FC = () => {
 
   // If already authenticated, redirect them to the proper page based on their status
   if (isAuthenticated) {
-    const targetRoute = getVendorRedirect(vendor?.status);
+    const targetRoute = getVendorRedirect(vendor?.status, vendor?.applicationId);
     // Allow users to visit their own designated status route or register/login without infinite loop
-    const statusRoutes = ['/application-status', '/rejection-details', '/account-restricted', '/register', '/forgot-password'];
-    if (!statusRoutes.includes(location.pathname) && location.pathname !== targetRoute) {
+    const statusRoutes = [
+      '/registration/review',
+      '/application-status',
+      '/rejection-details',
+      '/account-restricted',
+      '/register',
+      '/forgot-password'
+    ];
+    if (!statusRoutes.some(r => location.pathname.startsWith(r)) && location.pathname !== targetRoute) {
       return <Navigate to={targetRoute} replace />;
     }
   }
