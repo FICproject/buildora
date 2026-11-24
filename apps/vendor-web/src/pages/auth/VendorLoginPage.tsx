@@ -1,45 +1,64 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useVendorAuthStore } from '../../store/useVendorAuthStore';
 import { vendorApi } from '../../services/vendorApi';
+import { CircularCollage } from '../../components/auth/CircularCollage';
+import { SkylineIllustration } from '../../components/auth/SkylineIllustration';
+import { WaveDecorations } from '../../components/auth/WaveDecorations';
 import {
   Mail,
   Lock,
   Phone,
   Eye,
   EyeOff,
-  AlertCircle,
   ArrowRight,
-  Sparkles,
-  ShieldAlert,
-  KeyRound,
+  UserPlus,
+  AlertCircle,
   CheckCircle2,
-  Clock
+  Clock,
+  Sparkles,
+  KeyRound,
+  X
 } from 'lucide-react';
 
 export const VendorLoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { login, loginWithOtp, isLoading, error, clearError } = useVendorAuthStore();
 
-  // Tabs: 'password' | 'otp'
+  // Active Login Method Tab: 'password' | 'otp'
   const [loginMethod, setLoginMethod] = useState<'password' | 'otp'>('password');
 
-  // Form states
+  // Form Fields
   const [identifier, setIdentifier] = useState('vendor@buildora.in');
   const [password, setPassword] = useState('Vendor@123');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // OTP states
+  // OTP Login States
   const [otpCode, setOtpCode] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+
+  // Status & Success notices
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
 
-  // Cooldown countdown timer
+  // Forgot Password Modal States
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [forgotStep, setForgotStep] = useState<'IDENTIFIER' | 'RESET'>('IDENTIFIER');
+  const [isForgotLoading, setIsForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+
+  // Demo Accounts Drawer (Discreet testing tool for all 5 statuses)
+  const [isDemoDrawerOpen, setIsDemoDrawerOpen] = useState(false);
+
+  // OTP Countdown Timer
   useEffect(() => {
     let timer: any;
     if (otpCooldown > 0) {
@@ -56,7 +75,16 @@ export const VendorLoginPage: React.FC = () => {
     clearError();
     setStatusNotice(null);
 
-    const res = await login(identifier, password, rememberMe);
+    if (!identifier.trim()) {
+      alert('Please enter your registered Email or Mobile number.');
+      return;
+    }
+    if (!password) {
+      alert('Please enter your account password.');
+      return;
+    }
+
+    const res = await login(identifier.trim(), password, rememberMe);
     if (res.success && res.redirectTo) {
       navigate(res.redirectTo);
     }
@@ -65,7 +93,7 @@ export const VendorLoginPage: React.FC = () => {
   // Handle Request OTP
   const handleRequestOtp = async () => {
     if (!identifier.trim()) {
-      alert('Please enter your registered email address or mobile number.');
+      alert('Please enter your registered mobile number or email address.');
       return;
     }
     setIsSendingOtp(true);
@@ -80,8 +108,9 @@ export const VendorLoginPage: React.FC = () => {
         setDevOtpHint(res.devOtpHint);
         setOtpCode(res.devOtpHint);
       }
+      setStatusNotice(`Verification code sent to ${identifier.trim()}`);
     } catch (err: any) {
-      // Error handled by store or alert
+      alert(err.message || 'Failed to send OTP. Please check your credentials.');
     } finally {
       setIsSendingOtp(false);
     }
@@ -97,332 +126,637 @@ export const VendorLoginPage: React.FC = () => {
     clearError();
     setStatusNotice(null);
 
-    const res = await loginWithOtp(identifier, otpCode);
+    const res = await loginWithOtp(identifier.trim(), otpCode.trim());
     if (res.success && res.redirectTo) {
       navigate(res.redirectTo);
     }
   };
 
-  // Switch demo persona credentials
+  // Forgot Password: Request OTP
+  const handleForgotSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    if (!forgotIdentifier.trim()) {
+      setForgotError('Please enter your registered Email or Mobile number.');
+      return;
+    }
+    setIsForgotLoading(true);
+    try {
+      const res = await vendorApi.forgotPasswordSendOtp(forgotIdentifier.trim());
+      setForgotStep('RESET');
+      if (res.devOtpHint) {
+        setForgotOtp(res.devOtpHint);
+      }
+      setForgotSuccess(`Verification code sent to ${forgotIdentifier.trim()}`);
+    } catch (err: any) {
+      setForgotError(err.message || 'Failed to send password reset code.');
+    } finally {
+      setIsForgotLoading(false);
+    }
+  };
+
+  // Forgot Password: Reset Submit
+  const handleForgotReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    if (!forgotOtp || forgotOtp.length < 6) {
+      setForgotError('Please enter the 6-digit verification code.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setForgotError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setForgotError('Passwords do not match.');
+      return;
+    }
+
+    setIsForgotLoading(true);
+    try {
+      await vendorApi.forgotPasswordReset({
+        identifier: forgotIdentifier.trim(),
+        otp: forgotOtp.trim(),
+        newPassword,
+        confirmPassword
+      });
+      setForgotSuccess('Password updated successfully! You can now log in.');
+      setTimeout(() => {
+        setIsForgotPasswordOpen(false);
+        setPassword(newPassword);
+        setIdentifier(forgotIdentifier);
+        setForgotStep('IDENTIFIER');
+        setForgotSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setForgotError(err.message || 'Failed to reset password. Please verify the code.');
+    } finally {
+      setIsForgotLoading(false);
+    }
+  };
+
+  // Select Demo Account Persona
   const selectDemoPersona = (email: string, pass = 'Vendor@123', label: string) => {
     setIdentifier(email);
     setPassword(pass);
     setLoginMethod('password');
     clearError();
-    setStatusNotice(`Selected persona: ${label}. Click "Sign In" to test status redirection.`);
+    setIsDemoDrawerOpen(false);
+    setStatusNotice(`Loaded: ${label}. Click "Login ->" to test role status.`);
   };
 
   return (
-    <div className="w-full bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-[#E2E8F0] space-y-6 animate-in fade-in-0 duration-200">
-      {/* Mobile Brand Header */}
-      <div className="lg:hidden flex items-center gap-2.5 pb-4 border-b border-slate-100">
-        <div className="w-9 h-9 rounded-xl bg-[#203D91] flex items-center justify-center text-white font-black text-lg shadow-sm">
-          B
-        </div>
-        <div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-black text-xl tracking-tight text-[#17233C]">BUILDORA</span>
-            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-[#FF7417] text-white">60</span>
+    <div className="min-h-screen w-full bg-[#FFFFFF] relative overflow-hidden flex flex-col justify-between font-sans text-[#152B52] selection:bg-[#FF7900]/20 selection:text-[#FF7900]">
+      {/* Soft Background Tint Accents */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-bl from-[#F3F7FC] via-white to-transparent pointer-events-none -z-10" />
+
+      {/* TOP HEADER: Brand Logo & QA Switcher */}
+      <header className="w-full max-w-7xl mx-auto px-6 sm:px-10 lg:px-14 pt-6 sm:pt-8 flex items-center justify-between z-20">
+        {/* Brand Logo & Tagline (Matches reference top-left) */}
+        <Link to="/login" className="flex items-center gap-3 group select-none">
+          {/* Orange B Icon Container */}
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF7900] to-[#FFA52F] flex items-center justify-center text-white font-black text-2xl shadow-md shadow-[#FF7900]/20 group-hover:scale-105 transition-transform">
+            B
           </div>
-          <p className="text-[11px] text-slate-500 font-medium">Build Smart. Supply Better.</p>
-        </div>
-      </div>
-
-      {/* Heading & Subtitle */}
-      <div>
-        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-[#17233C]">
-          Vendor Partner Login
-        </h2>
-        <p className="text-xs sm:text-sm text-slate-500 mt-1.5 leading-relaxed">
-          Manage your dark store stock, real-time builder dispatches, and automated weekly payouts.
-        </p>
-      </div>
-
-      {/* Error / Lockout Banner */}
-      {error && (
-        <div className="p-4 rounded-2xl bg-rose-50/90 border border-rose-200 text-rose-800 text-xs flex items-start gap-3 shadow-xs animate-shake">
-          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <p className="font-bold text-rose-900">Authentication Alert</p>
-            <p className="text-rose-700 leading-relaxed">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Status Notice */}
-      {statusNotice && (
-        <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs flex items-center gap-2.5">
-          <CheckCircle2 className="w-4 h-4 text-[#203D91] shrink-0" />
-          <span>{statusNotice}</span>
-        </div>
-      )}
-
-      {/* Demo Persona Switcher */}
-      <div className="p-3.5 rounded-2xl bg-[#F4F7FC] border border-[#E2E8F0]">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-[#FF7417]" />
-            Quick Test Accounts (All 5 Statuses)
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => selectDemoPersona('vendor@buildora.in', 'Vendor@123', 'Active Approved Store')}
-            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
-          >
-            ✓ Approved (Apex Depot)
-          </button>
-          <button
-            type="button"
-            onClick={() => selectDemoPersona('underreview@buildora.in', 'Vendor@123', 'Under Review Account')}
-            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-blue-50 text-[#203D91] border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
-          >
-            ⏳ Under Review
-          </button>
-          <button
-            type="button"
-            onClick={() => selectDemoPersona('draft@buildora.in', 'Vendor@123', 'Incomplete Draft Registration')}
-            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
-          >
-            📝 Resume Draft
-          </button>
-          <button
-            type="button"
-            onClick={() => selectDemoPersona('rejected@buildora.in', 'Vendor@123', 'Rejected Application')}
-            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100 transition-colors cursor-pointer"
-          >
-            ✕ Rejected (Re-submit)
-          </button>
-          <button
-            type="button"
-            onClick={() => selectDemoPersona('suspended@buildora.in', 'Vendor@123', 'Suspended Account')}
-            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200 transition-colors cursor-pointer"
-          >
-            🚫 Suspended
-          </button>
-        </div>
-      </div>
-
-      {/* Login Mode Tabs */}
-      <div className="flex p-1 bg-[#F4F7FC] rounded-xl border border-[#E2E8F0]">
-        <button
-          type="button"
-          onClick={() => {
-            setLoginMethod('password');
-            clearError();
-          }}
-          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-            loginMethod === 'password'
-              ? 'bg-white text-[#203D91] shadow-xs'
-              : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          Password Login
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setLoginMethod('otp');
-            clearError();
-          }}
-          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-            loginMethod === 'otp'
-              ? 'bg-white text-[#203D91] shadow-xs'
-              : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          Login with Mobile OTP
-        </button>
-      </div>
-
-      {/* Method 1: Password Login Form */}
-      {loginMethod === 'password' ? (
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-[#17233C] mb-1.5">
-              Registered Email or Mobile Number
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                required
-                placeholder="vendor@company.com or 9845012345"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-sm text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91] focus:border-transparent transition-all"
-              />
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-black text-2xl tracking-tight text-[#102B63]">BUILDORA</span>
+              <span className="font-black text-2xl tracking-tight text-[#FF7900]">60</span>
+            </div>
+            <p className="text-[11px] font-semibold text-slate-500 tracking-tight leading-none mt-0.5">
+              Build Smart. Supply Better.
+            </p>
+          </div>
+        </Link>
+
+        {/* Quick Demo Accounts Pill Button (Discrete developer/testing convenience) */}
+        <button
+          type="button"
+          onClick={() => setIsDemoDrawerOpen(true)}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold text-[#102B63] bg-[#F3F7FC] hover:bg-[#e6eef8] border border-slate-200 transition-colors shadow-2xs cursor-pointer select-none"
+          title="Click to quickly switch test vendor accounts across all 5 review statuses"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-[#FF7900]" />
+          <span className="hidden sm:inline">Quick Test Accounts</span>
+          <span className="sm:hidden">Test</span>
+        </button>
+      </header>
+
+      {/* MAIN CONTENT AREA: 2-Column Split Matching Reference Screenshot */}
+      <main className="w-full max-w-7xl mx-auto px-6 sm:px-10 lg:px-14 py-8 lg:py-10 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center flex-1 z-10 relative">
+        {/* LEFT COLUMN: Headings + Circular Segmented Collage + Skyline Illustration */}
+        <div className="lg:col-span-7 flex flex-col justify-center relative">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+            {/* Text Copy Section */}
+            <div className="md:col-span-5 space-y-3 z-10 text-center md:text-left">
+              <h1 className="text-3xl sm:text-4xl lg:text-[40px] font-black text-[#102B63] tracking-tight leading-[1.15]">
+                Partner with <br />
+                <span className="text-[#102B63]">BUILDORA</span>{' '}
+                <span className="text-[#FF7900]">60</span>
+              </h1>
+              <p className="text-sm sm:text-base text-slate-500 font-normal leading-relaxed max-w-sm mx-auto md:mx-0">
+                Bring your construction products to a larger market and grow with us.
+              </p>
+            </div>
+
+            {/* Circular Segmented Construction Collage */}
+            <div className="md:col-span-7 flex justify-center md:justify-end z-10">
+              <CircularCollage size={460} className="w-full max-w-[420px] lg:max-w-[460px]" />
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold text-[#17233C]">Password</label>
-              <Link
-                to="/forgot-password"
-                className="text-xs font-semibold text-[#203D91] hover:underline"
+          {/* City Skyline Outline Illustration (Anchored near bottom-left) */}
+          <div className="relative mt-4 md:mt-2">
+            <SkylineIllustration className="hidden md:block absolute -bottom-6 left-2" />
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Reference-Based White Login Card */}
+        <div className="lg:col-span-5 flex justify-center lg:justify-end z-20">
+          <div className="w-full max-w-[420px] bg-white rounded-[28px] border border-[#F5B36B] shadow-[0_20px_50px_rgba(16,43,99,0.08)] p-7 sm:p-9 relative transition-all">
+            {/* Card Top Storefront Icon Badge */}
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#FFA52F] to-[#FF7900] flex items-center justify-center text-white shadow-lg shadow-[#FF7900]/25 mx-auto mb-3.5 select-none">
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#FFFFFF"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                Forgot password?
-              </Link>
+                <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+                <path d="M2 7h20" />
+                <path d="M22 7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2" />
+              </svg>
             </div>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••••••"
-                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E2E8F0] text-sm text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91] focus:border-transparent transition-all"
-              />
+
+            {/* Card Titles */}
+            <div className="text-center space-y-1 mb-5">
+              <h2 className="text-2xl font-black text-[#102B63] tracking-tight">Vendor Login</h2>
+              <p className="text-xs font-medium text-slate-400">Access your vendor portal</p>
+            </div>
+
+            {/* Login Method Toggle Tabs (Password | OTP) */}
+            <div className="bg-[#F3F7FC] p-1 rounded-full flex max-w-[260px] mx-auto border border-slate-200/70 mb-5 select-none">
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                onClick={() => {
+                  setLoginMethod('password');
+                  clearError();
+                  setStatusNotice(null);
+                }}
+                className={`flex-1 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  loginMethod === 'password'
+                    ? 'bg-[#FF7900] text-white shadow-sm'
+                    : 'text-slate-600 hover:text-[#102B63]'
+                }`}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                Password
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMethod('otp');
+                  clearError();
+                  setStatusNotice(null);
+                }}
+                className={`flex-1 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  loginMethod === 'otp'
+                    ? 'bg-[#FF7900] text-white shadow-sm'
+                    : 'text-slate-600 hover:text-[#102B63]'
+                }`}
+              >
+                OTP
               </button>
             </div>
-          </div>
 
-          <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded text-[#203D91] border-slate-300 focus:ring-[#203D91]"
-              />
-              <span className="text-xs text-slate-600 font-medium">Remember this browser</span>
-            </label>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-          >
-            {isLoading ? (
-              <span className="inline-flex items-center gap-2">
-                <Clock className="w-4 h-4 animate-spin" />
-                Signing in...
-              </span>
-            ) : (
-              <>
-                Sign In to Vendor Portal
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
-        </form>
-      ) : (
-        /* Method 2: OTP Login Form */
-        <form onSubmit={handleOtpSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-[#17233C] mb-1.5">
-              Registered Email or Mobile Number
-            </label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  required
-                  placeholder="9845012345 or vendor@buildora.in"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-sm text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91] focus:border-transparent transition-all"
-                />
+            {/* Error Notification Banner */}
+            {error && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-in fade-in-0 duration-200">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span className="flex-1 font-medium leading-snug">{error}</span>
+                <button
+                  type="button"
+                  onClick={clearError}
+                  className="text-rose-400 hover:text-rose-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleRequestOtp}
-                disabled={isSendingOtp || otpCooldown > 0}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] transition-all shrink-0 cursor-pointer disabled:opacity-50"
-              >
-                {isSendingOtp ? 'Sending...' : otpCooldown > 0 ? `Resend (${otpCooldown}s)` : 'Send OTP'}
-              </button>
-            </div>
-          </div>
+            )}
 
-          {otpSent && (
-            <div className="space-y-3 pt-1 animate-in fade-in-0 duration-200">
-              {devOtpHint && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
-                  <span>Dev Test OTP: <strong className="font-mono text-sm tracking-widest">{devOtpHint}</strong></span>
+            {/* Status / Success Notice Banner */}
+            {statusNotice && (
+              <div className="mb-4 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-center gap-2 animate-in fade-in-0 duration-200">
+                <CheckCircle2 className="w-4 h-4 text-[#FF7900] shrink-0" />
+                <span className="font-medium flex-1">{statusNotice}</span>
+              </div>
+            )}
+
+            {/* TAB 1: Password Login Form */}
+            {loginMethod === 'password' ? (
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                {/* Email or Mobile Input */}
+                <div className="space-y-1">
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      required
+                      placeholder="Email or Mobile"
+                      className="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Password Input */}
+                <div className="space-y-1">
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      placeholder="Password"
+                      className="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Forgot Password Right-Aligned Link (Matches reference) */}
+                <div className="text-right pt-0.5">
                   <button
                     type="button"
-                    onClick={() => setOtpCode(devOtpHint)}
-                    className="text-xs font-bold text-[#203D91] underline"
+                    onClick={() => {
+                      setForgotIdentifier(identifier);
+                      setIsForgotPasswordOpen(true);
+                      setForgotStep('IDENTIFIER');
+                      setForgotError(null);
+                    }}
+                    className="text-xs font-bold text-[#FF7900] hover:text-[#e06b00] transition-colors cursor-pointer"
                   >
-                    Auto-fill
+                    Forgot Password?
                   </button>
                 </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-bold text-[#17233C] mb-1.5">
-                  Enter 6-Digit Verification Code
-                </label>
+                {/* Login Button with Right Arrow */}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3.5 rounded-full text-base font-bold text-white bg-gradient-to-r from-[#FF7900] to-[#FFA52F] hover:from-[#e66d00] hover:to-[#f09624] shadow-md shadow-[#FF7900]/25 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] disabled:opacity-60"
+                >
+                  {isLoading ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Clock className="w-4 h-4 animate-spin" />
+                      Signing in...
+                    </span>
+                  ) : (
+                    <>
+                      <span>Login</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              /* TAB 2: OTP Login Form */
+              <form onSubmit={handleOtpSubmit} className="space-y-4">
+                {/* Mobile Number / Email Input */}
+                <div className="space-y-1">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
+                        required
+                        placeholder="Registered Mobile (+91)"
+                        className="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRequestOtp}
+                      disabled={isSendingOtp || otpCooldown > 0}
+                      className="px-4 py-3 rounded-xl text-xs font-bold bg-[#FF7900] text-white hover:bg-[#e06b00] transition-all shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
+                    >
+                      {isSendingOtp ? 'Sending...' : otpCooldown > 0 ? `${otpCooldown}s` : 'Send OTP'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 6-Digit OTP Code Input */}
+                {otpSent && (
+                  <div className="space-y-2 animate-in fade-in-0 duration-200">
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                        required
+                        placeholder="Enter 6-digit OTP"
+                        className="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 text-sm font-mono tracking-widest text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs"
+                      />
+                    </div>
+                    {devOtpHint && (
+                      <p className="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center justify-between">
+                        <span>Development Demo OTP:</span>
+                        <strong className="font-mono text-xs">{devOtpHint}</strong>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Verify and Login Button */}
+                <button
+                  type="submit"
+                  disabled={isLoading || (!otpSent && !otpCode)}
+                  className="w-full py-3.5 rounded-full text-base font-bold text-white bg-gradient-to-r from-[#FF7900] to-[#FFA52F] hover:from-[#e66d00] hover:to-[#f09624] shadow-md shadow-[#FF7900]/25 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] disabled:opacity-60"
+                >
+                  {isLoading ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Clock className="w-4 h-4 animate-spin" />
+                      Verifying...
+                    </span>
+                  ) : (
+                    <>
+                      <span>Verify and Login</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Bottom Registration CTA (Matches Reference Screenshot) */}
+            <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-center">
+              <Link
+                to="/register"
+                className="inline-flex items-center gap-2 text-sm font-bold text-[#102B63] hover:text-[#FF7900] transition-colors cursor-pointer group"
+              >
+                <UserPlus className="w-4 h-4 text-[#FF7900] group-hover:scale-110 transition-transform" />
+                <span>Register as Vendor Partner</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Decorative Bottom Colored Waves Component */}
+      <WaveDecorations />
+
+      {/* ------------------------------------------------------------- */}
+      {/* MODAL 1: Forgot Password Workflow                             */}
+      {/* ------------------------------------------------------------- */}
+      {isForgotPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in-0 duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 relative space-y-4">
+            <button
+              type="button"
+              onClick={() => setIsForgotPasswordOpen(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-[#102B63]">Reset Vendor Password</h3>
+              <p className="text-xs text-slate-500">
+                {forgotStep === 'IDENTIFIER'
+                  ? 'Enter your registered email address or mobile number to receive a verification OTP.'
+                  : 'Enter the 6-digit code and choose a new secure password.'}
+              </p>
+            </div>
+
+            {forgotError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {forgotSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{forgotSuccess}</span>
+              </div>
+            )}
+
+            {forgotStep === 'IDENTIFIER' ? (
+              <form onSubmit={handleForgotSendOtp} className="space-y-4">
                 <div className="relative">
-                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={forgotIdentifier}
+                    onChange={(e) => setForgotIdentifier(e.target.value)}
+                    required
+                    placeholder="Registered Email or Mobile"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isForgotLoading}
+                  className="w-full py-3 rounded-xl text-xs font-bold text-white bg-[#FF7900] hover:bg-[#e06b00] shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isForgotLoading ? 'Sending Verification Code...' : 'Send Reset Code'}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleForgotReset} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    6-Digit Verification Code
+                  </label>
                   <input
                     type="text"
                     maxLength={6}
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    value={forgotOtp}
+                    onChange={(e) => setForgotOtp(e.target.value)}
                     required
                     placeholder="123456"
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-sm font-mono tracking-widest text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91] focus:border-transparent transition-all"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono tracking-widest focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900]"
                   />
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-              >
-                {isLoading ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Clock className="w-4 h-4 animate-spin" />
-                    Verifying OTP...
-                  </span>
-                ) : (
-                  <>
-                    Verify & Sign In
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </form>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    placeholder="At least 8 characters"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    placeholder="Confirm new password"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900]"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep('IDENTIFIER')}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isForgotLoading}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-[#FF7900] hover:bg-[#e06b00] shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isForgotLoading ? 'Updating Password...' : 'Reset Password & Login'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* Registration Link */}
-      <div className="pt-2 border-t border-slate-100 text-center space-y-2">
-        <p className="text-xs text-slate-500">
-          Want to become a certified BUILDORA 60 Supplier Partner?
-        </p>
-        <Link
-          to="/register"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#FF7417] hover:underline"
-        >
-          Register your distribution store or mill
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
+      {/* ------------------------------------------------------------- */}
+      {/* DRAWER 2: Discreet QA & Developer Test Persona Switcher      */}
+      {/* ------------------------------------------------------------- */}
+      {isDemoDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-xs p-4 animate-in fade-in-0 duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-[#FF7900]" />
+                <h3 className="text-sm font-bold text-[#102B63]">Quick Test Vendor Accounts</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDemoDrawerOpen(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-      {/* Legal Footer Links */}
-      <div className="pt-3 text-center text-[11px] text-slate-400 flex items-center justify-center gap-3">
-        <a href="#" className="hover:underline">Supplier Terms</a>
-        <span>•</span>
-        <a href="#" className="hover:underline">Privacy Policy</a>
-        <span>•</span>
-        <a href="#" className="hover:underline">Compliance Standards</a>
-      </div>
+            <p className="text-xs text-slate-500">
+              Click any account persona to populate credentials and test role-based status redirection:
+            </p>
+
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() =>
+                  selectDemoPersona('vendor@buildora.in', 'Vendor@123', 'Active Approved Store (Apex Depot)')
+                }
+                className="w-full p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-left border border-emerald-200 transition-colors cursor-pointer"
+              >
+                <div className="font-bold text-xs text-emerald-900 flex items-center justify-between">
+                  <span>✓ Approved Active Store</span>
+                  <span className="text-[10px] bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded">
+                    /dashboard
+                  </span>
+                </div>
+                <div className="text-[11px] text-emerald-700 mt-0.5">vendor@buildora.in</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  selectDemoPersona('underreview@buildora.in', 'Vendor@123', 'Under Review Account')
+                }
+                className="w-full p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-left border border-blue-200 transition-colors cursor-pointer"
+              >
+                <div className="font-bold text-xs text-[#102B63] flex items-center justify-between">
+                  <span>⏳ Application Under Review</span>
+                  <span className="text-[10px] bg-blue-200 text-blue-900 px-1.5 py-0.5 rounded">
+                    /application-status
+                  </span>
+                </div>
+                <div className="text-[11px] text-blue-700 mt-0.5">underreview@buildora.in</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  selectDemoPersona('draft@buildora.in', 'Vendor@123', 'Incomplete Draft Registration')
+                }
+                className="w-full p-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-left border border-amber-200 transition-colors cursor-pointer"
+              >
+                <div className="font-bold text-xs text-amber-900 flex items-center justify-between">
+                  <span>📝 Incomplete Draft Onboarding</span>
+                  <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded">
+                    /onboarding
+                  </span>
+                </div>
+                <div className="text-[11px] text-amber-700 mt-0.5">draft@buildora.in</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  selectDemoPersona('rejected@buildora.in', 'Vendor@123', 'Rejected Application')
+                }
+                className="w-full p-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-left border border-rose-200 transition-colors cursor-pointer"
+              >
+                <div className="font-bold text-xs text-rose-900 flex items-center justify-between">
+                  <span>✕ Rejected Application</span>
+                  <span className="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded">
+                    /rejection-details
+                  </span>
+                </div>
+                <div className="text-[11px] text-rose-700 mt-0.5">rejected@buildora.in</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  selectDemoPersona('suspended@buildora.in', 'Vendor@123', 'Suspended Account')
+                }
+                className="w-full p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-left border border-slate-300 transition-colors cursor-pointer"
+              >
+                <div className="font-bold text-xs text-slate-800 flex items-center justify-between">
+                  <span>🚫 Suspended Account</span>
+                  <span className="text-[10px] bg-slate-300 text-slate-800 px-1.5 py-0.5 rounded">
+                    /account-restricted
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-600 mt-0.5">suspended@buildora.in</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

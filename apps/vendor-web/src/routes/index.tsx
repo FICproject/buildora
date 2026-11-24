@@ -39,9 +39,11 @@ export const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
+      {/* Standalone Reference-Based Vendor Login Page */}
+      <Route path="/login" element={<VendorLoginPage />} />
+
       {/* Public & Auth Layout Routes */}
       <Route element={<VendorAuthLayout />}>
-        <Route path="/login" element={<VendorLoginPage />} />
         <Route path="/register" element={<VendorRegisterPage />} />
         <Route path="/forgot-password" element={<VendorForgotPasswordPage />} />
         
