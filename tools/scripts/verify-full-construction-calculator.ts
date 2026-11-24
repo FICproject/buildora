@@ -57,6 +57,7 @@ assert(routesContent.includes("path: 'construction-calculator'"), 'construction-
 const headerPath = path.resolve(__dirname, '../../apps/customer-web/src/components/common/Header.tsx');
 const headerContent = fs.readFileSync(headerPath, 'utf-8');
 assert(headerContent.includes('/tools/home-construction-calculator'), 'Header has link to /tools/home-construction-calculator');
+assert(!headerContent.includes('<span>Construction Calculator</span>'), 'Desktop category nav does not contain Construction Calculator (keeps navigation bar cleanly on single row)');
 
 const footerPath = path.resolve(__dirname, '../../apps/customer-web/src/components/common/Footer.tsx');
 const footerContent = fs.readFileSync(footerPath, 'utf-8');

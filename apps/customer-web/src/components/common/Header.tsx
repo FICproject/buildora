@@ -610,20 +610,6 @@ export const Header: React.FC = () => {
                 <Sparkles className={`w-3.5 h-3.5 fill-current ${isDealsActive ? 'text-white' : 'text-brand-orange-600'}`} />
                 <span>Deals</span>
               </Link>
-
-              {/* Home Construction Calculator Direct Nav */}
-              <Link
-                to="/tools/home-construction-calculator"
-                className={`py-2 px-3 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all ${
-                  location.pathname.includes('home-construction-calculator')
-                    ? 'bg-brand-blue-900 text-white shadow-sm'
-                    : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
-                }`}
-                title="Home Construction Calculator"
-              >
-                <Calculator className={`w-3.5 h-3.5 ${location.pathname.includes('home-construction-calculator') ? 'text-white' : 'text-brand-orange-500'}`} />
-                <span>Construction Calculator</span>
-              </Link>
             </div>
           </div>
 
