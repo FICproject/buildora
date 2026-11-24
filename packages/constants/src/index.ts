@@ -1000,5 +1000,5 @@ export const AVAILABLE_COUPONS = [
   }
 ];
 
-export * from './seed-data';
-export * from './category-filters';
+export * from './seed-data.js';
+export * from './category-filters.js';

@@ -1,85 +1,62 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
+import { ChevronRight, RotateCcw, PackageOpen } from 'lucide-react';
 import {
-  Rocket,
-  ChevronRight,
-  SlidersHorizontal,
-  Search,
-  RotateCcw,
-  Sparkles,
-  Zap,
-  Star,
-  CheckCircle2,
-  Package,
-  Layers,
-  Box,
-  Wrench,
-  Feather,
-  Columns,
-  Compass,
-  Coffee,
-  BatteryCharging,
-  Sun,
-  ShieldCheck,
-  Truck,
-  ArrowRight
-} from 'lucide-react';
-import {
-  NEW_LAUNCHES_CATEGORIES,
-  MASTER_CATEGORIES,
-  SEED_PRODUCTS
+  SEED_PRODUCTS,
+  getAvailableFiltersForCategory,
+  applyCategoryFilters,
+  ActiveCategoryFilters
 } from '@buildora/constants';
-import { Product, NewLaunchCategory } from '@buildora/types';
+import { Product } from '@buildora/types';
 import { api } from '../services/api';
 import { ProductCard } from '../components/common/ProductCard';
+import {
+  CategoryHorizontalFilterBar,
+  ActiveFilterChips,
+  SortOption
+} from '../components/catalog';
 
-const CATEGORY_ICONS: Record<string, React.ElementType> = {
-  'Layers': Layers,
-  'Box': Box,
-  'Wrench': Wrench,
-  'Feather': Feather,
-  'Columns': Columns,
-  'Compass': Compass,
-  'Coffee': Coffee,
-  'BatteryCharging': BatteryCharging,
-  'Sun': Sun
-};
+const NEW_LAUNCHES_SORT_OPTIONS: SortOption[] = [
+  { value: 'relevance', label: 'Relevance' },
+  { value: 'latest', label: 'Latest Arrivals (Newest)' },
+  { value: 'price-low', label: 'Price: Low to High' },
+  { value: 'price-high', label: 'Price: High to Low' },
+  { value: 'discount', label: 'Discount: High to Low' }
+];
 
 export const NewLaunchesPage: React.FC = () => {
-  const { categorySlug, subcategorySlug } = useParams<{
-    categorySlug?: string;
-    subcategorySlug?: string;
-  }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   // State
   const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
   const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
-  const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'latest');
-  const [inStockOnly, setInStockOnly] = useState(false);
-  const [asapOnly, setAsapOnly] = useState(false);
 
-  // Active category determination: either from route param (:categorySlug) or search param (?category=)
-  const activeCategorySlug = categorySlug || searchParams.get('category') || 'all';
+  // Active filter state initialized from URL parameters
+  const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() => {
+    const brandParam = searchParams.get('brand');
+    const sortParam = searchParams.get('sort');
+    const minP = searchParams.get('minPrice');
+    const maxP = searchParams.get('maxPrice');
+    const typeParam = searchParams.get('type');
+    const sizeParam = searchParams.get('size');
+    const inStock = searchParams.get('inStock') === 'true';
+    const asap = searchParams.get('asap') === 'true';
 
-  // Find active New Launch Category object
-  const activeCategory: NewLaunchCategory | undefined = useMemo(() => {
-    if (activeCategorySlug === 'all') return undefined;
-    return NEW_LAUNCHES_CATEGORIES.find(
-      (c) => c.slug === activeCategorySlug || c.masterCategorySlug === activeCategorySlug
-    );
-  }, [activeCategorySlug]);
+    const specs: Record<string, string[]> = {};
+    if (typeParam) specs['type'] = typeParam.split(',').map((s) => s.trim()).filter(Boolean);
+    if (sizeParam) specs['size'] = sizeParam.split(',').map((s) => s.trim()).filter(Boolean);
 
-  // Find underlying master category to get dynamic child subcategories
-  const activeMasterCategory = useMemo(() => {
-    if (!activeCategory) return undefined;
-    return MASTER_CATEGORIES.find((m) => m.slug === activeCategory.masterCategorySlug);
-  }, [activeCategory]);
-
-  // Active subcategory / child category
-  const activeSubcategorySlug = subcategorySlug || searchParams.get('subcategory') || 'all';
+    return {
+      brands: brandParam ? brandParam.split(',').map((b) => b.trim()).filter(Boolean) : [],
+      subcategories: [],
+      inStockOnly: inStock,
+      asapOnly: asap,
+      minPrice: minP ? Number(minP) : undefined,
+      maxPrice: maxP ? Number(maxP) : undefined,
+      specifications: specs,
+      sortBy: sortParam || 'latest'
+    };
+  });
 
   // Load products from API / fallback
   useEffect(() => {
@@ -102,463 +79,236 @@ export const NewLaunchesPage: React.FC = () => {
     };
   }, []);
 
-  // Filter products for New Launches
+  // Update URL search params when active filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeFilters.brands.length > 0) {
+      params.set('brand', activeFilters.brands.join(','));
+    }
+    if (activeFilters.specifications?.['type']?.length > 0) {
+      params.set('type', activeFilters.specifications['type'].join(','));
+    }
+    if (activeFilters.specifications?.['size']?.length > 0) {
+      params.set('size', activeFilters.specifications['size'].join(','));
+    }
+    if (activeFilters.minPrice !== undefined) {
+      params.set('minPrice', String(activeFilters.minPrice));
+    }
+    if (activeFilters.maxPrice !== undefined) {
+      params.set('maxPrice', String(activeFilters.maxPrice));
+    }
+    if (activeFilters.inStockOnly) {
+      params.set('inStock', 'true');
+    }
+    if (activeFilters.asapOnly) {
+      params.set('asap', 'true');
+    }
+    if (activeFilters.sortBy && activeFilters.sortBy !== 'latest') {
+      params.set('sort', activeFilters.sortBy);
+    }
+
+    setSearchParams(params, { replace: true });
+  }, [activeFilters, setSearchParams]);
+
+  // Pool of products for New Launches: products where isNewLaunch is true
   const newLaunchProducts = useMemo(() => {
-    // 1. Base pool: products marked as isNewLaunch OR belonging to any New Launches category
-    const validMasterSlugs = new Set(NEW_LAUNCHES_CATEGORIES.map((c) => c.masterCategorySlug));
+    return products.filter((p) => p.isNewLaunch);
+  }, [products]);
 
-    let pool = products.filter((p) => p.isNewLaunch || validMasterSlugs.has(p.categorySlug));
+  // Dynamically compute available filters for new-launches (Brand, Type, Price, Size)
+  const availableFilters = useMemo(() => {
+    return getAvailableFiltersForCategory('new-launches', newLaunchProducts);
+  }, [newLaunchProducts]);
 
-    // 2. Filter by Category
-    if (activeCategory) {
-      pool = pool.filter((p) => p.categorySlug === activeCategory.masterCategorySlug);
-    }
+  // Apply filters and sorting
+  const filteredProducts = useMemo(() => {
+    let result = applyCategoryFilters(newLaunchProducts, activeFilters, 'new-launches');
 
-    // 3. Filter by Child Subcategory
-    if (activeSubcategorySlug !== 'all') {
-      pool = pool.filter((p) => p.subcategorySlug === activeSubcategorySlug);
-    }
-
-    // 4. In Stock Filter
-    if (inStockOnly) {
-      pool = pool.filter((p) => p.inStock);
-    }
-
-    // 5. 60-Minute Fast Delivery Filter
-    if (asapOnly) {
-      pool = pool.filter((p) => p.deliverySpeedAvailable.includes('ASAP_60'));
-    }
-
-    // 6. Local Search Query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      pool = pool.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.brand.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q) ||
-          p.subcategory.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q)
-      );
-    }
-
-    // 7. Sorting
-    const sorted = [...pool];
-    if (sortBy === 'price_asc') {
-      sorted.sort((a, b) => a.price - b.price);
-    } else if (sortBy === 'price_desc') {
-      sorted.sort((a, b) => b.price - a.price);
-    } else if (sortBy === 'rating') {
-      sorted.sort((a, b) => b.rating - a.rating);
-    } else if (sortBy === 'discount') {
-      sorted.sort((a, b) => b.discount - a.discount);
-    } else {
-      // Latest arrivals first: priority to isNewLaunch, then id
-      sorted.sort((a, b) => {
+    // Sorting
+    const sort = activeFilters.sortBy || 'latest';
+    if (sort === 'price-low' || sort === 'price_asc') {
+      result = [...result].sort((a, b) => a.price - b.price);
+    } else if (sort === 'price-high' || sort === 'price_desc') {
+      result = [...result].sort((a, b) => b.price - a.price);
+    } else if (sort === 'discount') {
+      result = [...result].sort((a, b) => (b.discount || 0) - (a.discount || 0));
+    } else if (sort === 'rating') {
+      result = [...result].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    } else if (sort === 'speed') {
+      result = [...result].sort((a, b) => {
+        const aAsap = a.deliverySpeedAvailable?.includes('ASAP_60') ? 1 : 0;
+        const bAsap = b.deliverySpeedAvailable?.includes('ASAP_60') ? 1 : 0;
+        return bAsap - aAsap;
+      });
+    } else if (sort === 'latest') {
+      result = [...result].sort((a, b) => {
         if (a.isNewLaunch && !b.isNewLaunch) return -1;
         if (!a.isNewLaunch && b.isNewLaunch) return 1;
         return b.id.localeCompare(a.id);
       });
     }
 
-    return sorted;
-  }, [
-    products,
-    activeCategory,
-    activeSubcategorySlug,
-    inStockOnly,
-    asapOnly,
-    searchQuery,
-    sortBy
-  ]);
+    return result;
+  }, [newLaunchProducts, activeFilters]);
 
-  const handleCategoryChange = (slug: string) => {
-    if (slug === 'all') {
-      navigate('/new-launches');
-    } else {
-      const nlCat = NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug);
-      const targetSlug = nlCat ? nlCat.masterCategorySlug : slug;
-      navigate(`/categories/${targetSlug}`);
-    }
+  // Filter change handlers
+  const handleResetFilters = () => {
+    setActiveFilters({
+      brands: [],
+      subcategories: [],
+      inStockOnly: false,
+      asapOnly: false,
+      minPrice: undefined,
+      maxPrice: undefined,
+      specifications: {},
+      sortBy: 'latest'
+    });
   };
 
-  const handleSubcategoryChange = (subSlug: string) => {
-    if (!activeCategory) return;
-    const targetSlug = activeCategory.masterCategorySlug || activeCategory.slug;
-    if (subSlug === 'all') {
-      navigate(`/categories/${targetSlug}`);
-    } else {
-      navigate(`/categories/${targetSlug}/${subSlug}`);
-    }
+  const handleRemoveBrand = (brand: string) => {
+    setActiveFilters((prev) => ({
+      ...prev,
+      brands: prev.brands.filter((b) => b !== brand)
+    }));
   };
 
-  const resetFilters = () => {
-    setSearchQuery('');
-    setSortBy('latest');
-    setInStockOnly(false);
-    setAsapOnly(false);
-    navigate('/new-launches');
+  const handleRemoveSubcategory = (sub: string) => {
+    setActiveFilters((prev) => ({
+      ...prev,
+      subcategories: prev.subcategories.filter((s) => s !== sub)
+    }));
+  };
+
+  const handleRemoveSpec = (dimId: string, val: string) => {
+    setActiveFilters((prev) => {
+      const currentList = prev.specifications[dimId] || [];
+      const updatedList = currentList.filter((v) => v !== val);
+      const updatedSpecs = { ...prev.specifications };
+      if (updatedList.length === 0) {
+        delete updatedSpecs[dimId];
+      } else {
+        updatedSpecs[dimId] = updatedList;
+      }
+      return {
+        ...prev,
+        specifications: updatedSpecs
+      };
+    });
+  };
+
+  const handleRemovePrice = () => {
+    setActiveFilters((prev) => ({
+      ...prev,
+      minPrice: undefined,
+      maxPrice: undefined
+    }));
+  };
+
+  const handleRemoveInStock = () => {
+    setActiveFilters((prev) => ({
+      ...prev,
+      inStockOnly: false
+    }));
+  };
+
+  const handleRemoveAsap = () => {
+    setActiveFilters((prev) => ({
+      ...prev,
+      asapOnly: false
+    }));
   };
 
   return (
-    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8 space-y-6 sm:space-y-8 animate-in fade-in-0 duration-200">
-      {/* 1. BREADCRUMBS NAVIGATION */}
+    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-5 animate-in fade-in-0 duration-200">
+      {/* 1. Breadcrumb Navigation */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500 overflow-x-auto no-scrollbar whitespace-nowrap">
         <Link to="/" className="hover:text-brand-blue-900 flex-shrink-0 transition-colors">
           Home
         </Link>
         <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-        <Link
-          to="/new-launches"
-          className={`flex-shrink-0 transition-colors ${
-            !activeCategory ? 'font-bold text-brand-blue-900' : 'hover:text-brand-blue-900'
-          }`}
-        >
+        <span className="font-semibold text-slate-800 flex-shrink-0">
           New Launches
-        </Link>
-
-        {activeCategory && (
-          <>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <Link
-              to={`/categories/${activeCategory.masterCategorySlug || activeCategory.slug}`}
-              className={`flex-shrink-0 transition-colors ${
-                activeSubcategorySlug === 'all'
-                  ? 'font-bold text-brand-blue-900'
-                  : 'hover:text-brand-blue-900'
-              }`}
-            >
-              {activeCategory.name}
-            </Link>
-          </>
-        )}
-
-        {activeCategory && activeSubcategorySlug !== 'all' && (
-          <>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <span className="font-bold text-brand-orange-600 flex-shrink-0">
-              {activeMasterCategory?.subcategories.find((s) => s.slug === activeSubcategorySlug)?.name ||
-                activeSubcategorySlug}
-            </span>
-          </>
-        )}
+        </span>
       </nav>
 
-      {/* 2. HERO / HEADER BANNER */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-slate-900 via-brand-blue-950 to-slate-900 text-white p-6 sm:p-10 shadow-xl border border-slate-800">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-brand-orange-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 -mb-12 w-64 h-64 bg-brand-blue-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-orange-500/20 border border-brand-orange-400/30 text-brand-orange-400 text-xs font-black tracking-wide">
-            <Rocket className="w-3.5 h-3.5 animate-pulse" />
-            <span>JUST INTRODUCED &bull; 60-MIN SITE DISPATCH</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white">
-            {activeCategory ? activeCategory.name : 'New Launches'}
+      {/* 2. Category Title Header (HomeRun-Style Parity) */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            New Launches
           </h1>
-
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
-            {activeCategory
-              ? activeCategory.description
-              : 'Discover the latest additions to BUILDORA 60 — direct-from-mill construction supplies, heavy-duty architectural hardware, conduits, bath renovation fixtures, and smart site appliances.'}
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl">
+            Recently introduced construction materials, direct-from-mill architectural hardware, smart electrical supplies, and modern building fixtures.
           </p>
-
-          <div className="flex items-center gap-4 pt-2 text-xs font-semibold text-slate-400 flex-wrap">
-            <div className="flex items-center gap-1.5 text-emerald-400">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>100% Genuine Direct from Brand</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <Truck className="w-4 h-4 text-brand-orange-400" />
-              <span>EV Mini-Truck Dispatch Across Bengaluru</span>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* 3. NEW LAUNCHES SUBCATEGORY PILLS / CARDS (REFERENCE HOME-RUN TAXONOMY) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-brand-orange-500" />
-            <span>Curated Categories ({NEW_LAUNCHES_CATEGORIES.length})</span>
+      {/* 3. Horizontal Filter Bar (Brand, Type, Price, Size, Sort - Strictly No Category Filter) */}
+      <CategoryHorizontalFilterBar
+        availableFilters={availableFilters}
+        activeFilters={activeFilters}
+        onChangeFilters={setActiveFilters}
+        onResetFilters={handleResetFilters}
+        totalResultsCount={filteredProducts.length}
+        sortOptions={NEW_LAUNCHES_SORT_OPTIONS}
+      />
+
+      {/* 4. Active Filter Chips */}
+      <ActiveFilterChips
+        activeFilters={activeFilters}
+        availableFilters={availableFilters}
+        onRemoveBrand={handleRemoveBrand}
+        onRemoveSubcategory={handleRemoveSubcategory}
+        onRemoveSpec={handleRemoveSpec}
+        onRemovePrice={handleRemovePrice}
+        onRemoveInStock={handleRemoveInStock}
+        onRemoveAsap={handleRemoveAsap}
+        onClearAll={handleResetFilters}
+      />
+
+      {/* 5. Full-Width Product Grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
+            <div key={n} className="bg-white rounded-2xl border border-slate-200 p-4 h-72 animate-pulse space-y-3">
+              <div className="bg-slate-100 rounded-xl h-36 w-full" />
+              <div className="h-4 bg-slate-100 rounded w-3/4" />
+              <div className="h-3 bg-slate-100 rounded w-1/2" />
+              <div className="h-8 bg-slate-100 rounded w-full mt-4" />
+            </div>
+          ))}
+        </div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="p-16 bg-white rounded-3xl border border-slate-200 text-center space-y-4 shadow-2xs">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
+            <PackageOpen className="w-8 h-8" />
           </div>
-          {activeCategorySlug !== 'all' && (
+          <div className="space-y-1">
+            <h3 className="font-bold text-slate-900 text-lg">
+              No new launches match your selected filters
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+              Try adjusting or clearing your filters to explore all newly launched construction materials.
+            </p>
+          </div>
+          <div className="pt-2">
             <button
               type="button"
-              onClick={() => handleCategoryChange('all')}
-              className="text-xs font-bold text-brand-blue-900 hover:text-brand-orange-600 transition-colors"
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold bg-brand-blue-900 text-white hover:bg-brand-blue-950 transition-colors shadow-sm cursor-pointer"
             >
-              Show All Categories
+              <RotateCcw className="w-3.5 h-3.5" />
+              Clear All Filters
             </button>
-          )}
-        </div>
-
-        {/* Horizontal Category Chips */}
-        <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1 text-xs whitespace-nowrap">
-          <button
-            type="button"
-            onClick={() => handleCategoryChange('all')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all flex-shrink-0 cursor-pointer ${
-              activeCategorySlug === 'all'
-                ? 'bg-brand-blue-900 text-white shadow-md'
-                : 'bg-white text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 border border-slate-200 shadow-2xs'
-            }`}
-          >
-            <Rocket className="w-3.5 h-3.5 text-brand-orange-400" />
-            <span>All New Launches</span>
-          </button>
-
-          {NEW_LAUNCHES_CATEGORIES.map((cat) => {
-            const isSelected = activeCategorySlug === cat.slug;
-            const Icon = CATEGORY_ICONS[cat.icon] || Package;
-
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => handleCategoryChange(cat.slug)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold transition-all flex-shrink-0 cursor-pointer ${
-                  isSelected
-                    ? 'bg-brand-blue-900 text-white shadow-md font-black'
-                    : 'bg-white text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 border border-slate-200 shadow-2xs'
-                }`}
-                title={cat.description}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-brand-orange-500'}`} />
-                <span>{cat.name}</span>
-                {cat.badge && (
-                  <span
-                    className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${
-                      isSelected ? 'bg-white/20 text-white' : 'bg-orange-100 text-brand-orange-600'
-                    }`}
-                  >
-                    {cat.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. DYNAMIC CHILD CATEGORIES (WHEN A CATEGORY IS SELECTED) */}
-      {activeCategory && activeMasterCategory && activeMasterCategory.subcategories.length > 0 && (
-        <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-2.5 animate-in fade-in-0 duration-150">
-          <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-between">
-            <span>{activeCategory.name} &bull; Child Categories</span>
-            <Link
-              to={`/categories/${activeCategory.masterCategorySlug}`}
-              className="text-[11px] text-brand-blue-900 font-bold hover:underline flex items-center gap-1"
-            >
-              <span>View Master Catalogue</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
           </div>
-
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 text-xs whitespace-nowrap">
-            <button
-              type="button"
-              onClick={() => handleSubcategoryChange('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeSubcategorySlug === 'all'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-white text-slate-700 hover:bg-slate-200/80 border border-slate-200'
-              }`}
-            >
-              All {activeCategory.name}
-            </button>
-
-            {activeMasterCategory.subcategories.map((sub) => {
-              const isSelected = activeSubcategorySlug === sub.slug;
-              return (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={() => handleSubcategoryChange(sub.slug)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-slate-900 text-white font-bold shadow-xs'
-                      : 'bg-white text-slate-700 hover:bg-slate-200/80 border border-slate-200'
-                  }`}
-                >
-                  {sub.name}
-                </button>
-              );
-            })}
-          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+          {filteredProducts.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
         </div>
       )}
-
-      {/* 5. SEARCH & CONTROLS TOOLBAR */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4">
-        {/* Left: Search input */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search within New Launches..."
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-brand-blue-500 focus:ring-1 focus:ring-brand-blue-500 bg-slate-50/50"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        {/* Right: Quick Toggles & Sort Dropdown */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          {/* In-Stock Toggle */}
-          <button
-            type="button"
-            onClick={() => setInStockOnly(!inStockOnly)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-              inStockOnly
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            ⚡ In-Stock Only
-          </button>
-
-          {/* 60-min delivery toggle */}
-          <button
-            type="button"
-            onClick={() => setAsapOnly(!asapOnly)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-              asapOnly
-                ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            🚚 60-Min Express
-          </button>
-
-          {/* Sort selector */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="py-2 px-3 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-brand-blue-500 cursor-pointer"
-          >
-            <option value="latest">Latest Arrivals (Newest)</option>
-            <option value="rating">Customer Rating (Highest)</option>
-            <option value="price_asc">Price: Low to High</option>
-            <option value="price_desc">Price: High to Low</option>
-            <option value="discount">Biggest Discounts</option>
-          </select>
-
-          {/* Clear Filters */}
-          {(searchQuery || inStockOnly || asapOnly || sortBy !== 'latest' || activeCategorySlug !== 'all') && (
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="p-2 text-slate-500 hover:text-brand-orange-600 transition-colors cursor-pointer"
-              title="Reset all filters"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 6. PRODUCTS LISTING GRID */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between text-xs text-slate-500">
-          <div className="font-bold text-slate-800">
-            Showing <span className="text-brand-orange-600 font-black">{newLaunchProducts.length}</span> Materials
-            {activeCategory && ` in ${activeCategory.name}`}
-          </div>
-          <div className="text-[11px] text-slate-400">
-            Real-time inventory dispatched from Indiranagar, Koramangala &amp; Rajajinagar dark stores
-          </div>
-        </div>
-
-        {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-              <div key={n} className="bg-white rounded-2xl border border-slate-200 p-4 h-72 animate-pulse space-y-3">
-                <div className="bg-slate-100 rounded-xl h-36 w-full" />
-                <div className="h-4 bg-slate-100 rounded w-3/4" />
-                <div className="h-3 bg-slate-100 rounded w-1/2" />
-                <div className="h-8 bg-slate-100 rounded w-full mt-4" />
-              </div>
-            ))}
-          </div>
-        ) : newLaunchProducts.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-4 max-w-xl mx-auto shadow-sm">
-            <div className="w-16 h-16 rounded-2xl bg-brand-orange-50 text-brand-orange-600 flex items-center justify-center mx-auto">
-              <Rocket className="w-8 h-8" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-black text-slate-900">No products match your criteria</h3>
-              <p className="text-xs text-slate-500">
-                Try resetting your filters or search terms to explore all newly launched construction materials.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="px-5 py-2.5 bg-brand-blue-900 hover:bg-brand-blue-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
-            >
-              Reset Filters &amp; View All
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-            {newLaunchProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 7. QUALITY ASSURANCE & DISPATCH BANNER */}
-      <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 shadow-card">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-brand-orange-400 flex-shrink-0">
-            <Truck className="w-5 h-5" />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-xs font-bold text-white">60-Minute Site Delivery</h4>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              Dispatched from 5 hyper-local dark stores across Bengaluru with real-time GPS tracking.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-emerald-400 flex-shrink-0">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-xs font-bold text-white">100% Genuine Materials</h4>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              Direct-from-mill authorized sourcing with test certificates and manufacturer warranty.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-sky-400 flex-shrink-0">
-            <Zap className="w-5 h-5" />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-xs font-bold text-white">Instant B2B GST Invoicing</h4>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              Automated 18% &amp; 28% Input Tax Credit (ITC) tax invoices generated instantly upon dispatch.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

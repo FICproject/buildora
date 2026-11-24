@@ -7,6 +7,17 @@ export default {
   theme: {
     extend: {
       colors: {
+        vendor: {
+          navy: '#203D91',
+          'navy-dark': '#162b66',
+          'navy-light': '#2b4fb8',
+          orange: '#FF7417',
+          'orange-dark': '#e05e07',
+          'orange-light': '#ff8d3d',
+          bg: '#F4F7FC',
+          text: '#17233C',
+          border: '#E2E8F0',
+        },
         brand: {
           blue: {
             50: '#eff6ff',

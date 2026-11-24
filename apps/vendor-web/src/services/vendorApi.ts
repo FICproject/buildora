@@ -7,6 +7,14 @@ import {
   VendorDashboardMetrics,
   BulkPriceTier,
   BulkPricingTier,
+  VendorStockMovement,
+  VendorReturnRequest,
+  VendorPromotion,
+  VendorProductReview,
+  VendorInvoice,
+  VendorSupportTicket,
+  VendorEmployee,
+  VendorWarehouse,
 } from '@buildora/types';
 import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES } from '@buildora/constants';
 
@@ -458,23 +466,182 @@ export const vendorApi = {
     };
   },
 
-  // Auth
-  async login(email: string, password?: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      if (res.ok) {
-        return await res.json();
+  // ==========================================
+  // AUTHENTICATION & SECURITY
+  // ==========================================
+
+  async sendOtp(identifier: string, type: 'REGISTRATION_EMAIL' | 'REGISTRATION_MOBILE' | 'LOGIN' | 'PASSWORD_RESET') {
+    const res = await fetch(`${API_BASE_URL}/vendor/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, type }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to send verification code.');
+    return data;
+  },
+
+  async verifyOtp(identifier: string, type: 'REGISTRATION_EMAIL' | 'REGISTRATION_MOBILE' | 'LOGIN' | 'PASSWORD_RESET', otp: string) {
+    const res = await fetch(`${API_BASE_URL}/vendor/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, type, otp }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Invalid or expired verification code.');
+    return data;
+  },
+
+  async login(identifier: string, password?: string, rememberMe?: boolean) {
+    const res = await fetch(`${API_BASE_URL}/vendor/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password, rememberMe }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Login failed. Please check your credentials.');
+    if (data.token) {
+      localStorage.setItem('buildora_vendor_token', data.token);
+    }
+    return data;
+  },
+
+  async loginWithOtp(identifier: string, otp: string) {
+    const res = await fetch(`${API_BASE_URL}/vendor/auth/login-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, otp }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'OTP verification failed.');
+    if (data.token) {
+      localStorage.setItem('buildora_vendor_token', data.token);
+    }
+    return data;
+  },
+
+  async forgotPasswordSendOtp(identifier: string) {
+    const res = await fetch(`${API_BASE_URL}/vendor/auth/forgot-password/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to send password reset code.');
+    return data;
+  },
+
+  async forgotPasswordReset(payload: { identifier: string; otp: string; newPassword: string; confirmPassword: string }) {
+    const res = await fetch(`${API_BASE_URL}/vendor/auth/forgot-password/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to reset password.');
+    return data;
+  },
+
+  // ==========================================
+  // REGISTRATION WIZARD (STEPS 1 TO 5)
+  // ==========================================
+
+  async registerStep1(payload: {
+    ownerName: string;
+    email: string;
+    phone: string;
+    password: string;
+    confirmPassword: string;
+  }) {
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/step1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Registration failed.');
+    if (data.token) {
+      localStorage.setItem('buildora_vendor_token', data.token);
+    }
+    return data;
+  },
+
+  async saveRegistrationDraft(wizardData: any, currentStep: number, vendorId?: string) {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/save-draft`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ vendorId, wizardData, currentStep }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to save registration draft.');
+    return data;
+  },
+
+  async submitRegistration(wizardData: any, vendorId?: string) {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ vendorId, wizardData }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to submit vendor application.');
+    return data;
+  },
+
+  async uploadDocument(docPayload: {
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    type: string;
+    title: string;
+  }) {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/upload-doc`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(docPayload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Document upload failed.');
+    return data.document;
+  },
+
+  async getRegistrationStatus() {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/status`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
       }
-    } catch {}
-    return {
-      success: true,
-      token: 'jwt-vendor-token-buildora-60',
-      vendor: localVendor,
-    };
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to fetch registration status.');
+    return data;
+  },
+
+  async resubmitApplication(notes?: string) {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/resubmit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ notes }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to resubmit application.');
+    return data;
   },
 
   async getProfile(): Promise<VendorProfile> {
@@ -796,5 +963,611 @@ export const vendorApi = {
 
   async markAllNotificationsAsRead(): Promise<boolean> {
     return this.markAllNotificationsRead();
+  },
+
+  // Category Dynamic Attributes
+  async getCategoryAttributes(category?: string) {
+    const q = category ? `?category=${category}` : '';
+    return request<any>(`/vendor/categories/attributes${q}`, {}, {
+      attributes: [
+        { name: 'Grade / Specification', uiType: 'pills', options: ['53 Grade IS 12269', 'PPC IS 1489', 'Premium Structural'] },
+        { name: 'Package Unit', uiType: 'cards', options: ['50kg Bag', '1000kg Jumbo Bag'] }
+      ]
+    });
+  },
+
+  // Bulk Product Import & Export
+  async bulkImportProducts(products: Partial<VendorProduct>[]) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/products/bulk-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        return json;
+      }
+    } catch {}
+    return { success: true, importedCount: products.length };
+  },
+
+  async exportProducts() {
+    return request<any>('/vendor/products/export', {}, { count: localProducts.length, data: localProducts });
+  },
+
+  async updateProductVariants(id: string, variants: any[], attributes?: any[]) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/products/${id}/variants`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ variants, attributes }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    const p = localProducts.find((item) => item.id === id);
+    if (p) {
+      p.variants = variants;
+      if (attributes) p.attributes = attributes;
+      broadcastProductChange(p);
+    }
+    return { success: true, variants, attributes };
+  },
+
+  async getAllBulkPricing() {
+    return request<any>('/vendor/bulk-pricing/all', {}, {
+      count: 3,
+      data: localProducts.filter((p) => p.isBulkEligible).map((p) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        category: p.category,
+        basePrice: p.price,
+        mrp: p.mrp,
+        bulkPricing: p.bulkPricing
+      }))
+    });
+  },
+
+  // Stock Movements & Warehouses
+  async getStockMovements(productId?: string): Promise<VendorStockMovement[]> {
+    const q = productId ? `?productId=${productId}` : '';
+    return request<VendorStockMovement[]>(`/vendor/inventory/movements${q}`, {}, [
+      {
+        id: 'sm-1',
+        productId: 'vp-prod-cem-1',
+        productName: 'UltraTech Super Cement (PPC)',
+        sku: 'CEM-ULT-PPC-50KG',
+        warehouseId: 'wh-1',
+        warehouseName: 'Peenya Central Dispatch Depot',
+        type: 'INWARD',
+        quantityDelta: 200,
+        quantityBefore: 50,
+        quantityAfter: 250,
+        reason: 'Direct plant consignment receipt from Rajashree Cement Works',
+        referenceNumber: 'GRN-2026-0819',
+        performedBy: 'Ramesh Gowda',
+        createdAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString()
+      },
+      {
+        id: 'sm-2',
+        productId: 'vp-prod-cem-1',
+        productName: 'UltraTech Super Cement (PPC)',
+        sku: 'CEM-ULT-PPC-50KG',
+        warehouseId: 'wh-1',
+        warehouseName: 'Peenya Central Dispatch Depot',
+        type: 'DISPATCH',
+        quantityDelta: -10,
+        quantityBefore: 250,
+        quantityAfter: 240,
+        reason: '60-Min express site dispatch for Order #BLD-2026-8941',
+        referenceNumber: 'DSP-2026-4410',
+        performedBy: 'Mohan Reddy',
+        createdAt: new Date(Date.now() - 35 * 60 * 1000).toISOString()
+      }
+    ]);
+  },
+
+  async getWarehouses(): Promise<{ data: VendorWarehouse[]; darkStores: any[] }> {
+    return request<any>('/vendor/warehouses', {}, {
+      data: [
+        {
+          id: 'wh-1',
+          name: 'Peenya Central Dispatch Depot',
+          address: 'Plot 88, Peenya 2nd Stage, Industrial Area',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          pincode: '560058',
+          contactPerson: 'Ramesh Gowda',
+          phone: '9845012348',
+          isPrimary: true
+        },
+        {
+          id: 'wh-blr-02',
+          name: 'Whitefield Dark Store Hub',
+          address: 'Survey No. 42, ITPL Main Road, Hoodi',
+          city: 'Bengaluru',
+          state: 'Karnataka',
+          pincode: '560066',
+          contactPerson: 'Anand Murthy',
+          phone: '9845099881',
+          isPrimary: false
+        }
+      ],
+      darkStores: Object.values(BENGALURU_WAREHOUSES)
+    });
+  },
+
+  async createWarehouse(wh: Partial<VendorWarehouse>) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/warehouses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(wh),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, data: { ...wh, id: `wh-${Date.now()}` } };
+  },
+
+  async updateWarehouse(id: string, wh: Partial<VendorWarehouse>) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/warehouses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(wh),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, data: { ...wh, id } };
+  },
+
+  async deleteWarehouse(id: string) {
+    try {
+      await fetch(`${API_BASE_URL}/vendor/warehouses/${id}`, { method: 'DELETE' });
+    } catch {}
+    return { success: true };
+  },
+
+  // Order Actions & Packing Slip
+  async acceptOrder(id: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/orders/${id}/accept`, { method: 'POST' });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true };
+  },
+
+  async rejectOrder(id: string, reason: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/orders/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true };
+  },
+
+  async getOrderPackingSlip(id: string) {
+    return request<any>(`/vendor/orders/${id}/packing-slip`, {}, {
+      slipNumber: `PS-${id}`,
+      generatedAt: new Date().toISOString(),
+      vendor: localVendor.businessInfo,
+      assignedDarkStore: BENGALURU_WAREHOUSES['WH-BLR-04']
+    });
+  },
+
+  // Returns & Refunds
+  async getReturns(status?: string): Promise<VendorReturnRequest[]> {
+    const q = status ? `?status=${status}` : '';
+    return request<VendorReturnRequest[]>(`/vendor/returns${q}`, {}, [
+      {
+        id: 'ret-101',
+        orderId: 'vo-100',
+        orderNumber: 'BLD-2026-8940',
+        vendorId: 'vnd-apex-01',
+        customerId: 'cust-8821',
+        customerName: 'Suresh Kumar',
+        customerPhone: '9845099887',
+        items: [
+          {
+            productId: 'prod-ele-1',
+            name: 'Finolex Flame Retardant 2.5 sq mm Copper Wire',
+            sku: 'ELE-FIN-25-RED',
+            quantity: 2,
+            price: 1725,
+            returnReason: 'Wrong wire gauge ordered by electrician',
+            productCondition: 'SEALED'
+          }
+        ],
+        totalRefundAmount: 3450,
+        status: 'REFUNDED',
+        pickupAddress: 'Villa 18, Palm Meadows, Whitefield, Bengaluru 560066',
+        requestedAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+        resolvedAt: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
+        restockDecision: true
+      }
+    ]);
+  },
+
+  async updateReturnStatus(id: string, status: string, restockDecision?: boolean, rejectionReason?: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/returns/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, restockDecision, rejectionReason }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, status };
+  },
+
+  // Promotions & Deals
+  async getPromotions(): Promise<VendorPromotion[]> {
+    return request<VendorPromotion[]>('/vendor/promotions', {}, [
+      {
+        id: 'promo-01',
+        vendorId: 'vnd-apex-01',
+        title: 'Monsoon Foundation & Structural Cement Sale',
+        description: 'Flat 8% instant discount on orders above 25 bags of UltraTech & ACC Cement.',
+        discountType: 'PERCENTAGE',
+        discountValue: 8,
+        startDate: '2026-11-01T00:00:00Z',
+        endDate: '2026-11-30T23:59:59Z',
+        applicableProductIds: ['vp-prod-cem-1'],
+        status: 'ACTIVE',
+        bannerText: 'EXTRA 8% OFF ON 25+ BAGS',
+        usageCount: 42,
+        salesGenerated: 184500
+      }
+    ]);
+  },
+
+  async createPromotion(promo: Partial<VendorPromotion>) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/promotions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(promo),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, data: { ...promo, id: `promo-${Date.now()}` } };
+  },
+
+  async updatePromotionStatus(id: string, status: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/promotions/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, status };
+  },
+
+  // New Launches Spotlight
+  async getNewLaunches(): Promise<VendorProduct[]> {
+    return request<VendorProduct[]>('/vendor/new-launches', {}, localProducts.filter((p) => p.isNewLaunch));
+  },
+
+  async addNewLaunch(id: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/new-launches/${id}`, { method: 'POST' });
+      if (res.ok) return await res.json();
+    } catch {}
+    const p = localProducts.find((item) => item.id === id);
+    if (p) {
+      p.isNewLaunch = true;
+      broadcastProductChange(p);
+    }
+    return { success: true };
+  },
+
+  async removeNewLaunch(id: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/new-launches/${id}`, { method: 'DELETE' });
+      if (res.ok) return await res.json();
+    } catch {}
+    const p = localProducts.find((item) => item.id === id);
+    if (p) {
+      p.isNewLaunch = false;
+      broadcastProductChange(p);
+    }
+    return { success: true };
+  },
+
+  // Customer Reviews
+  async getReviews(): Promise<{ averageRating: number; totalCount: number; data: VendorProductReview[] }> {
+    return request<any>('/vendor/reviews', {}, {
+      averageRating: 4.8,
+      totalCount: 3,
+      data: [
+        {
+          id: 'rev-01',
+          productId: 'vp-prod-cem-1',
+          productName: 'UltraTech Super Cement (PPC)',
+          sku: 'CEM-ULT-PPC-50KG',
+          customerName: 'Arjun Sharma (Site Engineer)',
+          rating: 5,
+          title: 'Fresh mill stock delivered in under 45 minutes',
+          comment: 'Cement bags arrived completely dry with zero clumps or moisture damage. Initial setting time test was exactly 42 minutes.',
+          verifiedPurchase: true,
+          createdAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+          vendorReply: {
+            message: 'Thank you Arjun! All our cement consignments are directly dispatched from authorized depot.',
+            repliedAt: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),
+            repliedBy: 'Vikramaditya Rao'
+          }
+        }
+      ]
+    });
+  },
+
+  async replyToReview(id: string, message: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/reviews/${id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, message };
+  },
+
+  // Invoices & GST Documents
+  async getInvoices(): Promise<VendorInvoice[]> {
+    return request<VendorInvoice[]>('/vendor/invoices', {}, [
+      {
+        id: 'inv-1001',
+        invoiceNumber: 'INV-BLD-2026-1001',
+        orderId: 'vo-101',
+        orderNumber: 'BLD-2026-8941',
+        vendorId: 'vnd-apex-01',
+        customerName: 'Arjun Sharma',
+        customerGstin: '29AAFCS8291K1Z5',
+        invoiceDate: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        subtotal: 3950,
+        discount: 0,
+        taxableAmount: 3950,
+        cgstAmount: 355.5,
+        sgstAmount: 355.5,
+        igstAmount: 0,
+        totalAmount: 4661,
+        pdfUrl: '/docs/invoice-sample.pdf',
+        status: 'GENERATED'
+      }
+    ]);
+  },
+
+  async requestSettlementPayout(amount?: number) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/settlements/request-payout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, message: 'On-demand bank payout requested.' };
+  },
+
+  // Sales Analytics & Reports
+  async getSalesReport(period?: string, category?: string) {
+    const q = new URLSearchParams();
+    if (period) q.set('period', period);
+    if (category) q.set('category', category);
+    return request<any>(`/vendor/reports/sales?${q.toString()}`, {}, {
+      period: period || 'Last 30 Days',
+      totalRevenue: 168400,
+      totalOrders: 52,
+      averageOrderValue: 3238,
+      topCategories: [
+        { name: 'Civil & Interiors', revenue: 78500, percentage: 46.6 },
+        { name: 'Plumbing & Pipes', revenue: 42300, percentage: 25.1 },
+        { name: 'Electrical & Lighting', revenue: 32600, percentage: 19.3 },
+        { name: 'Plywood & Hardware', revenue: 15000, percentage: 9.0 }
+      ],
+      dailySummary: [
+        { date: '2026-11-20', sales: 22400, orders: 8 },
+        { date: '2026-11-21', sales: 26900, orders: 9 },
+        { date: '2026-11-22', sales: 31200, orders: 11 },
+        { date: '2026-11-23', sales: 22700, orders: 7 },
+        { date: '2026-11-24', sales: 34100, orders: 12 }
+      ]
+    });
+  },
+
+  // Team & RBAC
+  async getTeam(): Promise<VendorEmployee[]> {
+    return request<VendorEmployee[]>('/vendor/team', {}, [
+      {
+        id: 'emp-01',
+        vendorId: 'vnd-apex-01',
+        name: 'Vikramaditya Rao',
+        email: 'vendor@buildora.in',
+        phone: '9845012345',
+        role: 'VENDOR_OWNER',
+        status: 'ACTIVE',
+        permissions: ['ALL_PERMISSIONS'],
+        invitedAt: '2026-01-10T09:00:00Z',
+        lastLoginAt: new Date().toISOString()
+      },
+      {
+        id: 'emp-02',
+        vendorId: 'vnd-apex-01',
+        name: 'Ramesh Gowda',
+        email: 'ramesh.gowda@supremebuild.com',
+        phone: '9845012348',
+        role: 'VENDOR_ADMIN',
+        status: 'ACTIVE',
+        permissions: ['CATALOG_EDIT', 'INVENTORY_MANAGE', 'ORDERS_MANAGE'],
+        invitedAt: '2026-01-12T10:00:00Z'
+      }
+    ]);
+  },
+
+  async inviteTeamMember(data: any) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/team/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, data: { ...data, id: `emp-${Date.now()}` } };
+  },
+
+  async updateTeamRole(id: string, role: string, permissions?: string[]) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/team/${id}/role`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, permissions }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, role };
+  },
+
+  async removeTeamMember(id: string) {
+    try {
+      await fetch(`${API_BASE_URL}/vendor/team/${id}`, { method: 'DELETE' });
+    } catch {}
+    return { success: true };
+  },
+
+  async getTeamAuditLogs() {
+    return request<any>('/vendor/team/audit-logs', {}, localVendor.auditLogs || []);
+  },
+
+  // Support Tickets
+  async getSupportTickets(): Promise<VendorSupportTicket[]> {
+    return request<VendorSupportTicket[]>('/vendor/support/tickets', {}, [
+      {
+        id: 'tkt-01',
+        ticketNumber: 'TKT-2026-891',
+        vendorId: 'vnd-apex-01',
+        subject: 'Express dispatch bay access card for Whitefield Dark Store WH-BLR-02',
+        category: 'DARK_STORE_LOGISTICS',
+        priority: 'HIGH',
+        description: 'Our EV mini-truck driver was delayed at gate 2 security check due to missing RFID delivery badge.',
+        status: 'IN_PROGRESS',
+        createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+        updatedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
+        messages: [
+          {
+            id: 'msg-1',
+            sender: 'Mohan Reddy',
+            senderRole: 'VENDOR',
+            text: 'Driver vehicle KA-04-MB-4819 needs fast-lane RFID tag for Whitefield depot intake.',
+            timestamp: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+          }
+        ]
+      }
+    ]);
+  },
+
+  async createSupportTicket(data: any) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/support/tickets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, data: { ...data, id: `tkt-${Date.now()}` } };
+  },
+
+  async addSupportTicketMessage(id: string, text: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/support/tickets/${id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, text };
+  },
+
+  // Vendor Profile, Bank & Settings
+  async updateProfile(businessInfo: any) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessInfo }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    localVendor.businessInfo = { ...localVendor.businessInfo, ...businessInfo };
+    return { success: true, data: localVendor };
+  },
+
+  async updateBankDetails(bankDetails: any) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/profile/bank`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bankDetails),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    localVendor.businessInfo.bankDetails = { ...localVendor.businessInfo.bankDetails, ...bankDetails };
+    return { success: true, data: localVendor.businessInfo.bankDetails };
+  },
+
+  async updateSecuritySettings(data: { currentPassword?: string; newPassword?: string; enable2FA?: boolean }) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/settings/security`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, message: 'Security preferences updated' };
+  },
+
+  async updateNotificationSettings(data: any) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/settings/notifications`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, message: 'Notification preferences updated' };
+  },
+
+  async getDeliverySettings() {
+    return request<any>('/vendor/delivery/settings', {}, {
+      warehouseAddress: localVendor.businessInfo.warehouseAddress,
+      pickupPincode: localVendor.businessInfo.pickupPincode,
+      assignedDarkStoreId: localVendor.businessInfo.assignedDarkStoreId,
+      assignedWarehouseName: 'Bengaluru West Dark Store (WH-BLR-04)',
+      dispatchCutoff: localVendor.businessInfo.dispatchCutoff || '18:00',
+      preparationTimeMins: localVendor.businessInfo.preparationTimeMins || 30
+    });
+  },
+
+  async updateDeliverySettings(data: any) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/delivery/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return { success: true, data };
   },
 };

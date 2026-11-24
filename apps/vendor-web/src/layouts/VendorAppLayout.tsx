@@ -27,24 +27,32 @@ export const VendorAppLayout: React.FC = () => {
 
   // Compute page title from path
   const getPageTitle = (pathname: string) => {
-    if (pathname.includes('/products')) return 'Product & Catalog Management';
-    if (pathname.includes('/bulk-pricing')) return 'Bulk Pricing & Tier Discounts';
-    if (pathname.includes('/orders')) return 'Order Dispatch & Fulfillment';
-    if (pathname.includes('/inventory')) return 'Real-Time Inventory & Dark Store Stock';
+    if (pathname.includes('/products')) return 'Product & Dynamic Attributes';
+    if (pathname.includes('/bulk-pricing')) return 'Bulk Pricing & Quantity Tiers';
+    if (pathname.includes('/new-launches')) return 'New Launches 60-Min Spotlight';
+    if (pathname.includes('/orders')) return 'Order Dispatch & 60-Min SLAs';
+    if (pathname.includes('/inventory')) return 'Real-Time Inventory & Stock Inwarding';
+    if (pathname.includes('/warehouses')) return 'Warehouses & Bengaluru Dark Stores';
+    if (pathname.includes('/returns')) return 'Returns, Inspections & Restocking';
+    if (pathname.includes('/promotions')) return 'Offers, Deals & Promotions';
+    if (pathname.includes('/reviews')) return 'Customer Reviews & Ratings';
     if (pathname.includes('/delivery')) return 'Delivery Hub & SLA Settings';
-    if (pathname.includes('/earnings')) return 'Settlements & Payout Statements';
+    if (pathname.includes('/earnings')) return 'Settlements & Payout Ledger';
+    if (pathname.includes('/invoices')) return 'B2B GST Invoices & ITC';
     if (pathname.includes('/reports')) return 'Sales & Performance Reports';
+    if (pathname.includes('/team')) return 'Team & RBAC Permissions (7 Roles)';
+    if (pathname.includes('/support')) return 'Partner Support Centre & Tickets';
     if (pathname.includes('/notifications')) return 'Store Notifications';
-    if (pathname.includes('/settings')) return 'Store & Business Settings';
+    if (pathname.includes('/settings')) return 'Store & Security Settings';
     if (pathname.includes('/onboarding')) return 'Vendor Onboarding & KYC';
-    return 'Vendor Dashboard Overview';
+    return 'Store Performance Dashboard';
   };
 
   const isKycIncomplete =
     vendor?.status === 'DRAFT' || vendor?.status === 'PENDING_VERIFICATION';
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 antialiased overflow-hidden">
+    <div className="flex h-screen bg-[#F4F7FC] text-[#17233C] antialiased overflow-hidden">
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
         <VendorSidebar />

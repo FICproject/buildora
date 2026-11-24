@@ -91,6 +91,8 @@ export interface Product {
     inStock: boolean;
     stockCount: number;
     isBulkEligible: boolean;
+    productType?: string;
+    size?: string;
     bulkPricing?: BulkPriceTier[];
     attributes?: ProductAttribute[];
     variants?: ProductVariant[];
@@ -354,8 +356,133 @@ export interface FaqItem {
     answer: string;
 }
 export type BulkPricingTier = BulkPriceTier;
-export type VendorAccountStatus = 'DRAFT' | 'REGISTERED' | 'PENDING_VERIFICATION' | 'KYC_PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED' | 'DISABLED';
-export type VendorRole = 'VENDOR_OWNER' | 'VENDOR_ADMIN' | 'CATALOG_MANAGER' | 'INVENTORY_MANAGER' | 'ORDER_MANAGER' | 'FINANCE_VIEWER';
+export type VendorAccountStatus = 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'REGISTERED' | 'PENDING_VERIFICATION' | 'KYC_PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED' | 'DISABLED';
+export type VendorRole = 'VENDOR_OWNER' | 'VENDOR_ADMIN' | 'CATALOG_MANAGER' | 'INVENTORY_MANAGER' | 'ORDER_MANAGER' | 'FINANCE_MANAGER' | 'FINANCE_VIEWER' | 'SUPPORT_STAFF';
+export interface VendorEmployee {
+    id: string;
+    vendorId: string;
+    name: string;
+    email: string;
+    phone: string;
+    role: VendorRole;
+    status: 'ACTIVE' | 'INVITED' | 'INACTIVE';
+    permissions: string[];
+    invitedAt: string;
+    lastLoginAt?: string;
+}
+export interface VendorStockMovement {
+    id: string;
+    productId: string;
+    productName: string;
+    sku: string;
+    warehouseId: string;
+    warehouseName: string;
+    type: 'INWARD' | 'DISPATCH' | 'ADJUSTMENT' | 'RETURN' | 'TRANSFER' | 'DAMAGED';
+    quantityDelta: number;
+    quantityBefore: number;
+    quantityAfter: number;
+    reason: string;
+    referenceNumber?: string;
+    performedBy: string;
+    createdAt: string;
+}
+export interface VendorReturnItem {
+    productId: string;
+    name: string;
+    sku: string;
+    quantity: number;
+    price: number;
+    returnReason: string;
+    productCondition: 'SEALED' | 'OPENED_UNUSED' | 'DAMAGED' | 'DEFECTIVE';
+    images?: string[];
+}
+export interface VendorReturnRequest {
+    id: string;
+    orderId: string;
+    orderNumber: string;
+    vendorId: string;
+    customerId: string;
+    customerName: string;
+    customerPhone?: string;
+    items: VendorReturnItem[];
+    totalRefundAmount: number;
+    status: 'REQUESTED' | 'APPROVED' | 'PICKED_UP' | 'INSPECTION_PENDING' | 'REFUNDED' | 'REJECTED';
+    rejectionReason?: string;
+    pickupAddress: string;
+    requestedAt: string;
+    resolvedAt?: string;
+    restockDecision?: boolean;
+}
+export interface VendorPromotion {
+    id: string;
+    vendorId: string;
+    title: string;
+    description: string;
+    discountType: 'PERCENTAGE' | 'FLAT';
+    discountValue: number;
+    startDate: string;
+    endDate: string;
+    applicableProductIds: string[];
+    status: 'ACTIVE' | 'SCHEDULED' | 'EXPIRED' | 'PENDING_APPROVAL';
+    bannerText?: string;
+    usageCount?: number;
+    salesGenerated?: number;
+}
+export interface VendorProductReview {
+    id: string;
+    productId: string;
+    productName: string;
+    sku: string;
+    customerName: string;
+    rating: number;
+    title?: string;
+    comment: string;
+    verifiedPurchase: boolean;
+    createdAt: string;
+    vendorReply?: {
+        message: string;
+        repliedAt: string;
+        repliedBy: string;
+    };
+}
+export interface VendorInvoice {
+    id: string;
+    invoiceNumber: string;
+    orderId: string;
+    orderNumber: string;
+    vendorId: string;
+    customerName: string;
+    customerGstin?: string;
+    invoiceDate: string;
+    subtotal: number;
+    discount: number;
+    taxableAmount: number;
+    cgstAmount: number;
+    sgstAmount: number;
+    igstAmount: number;
+    totalAmount: number;
+    pdfUrl: string;
+    status: 'GENERATED' | 'PAID' | 'CANCELLED';
+}
+export interface VendorSupportTicket {
+    id: string;
+    ticketNumber: string;
+    vendorId: string;
+    subject: string;
+    category: 'CATALOG' | 'ORDERS' | 'PAYMENT_SETTLEMENT' | 'DARK_STORE_LOGISTICS' | 'KYC_COMPLIANCE' | 'TECHNICAL';
+    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    description: string;
+    status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+    createdAt: string;
+    updatedAt: string;
+    messages: {
+        id: string;
+        sender: string;
+        senderRole: 'VENDOR' | 'SUPPORT_AGENT';
+        text: string;
+        timestamp: string;
+    }[];
+}
 export interface VendorBankDetails {
     accountHolderName: string;
     bankName: string;
@@ -402,6 +529,83 @@ export interface VendorBusinessInfo {
         uploadedAt: string;
     }[];
 }
+export interface VendorWarehouse {
+    id: string;
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+    contactPerson?: string;
+    phone?: string;
+    isPrimary?: boolean;
+}
+export interface VendorKycDocument {
+    id: string;
+    type: 'BUSINESS_REGISTRATION' | 'GST_CERTIFICATE' | 'PAN_CARD' | 'AUTHORIZED_ID' | 'CANCELLED_CHEQUE' | 'CATALOGUE' | 'OTHER';
+    title: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    fileUrl: string;
+    uploadedAt: string;
+    verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+    rejectionReason?: string;
+}
+export interface VendorAuditLog {
+    id: string;
+    action: string;
+    performedBy: string;
+    performedAt: string;
+    details?: string;
+    oldStatus?: string;
+    newStatus?: string;
+}
+export interface VendorRegistrationWizardData {
+    ownerName: string;
+    email: string;
+    phone: string;
+    isEmailVerified: boolean;
+    isPhoneVerified: boolean;
+    password?: string;
+    confirmPassword?: string;
+    legalBusinessName: string;
+    storeName: string;
+    businessType: 'MANUFACTURER' | 'DISTRIBUTOR' | 'WHOLESALER' | 'RETAILER' | 'DEALER' | 'OTHER';
+    businessRegistrationType: string;
+    yearOfEstablishment?: string;
+    website?: string;
+    description?: string;
+    country: string;
+    state: string;
+    district: string;
+    city: string;
+    area: string;
+    pincode: string;
+    completeAddress: string;
+    dispatchAddress?: string;
+    warehouses?: VendorWarehouse[];
+    gstin?: string;
+    pan?: string;
+    documents: VendorKycDocument[];
+    bankDetails: {
+        accountHolderName: string;
+        bankName: string;
+        accountNumber: string;
+        ifsc: string;
+        accountType: 'CURRENT' | 'SAVINGS';
+        chequeDocUrl?: string;
+        isVerified?: boolean;
+    };
+    productCategories: string[];
+    childCategories?: string[];
+    brandsSupplied: string[];
+    operatingLocations: string[];
+    catalogueUrl?: string;
+    termsAccepted: boolean;
+    privacyAccepted: boolean;
+    currentStep: number;
+}
 export interface VendorProfile {
     id: string;
     tenantId: string;
@@ -420,6 +624,13 @@ export interface VendorProfile {
     categories?: string[];
     business?: any;
     bankDetails?: any;
+    isEmailVerified?: boolean;
+    isPhoneVerified?: boolean;
+    registrationStep?: number;
+    warehouses?: VendorWarehouse[];
+    kycDocuments?: VendorKycDocument[];
+    auditLogs?: VendorAuditLog[];
+    registrationData?: Partial<VendorRegistrationWizardData>;
 }
 export interface VendorProduct {
     id: string;
@@ -451,6 +662,9 @@ export interface VendorProduct {
     stock?: number;
     lowStockThreshold: number;
     isBulkEligible: boolean;
+    isNewLaunch?: boolean;
+    productType?: string;
+    size?: string;
     bulkPricing?: BulkPriceTier[];
     attributes?: ProductAttribute[];
     variants?: ProductVariant[];

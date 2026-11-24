@@ -122,3 +122,35 @@ export interface BulkQuotationDocument {
   status: 'PENDING' | 'CONTACTED' | 'QUOTED' | 'CLOSED';
   createdAt: Date;
 }
+
+export interface VendorDocument {
+  id: string;
+  tenantId: string;
+  name: string;
+  storeName: string;
+  email: string;
+  phone: string;
+  passwordHash: string;
+  status: 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
+  rejectionReason?: string;
+  registrationStep: number;
+  isEmailVerified: boolean;
+  isPhoneVerified: boolean;
+  businessInfo: any;
+  warehouses: any[];
+  kycDocuments: any[];
+  auditLogs: any[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface VendorOtpDocument {
+  id: string;
+  identifier: string;
+  type: string;
+  hashedOtp: string;
+  expiresAt: Date;
+  attempts: number;
+  verified: boolean;
+  createdAt: Date;
+}

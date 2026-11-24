@@ -142,6 +142,76 @@ export const VendorSettingsPage: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* Security & 2FA */}
+        <Card>
+          <CardHeader
+            title="Security & Two-Factor Authentication (2FA)"
+            subtitle="Secure your merchant account with multi-factor authentication"
+          />
+          <CardContent className="space-y-4 text-xs">
+            <div className="flex items-center justify-between p-3.5 bg-[#F4F7FC] rounded-xl border border-[#E2E8F0]">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#203D91]/10 text-[#203D91] flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="font-extrabold text-[#17233C]">Two-Factor Authentication (SMS OTP)</p>
+                  <p className="text-[11px] text-slate-500">Require an SMS verification code on login from unverified devices.</p>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                defaultChecked
+                className="w-4 h-4 rounded text-[#203D91] focus:ring-[#203D91]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Current Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 outline-hidden"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">New Password</label>
+                <input
+                  type="password"
+                  placeholder="Min 8 characters with number & symbol"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 outline-hidden"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Notification Channel Preferences */}
+        <Card>
+          <CardHeader
+            title="Order & Stock Notification Channels"
+            subtitle="Choose where dispatch alerts, low-stock warnings, and settlement notices are sent"
+          />
+          <CardContent className="space-y-3 text-xs">
+            {[
+              { id: 'sms_dispatch', label: 'SMS Instant Alert on New 60-Min Site Orders', default: true },
+              { id: 'whatsapp_dispatch', label: 'WhatsApp Order Dispatch Confirmation & Customer Handoff', default: true },
+              { id: 'email_settlement', label: 'Email Weekly Payout Statements & Form GSTR-1 Invoices', default: true },
+              { id: 'stock_warning', label: 'Low Stock Emergency Notifications (Below Safety Threshold)', default: true },
+            ].map((pref) => (
+              <label key={pref.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-[#F4F7FC] cursor-pointer">
+                <input
+                  type="checkbox"
+                  defaultChecked={pref.default}
+                  className="w-4 h-4 rounded text-[#203D91]"
+                />
+                <span className="font-medium text-slate-700">{pref.label}</span>
+              </label>
+            ))}
+          </CardContent>
+        </Card>
+
         {/* Operating Hours */}
         <Card>
           <CardHeader

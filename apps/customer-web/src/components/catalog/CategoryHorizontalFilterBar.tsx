@@ -14,12 +14,18 @@ import {
   ActiveCategoryFilters
 } from '@buildora/constants';
 
+export interface SortOption {
+  value: string;
+  label: string;
+}
+
 interface CategoryHorizontalFilterBarProps {
   availableFilters: AvailableCategoryFilter[];
   activeFilters: ActiveCategoryFilters;
   onChangeFilters: (updated: ActiveCategoryFilters) => void;
   onResetFilters: () => void;
   totalResultsCount: number;
+  sortOptions?: SortOption[];
   className?: string;
 }
 
@@ -29,6 +35,7 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
   onChangeFilters,
   onResetFilters,
   totalResultsCount,
+  sortOptions,
   className = ''
 }) => {
   // Track which dropdown popover is currently open
@@ -491,7 +498,7 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
             </span>
             <select
               aria-label="Sort products by"
-              value={activeFilters.sortBy || 'relevance'}
+              value={activeFilters.sortBy || (sortOptions && sortOptions.length > 0 ? sortOptions[0].value : 'relevance')}
               onChange={(e) =>
                 onChangeFilters({
                   ...activeFilters,
@@ -500,12 +507,23 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
               }
               className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-blue-500 cursor-pointer"
             >
-              <option value="relevance">Relevance</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="rating">Highest Rated</option>
-              <option value="discount">Biggest Discount</option>
-              <option value="speed">Fastest Delivery (60 Mins)</option>
+              {sortOptions && sortOptions.length > 0 ? (
+                sortOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="relevance">Relevance</option>
+                  <option value="latest">Latest Arrivals (Newest)</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                  <option value="discount">Discount: High to Low</option>
+                  <option value="rating">Highest Rated</option>
+                  <option value="speed">Fastest Delivery (60 Mins)</option>
+                </>
+              )}
             </select>
           </div>
         </div>

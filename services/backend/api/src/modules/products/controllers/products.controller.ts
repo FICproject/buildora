@@ -16,6 +16,8 @@ export class ProductsController {
     @Query('rating') rating?: string,
     @Query('specifications') specifications?: string,
     @Query('newLaunch') newLaunch?: string,
+    @Query('type') type?: string,
+    @Query('size') size?: string,
     @Query('sortBy') sortBy?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string
@@ -51,6 +53,20 @@ export class ProductsController {
     }
     if (newLaunch === 'true') {
       result = result.filter((p) => p.isNewLaunch);
+    }
+    if (type) {
+      const types = type.split(',').map((t) => t.trim().toLowerCase());
+      result = result.filter((p) => {
+        const prodType = (p as any).productType || p.specifications?.['Product Type'] || p.specifications?.['Type'] || p.subcategory;
+        return types.some((t) => prodType && String(prodType).toLowerCase().includes(t));
+      });
+    }
+    if (size) {
+      const sizes = size.split(',').map((s) => s.trim().toLowerCase());
+      result = result.filter((p) => {
+        const prodSize = (p as any).size || p.specifications?.['Size'] || p.packSize || p.unit;
+        return sizes.some((s) => prodSize && String(prodSize).toLowerCase().includes(s));
+      });
     }
     if (minPrice) {
       result = result.filter((p) => p.price >= Number(minPrice));
@@ -89,14 +105,20 @@ export class ProductsController {
       );
     }
 
-    if (sortBy === 'price_asc') {
+    if (sortBy === 'price_asc' || sortBy === 'price-low') {
       result.sort((a, b) => a.price - b.price);
-    } else if (sortBy === 'price_desc') {
+    } else if (sortBy === 'price_desc' || sortBy === 'price-high') {
       result.sort((a, b) => b.price - a.price);
     } else if (sortBy === 'rating') {
-      result.sort((a, b) => b.rating - a.rating);
+      result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     } else if (sortBy === 'discount') {
-      result.sort((a, b) => b.discount - a.discount);
+      result.sort((a, b) => (b.discount || 0) - (a.discount || 0));
+    } else if (sortBy === 'latest') {
+      result.sort((a, b) => {
+        if (a.isNewLaunch && !b.isNewLaunch) return -1;
+        if (!a.isNewLaunch && b.isNewLaunch) return 1;
+        return b.id.localeCompare(a.id);
+      });
     }
 
     const pageNum = Number(page) || 1;

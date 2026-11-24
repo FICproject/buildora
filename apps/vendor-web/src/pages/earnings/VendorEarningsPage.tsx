@@ -16,6 +16,7 @@ import { Card, CardHeader, CardContent } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { StatCard } from '../../components/common/StatCard';
+import { vendorApi } from '../../services/vendorApi';
 
 export const VendorEarningsPage: React.FC = () => {
   const { vendor } = useVendorAuthStore();
@@ -83,34 +84,46 @@ export const VendorEarningsPage: React.FC = () => {
       </div>
 
       {/* Bank Account Verification Card */}
-      <Card>
-        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 text-white rounded-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-300">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm">
-                  {vendor?.businessInfo?.bankDetails?.bankName || vendor?.bankDetails?.bankName || 'HDFC Bank'} &bull;&bull;&bull;&bull;{' '}
-                  {(vendor?.businessInfo?.bankDetails?.accountNumber || vendor?.bankDetails?.accountNumber || '1012').slice(-4)}
-                </span>
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> IFSC Verified
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Beneficiary: {vendor?.businessInfo?.bankDetails?.accountHolderName || vendor?.bankDetails?.beneficiaryName || 'Supreme Materials BLR'} | IFSC:{' '}
-                {vendor?.businessInfo?.bankDetails?.ifsc || vendor?.bankDetails?.ifscCode || 'HDFC0001234'}
-              </p>
-            </div>
+      <div className="p-5 rounded-2xl bg-white border border-[#E2E8F0] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-[#203D91]/10 border border-[#203D91]/20 flex items-center justify-center text-[#203D91] shrink-0">
+            <CreditCard className="w-5 h-5" />
           </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-sm text-[#17233C]">
+                {vendor?.businessInfo?.bankDetails?.bankName || vendor?.bankDetails?.bankName || 'HDFC Bank'} &bull;&bull;&bull;&bull;{' '}
+                {(vendor?.businessInfo?.bankDetails?.accountNumber || vendor?.bankDetails?.accountNumber || '2341').slice(-4)}
+              </span>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-600" /> IFSC Verified
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Beneficiary: <strong className="text-[#17233C]">{vendor?.businessInfo?.bankDetails?.accountHolderName || vendor?.bankDetails?.beneficiaryName || 'Supreme Materials BLR'}</strong> | IFSC:{' '}
+              <span className="font-mono">{vendor?.businessInfo?.bankDetails?.ifsc || vendor?.bankDetails?.ifscCode || 'HDFC0000053'}</span>
+            </p>
+          </div>
+        </div>
 
-          <div className="text-xs text-slate-400">
-            Automated direct RTGS / NEFT transfer every Friday 11:00 AM IST.
+        <div className="flex items-center gap-3">
+          <div className="text-right hidden sm:block text-xs">
+            <p className="text-[11px] text-slate-500">Automated Direct Transfer</p>
+            <p className="font-bold text-[#203D91]">Every Friday 11:00 AM IST</p>
           </div>
-        </CardContent>
-      </Card>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={async () => {
+              await vendorApi.requestSettlementPayout();
+              alert('On-demand bank payout request submitted for NEFT processing.');
+              fetchSettlements();
+            }}
+          >
+            Request Payout Now
+          </Button>
+        </div>
+      </div>
 
       {/* Settlements History Table */}
       <Card>

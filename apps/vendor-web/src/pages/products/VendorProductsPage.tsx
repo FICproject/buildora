@@ -68,6 +68,9 @@ export const VendorProductsPage: React.FC = () => {
   const [stock, setStock] = useState('250');
   const [lowStockThreshold, setLowStockThreshold] = useState('40');
   const [description, setDescription] = useState('');
+  const [productType, setProductType] = useState('');
+  const [size, setSize] = useState('');
+  const [isNewLaunch, setIsNewLaunch] = useState(false);
 
   // Attribute & Variant configuration states (Phase 7)
   const [hasVariants, setHasVariants] = useState(false);
@@ -93,6 +96,9 @@ export const VendorProductsPage: React.FC = () => {
     setStock('250');
     setLowStockThreshold('40');
     setDescription('High-strength grade cement manufactured directly at tier-1 plants for structural RCC work.');
+    setProductType('');
+    setSize('50 Kg Bag');
+    setIsNewLaunch(false);
     setHasVariants(false);
     setFormAttributes([{ id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'M6, M8' }]);
     setFormVariants([]);
@@ -112,6 +118,9 @@ export const VendorProductsPage: React.FC = () => {
     setStock(p.stock.toString());
     setLowStockThreshold((p.lowStockThreshold || 30).toString());
     setDescription(p.description || '');
+    setProductType((p as any).productType || p.specifications?.['Product Type'] || p.specifications?.['Type'] || '');
+    setSize((p as any).size || p.specifications?.['Size'] || p.packSize || p.unit || '');
+    setIsNewLaunch(Boolean(p.isNewLaunch));
 
     const hasV = Boolean((p.variants && p.variants.length > 1) || (p.attributes && p.attributes.length > 0));
     setHasVariants(hasV);
@@ -219,10 +228,16 @@ export const VendorProductsPage: React.FC = () => {
       lowStockThreshold: Number(lowStockThreshold),
       description,
       status: Number(stock) > 0 ? ('ACTIVE' as const) : ('OUT_OF_STOCK' as const),
+      isNewLaunch,
+      productType,
+      size,
       specifications: {
-        Grade: '53 Grade IS 12269',
-        Packaging: unit,
-        Origin: 'Bengaluru Tier-1 Plant',
+        ...(editingProduct?.specifications || {}),
+        'Product Type': productType || 'Material',
+        'Type': productType || 'Material',
+        'Size': size || unit,
+        'Packaging': unit,
+        'Origin': 'Bengaluru Depot'
       },
       bulkPricing: editingProduct?.bulkPricing || [
         { minQuantity: 10, discountPercentage: 5, unitPrice: Math.round(Number(price) * 0.95) },
@@ -374,7 +389,14 @@ export const VendorProductsPage: React.FC = () => {
                             <Package className="w-5 h-5 text-blue-600" />
                           </div>
                           <div>
-                            <p className="font-semibold text-slate-900 line-clamp-1">{p.name}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-semibold text-slate-900 line-clamp-1">{p.name}</p>
+                              {p.isNewLaunch && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                  New Launch
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[11px] text-slate-400">Unit: {p.unit}</p>
                           </div>
                         </div>
@@ -612,6 +634,51 @@ export const VendorProductsPage: React.FC = () => {
                 onChange={(e) => setLowStockThreshold(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Product Type (Catalog Filter)
+              </label>
+              <input
+                type="text"
+                value={productType}
+                onChange={(e) => setProductType(e.target.value)}
+                placeholder="e.g. Rotary Hammer, Concealed Cistern, Ball Bearing Slide"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Specification Size (Catalog Filter)
+              </label>
+              <input
+                type="text"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                placeholder="e.g. 18 Inch (450mm), 25 Litres, 25mm"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="md:col-span-2 p-3 bg-amber-50/70 rounded-xl border border-amber-200">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isNewLaunch}
+                  onChange={(e) => setIsNewLaunch(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-900">
+                    Feature in New Launches
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    When enabled, this material appears immediately in the customer New Launches collection with Brand, Type, Price, and Size filtering.
+                  </p>
+                </div>
+              </label>
             </div>
 
             <div className="md:col-span-2">

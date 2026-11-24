@@ -342,6 +342,27 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
     { id: 'productType', name: 'Type', type: 'checkbox', specKeys: ['Flooring / Ceiling Type', 'Product Type'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
+  ],
+
+  // 29. New Launches (HomeRun Reference Parity: Brand, Type, Price, Size)
+  // Strictly omit Category filter as customers navigate directly via Desktop Category Navigation
+  'new-launches': [
+    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
+    {
+      id: 'type',
+      name: 'Type',
+      type: 'checkbox',
+      specKeys: ['Product Type', 'Type', 'Crank Type', 'Bonding Type', 'Tile Type', 'Mounting Type'],
+      catAttrKeys: ['type', 'productType']
+    },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' },
+    {
+      id: 'size',
+      name: 'Size',
+      type: 'checkbox',
+      specKeys: ['Size'],
+      catAttrKeys: ['size']
+    }
   ]
 };
 
@@ -428,6 +449,18 @@ export function getAvailableFiltersForCategory(
             if (val && typeof val === 'string' && val.trim()) {
               valuesFound.push(val.trim());
             }
+          }
+        }
+
+        // Direct product properties (Vendor / dynamic models)
+        if (dim.id === 'type' || dim.name.toLowerCase() === 'type') {
+          if ((p as any).productType && typeof (p as any).productType === 'string' && (p as any).productType.trim()) {
+            valuesFound.push((p as any).productType.trim());
+          }
+        }
+        if (dim.id === 'size' || dim.name.toLowerCase() === 'size') {
+          if ((p as any).size && typeof (p as any).size === 'string' && (p as any).size.trim()) {
+            valuesFound.push((p as any).size.trim());
           }
         }
       }
@@ -657,6 +690,21 @@ export function applyCategoryFilters(
             if (val && typeof val === 'string') {
               productValues.push(val.trim());
             }
+          }
+        }
+
+        if (dim.id === 'type' || dim.name.toLowerCase() === 'type') {
+          if ((p as any).productType && typeof (p as any).productType === 'string') {
+            productValues.push((p as any).productType.trim());
+          }
+          if (p.subcategory && typeof p.subcategory === 'string') {
+            productValues.push(p.subcategory.trim());
+          }
+        }
+
+        if (dim.id === 'size' || dim.name.toLowerCase() === 'size') {
+          if ((p as any).size && typeof (p as any).size === 'string') {
+            productValues.push((p as any).size.trim());
           }
         }
 
