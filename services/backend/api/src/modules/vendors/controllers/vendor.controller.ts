@@ -13,8 +13,15 @@ import {
   UnauthorizedException,
   ForbiddenException,
   HttpException,
-  HttpStatus
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  Res,
+  Req,
+  OnModuleInit
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Request, Response } from 'express';
 import {
   VendorProfile,
   VendorProduct,
@@ -44,19 +51,27 @@ import { dbStore } from '../../../database/store';
 import { vendorSecurityService } from '../services/vendor-security.service';
 import { vendorNotificationService } from '../services/vendor-notification.service';
 import { postalLookupService } from '../services/postal-lookup.service';
+import { storageService } from '../services/storage.service';
+import { vendorPersistenceService } from '../services/vendor-persistence.service';
 import {
   validateName,
+  validateBusinessName,
   validateEmail,
   validateIndianMobile,
   validateIdentifier,
   validatePincode,
+  validateCityOrState,
   validateGSTIN,
   validatePAN,
+  validateBankName,
   validateBankAccount,
   validateIFSC,
   validatePassword,
   validateConfirmPassword,
-  validateAddress
+  validateAddress,
+  validateYearOfEstablishment,
+  validateWebsite,
+  MAX_LOGO_SIZE_BYTES
 } from '@buildora/validation';
 
 // Initial Demo Vendor Profile
@@ -86,13 +101,13 @@ export function getVendorRedirectUrl(status: VendorAccountStatus, applicationId?
       return '/register';
     case 'SUBMITTED':
     case 'UNDER_REVIEW':
-      return applicationId ? `/registration/review/${applicationId}` : '/application-status';
+    case 'RESUBMISSION_REQUIRED':
     case 'REJECTED':
-      return '/rejection-details';
+      return applicationId ? `/application-status/${applicationId}` : '/application-status';
     case 'SUSPENDED':
       return '/account-restricted';
     default:
-      return applicationId ? `/registration/review/${applicationId}` : '/application-status';
+      return applicationId ? `/application-status/${applicationId}` : '/application-status';
   }
 }
 
@@ -1338,7 +1353,12 @@ function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
 }
 
 @Controller('api/v1/vendor')
-export class VendorController {
+export class VendorController implements OnModuleInit {
+  async onModuleInit() {
+    // Hydrate persisted vendor applications/accounts from MongoDB if connected
+    await vendorPersistenceService.loadAllVendorsIntoMap(vendorRecords);
+  }
+
   // ==========================================
   // 1. AUTHENTICATION & SECURITY
   // ==========================================
@@ -1452,7 +1472,7 @@ export class VendorController {
 
     // 5. Generate secure JWT tokens
     const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
-    const redirectTo = getVendorRedirectUrl(vendor.status);
+    const redirectTo = getVendorRedirectUrl(vendor.status, vendor.applicationId);
 
     return {
       success: true,
@@ -1470,9 +1490,16 @@ export class VendorController {
         email: vendor.email,
         phone: vendor.phone,
         status: vendor.status,
+        applicationId: vendor.applicationId,
+        submittedAt: vendor.submittedAt,
+        logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
+        logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
         rejectionReason: vendor.rejectionReason,
+        resubmissionReason: vendor.resubmissionReason,
+        suspendedReason: vendor.suspendedReason,
         registrationStep: vendor.registrationStep,
-        businessInfo: vendor.businessInfo
+        businessInfo: vendor.businessInfo,
+        registrationData: vendor.registrationData
       }
     };
   }
@@ -1507,7 +1534,7 @@ export class VendorController {
     vendorSecurityService.clearLoginAttempts(clean);
 
     const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
-    const redirectTo = getVendorRedirectUrl(vendor.status);
+    const redirectTo = getVendorRedirectUrl(vendor.status, vendor.applicationId);
 
     return {
       success: true,
@@ -1524,9 +1551,16 @@ export class VendorController {
         email: vendor.email,
         phone: vendor.phone,
         status: vendor.status,
+        applicationId: vendor.applicationId,
+        submittedAt: vendor.submittedAt,
+        logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
+        logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
         rejectionReason: vendor.rejectionReason,
+        resubmissionReason: vendor.resubmissionReason,
+        suspendedReason: vendor.suspendedReason,
         registrationStep: vendor.registrationStep,
-        businessInfo: vendor.businessInfo
+        businessInfo: vendor.businessInfo,
+        registrationData: vendor.registrationData
       }
     };
   }
@@ -1636,7 +1670,7 @@ export class VendorController {
     return {
       success: true,
       status: vendor.status,
-      redirectTo: getVendorRedirectUrl(vendor.status),
+      redirectTo: getVendorRedirectUrl(vendor.status, vendor.applicationId),
       vendor: {
         id: vendor.id,
         tenantId: vendor.tenantId,
@@ -1645,9 +1679,18 @@ export class VendorController {
         email: vendor.email,
         phone: vendor.phone,
         status: vendor.status,
+        applicationId: vendor.applicationId,
+        submittedAt: vendor.submittedAt,
+        logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
+        logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
         rejectionReason: vendor.rejectionReason,
+        resubmissionReason: vendor.resubmissionReason,
+        suspendedReason: vendor.suspendedReason,
+        approvedBy: vendor.approvedBy,
+        approvedAt: vendor.approvedAt,
         registrationStep: vendor.registrationStep || 1,
         businessInfo: vendor.businessInfo,
+        registrationData: vendor.registrationData,
         warehouses: vendor.warehouses || [],
         kycDocuments: vendor.kycDocuments || [],
         auditLogs: vendor.auditLogs || []
@@ -1781,6 +1824,7 @@ export class VendorController {
     };
 
     vendorRecords.set(draftId, newDraft);
+    void vendorPersistenceService.saveVendorRecord(newDraft);
 
     const tokens = vendorSecurityService.generateTokens(newDraft.id, newDraft.email);
 
@@ -1821,6 +1865,14 @@ export class VendorController {
       }
       if (wizardData.businessType) vendor.businessInfo.businessType = wizardData.businessType as any;
       if (wizardData.description) vendor.businessInfo.description = wizardData.description;
+      if (wizardData.logoUrl !== undefined) {
+        vendor.logoUrl = wizardData.logoUrl || undefined;
+        vendor.businessInfo.logo = wizardData.logoUrl || undefined;
+      }
+      if (wizardData.logoMetadata !== undefined) {
+        vendor.logoMetadata = wizardData.logoMetadata || undefined;
+        vendor.businessInfo.logoMetadata = wizardData.logoMetadata || undefined;
+      }
       if (wizardData.gstin) vendor.businessInfo.gstin = wizardData.gstin;
       if (wizardData.pan) vendor.businessInfo.pan = wizardData.pan;
       if (wizardData.pincode) {
@@ -1864,6 +1916,8 @@ export class VendorController {
       }
     }
 
+    void vendorPersistenceService.saveVendorRecord(vendor);
+
     return {
       success: true,
       message: 'Registration progress saved successfully.',
@@ -1894,7 +1948,7 @@ export class VendorController {
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         expiresIn: tokens.expiresIn,
-        redirectTo: `/registration/review/${vendor.applicationId || `APP-BLR-2026-${vendor.id.slice(-6)}`}`,
+        redirectTo: `/application-status/${vendor.applicationId || `APP-BLR-2026-${vendor.id.slice(-6)}`}`,
         vendor: {
           id: vendor.id,
           tenantId: vendor.tenantId,
@@ -1905,6 +1959,8 @@ export class VendorController {
           status: vendor.status,
           applicationId: vendor.applicationId,
           submittedAt: vendor.submittedAt,
+          logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
+          logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
           registrationStep: vendor.registrationStep,
           businessInfo: vendor.businessInfo
         }
@@ -1931,11 +1987,24 @@ export class VendorController {
     }
 
     // Step 2 Validation: Business Information
-    if (!data.legalBusinessName || !data.storeName || !data.businessType) {
-      throw new BadRequestException('Please complete all required fields in Step 2: Legal Entity Name, Display Store Name, and Business Type.');
+    const legalBizCheck = validateBusinessName(data.legalBusinessName || '', 'Legal Entity Business Name');
+    if (!legalBizCheck.isValid) {
+      throw new BadRequestException(legalBizCheck.error || 'Legal Entity Business Name is required.');
     }
-    if (data.storeName.trim().length < 2) {
-      throw new BadRequestException('Display Store Name must be at least 2 characters.');
+    const storeBizCheck = validateBusinessName(data.storeName || '', 'Store / Brand Trade Name');
+    if (!storeBizCheck.isValid) {
+      throw new BadRequestException(storeBizCheck.error || 'Display Store Name is required.');
+    }
+    if (!data.businessType) {
+      throw new BadRequestException('Business Supplier Type is required in Step 2.');
+    }
+    if (data.yearOfEstablishment) {
+      const yearCheck = validateYearOfEstablishment(data.yearOfEstablishment);
+      if (!yearCheck.isValid) throw new BadRequestException(yearCheck.error);
+    }
+    if (data.website) {
+      const webCheck = validateWebsite(data.website);
+      if (!webCheck.isValid) throw new BadRequestException(webCheck.error);
     }
 
     // Step 3 Validation: Address & Pincode
@@ -1946,11 +2015,13 @@ export class VendorController {
     if (!pinCheck.isValid) {
       throw new BadRequestException(pinCheck.error || 'Invalid 6-digit Indian PIN code in Step 3.');
     }
-    if (!data.completeAddress || data.completeAddress.trim().length < 5) {
-      throw new BadRequestException('Please enter a complete registered business address (minimum 5 characters) in Step 3.');
-    }
-    if (!data.city || !data.state) {
-      throw new BadRequestException('City and State are required in Step 3.');
+    const stateCheck = validateCityOrState(data.state || '', 'State');
+    if (!stateCheck.isValid) throw new BadRequestException(stateCheck.error);
+    const cityCheck = validateCityOrState(data.city || '', 'City / Region');
+    if (!cityCheck.isValid) throw new BadRequestException(cityCheck.error);
+    const addrCheck = validateAddress(data.completeAddress || '');
+    if (!addrCheck.isValid) {
+      throw new BadRequestException(addrCheck.error || 'Please enter a complete registered business address (minimum 5 characters) in Step 3.');
     }
 
     // Step 4 Validation: At least GST or PAN
@@ -1970,15 +2041,20 @@ export class VendorController {
       }
     }
 
-    // Step 5 Validation: Bank details & Terms acceptance
-    if (!data.bankDetails?.accountHolderName || !data.bankDetails?.accountNumber || !data.bankDetails?.ifsc) {
-      throw new BadRequestException('Please provide valid bank settlement account details in Step 5.');
+    // Step 5 Validation: Bank details & Terms acceptance (NO category/brand requirements)
+    const holderCheck = validateName(data.bankDetails?.accountHolderName || '');
+    if (!holderCheck.isValid) {
+      throw new BadRequestException(holderCheck.error || 'Valid Account Beneficiary Name is required in Step 5.');
     }
-    const accCheck = validateBankAccount(data.bankDetails.accountNumber);
+    const bankCheck = validateBankName(data.bankDetails?.bankName || '');
+    if (!bankCheck.isValid) {
+      throw new BadRequestException(bankCheck.error || 'Valid Bank Name is required in Step 5.');
+    }
+    const accCheck = validateBankAccount(data.bankDetails?.accountNumber || '');
     if (!accCheck.isValid) {
       throw new BadRequestException(accCheck.error || 'Invalid bank account number.');
     }
-    const ifscCheck = validateIFSC(data.bankDetails.ifsc);
+    const ifscCheck = validateIFSC(data.bankDetails?.ifsc || '');
     if (!ifscCheck.isValid) {
       throw new BadRequestException(ifscCheck.error || 'Invalid 11-character IFSC code.');
     }
@@ -1987,50 +2063,71 @@ export class VendorController {
       throw new BadRequestException('You must review and accept the BUILDORA 60 Supplier Terms and Privacy Policy.');
     }
 
-    // Generate unique Application ID if not present
+    const oldStatus = vendor.status;
+
+    // Normalize and persist
     if (!vendor.applicationId) {
       vendor.applicationId = `APP-BLR-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     }
     vendor.submittedAt = new Date().toISOString();
     vendor.status = 'SUBMITTED';
     vendor.rejectionReason = undefined;
+    vendor.resubmissionReason = undefined;
     vendor.updatedAt = new Date().toISOString();
     vendor.registrationStep = 5;
-    vendor.registrationData = data;
+    vendor.registrationData = {
+      ...data,
+      email: (data.email || vendor.email).trim().toLowerCase(),
+      phone: (data.phone || vendor.phone).replace(/\D/g, '').slice(-10),
+      pincode: data.pincode.trim(),
+      gstin: data.gstin ? data.gstin.trim().toUpperCase() : undefined,
+      pan: data.pan ? data.pan.trim().toUpperCase() : undefined,
+      bankDetails: {
+        ...data.bankDetails,
+        accountNumber: data.bankDetails.accountNumber.replace(/\D/g, ''),
+        ifsc: data.bankDetails.ifsc.trim().toUpperCase()
+      }
+    };
 
-    if (data.ownerName) vendor.name = data.ownerName;
-    if (data.storeName) vendor.storeName = data.storeName;
-    if (data.phone) vendor.phone = data.phone;
-    if (data.email) vendor.email = data.email;
+    if (data.ownerName) vendor.name = data.ownerName.trim();
+    if (data.storeName) vendor.storeName = data.storeName.trim();
+    if (data.phone) vendor.phone = data.phone.replace(/\D/g, '').slice(-10);
+    if (data.email) vendor.email = data.email.trim().toLowerCase();
+    if (data.logoUrl !== undefined) vendor.logoUrl = data.logoUrl || undefined;
+    if (data.logoMetadata !== undefined) vendor.logoMetadata = data.logoMetadata || undefined;
     if (data.documents && data.documents.length > 0) {
       vendor.kycDocuments = data.documents;
     }
 
     vendor.businessInfo = {
       ...vendor.businessInfo,
-      businessName: data.legalBusinessName || vendor.businessInfo?.businessName,
-      contactPerson: data.ownerName || vendor.name,
-      phone: data.phone || vendor.phone,
-      email: data.email || vendor.email,
+      businessName: data.legalBusinessName.trim(),
+      storeName: data.storeName.trim(),
+      contactPerson: data.ownerName?.trim() || vendor.name,
+      phone: vendor.phone,
+      email: vendor.email,
       businessType: (data.businessRegistrationType || vendor.businessInfo?.businessType || 'PRIVATE_LIMITED') as any,
       description: data.description || vendor.businessInfo?.description,
-      gstin: data.gstin || vendor.businessInfo?.gstin,
-      pan: data.pan || vendor.businessInfo?.pan,
+      logo: data.logoUrl || vendor.logoUrl || vendor.businessInfo?.logo,
+      logoMetadata: data.logoMetadata || vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
+      gstin: data.gstin ? data.gstin.trim().toUpperCase() : vendor.businessInfo?.gstin,
+      pan: data.pan ? data.pan.trim().toUpperCase() : vendor.businessInfo?.pan,
       categories: data.productCategories || vendor.categories || [],
       address: {
-        building: data.completeAddress || vendor.businessInfo?.address?.building || '',
+        building: data.completeAddress.trim(),
         street: data.area || vendor.businessInfo?.address?.street || '',
         area: data.area || vendor.businessInfo?.address?.area || '',
-        city: data.city || vendor.businessInfo?.address?.city || '',
-        state: data.state || vendor.businessInfo?.address?.state || '',
-        pincode: data.pincode || vendor.businessInfo?.address?.pincode || ''
+        city: data.city.trim(),
+        state: data.state.trim(),
+        pincode: data.pincode.trim(),
+        country: data.country || 'India'
       },
       bankDetails: {
-        accountHolderName: data.bankDetails?.accountHolderName || '',
-        bankName: data.bankDetails?.bankName || '',
-        accountNumber: data.bankDetails?.accountNumber || '',
-        ifsc: data.bankDetails?.ifsc || '',
-        branch: data.bankDetails?.bankName ? `${data.bankDetails.bankName} Branch` : 'Main Branch',
+        accountHolderName: data.bankDetails.accountHolderName.trim(),
+        bankName: data.bankDetails.bankName.trim(),
+        accountNumber: data.bankDetails.accountNumber.replace(/\D/g, ''),
+        ifsc: data.bankDetails.ifsc.trim().toUpperCase(),
+        branch: data.bankDetails.bankName ? `${data.bankDetails.bankName.trim()} Branch` : 'Main Branch',
         isVerified: false
       }
     };
@@ -2039,13 +2136,16 @@ export class VendorController {
     if (!vendor.auditLogs) vendor.auditLogs = [];
     vendor.auditLogs.unshift({
       id: `audit-${Date.now()}`,
-      action: 'APPLICATION_SUBMITTED',
+      action: oldStatus === 'RESUBMISSION_REQUIRED' ? 'APPLICATION_RESUBMITTED' : 'APPLICATION_SUBMITTED',
       performedBy: vendor.name || 'Vendor Owner',
       performedAt: new Date().toISOString(),
       details: `Vendor submitted registration with application ID ${vendor.applicationId}. Application queued for Compliance & KYC review.`,
-      oldStatus: 'DRAFT',
+      oldStatus,
       newStatus: 'SUBMITTED'
     });
+
+    // Persist to MongoDB
+    void vendorPersistenceService.saveVendorRecord(vendor);
 
     // Send notifications
     vendorNotificationService.notify(
@@ -2053,7 +2153,7 @@ export class VendorController {
       'APPLICATION_SUBMITTED',
       'Supplier Application Submitted',
       `Thank you for applying to BUILDORA 60 Supplier Network. Your application ${vendor.applicationId} is under administrative compliance verification.`,
-      `/registration/review/${vendor.applicationId}`,
+      `/application-status/${vendor.applicationId}`,
       { email: vendor.email, phone: vendor.phone }
     );
 
@@ -2061,7 +2161,7 @@ export class VendorController {
     const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
     vendor.refreshToken = tokens.refreshToken;
 
-    const redirectTo = `/registration/review/${vendor.applicationId}`;
+    const redirectTo = `/application-status/${vendor.applicationId}`;
 
     return {
       success: true,
@@ -2082,6 +2182,8 @@ export class VendorController {
         status: vendor.status,
         applicationId: vendor.applicationId,
         submittedAt: vendor.submittedAt,
+        logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
+        logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
         registrationStep: vendor.registrationStep,
         businessInfo: vendor.businessInfo
       }
@@ -2153,6 +2255,12 @@ export class VendorController {
         status: targetVendor.status,
         submittedAt: targetVendor.submittedAt || targetVendor.createdAt,
         updatedAt: targetVendor.updatedAt,
+        approvedAt: targetVendor.approvedAt,
+        rejectionReason: targetVendor.rejectionReason,
+        resubmissionReason: targetVendor.resubmissionReason,
+        suspendedReason: targetVendor.suspendedReason,
+        logoUrl: targetVendor.logoUrl || targetVendor.businessInfo?.logo,
+        logoMetadata: targetVendor.logoMetadata || targetVendor.businessInfo?.logoMetadata,
         storeName: targetVendor.storeName || regData?.storeName || 'N/A',
         businessName: targetVendor.businessInfo?.businessName || regData?.legalBusinessName || 'N/A',
         ownerName: targetVendor.name || regData?.ownerName || 'N/A',
@@ -2251,6 +2359,109 @@ export class VendorController {
     };
   }
 
+  @Post('registration/upload-logo')
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      limits: { fileSize: MAX_LOGO_SIZE_BYTES }
+    })
+  )
+  async uploadRegistrationLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('authorization') authHeader?: string,
+    @Req() req?: Request
+  ) {
+    const vendor = getVendorFromAuthHeader(authHeader);
+    if (!file) {
+      throw new BadRequestException('Please attach an image file (JPG, JPEG, PNG, or WEBP) under field "logo".');
+    }
+
+    const host = req?.get?.('host') || `localhost:${process.env.PORT || 3000}`;
+    const protocol = req?.protocol || 'http';
+    const baseUrl = `${protocol}://${host}`;
+
+    const logoMetadata = await storageService.uploadVendorLogo(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      baseUrl
+    );
+
+    vendor.logoUrl = logoMetadata.url;
+    vendor.logoMetadata = logoMetadata;
+    vendor.businessInfo = {
+      ...vendor.businessInfo,
+      logo: logoMetadata.url,
+      logoMetadata
+    };
+    if (vendor.registrationData) {
+      vendor.registrationData.logoUrl = logoMetadata.url;
+      vendor.registrationData.logoMetadata = logoMetadata;
+    }
+    vendor.updatedAt = new Date().toISOString();
+    void vendorPersistenceService.saveVendorRecord(vendor);
+
+    return {
+      success: true,
+      message: 'Business logo uploaded securely.',
+      logoUrl: logoMetadata.url,
+      logoMetadata
+    };
+  }
+
+  @Post('profile/upload-logo')
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      limits: { fileSize: MAX_LOGO_SIZE_BYTES }
+    })
+  )
+  async uploadProfileLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('authorization') authHeader?: string,
+    @Req() req?: Request
+  ) {
+    const vendor = getVendorFromAuthHeader(authHeader);
+    if (!file) {
+      throw new BadRequestException('Please attach an image file (JPG, JPEG, PNG, or WEBP).');
+    }
+
+    const host = req?.get?.('host') || `localhost:${process.env.PORT || 3000}`;
+    const protocol = req?.protocol || 'http';
+    const baseUrl = `${protocol}://${host}`;
+
+    const logoMetadata = await storageService.uploadVendorLogo(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      baseUrl
+    );
+
+    vendor.logoUrl = logoMetadata.url;
+    vendor.logoMetadata = logoMetadata;
+    vendor.businessInfo = {
+      ...vendor.businessInfo,
+      logo: logoMetadata.url,
+      logoMetadata
+    };
+    vendor.updatedAt = new Date().toISOString();
+    void vendorPersistenceService.saveVendorRecord(vendor);
+
+    return {
+      success: true,
+      message: 'Business logo updated.',
+      logoUrl: logoMetadata.url,
+      logoMetadata,
+      vendor
+    };
+  }
+
+  @Get('uploads/logos/:filename')
+  serveUploadedLogo(@Param('filename') filename: string, @Res() res: Response) {
+    const { filePath, mimeType } = storageService.getLogoFilePath(filename);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(filePath);
+  }
+
   @Get('registration/status')
   getRegistrationStatus(@Headers('authorization') authHeader?: string) {
     const vendor = getVendorFromAuthHeader(authHeader);
@@ -2266,11 +2477,16 @@ export class VendorController {
       applicationId: vendor.applicationId || (vendor.status === 'SUBMITTED' ? `APP-BLR-2026-${vendor.id.slice(-6)}` : undefined),
       submittedAt: vendor.submittedAt || vendor.createdAt,
       rejectionReason: vendor.rejectionReason,
+      resubmissionReason: vendor.resubmissionReason,
+      suspendedReason: vendor.suspendedReason,
+      approvedAt: vendor.approvedAt,
       registrationStep: vendor.registrationStep || 1,
       storeName: vendor.storeName,
       legalName: vendor.businessInfo?.businessName,
       email: vendor.email,
       phone: vendor.phone,
+      logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
+      logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
       maskedPan,
       maskedBankAcc,
       kycDocuments: (vendor.kycDocuments || []).map((doc) => ({
@@ -2289,11 +2505,14 @@ export class VendorController {
     @Headers('authorization') authHeader?: string
   ) {
     const vendor = getVendorFromAuthHeader(authHeader);
-    if (vendor.status !== 'REJECTED') {
-      throw new BadRequestException(`Only rejected applications can be resubmitted. Current status is ${vendor.status}.`);
+    if (vendor.status !== 'REJECTED' && vendor.status !== 'RESUBMISSION_REQUIRED') {
+      throw new BadRequestException(`Only rejected or resubmission-required applications can be resubmitted. Current status is ${vendor.status}.`);
     }
 
+    const oldStatus = vendor.status;
     vendor.status = 'SUBMITTED';
+    vendor.rejectionReason = undefined;
+    vendor.resubmissionReason = undefined;
     vendor.updatedAt = new Date().toISOString();
 
     if (!vendor.auditLogs) vendor.auditLogs = [];
@@ -2302,10 +2521,11 @@ export class VendorController {
       action: 'APPLICATION_RESUBMITTED',
       performedBy: vendor.name,
       performedAt: new Date().toISOString(),
-      details: body.notes ? `Application revised and resubmitted. Notes: ${body.notes}` : 'Application revised with updated documents.',
-      oldStatus: 'REJECTED',
+      details: body.notes ? `Application revised and resubmitted. Notes: ${body.notes}` : 'Application revised with updated details.',
+      oldStatus,
       newStatus: 'SUBMITTED'
     });
+    void vendorPersistenceService.saveVendorRecord(vendor);
 
     vendorNotificationService.notify(
       vendor.id,
@@ -3686,13 +3906,28 @@ export class VendorController {
   }
 
   @Put('profile')
-  updateVendorProfile(@Body() body: any) {
-    if (body.storeName) currentVendor.storeName = body.storeName;
-    if (body.businessInfo) {
-      currentVendor.businessInfo = { ...currentVendor.businessInfo, ...body.businessInfo };
+  updateVendorProfile(@Body() body: any, @Headers('authorization') authHeader?: string) {
+    let target: VendorProfile = currentVendor;
+    try {
+      if (authHeader) target = getVendorFromAuthHeader(authHeader);
+    } catch {
+      target = currentVendor;
     }
-    currentVendor.updatedAt = new Date().toISOString();
-    return { success: true, message: 'Vendor business profile updated.', data: currentVendor };
+    if (body.storeName) target.storeName = body.storeName;
+    if (body.logoUrl !== undefined) {
+      target.logoUrl = body.logoUrl || undefined;
+      target.businessInfo.logo = body.logoUrl || undefined;
+    }
+    if (body.logoMetadata !== undefined) {
+      target.logoMetadata = body.logoMetadata || undefined;
+      target.businessInfo.logoMetadata = body.logoMetadata || undefined;
+    }
+    if (body.businessInfo) {
+      target.businessInfo = { ...target.businessInfo, ...body.businessInfo };
+    }
+    target.updatedAt = new Date().toISOString();
+    void vendorPersistenceService.saveVendorRecord(target);
+    return { success: true, message: 'Vendor business profile updated.', data: target };
   }
 
   @Put('profile/bank')

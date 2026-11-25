@@ -666,6 +666,146 @@ export const vendorApi = {
     return data.document;
   },
 
+  async uploadRegistrationLogo(file: File) {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const formData = new FormData();
+    formData.append('logo', file);
+
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/upload-logo`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to upload business logo.');
+    return data;
+  },
+
+  async uploadProfileLogo(file: File) {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const formData = new FormData();
+    formData.append('logo', file);
+
+    const res = await fetch(`${API_BASE_URL}/vendor/profile/upload-logo`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to update business logo.');
+    return data;
+  },
+
+  // ==========================================
+  // DEV-ONLY ADMIN APPROVAL CLIENT
+  // ==========================================
+  devAdmin: {
+    async listApplications(search?: string, status?: string) {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (status && status !== 'ALL') params.set('status', status);
+      const res = await fetch(`${API_BASE_URL}/admin/vendors/applications?${params.toString()}`, {
+        headers: {
+          'x-admin-key': 'buildora-dev-admin-2026',
+          'x-admin-id': 'admin-compliance-01'
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to load vendor applications.');
+      return data;
+    },
+
+    async getApplication(id: string) {
+      const res = await fetch(`${API_BASE_URL}/admin/vendors/applications/${encodeURIComponent(id)}`, {
+        headers: {
+          'x-admin-key': 'buildora-dev-admin-2026',
+          'x-admin-id': 'admin-compliance-01'
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to load application details.');
+      return data;
+    },
+
+    async markUnderReview(id: string) {
+      const res = await fetch(`${API_BASE_URL}/admin/vendors/applications/${encodeURIComponent(id)}/under-review`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'buildora-dev-admin-2026',
+          'x-admin-id': 'admin-compliance-01'
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to update status.');
+      return data;
+    },
+
+    async approveApplication(id: string, notes?: string) {
+      const res = await fetch(`${API_BASE_URL}/admin/vendors/applications/${encodeURIComponent(id)}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'buildora-dev-admin-2026',
+          'x-admin-id': 'admin-compliance-01'
+        },
+        body: JSON.stringify({ notes })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to approve application.');
+      return data;
+    },
+
+    async rejectApplication(id: string, reason: string) {
+      const res = await fetch(`${API_BASE_URL}/admin/vendors/applications/${encodeURIComponent(id)}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'buildora-dev-admin-2026',
+          'x-admin-id': 'admin-compliance-01'
+        },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to reject application.');
+      return data;
+    },
+
+    async requestResubmission(id: string, reason: string) {
+      const res = await fetch(`${API_BASE_URL}/admin/vendors/applications/${encodeURIComponent(id)}/request-resubmission`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'buildora-dev-admin-2026',
+          'x-admin-id': 'admin-compliance-01'
+        },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to request resubmission.');
+      return data;
+    },
+
+    async suspendVendor(id: string, reason: string) {
+      const res = await fetch(`${API_BASE_URL}/admin/vendors/applications/${encodeURIComponent(id)}/suspend`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': 'buildora-dev-admin-2026',
+          'x-admin-id': 'admin-compliance-01'
+        },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to suspend vendor.');
+      return data;
+    }
+  },
+
   async getRegistrationStatus() {
     const token = localStorage.getItem('buildora_vendor_token');
     const res = await fetch(`${API_BASE_URL}/vendor/registration/status`, {
@@ -1547,16 +1687,20 @@ export const vendorApi = {
   },
 
   // Vendor Profile, Bank & Settings
-  async updateProfile(businessInfo: any) {
+  async updateProfile(payload: any) {
+    const token = localStorage.getItem('buildora_vendor_token');
     try {
       const res = await fetch(`${API_BASE_URL}/vendor/profile`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessInfo }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload?.businessInfo || payload?.storeName || payload?.logoUrl !== undefined ? payload : { businessInfo: payload }),
       });
       if (res.ok) return await res.json();
     } catch {}
-    localVendor.businessInfo = { ...localVendor.businessInfo, ...businessInfo };
+    localVendor.businessInfo = { ...localVendor.businessInfo, ...(payload?.businessInfo || payload) };
     return { success: true, data: localVendor };
   },
 

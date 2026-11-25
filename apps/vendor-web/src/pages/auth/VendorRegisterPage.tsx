@@ -1,25 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useVendorAuthStore } from '../../store/useVendorAuthStore';
 import { vendorApi } from '../../services/vendorApi';
-import { MASTER_CATEGORIES } from '@buildora/constants';
 import {
   VendorKycDocument,
   VendorWarehouse,
-  VendorRegistrationWizardData
+  VendorRegistrationWizardData,
+  VendorLogoMetadata
 } from '@buildora/types';
 import {
   validateName,
+  validateBusinessName,
   validateEmail,
   validateIndianMobile,
   validatePincode,
+  validateCityOrState,
   validateGSTIN,
   validatePAN,
+  validateBankName,
   validateBankAccount,
   validateIFSC,
   validatePassword,
   validateConfirmPassword,
-  validateAddress
+  validateAddress,
+  validateYearOfEstablishment,
+  validateWebsite,
+  validateLogoFileMetadata
 } from '@buildora/validation';
 import {
   User,
@@ -45,11 +51,15 @@ import {
   RotateCcw,
   Search,
   Sparkles,
-  Check
+  Check,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export const VendorRegisterPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('returnTo');
+  const requestedStep = Number(searchParams.get('step'));
   const { setSession, vendor: activeVendor } = useVendorAuthStore();
 
   // Wizard Step: 1 to 5
@@ -103,6 +113,11 @@ export const VendorRegisterPage: React.FC = () => {
   const [yearOfEstablishment, setYearOfEstablishment] = useState('');
   const [website, setWebsite] = useState('');
   const [description, setDescription] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string>('');
+  const [logoMetadata, setLogoMetadata] = useState<VendorLogoMetadata | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   // ----------------------------------------------------
   // STEP 3: BUSINESS ADDRESS & WAREHOUSES (Initially 100% empty)
@@ -152,17 +167,16 @@ export const VendorRegisterPage: React.FC = () => {
   const [accountType, setAccountType] = useState<'CURRENT' | 'SAVINGS'>('CURRENT');
   const [chequeDocName, setChequeDocName] = useState<string | null>(null);
 
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [brandsSupplied, setBrandsSupplied] = useState<string[]>([]);
-  const [brandInput, setBrandInput] = useState('');
-  const [operatingLocations, setOperatingLocations] = useState<string[]>([]);
-
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
-  // Resume saved draft IF AND ONLY IF vendor explicitly has an active DRAFT status
+  // Resume saved draft OR resubmission data
   useEffect(() => {
-    if (activeVendor && activeVendor.status === 'DRAFT' && activeVendor.registrationData) {
+    if (
+      activeVendor &&
+      (activeVendor.status === 'DRAFT' || activeVendor.status === 'RESUBMISSION_REQUIRED') &&
+      activeVendor.registrationData
+    ) {
       const d = activeVendor.registrationData;
       setVendorId(activeVendor.id);
       if (d.ownerName) setOwnerName(d.ownerName);
@@ -181,6 +195,11 @@ export const VendorRegisterPage: React.FC = () => {
       if (d.yearOfEstablishment) setYearOfEstablishment(d.yearOfEstablishment);
       if (d.website) setWebsite(d.website);
       if (d.description) setDescription(d.description);
+      if (d.logoUrl) {
+        setLogoUrl(d.logoUrl);
+        setLogoPreview(d.logoUrl);
+      }
+      if (d.logoMetadata) setLogoMetadata(d.logoMetadata);
       if (d.state) setState(d.state);
       if (d.district) setDistrict(d.district);
       if (d.city) setCity(d.city);
@@ -199,9 +218,16 @@ export const VendorRegisterPage: React.FC = () => {
       }
       if (d.bankDetails?.ifsc) setIfsc(d.bankDetails.ifsc);
       if (d.bankDetails?.accountType) setAccountType(d.bankDetails.accountType as any);
-      if (d.productCategories && d.productCategories.length) setSelectedCategories(d.productCategories);
-      if (d.brandsSupplied && d.brandsSupplied.length) setBrandsSupplied(d.brandsSupplied);
-      if (d.currentStep && d.currentStep >= 1 && d.currentStep <= 5) setCurrentStep(d.currentStep);
+      if (d.termsAccepted) setTermsAccepted(true);
+      if (d.privacyAccepted) setPrivacyAccepted(true);
+
+      if (requestedStep >= 1 && requestedStep <= 5) {
+        setCurrentStep(requestedStep);
+      } else if (d.currentStep && d.currentStep >= 1 && d.currentStep <= 5) {
+        setCurrentStep(d.currentStep);
+      }
+    } else if (requestedStep >= 1 && requestedStep <= 5) {
+      setCurrentStep(requestedStep);
     }
   }, []);
 
@@ -409,7 +435,12 @@ export const VendorRegisterPage: React.FC = () => {
 
       setVendorId(res.vendorId);
       if (res.vendor) {
-        setSession(res.token, res.vendor, '/register');
+        setSession(res.token, res.vendor, returnTo === 'review' ? '/registration/review' : '/register');
+      }
+      if (returnTo === 'review') {
+        await saveDraftAndSyncStore(5);
+        navigate('/registration/review');
+        return;
       }
       // Clean step transition with NO previous-step message
       goToStep(2);
@@ -420,19 +451,122 @@ export const VendorRegisterPage: React.FC = () => {
     }
   };
 
+  // Build normalized wizard payload
+  const buildWizardPayload = (stepOverride?: number): VendorRegistrationWizardData => ({
+    ownerName: ownerName.trim(),
+    email: email.trim().toLowerCase(),
+    phone: phone.replace(/\D/g, '').slice(-10),
+    isEmailVerified: true,
+    isPhoneVerified: true,
+    legalBusinessName: legalBusinessName.trim(),
+    storeName: storeName.trim(),
+    businessType: businessType as any,
+    businessRegistrationType,
+    yearOfEstablishment: yearOfEstablishment.trim(),
+    website: website.trim(),
+    description: description.trim(),
+    logoUrl: logoUrl || undefined,
+    logoMetadata: logoMetadata || undefined,
+    country,
+    state: state.trim(),
+    district: district.trim(),
+    city: city.trim(),
+    area: area.trim(),
+    pincode: pincode.trim(),
+    completeAddress: completeAddress.trim(),
+    dispatchAddress: sameDispatchAddress ? completeAddress.trim() : dispatchAddress.trim(),
+    warehouses,
+    gstin: gstin.trim().toUpperCase(),
+    pan: pan.trim().toUpperCase(),
+    documents,
+    bankDetails: {
+      accountHolderName: accountHolderName.trim(),
+      bankName: bankName.trim(),
+      accountNumber: accountNumber.replace(/\D/g, ''),
+      ifsc: ifsc.trim().toUpperCase(),
+      accountType,
+      chequeDocUrl: chequeDocName || undefined
+    },
+    termsAccepted,
+    privacyAccepted,
+    currentStep: stepOverride ?? currentStep
+  });
+
+  // Save draft & optionally navigate back to Review Page if editing from Review
+  const saveDraftAndSyncStore = async (stepNum: number) => {
+    const payload = buildWizardPayload(stepNum);
+    try {
+      const res = await vendorApi.saveRegistrationDraft(payload, stepNum, vendorId || undefined);
+      if (res?.vendor) {
+        const token = localStorage.getItem('buildora_vendor_token') || '';
+        setSession(token, res.vendor, returnTo === 'review' ? '/registration/review' : '/register');
+      }
+    } catch {
+      // Also update local store registrationData so review page always sees latest edits
+      if (activeVendor) {
+        const token = localStorage.getItem('buildora_vendor_token') || '';
+        setSession(token, { ...activeVendor, registrationData: payload, logoUrl: payload.logoUrl, logoMetadata: payload.logoMetadata });
+      }
+    }
+  };
+
+  // ----------------------------------------------------
+  // LOGO UPLOAD HANDLER (STEP 2)
+  // ----------------------------------------------------
+  const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLogoError(null);
+    const check = validateLogoFileMetadata(file.type, file.size, file.name);
+    if (!check.isValid) {
+      setLogoError(check.error || 'Invalid logo file.');
+      e.target.value = '';
+      return;
+    }
+
+    // Immediate local preview
+    const objectUrl = URL.createObjectURL(file);
+    setLogoPreview(objectUrl);
+    setIsUploadingLogo(true);
+
+    try {
+      const res = await vendorApi.uploadRegistrationLogo(file);
+      setLogoUrl(res.logoUrl);
+      setLogoMetadata(res.logoMetadata);
+      setLogoPreview(res.logoUrl);
+      setLogoError(null);
+    } catch (err: any) {
+      setLogoError(err.message || 'Logo upload failed. Please try another image.');
+      setLogoPreview(logoUrl || '');
+    } finally {
+      setIsUploadingLogo(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoUrl('');
+    setLogoMetadata(null);
+    setLogoPreview('');
+    setLogoError(null);
+  };
+
   // ----------------------------------------------------
   // STEP 2 VALIDATION & PROCEED
   // ----------------------------------------------------
-  const handleStep2Next = () => {
+  const handleStep2Next = async () => {
     setError(null);
     const errors: Record<string, string> = {};
 
-    if (!legalBusinessName.trim() || legalBusinessName.trim().length < 2) {
-      errors.legalBusinessName = 'Legal Entity Business Name is required (min 2 chars).';
+    const legalCheck = validateBusinessName(legalBusinessName, 'Legal Entity Business Name');
+    if (!legalCheck.isValid) {
+      errors.legalBusinessName = legalCheck.error || 'Legal Entity Business Name is required (min 2 chars).';
     }
 
-    if (!storeName.trim() || storeName.trim().length < 2) {
-      errors.storeName = 'Store / Brand Trade Name is required (min 2 chars).';
+    const storeCheck = validateBusinessName(storeName, 'Store / Brand Trade Name');
+    if (!storeCheck.isValid) {
+      errors.storeName = storeCheck.error || 'Store / Brand Trade Name is required (min 2 chars).';
     }
 
     if (!businessType) {
@@ -443,6 +577,16 @@ export const VendorRegisterPage: React.FC = () => {
       errors.businessRegistrationType = 'Please select your Business Registration Constitution.';
     }
 
+    const yearCheck = validateYearOfEstablishment(yearOfEstablishment);
+    if (!yearCheck.isValid) {
+      errors.yearOfEstablishment = yearCheck.error || 'Invalid year of establishment.';
+    }
+
+    const webCheck = validateWebsite(website);
+    if (!webCheck.isValid) {
+      errors.website = webCheck.error || 'Invalid website URL.';
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setError('Please complete all required business information fields.');
@@ -450,13 +594,18 @@ export const VendorRegisterPage: React.FC = () => {
     }
 
     setFieldErrors({});
+    if (returnTo === 'review') {
+      await saveDraftAndSyncStore(5);
+      navigate('/registration/review');
+      return;
+    }
     goToStep(3);
   };
 
   // ----------------------------------------------------
   // STEP 3 VALIDATION & PROCEED
   // ----------------------------------------------------
-  const handleStep3Next = () => {
+  const handleStep3Next = async () => {
     setError(null);
     const errors: Record<string, string> = {};
 
@@ -465,12 +614,14 @@ export const VendorRegisterPage: React.FC = () => {
       errors.pincode = pinCheck.error || 'Please enter a valid 6-digit Indian Postal Pincode.';
     }
 
-    if (!state.trim()) {
-      errors.state = 'State is required. Please enter a valid pincode or enter state manually.';
+    const stateCheck = validateCityOrState(state, 'State');
+    if (!stateCheck.isValid) {
+      errors.state = stateCheck.error || 'State is required.';
     }
 
-    if (!city.trim()) {
-      errors.city = 'City / Region is required. Please enter a valid pincode or enter city manually.';
+    const cityCheck = validateCityOrState(city, 'City / Region');
+    if (!cityCheck.isValid) {
+      errors.city = cityCheck.error || 'City / Region is required.';
     }
 
     const addrCheck = validateAddress(completeAddress);
@@ -485,13 +636,18 @@ export const VendorRegisterPage: React.FC = () => {
     }
 
     setFieldErrors({});
+    if (returnTo === 'review') {
+      await saveDraftAndSyncStore(5);
+      navigate('/registration/review');
+      return;
+    }
     goToStep(4);
   };
 
   // ----------------------------------------------------
   // STEP 4 VALIDATION & PROCEED
   // ----------------------------------------------------
-  const handleStep4Next = () => {
+  const handleStep4Next = async () => {
     setError(null);
     const errors: Record<string, string> = {};
 
@@ -527,6 +683,11 @@ export const VendorRegisterPage: React.FC = () => {
     }
 
     setFieldErrors({});
+    if (returnTo === 'review') {
+      await saveDraftAndSyncStore(5);
+      navigate('/registration/review');
+      return;
+    }
     goToStep(5);
   };
 
@@ -537,49 +698,7 @@ export const VendorRegisterPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      await vendorApi.saveRegistrationDraft(
-        {
-          ownerName,
-          email,
-          phone,
-          legalBusinessName,
-          storeName,
-          businessType: businessType as any,
-          businessRegistrationType,
-          yearOfEstablishment,
-          website,
-          description,
-          country,
-          state,
-          district,
-          city,
-          area,
-          pincode,
-          completeAddress,
-          dispatchAddress: sameDispatchAddress ? completeAddress : dispatchAddress,
-          warehouses,
-          gstin,
-          pan,
-          documents,
-          bankDetails: {
-            accountHolderName,
-            bankName,
-            accountNumber,
-            ifsc,
-            accountType,
-            chequeDocUrl: chequeDocName || undefined
-          },
-          productCategories: selectedCategories,
-          brandsSupplied,
-          operatingLocations,
-          termsAccepted,
-          privacyAccepted,
-          currentStep
-        },
-        currentStep,
-        vendorId || undefined
-      );
-
+      await saveDraftAndSyncStore(currentStep);
       setSuccessNotice(`Registration progress saved successfully! You can resume from Step ${currentStep} at any time.`);
     } catch (err: any) {
       setError(err.message || 'Failed to save progress.');
@@ -607,18 +726,6 @@ export const VendorRegisterPage: React.FC = () => {
 
   const handleRemoveWarehouse = (id: string) => {
     setWarehouses(warehouses.filter((w) => w.id !== id));
-  };
-
-  // Add Brand Tag
-  const handleAddBrand = () => {
-    if (brandInput.trim() && !brandsSupplied.includes(brandInput.trim())) {
-      setBrandsSupplied([...brandsSupplied, brandInput.trim()]);
-      setBrandInput('');
-    }
-  };
-
-  const handleRemoveBrand = (br: string) => {
-    setBrandsSupplied(brandsSupplied.filter((b) => b !== br));
   };
 
   // Document Upload Handler
@@ -654,9 +761,9 @@ export const VendorRegisterPage: React.FC = () => {
   };
 
   // ----------------------------------------------------
-  // STEP 5: FINAL REGISTRATION SUBMISSION & DIRECT NAVIGATION
+  // STEP 5: VALIDATE BANK & COMPLIANCE -> NAVIGATE TO REVIEW PAGE
   // ----------------------------------------------------
-  const handleFinalSubmit = async (e: React.FormEvent) => {
+  const handleProceedToReview = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     const errors: Record<string, string> = {};
@@ -666,8 +773,9 @@ export const VendorRegisterPage: React.FC = () => {
       errors.accountHolderName = nameCheck.error || 'Account Beneficiary Name is required (letters and spaces only).';
     }
 
-    if (!bankName.trim()) {
-      errors.bankName = 'Bank Name is required.';
+    const bankCheck = validateBankName(bankName);
+    if (!bankCheck.isValid) {
+      errors.bankName = bankCheck.error || 'Bank Name is required.';
     }
 
     const cleanAcc = accountNumber.trim().replace(/\D/g, '');
@@ -686,10 +794,6 @@ export const VendorRegisterPage: React.FC = () => {
       errors.ifsc = ifscCheck.error || 'Invalid IFSC format (11 characters, e.g. HDFC0000053).';
     }
 
-    if (selectedCategories.length === 0) {
-      errors.selectedCategories = 'Please select at least one product category you supply.';
-    }
-
     if (!termsAccepted) {
       errors.termsAccepted = 'You must accept the Supplier Terms of Partnership.';
     }
@@ -700,66 +804,18 @@ export const VendorRegisterPage: React.FC = () => {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      setError('Please correct the highlighted fields before submitting.');
+      setError('Please correct the highlighted fields before continuing to review.');
       return;
     }
 
     setFieldErrors({});
     setIsLoading(true);
     try {
-      const res = await vendorApi.submitRegistration(
-        {
-          ownerName: ownerName.trim(),
-          email: email.trim(),
-          phone: phone.replace(/\D/g, '').slice(-10),
-          isEmailVerified: true,
-          isPhoneVerified: true,
-          legalBusinessName: legalBusinessName.trim(),
-          storeName: storeName.trim(),
-          businessType: businessType as any,
-          businessRegistrationType,
-          yearOfEstablishment,
-          website,
-          description,
-          country,
-          state,
-          district,
-          city,
-          area,
-          pincode,
-          completeAddress,
-          dispatchAddress: sameDispatchAddress ? completeAddress : dispatchAddress,
-          warehouses,
-          gstin: gstin.trim().toUpperCase(),
-          pan: pan.trim().toUpperCase(),
-          documents,
-          bankDetails: {
-            accountHolderName: accountHolderName.trim(),
-            bankName: bankName.trim(),
-            accountNumber: cleanAcc,
-            ifsc: cleanIfsc,
-            accountType,
-            chequeDocUrl: chequeDocName || undefined
-          },
-          productCategories: selectedCategories,
-          brandsSupplied,
-          operatingLocations,
-          termsAccepted,
-          privacyAccepted,
-          currentStep: 5
-        },
-        vendorId || undefined
-      );
-
-      // Establish authenticated session immediately!
-      if (res.token && res.vendor) {
-        setSession(res.token, res.vendor, `/registration/review/${res.applicationId}`);
-      }
-
-      // CRITICAL FIX: Navigate DIRECTLY to the Review Page - NEVER to /login!
-      navigate(`/registration/review/${res.applicationId}`);
+      await saveDraftAndSyncStore(5);
+      // Phase 3: Navigate to Final Registration Review Page (DO NOT auto-submit!)
+      navigate('/registration/review');
     } catch (err: any) {
-      setError(err.message || 'Failed to submit registration application. Please retry.');
+      setError(err.message || 'Failed to save step details. Please retry.');
     } finally {
       setIsLoading(false);
     }
@@ -795,7 +851,7 @@ export const VendorRegisterPage: React.FC = () => {
             { step: 2, title: 'Business', icon: Building2 },
             { step: 3, title: 'Address', icon: MapPin },
             { step: 4, title: 'KYC & Tax', icon: FileText },
-            { step: 5, title: 'Bank & Catalog', icon: CreditCard }
+            { step: 5, title: 'Bank & Terms', icon: CreditCard }
           ].map((item) => {
             const isCompleted = item.step < currentStep;
             const isCurrent = item.step === currentStep;
@@ -1286,6 +1342,78 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Upload Your Business Logo (Phase 2) */}
+          <div className="p-4 rounded-2xl bg-[#F4F7FC] border border-[#E2E8F0] space-y-3">
+            <div>
+              <h4 className="text-xs font-bold text-[#17233C] flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-[#203D91]" />
+                Upload Your Business Logo
+              </h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                JPG, JPEG, PNG or WEBP • Maximum 5 MB. Appears on your store profile & review summary.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs relative">
+                {isUploadingLogo ? (
+                  <Loader2 className="w-6 h-6 text-[#203D91] animate-spin" />
+                ) : logoPreview ? (
+                  <img
+                    src={logoPreview}
+                    alt="Business Logo Preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-slate-400 p-2 text-center">
+                    <Building2 className="w-6 h-6 text-[#203D91]/50 mb-0.5" />
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                      {storeName ? storeName.slice(0, 2).toUpperCase() : 'LOGO'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs">
+                    <UploadCloud className="w-3.5 h-3.5 text-[#FF7417]" />
+                    <span>{logoPreview ? 'Replace Logo' : 'Choose Logo Image'}</span>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                      onChange={handleLogoSelect}
+                      disabled={isUploadingLogo}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {logoPreview && !isUploadingLogo && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                {logoMetadata && !logoError && (
+                  <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Uploaded ({Math.round(logoMetadata.fileSize / 1024)} KB)
+                  </p>
+                )}
+
+                {logoError && (
+                  <p className="text-[11px] text-rose-600 font-medium">{logoError}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="pt-4 flex items-center justify-between border-t border-slate-100">
             <button
               type="button"
@@ -1299,7 +1427,7 @@ export const VendorRegisterPage: React.FC = () => {
               onClick={handleStep2Next}
               className="py-3 px-6 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center gap-2 cursor-pointer"
             >
-              Next: Address & Hubs
+              {returnTo === 'review' ? 'Save & Return to Review' : 'Next: Address & Hubs'}
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -1722,10 +1850,10 @@ export const VendorRegisterPage: React.FC = () => {
       )}
 
       {/* ==================================================== */}
-      {/* STEP 5: BANK & PRODUCT INFORMATION                  */}
+      {/* STEP 5: BANK & COMPLIANCE INFORMATION                */}
       {/* ==================================================== */}
       {currentStep === 5 && (
-        <form onSubmit={handleFinalSubmit} className="space-y-6">
+        <form onSubmit={handleProceedToReview} className="space-y-6">
           {/* Bank Settlement Section */}
           <div className="p-4 bg-[#F4F7FC] rounded-2xl border border-[#E2E8F0] space-y-3">
             <h4 className="text-xs font-bold text-[#17233C] flex items-center gap-1.5">
@@ -1854,89 +1982,6 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Product Categories Supplied */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-[#17233C]">
-                Select Product Categories You Supply *
-              </label>
-              {fieldErrors.selectedCategories && (
-                <span className="text-[11px] text-rose-600 font-medium">{fieldErrors.selectedCategories}</span>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-2 bg-[#F4F7FC] rounded-2xl border border-[#E2E8F0]">
-              {MASTER_CATEGORIES.map((cat) => {
-                const isSelected = selectedCategories.includes(cat.slug);
-                return (
-                  <button
-                    key={cat.slug}
-                    type="button"
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedCategories(selectedCategories.filter((c) => c !== cat.slug));
-                      } else {
-                        setSelectedCategories([...selectedCategories, cat.slug]);
-                      }
-                      clearFieldError('selectedCategories');
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#203D91] text-white border-[#203D91]'
-                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    {isSelected ? '✓ ' : '+ '}
-                    {cat.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Brands Supplied Chips */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-[#17233C]">
-              Brands / Manufacturers Supplied (Optional)
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={brandInput}
-                onChange={(e) => setBrandInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddBrand();
-                  }
-                }}
-                placeholder="e.g. UltraTech, Havells, Astral, Jaquar"
-                className="flex-1 px-3.5 py-2 rounded-xl border border-[#E2E8F0] text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91]"
-              />
-              <button
-                type="button"
-                onClick={handleAddBrand}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] cursor-pointer"
-              >
-                + Add Brand
-              </button>
-            </div>
-            {brandsSupplied.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {brandsSupplied.map((b) => (
-                  <span
-                    key={b}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-[#203D91] text-xs font-bold border border-blue-200"
-                  >
-                    {b}
-                    <button type="button" onClick={() => handleRemoveBrand(b)} className="hover:text-rose-600 cursor-pointer">
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Terms & Conditions Acceptance */}
           <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
             <label className="flex items-start gap-2.5 cursor-pointer">
@@ -1992,12 +2037,12 @@ export const VendorRegisterPage: React.FC = () => {
               {isLoading ? (
                 <span className="inline-flex items-center gap-2">
                   <Clock className="w-4 h-4 animate-spin" />
-                  Submitting Application...
+                  Preparing Review...
                 </span>
               ) : (
                 <>
-                  Submit Vendor Application
-                  <ShieldCheck className="w-4 h-4" />
+                  Review Your Application
+                  <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>

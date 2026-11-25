@@ -4,9 +4,9 @@ import { Truck, ShieldCheck, Zap, Layers, CheckCircle2, Building2, TrendingUp } 
 
 export const VendorAuthLayout: React.FC = () => {
   return (
-    <div className="min-h-screen bg-[#F4F7FC] flex text-[#17233C]">
-      {/* Left Branding Panel (Desktop Only) - Navy Blue #203D91 Background */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#203D91] text-white flex-col justify-between p-12 xl:p-16 relative overflow-hidden shadow-2xl">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#F4F7FC] flex flex-col lg:flex-row text-[#17233C]">
+      {/* Left Branding Panel (Desktop Only - Fixed & Non-Scrolling) - Navy Blue #203D91 */}
+      <div className="hidden lg:flex lg:w-1/2 lg:h-screen lg:sticky lg:top-0 bg-[#203D91] text-white flex-col justify-between p-10 xl:p-14 relative overflow-hidden shadow-2xl shrink-0">
         {/* Subtle decorative glow accents with brand orange & blue */}
         <div className="absolute top-0 right-0 -mr-24 -mt-24 w-96 h-96 rounded-full bg-[#FF7417]/15 blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 -ml-24 -mb-24 w-96 h-96 rounded-full bg-white/10 blur-3xl pointer-events-none" />
@@ -91,9 +91,9 @@ export const VendorAuthLayout: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Content Form Area - Background #F4F7FC */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-10 lg:p-12 overflow-y-auto">
-        <div className="w-full max-w-xl">
+      {/* Right Content Form Area - Independently Scrollable on Desktop */}
+      <div className="w-full lg:w-1/2 lg:h-screen lg:overflow-y-auto flex flex-col p-6 sm:p-10 lg:p-12">
+        <div className="w-full max-w-xl mx-auto my-auto">
           <Outlet />
         </div>
       </div>

@@ -14,6 +14,7 @@ import { CustomerController } from './modules/customer/controllers/customer.cont
 import { ServiceabilityController } from './modules/warehouses/controllers/serviceability.controller';
 import { CheckoutController } from './modules/checkout/controllers/checkout.controller';
 import { VendorController } from './modules/vendors/controllers/vendor.controller';
+import { AdminVendorApprovalController } from './modules/vendors/controllers/admin-vendor-approval.controller';
 import { ConstructionCalculatorController } from './modules/construction-calculator/controllers/construction-calculator.controller';
 import { ConstructionCalculatorService } from './modules/construction-calculator/services/construction-calculator.service';
 
@@ -34,6 +35,7 @@ import { ConstructionCalculatorService } from './modules/construction-calculator
     CustomerController,
     ServiceabilityController,
     VendorController,
+    AdminVendorApprovalController,
     ConstructionCalculatorController,
   ],
   providers: [DatabaseService, ConstructionCalculatorService],

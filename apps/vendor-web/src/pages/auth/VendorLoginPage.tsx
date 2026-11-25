@@ -578,7 +578,7 @@ export const VendorLoginPage: React.FC = () => {
             )}
 
             {/* Bottom Registration CTA (Matches Reference Screenshot) */}
-            <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-center">
+            <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col items-center gap-2.5">
               <Link
                 to="/register"
                 className="inline-flex items-center gap-2 text-sm font-bold text-[#102B63] hover:text-[#FF7900] transition-colors cursor-pointer group"
@@ -586,6 +586,14 @@ export const VendorLoginPage: React.FC = () => {
                 <UserPlus className="w-4 h-4 text-[#FF7900] group-hover:scale-110 transition-transform" />
                 <span>Register as Vendor Partner</span>
               </Link>
+              {!import.meta.env.PROD && (
+                <Link
+                  to="/dev-admin/vendor-approvals"
+                  className="text-[11px] font-semibold text-slate-400 hover:text-[#203D91] transition-colors"
+                >
+                  Dev Admin Approval Console →
+                </Link>
+              )}
             </div>
           </div>
         </div>

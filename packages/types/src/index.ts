@@ -454,6 +454,7 @@ export type VendorAccountStatus =
   | 'DRAFT'
   | 'SUBMITTED'
   | 'UNDER_REVIEW'
+  | 'RESUBMISSION_REQUIRED'
   | 'REGISTERED'
   | 'PENDING_VERIFICATION'
   | 'KYC_PENDING'
@@ -463,6 +464,15 @@ export type VendorAccountStatus =
   | 'REJECTED'
   | 'SUSPENDED'
   | 'DISABLED';
+
+export interface VendorLogoMetadata {
+  url: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedAt: string;
+  storageProvider?: 'S3' | 'LOCAL_OBJECT_STORAGE';
+}
 
 export type VendorRole =
   | 'VENDOR_OWNER'
@@ -636,6 +646,7 @@ export interface VendorBusinessInfo {
   businessType: 'PROPRIETORSHIP' | 'PARTNERSHIP' | 'LLP' | 'PRIVATE_LIMITED' | 'PUBLIC_LIMITED';
   description?: string;
   logo?: string;
+  logoMetadata?: VendorLogoMetadata;
   gstin?: string;
   pan?: string;
   businessRegNumber?: string;
@@ -707,6 +718,8 @@ export interface VendorRegistrationWizardData {
   yearOfEstablishment?: string;
   website?: string;
   description?: string;
+  logoUrl?: string;
+  logoMetadata?: VendorLogoMetadata;
   country: string;
   state: string;
   district: string;
@@ -728,10 +741,10 @@ export interface VendorRegistrationWizardData {
     chequeDocUrl?: string;
     isVerified?: boolean;
   };
-  productCategories: string[];
+  productCategories?: string[];
   childCategories?: string[];
-  brandsSupplied: string[];
-  operatingLocations: string[];
+  brandsSupplied?: string[];
+  operatingLocations?: string[];
   catalogueUrl?: string;
   termsAccepted: boolean;
   privacyAccepted: boolean;
@@ -744,6 +757,13 @@ export interface VendorProfile {
   businessInfo: VendorBusinessInfo;
   status: VendorAccountStatus;
   rejectionReason?: string;
+  resubmissionReason?: string;
+  suspendedReason?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  suspendedAt?: string;
   rating: number;
   productCount: number;
   orderCount: number;
@@ -754,6 +774,8 @@ export interface VendorProfile {
   name?: string;
   email?: string;
   phone?: string;
+  logoUrl?: string;
+  logoMetadata?: VendorLogoMetadata;
   categories?: string[];
   business?: any;
   bankDetails?: any;

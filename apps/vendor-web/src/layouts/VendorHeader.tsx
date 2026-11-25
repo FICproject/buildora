@@ -118,9 +118,17 @@ export const VendorHeader: React.FC<VendorHeaderProps> = ({ onOpenMobileMenu, ti
           to="/settings"
           className="flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-xl hover:bg-[#F4F7FC] transition-colors border border-transparent hover:border-[#E2E8F0]"
         >
-          <div className="w-8 h-8 rounded-lg bg-[#203D91] text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-            {(vendor?.businessInfo?.storeName || vendor?.storeName || 'V').charAt(0)}
-          </div>
+          {vendor?.logoUrl || vendor?.businessInfo?.logo ? (
+            <img
+              src={vendor.logoUrl || vendor.businessInfo?.logo}
+              alt={vendor?.storeName || 'Store Logo'}
+              className="w-8 h-8 rounded-lg object-cover border border-[#E2E8F0] shadow-2xs bg-white"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-[#203D91] text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+              {(vendor?.businessInfo?.storeName || vendor?.storeName || 'V').charAt(0)}
+            </div>
+          )}
           <span className="text-xs font-bold text-[#17233C] hidden md:inline truncate max-w-[130px]">
             {vendor?.businessInfo?.storeName || vendor?.storeName || 'Supreme Materials BLR'}
           </span>

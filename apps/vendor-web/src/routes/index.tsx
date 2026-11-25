@@ -12,6 +12,7 @@ import { VendorApplicationStatusPage } from '../pages/auth/VendorApplicationStat
 import { VendorReviewPage } from '../pages/auth/VendorReviewPage';
 import { VendorRejectionPage } from '../pages/auth/VendorRejectionPage';
 import { VendorRestrictedPage } from '../pages/auth/VendorRestrictedPage';
+import { DevAdminVendorApprovalPage } from '../pages/admin/DevAdminVendorApprovalPage';
 
 // Vendor Portal Dashboard & Management Pages
 import { VendorOnboardingPage } from '../pages/onboarding/VendorOnboardingPage';
@@ -54,10 +55,16 @@ export const AppRoutes: React.FC = () => {
         <Route path="/registration/review" element={<VendorReviewPage />} />
         <Route path="/vendor/registration/review/:applicationId" element={<VendorReviewPage />} />
         <Route path="/vendor/registration/review" element={<VendorReviewPage />} />
-        <Route path="/application-status" element={<VendorReviewPage />} />
+        <Route path="/application-status/:applicationId" element={<VendorApplicationStatusPage />} />
+        <Route path="/application-status" element={<VendorApplicationStatusPage />} />
         <Route path="/rejection-details" element={<VendorRejectionPage />} />
         <Route path="/account-restricted" element={<VendorRestrictedPage />} />
       </Route>
+
+      {/* Development-Only Admin Approval Console */}
+      {!import.meta.env.PROD && (
+        <Route path="/dev-admin/vendor-approvals" element={<DevAdminVendorApprovalPage />} />
+      )}
 
       {/* Protected Vendor App Routes (Only APPROVED / ACTIVE Vendors) */}
       <Route element={<ProtectedRoute />}>

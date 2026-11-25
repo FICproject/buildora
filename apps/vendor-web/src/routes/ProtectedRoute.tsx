@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useVendorAuthStore } from '../store/useVendorAuthStore';
 import { VendorAccountStatus } from '@buildora/types';
@@ -12,9 +12,9 @@ export function getVendorRedirect(status?: VendorAccountStatus, applicationId?: 
       return '/register';
     case 'SUBMITTED':
     case 'UNDER_REVIEW':
-      return applicationId ? `/registration/review/${applicationId}` : '/registration/review';
+    case 'RESUBMISSION_REQUIRED':
     case 'REJECTED':
-      return '/rejection-details';
+      return applicationId ? `/application-status/${applicationId}` : '/application-status';
     case 'SUSPENDED':
       return '/account-restricted';
     default:
@@ -23,8 +23,15 @@ export function getVendorRedirect(status?: VendorAccountStatus, applicationId?: 
 }
 
 export const ProtectedRoute: React.FC = () => {
-  const { isAuthenticated, vendor } = useVendorAuthStore();
+  const { isAuthenticated, vendor, fetchProfile } = useVendorAuthStore();
   const location = useLocation();
+
+  // Always verify status against the backend on mount/navigation rather than trusting localStorage alone
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchProfile();
+    }
+  }, [isAuthenticated, location.pathname]);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;

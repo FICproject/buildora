@@ -10,14 +10,20 @@ import {
   Save,
   CheckCircle2,
   Warehouse,
+  UploadCloud,
+  Trash2,
+  Loader2,
+  Image as ImageIcon
 } from 'lucide-react';
 import { useVendorAuthStore } from '../../store/useVendorAuthStore';
+import { vendorApi } from '../../services/vendorApi';
+import { validateLogoFileMetadata } from '@buildora/validation';
 import { Card, CardHeader, CardContent, CardFooter } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 
 export const VendorSettingsPage: React.FC = () => {
-  const { vendor } = useVendorAuthStore();
+  const { vendor, fetchProfile } = useVendorAuthStore();
 
   const [storeName, setStoreName] = useState(vendor?.businessInfo?.storeName || vendor?.storeName || 'Supreme Materials BLR');
   const [email, setEmail] = useState(vendor?.businessInfo?.email || vendor?.email || 'vendor@buildora.in');
@@ -25,10 +31,57 @@ export const VendorSettingsPage: React.FC = () => {
   const [legalName, setLegalName] = useState(vendor?.businessInfo?.businessName || vendor?.business?.legalName || 'Supreme Materials Private Limited');
   const [gstin, setGstin] = useState(vendor?.businessInfo?.gstin || vendor?.business?.gstin || '29AAAAA0000A1Z5');
   const [pan, setPan] = useState(vendor?.businessInfo?.pan || vendor?.business?.pan || 'AAAAA0000A');
+  const [logoPreview, setLogoPreview] = useState(vendor?.logoUrl || vendor?.businessInfo?.logo || '');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoError(null);
+
+    const check = validateLogoFileMetadata(file.type, file.size, file.name);
+    if (!check.isValid) {
+      setLogoError(check.error || 'Invalid logo file.');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    try {
+      const res = await vendorApi.uploadProfileLogo(file);
+      setLogoPreview(res.logoUrl);
+      await fetchProfile();
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (err: any) {
+      setLogoError(err.message || 'Failed to upload business logo.');
+    } finally {
+      setIsUploadingLogo(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    setLogoError(null);
+    try {
+      await vendorApi.updateProfile({ logoUrl: '', logoMetadata: null });
+      setLogoPreview('');
+      await fetchProfile();
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (err: any) {
+      setLogoError(err.message || 'Failed to remove logo.');
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      await vendorApi.updateProfile({ storeName });
+      await fetchProfile();
+    } catch {}
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
@@ -66,6 +119,46 @@ export const VendorSettingsPage: React.FC = () => {
             subtitle="Display name and legal registered details in Karnataka"
           />
           <CardContent className="space-y-4">
+            {/* Business Logo Upload / Management */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center gap-4">
+              <div className="w-16 h-16 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
+                {isUploadingLogo ? (
+                  <Loader2 className="w-5 h-5 text-[#203D91] animate-spin" />
+                ) : logoPreview ? (
+                  <img src={logoPreview} alt="Business Logo" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon className="w-6 h-6 text-slate-400" />
+                )}
+              </div>
+              <div className="flex-1 min-w-[200px] space-y-1.5">
+                <p className="text-xs font-bold text-slate-800">Business / Brand Logo</p>
+                <p className="text-[11px] text-slate-500">JPG, JPEG, PNG or WEBP • Max 5 MB</p>
+                <div className="flex items-center gap-2 pt-1">
+                  <label className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#203D91] text-white hover:bg-[#162b66] cursor-pointer inline-flex items-center gap-1.5">
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>{logoPreview ? 'Change Logo' : 'Upload Logo'}</span>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                      onChange={handleLogoChange}
+                      disabled={isUploadingLogo}
+                      className="hidden"
+                    />
+                  </label>
+                  {logoPreview && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </button>
+                  )}
+                </div>
+                {logoError && <p className="text-[11px] text-rose-600 font-medium">{logoError}</p>}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">

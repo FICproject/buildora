@@ -328,9 +328,93 @@ export function validateWebsite(website: string): { isValid: boolean; error?: st
     return { isValid: true }; // Optional
   }
   const clean = website.trim();
-  const urlRegex = /^https?:\/\/[^\s$.?#].[^\s]*$/i;
+  const urlRegex = /^https?:\/\/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?(\/[^\s]*)?$/i;
   if (!urlRegex.test(clean)) {
     return { isValid: false, error: 'Please enter a valid website URL starting with http:// or https://' };
+  }
+  return { isValid: true };
+}
+
+/**
+ * Validates Legal Entity Business Name or Store/Trade Name.
+ * Allows letters, numbers, spaces, &, ., -, ', (, ), / and regional scripts.
+ */
+export function validateBusinessName(name: string, fieldLabel = 'Business Name'): { isValid: boolean; error?: string } {
+  if (!name || !name.trim()) {
+    return { isValid: false, error: `${fieldLabel} is required.` };
+  }
+  const clean = name.trim();
+  if (clean.length < 2) {
+    return { isValid: false, error: `${fieldLabel} must be at least 2 characters long.` };
+  }
+  if (clean.length > 120) {
+    return { isValid: false, error: `${fieldLabel} cannot exceed 120 characters.` };
+  }
+  const bizRegex = /^[a-zA-Z0-9\s.&,'\-\/()\u00C0-\u024F\u0900-\u0D7F]+$/;
+  if (!bizRegex.test(clean)) {
+    return { isValid: false, error: `${fieldLabel} contains unsupported special characters.` };
+  }
+  return { isValid: true };
+}
+
+/**
+ * Validates City or State name.
+ * Letters, spaces, dots, hyphens, slashes only (no digits or symbols).
+ */
+export function validateCityOrState(value: string, fieldLabel = 'Location'): { isValid: boolean; error?: string } {
+  if (!value || !value.trim()) {
+    return { isValid: false, error: `${fieldLabel} is required.` };
+  }
+  const clean = value.trim();
+  if (clean.length < 2 || clean.length > 80) {
+    return { isValid: false, error: `${fieldLabel} must be between 2 and 80 characters.` };
+  }
+  const locRegex = /^[a-zA-Z\s.\-\/\u00C0-\u024F\u0900-\u0D7F]+$/;
+  if (!locRegex.test(clean)) {
+    return { isValid: false, error: `${fieldLabel} must contain alphabetic characters only.` };
+  }
+  return { isValid: true };
+}
+
+/**
+ * Validates Bank Name.
+ */
+export function validateBankName(bankName: string): { isValid: boolean; error?: string } {
+  if (!bankName || !bankName.trim()) {
+    return { isValid: false, error: 'Bank Name is required.' };
+  }
+  const clean = bankName.trim();
+  if (clean.length < 2 || clean.length > 80) {
+    return { isValid: false, error: 'Bank Name must be between 2 and 80 characters.' };
+  }
+  const bankRegex = /^[a-zA-Z0-9\s.&'\-()]+$/;
+  if (!bankRegex.test(clean)) {
+    return { isValid: false, error: 'Bank Name contains invalid characters.' };
+  }
+  return { isValid: true };
+}
+
+export const ALLOWED_LOGO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'] as const;
+export const MAX_LOGO_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Validates logo file MIME type and size on client & server.
+ */
+export function validateLogoFileMetadata(mimeType: string, sizeBytes: number, fileName?: string): { isValid: boolean; error?: string } {
+  if (!mimeType || !ALLOWED_LOGO_MIME_TYPES.includes(mimeType.toLowerCase() as any)) {
+    return { isValid: false, error: 'Only JPG, JPEG, PNG, and WEBP image formats are supported for business logos.' };
+  }
+  if (fileName) {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (!ext || !['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+      return { isValid: false, error: 'Invalid file extension. Allowed extensions: .jpg, .jpeg, .png, .webp.' };
+    }
+  }
+  if (!sizeBytes || sizeBytes <= 0) {
+    return { isValid: false, error: 'Uploaded image file is empty.' };
+  }
+  if (sizeBytes > MAX_LOGO_SIZE_BYTES) {
+    return { isValid: false, error: 'Business logo file size must not exceed 5 MB.' };
   }
   return { isValid: true };
 }
