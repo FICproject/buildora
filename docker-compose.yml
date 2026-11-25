@@ -39,6 +39,23 @@ services:
     networks:
       - buildora-network
 
+  # BUILDORA 60 Vendor Portal (Nginx + React Vite SPA)
+  vendor-web:
+    build:
+      context: .
+      dockerfile: apps/vendor-web/Dockerfile
+      args:
+        - VITE_API_URL=/api/v1
+        - VITE_DEFAULT_TENANT_ID=tenant-buildora-blr
+    container_name: buildora-vendor-web
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - buildora-network
+
 networks:
   buildora-network:
     driver: bridge

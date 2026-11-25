@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Headers } from '@nestjs/common';
 import { databaseService, DatabaseService } from './database/database.service';
+import { vendorNotificationService } from './modules/vendors/services/vendor-notification.service';
 
 @Controller()
 export class AppController {
@@ -49,7 +50,8 @@ export class AppController {
         orders: 'HEALTHY',
         wallet: 'HEALTHY',
         auth: 'HEALTHY'
-      }
+      },
+      otpProviders: vendorNotificationService.getOtpProviderStatus()
     };
   }
 

@@ -49,20 +49,25 @@ Before deploying the backend to the cloud, configure MongoDB Atlas to accept con
 
 ---
 
-### B. Deploy Frontend on Vercel
+### B. Deploy Frontends on Vercel (Customer Web & Vendor Portal)
 1. Log in to [Vercel.com](https://vercel.com/).
 2. Click **Add New... $\rightarrow$ Project**.
 3. Import your GitHub repository.
-4. Configure the project:
+4. To deploy **Customer Web**:
    - **Framework Preset**: `Vite`
    - **Root Directory**: `apps/customer-web`
    - **Build Command**: `pnpm --filter @buildora/customer-web build`
    - **Output Directory**: `dist`
-5. Under **Environment Variables**, add:
+5. To deploy **Vendor Portal** (as a separate Vercel project):
+   - **Framework Preset**: `Vite`
+   - **Root Directory**: `apps/vendor-web`
+   - **Build Command**: `pnpm --filter @buildora/vendor-web build`
+   - **Output Directory**: `dist`
+6. Under **Environment Variables**, add:
    - `VITE_API_URL` = `https://buildora-backend-api.onrender.com/api/v1` (replace with your Render backend URL)
    - `VITE_DEFAULT_TENANT_ID` = `tenant-buildora-blr`
-6. Click **Deploy**.
-7. Vercel will build and provide a global CDN URL (e.g. `https://buildora.vercel.app`).
+7. Click **Deploy**.
+8. Vercel will build and provide a global CDN URL (e.g. `https://buildora-vendor.vercel.app`).
 
 ---
 

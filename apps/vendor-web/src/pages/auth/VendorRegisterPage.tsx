@@ -507,7 +507,7 @@ export const VendorRegisterPage: React.FC = () => {
     setTouched((prev) => ({ ...prev, email: true }));
     const emailCheck = validateEmail(email);
     if (!emailCheck.isValid) {
-      const msg = emailCheck.error || 'Enter a valid business email address.';
+      const msg = emailCheck.error || 'Please enter a valid business email address.';
       setFieldErrors((prev) => ({ ...prev, email: msg }));
       setError(msg);
       return;
@@ -525,7 +525,11 @@ export const VendorRegisterPage: React.FC = () => {
       }
       setSuccessNotice(`Verification code sent to ${cleanEmail}`);
     } catch (err: any) {
-      const msg = err.message || 'Failed to send email verification code.';
+      const raw = String(err?.message || '');
+      const msg =
+        !raw || /failed to fetch/i.test(raw)
+          ? 'Unable to send verification code. Please try again.'
+          : raw;
       setFieldErrors((prev) => ({ ...prev, email: msg }));
       setError(msg);
     } finally {
@@ -570,7 +574,11 @@ export const VendorRegisterPage: React.FC = () => {
       }
       setSuccessNotice(`Verification code sent to +91 ${phone}`);
     } catch (err: any) {
-      const msg = err.message || 'Failed to send mobile verification code.';
+      const raw = String(err?.message || '');
+      const msg =
+        !raw || /failed to fetch/i.test(raw)
+          ? 'Unable to send OTP to this mobile number.'
+          : raw;
       setFieldErrors((prev) => ({ ...prev, phone: msg }));
       setError(msg);
     } finally {
@@ -1372,16 +1380,21 @@ export const VendorRegisterPage: React.FC = () => {
                     type="tel"
                     name="phone"
                     inputMode="numeric"
+                    maxLength={10}
+                    pattern="[6-9][0-9]{9}"
+                    autoComplete="tel-national"
                     value={phone}
-                    onChange={(e) =>
-                      handleFieldChange('phone', e.target.value, setPhone, {
+                    onChange={(e) => {
+                      // Strictly allow numeric digits only, maximum 10 digits
+                      const sanitized = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      handleFieldChange('phone', sanitized, setPhone, {
                         autoTouchOnInput: true,
                         onExtraChange: () => {
                           setIsMobileVerified(false);
                           setIsMobileOtpSent(false);
                         }
-                      })
-                    }
+                      });
+                    }}
                     onBlur={() => handleFieldBlur('phone', phone)}
                     required
                     disabled={isMobileVerified}

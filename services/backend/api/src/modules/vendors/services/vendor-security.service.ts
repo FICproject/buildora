@@ -24,7 +24,11 @@ export interface LockoutRecord {
 export class VendorSecurityService {
   // In-memory security records (isolated per tenant / process)
   private otpStore: Map<string, OtpRecord> = new Map();
+  private otpRateLimitStore: Map<string, number[]> = new Map();
   private lockoutStore: Map<string, LockoutRecord> = new Map();
+
+  private readonly OTP_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+  private readonly OTP_MAX_REQUESTS_PER_WINDOW = 5;
 
   /**
    * Hashes a password using PBKDF2 with SHA-512 and a cryptographically secure random salt.
@@ -60,8 +64,12 @@ export class VendorSecurityService {
 
   /**
    * Generates a 6-digit cryptographic OTP and stores its SHA-256 hash.
+   * Enforces 60-second resend cooldown and sliding-window rate limiting (5 per 15 mins).
    */
-  generateAndStoreOtp(identifier: string, type: OtpRecord['type']): { success: boolean; message: string; cooldownSeconds: number; devOtpHint?: string } {
+  generateAndStoreOtp(
+    identifier: string,
+    type: OtpRecord['type']
+  ): { success: boolean; message: string; cooldownSeconds: number; devOtpHint?: string; otpForDelivery: string } {
     const cleanId = identifier.trim().toLowerCase();
     const now = Date.now();
     const storeKey = `${cleanId}:${type}`;
@@ -80,8 +88,24 @@ export class VendorSecurityService {
       );
     }
 
-    // 2. Generate 6-digit random code
-    const rawOtp = (Math.floor(100000 + crypto.randomInt(900000))).toString();
+    // 2. Check sliding-window rate limit (max 5 requests per 15 minutes)
+    const recentTimestamps = (this.otpRateLimitStore.get(storeKey) || []).filter(
+      (ts) => now - ts < this.OTP_WINDOW_MS
+    );
+    if (recentTimestamps.length >= this.OTP_MAX_REQUESTS_PER_WINDOW) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Too many verification code requests. Please wait 15 minutes before trying again.'
+        },
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+    recentTimestamps.push(now);
+    this.otpRateLimitStore.set(storeKey, recentTimestamps);
+
+    // 3. Generate 6-digit random code
+    const rawOtp = Math.floor(100000 + crypto.randomInt(900000)).toString();
     const hashedOtp = crypto.createHash('sha256').update(rawOtp).digest('hex');
 
     const record: OtpRecord = {
@@ -98,16 +122,21 @@ export class VendorSecurityService {
 
     this.otpStore.set(storeKey, record);
 
+    const exposeDevHint =
+      process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_OTP_FALLBACK === 'true';
+
     return {
       success: true,
       message: `Verification code sent to ${identifier}. Valid for 10 minutes.`,
       cooldownSeconds: 60,
-      devOtpHint: rawOtp // Exposed for dev and automated verification
+      otpForDelivery: rawOtp,
+      ...(exposeDevHint ? { devOtpHint: rawOtp } : {})
     };
   }
 
   /**
    * Verifies the supplied OTP against the SHA-256 hash in storage.
+   * Prevents OTP reuse once verified.
    */
   verifyOtp(identifier: string, type: OtpRecord['type'], otp: string): boolean {
     const cleanId = identifier.trim().toLowerCase();
@@ -116,6 +145,10 @@ export class VendorSecurityService {
 
     if (!entry) {
       throw new BadRequestException('No verification code requested or session expired. Please request a new code.');
+    }
+
+    if (entry.verified) {
+      throw new BadRequestException('This verification code has already been used. Please request a new code.');
     }
 
     const now = Date.now();

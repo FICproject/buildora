@@ -1375,7 +1375,7 @@ export class VendorController implements OnModuleInit {
   // ==========================================
 
   @Post('auth/send-otp')
-  sendOtp(
+  async sendOtp(
     @Body() body: { identifier: string; type: 'REGISTRATION_EMAIL' | 'REGISTRATION_MOBILE' | 'LOGIN' | 'PASSWORD_RESET' }
   ) {
     const { identifier, type } = body;
@@ -1383,30 +1383,35 @@ export class VendorController implements OnModuleInit {
       throw new BadRequestException('Identifier (email or mobile) and verification type are required.');
     }
 
+    let normalized = String(identifier).trim();
+
     if (type === 'REGISTRATION_EMAIL') {
-      const emailCheck = validateEmail(identifier);
+      const emailCheck = validateEmail(normalized);
       if (!emailCheck.isValid) {
         throw new BadRequestException({
-          message: emailCheck.error || 'Enter a valid business email address.',
-          errors: { email: emailCheck.error || 'Enter a valid business email address.' }
+          message: emailCheck.error || 'Please enter a valid business email address.',
+          errors: { email: emailCheck.error || 'Please enter a valid business email address.' }
         });
       }
+      normalized = emailCheck.normalized || normalized.toLowerCase();
     } else if (type === 'REGISTRATION_MOBILE') {
-      const phoneCheck = validateIndianMobile(identifier);
+      const phoneCheck = validateIndianMobile(normalized);
       if (!phoneCheck.isValid) {
         throw new BadRequestException({
           message: phoneCheck.error || 'Enter a valid 10-digit mobile number starting with 6–9.',
           errors: { phone: phoneCheck.error || 'Enter a valid 10-digit mobile number starting with 6–9.' }
         });
       }
+      normalized = phoneCheck.normalized || normalized;
     } else if (type === 'LOGIN' || type === 'PASSWORD_RESET') {
-      const identCheck = validateIdentifier(identifier);
+      const identCheck = validateIdentifier(normalized);
       if (!identCheck.isValid) {
         throw new BadRequestException(identCheck.error || 'Enter a valid business email or 10-digit mobile number.');
       }
+      normalized = identCheck.normalized || normalized.toLowerCase();
     }
 
-    const clean = identifier.trim().toLowerCase();
+    const clean = normalized.toLowerCase();
 
     // For LOGIN or PASSWORD_RESET, verify that vendor exists
     if (type === 'LOGIN' || type === 'PASSWORD_RESET') {
@@ -1414,7 +1419,6 @@ export class VendorController implements OnModuleInit {
       if (!vendor) {
         throw new NotFoundException(`No registered vendor account found for "${identifier}".`);
       }
-      // Check if account is suspended or locked
       if (vendor.status === 'SUSPENDED') {
         throw new HttpException(
           {
@@ -1432,16 +1436,35 @@ export class VendorController implements OnModuleInit {
     if (type === 'REGISTRATION_EMAIL' || type === 'REGISTRATION_MOBILE') {
       const existing = findVendorByIdentifier(clean);
       if (existing && existing.status !== 'DRAFT') {
-        throw new BadRequestException(`An account with this ${type === 'REGISTRATION_EMAIL' ? 'email' : 'mobile number'} already exists. Please sign in instead.`);
+        throw new BadRequestException(
+          `An account with this ${type === 'REGISTRATION_EMAIL' ? 'email' : 'mobile number'} already exists. Please sign in instead.`
+        );
       }
     }
 
     const result = vendorSecurityService.generateAndStoreOtp(clean, type);
+
+    let delivery: { delivered: boolean; provider: string; reason?: string } = {
+      delivered: false,
+      provider: 'DEV_CONSOLE'
+    };
+
+    if (type === 'REGISTRATION_EMAIL' || (type === 'PASSWORD_RESET' && clean.includes('@'))) {
+      delivery = await vendorNotificationService.sendOtpEmail(clean, result.otpForDelivery);
+    } else if (type === 'REGISTRATION_MOBILE' || (type === 'PASSWORD_RESET' && !clean.includes('@')) || type === 'LOGIN') {
+      if (clean.includes('@')) {
+        delivery = await vendorNotificationService.sendOtpEmail(clean, result.otpForDelivery);
+      } else {
+        delivery = await vendorNotificationService.sendOtpSms(clean, result.otpForDelivery);
+      }
+    }
+
     return {
       success: true,
       message: result.message,
       cooldownSeconds: result.cooldownSeconds,
-      devOtpHint: result.devOtpHint
+      deliveryProvider: delivery.provider,
+      ...(result.devOtpHint ? { devOtpHint: result.devOtpHint } : {})
     };
   }
 

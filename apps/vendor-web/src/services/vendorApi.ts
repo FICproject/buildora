@@ -17,8 +17,10 @@ import {
   VendorWarehouse,
 } from '@buildora/types';
 import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES } from '@buildora/constants';
+import { VENDOR_APP_CONFIG } from '../config';
+import { apiRequest, mapFriendlyApiError } from './apiClient';
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE_URL = VENDOR_APP_CONFIG.apiBaseUrl;
 
 // Initial local fallback data to guarantee 100% operational UI even if backend daemon is restarting
 let localVendor: VendorProfile = {
@@ -398,27 +400,34 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}, fallbackData?: T): Promise<T> {
-  try {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-        ...options.headers,
-      },
-    });
-    if (res.ok) {
-      const json = await res.json();
-      return json.data !== undefined ? json.data : json;
+  if (API_BASE_URL) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), VENDOR_APP_CONFIG.requestTimeoutMs);
+      const res = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-ID': VENDOR_APP_CONFIG.defaultTenantId,
+          ...getAuthHeaders(),
+          ...options.headers,
+        },
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const json = await res.json();
+        return json.data !== undefined ? json.data : json;
+      }
+    } catch {
+      // Fall back cleanly if offline/fallbackData provided
     }
-  } catch (err) {
-    // silently fallback to fast memory state
   }
 
   if (fallbackData !== undefined) {
     return fallbackData;
   }
-  throw new Error(`API call failed for ${path}`);
+  throw new Error('Unable to connect to the server. Please try again.');
 }
 
 function broadcastProductChange(prod: any) {
@@ -481,39 +490,37 @@ export const vendorApi = {
   // ==========================================
 
   async sendOtp(identifier: string, type: 'REGISTRATION_EMAIL' | 'REGISTRATION_MOBILE' | 'LOGIN' | 'PASSWORD_RESET') {
-    const res = await fetch(`${API_BASE_URL}/vendor/auth/send-otp`, {
+    const fallbackMsg =
+      type === 'REGISTRATION_EMAIL'
+        ? 'Unable to send verification code. Please try again.'
+        : type === 'REGISTRATION_MOBILE'
+        ? 'Unable to send OTP to this mobile number.'
+        : 'Unable to send verification code. Please try again.';
+
+    return apiRequest('/vendor/auth/send-otp', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, type }),
+      includeAuth: false,
+      body: { identifier, type },
+      fallbackErrorMessage: fallbackMsg
     });
-    const data = await res.json();
-    if (!res.ok) {
-      const err: any = new Error(data.message || 'Failed to send verification code.');
-      err.errors = data.errors;
-      throw err;
-    }
-    return data;
   },
 
   async verifyOtp(identifier: string, type: 'REGISTRATION_EMAIL' | 'REGISTRATION_MOBILE' | 'LOGIN' | 'PASSWORD_RESET', otp: string) {
-    const res = await fetch(`${API_BASE_URL}/vendor/auth/verify-otp`, {
+    return apiRequest('/vendor/auth/verify-otp', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, type, otp }),
+      includeAuth: false,
+      body: { identifier, type, otp },
+      fallbackErrorMessage: 'Invalid or expired verification code.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Invalid or expired verification code.');
-    return data;
   },
 
   async login(identifier: string, password?: string, rememberMe?: boolean) {
-    const res = await fetch(`${API_BASE_URL}/vendor/auth/login`, {
+    const data = await apiRequest<any>('/vendor/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, password, rememberMe }),
+      includeAuth: false,
+      body: { identifier, password, rememberMe },
+      fallbackErrorMessage: 'Login failed. Please check your credentials.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Login failed. Please check your credentials.');
     if (data.token) {
       localStorage.setItem('buildora_vendor_token', data.token);
     }
@@ -521,13 +528,12 @@ export const vendorApi = {
   },
 
   async loginWithOtp(identifier: string, otp: string) {
-    const res = await fetch(`${API_BASE_URL}/vendor/auth/login-otp`, {
+    const data = await apiRequest<any>('/vendor/auth/login-otp', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, otp }),
+      includeAuth: false,
+      body: { identifier, otp },
+      fallbackErrorMessage: 'OTP verification failed.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'OTP verification failed.');
     if (data.token) {
       localStorage.setItem('buildora_vendor_token', data.token);
     }
@@ -535,25 +541,21 @@ export const vendorApi = {
   },
 
   async forgotPasswordSendOtp(identifier: string) {
-    const res = await fetch(`${API_BASE_URL}/vendor/auth/forgot-password/send-otp`, {
+    return apiRequest('/vendor/auth/forgot-password/send-otp', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier }),
+      includeAuth: false,
+      body: { identifier },
+      fallbackErrorMessage: 'Unable to send password reset code. Please try again.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to send password reset code.');
-    return data;
   },
 
   async forgotPasswordReset(payload: { identifier: string; otp: string; newPassword: string; confirmPassword: string }) {
-    const res = await fetch(`${API_BASE_URL}/vendor/auth/forgot-password/reset`, {
+    return apiRequest('/vendor/auth/forgot-password/reset', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      includeAuth: false,
+      body: payload,
+      fallbackErrorMessage: 'Failed to reset password.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to reset password.');
-    return data;
   },
 
   // ==========================================
@@ -567,17 +569,12 @@ export const vendorApi = {
     password: string;
     confirmPassword: string;
   }) {
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/step1`, {
+    const data = await apiRequest<any>('/vendor/registration/step1', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      includeAuth: false,
+      body: payload,
+      fallbackErrorMessage: 'Unable to complete account registration. Please try again.'
     });
-    const data = await res.json();
-    if (!res.ok) {
-      const err: any = new Error(data.message || 'Registration failed.');
-      err.errors = data.errors;
-      throw err;
-    }
     if (data.token) {
       localStorage.setItem('buildora_vendor_token', data.token);
     }
@@ -585,35 +582,30 @@ export const vendorApi = {
   },
 
   async saveRegistrationDraft(wizardData: any, currentStep: number, vendorId?: string) {
-    const token = localStorage.getItem('buildora_vendor_token');
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/save-draft`, {
+    return apiRequest('/vendor/registration/save-draft', {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ vendorId, wizardData, currentStep }),
+      body: { vendorId, wizardData, currentStep },
+      fallbackErrorMessage: 'Failed to save registration draft.'
     });
-    const data = await res.json();
-    if (!res.ok) {
-      const err: any = new Error(data.message || 'Failed to save registration draft.');
-      err.errors = data.errors;
-      throw err;
-    }
-    return data;
   },
 
   async lookupPincode(pincode: string) {
     const clean = (pincode || '').replace(/\D/g, '').slice(0, 6);
     try {
-      const res = await fetch(`${API_BASE_URL}/vendor/pincode-lookup/${encodeURIComponent(clean)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Location not found for this pincode.');
-      return data;
+      return await apiRequest(`/vendor/pincode-lookup/${encodeURIComponent(clean)}`, {
+        method: 'GET',
+        includeAuth: false,
+        fallbackErrorMessage: 'Location not found for this pincode.'
+      });
     } catch (err: any) {
-      // Direct live India Post fallback in case backend server is offline or unreachable
+      // Direct live India Post fallback only if backend is unreachable
       try {
-        const liveRes = await fetch(`https://api.postalpincode.in/pincode/${clean}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const liveRes = await fetch(`https://api.postalpincode.in/pincode/${clean}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         if (liveRes.ok) {
           const liveData = await liveRes.json();
           if (Array.isArray(liveData) && liveData[0]?.Status === 'Success' && Array.isArray(liveData[0]?.PostOffice) && liveData[0].PostOffice.length > 0) {
@@ -632,26 +624,16 @@ export const vendorApi = {
           }
         }
       } catch {}
-      throw new Error(err.message || 'Failed to lookup pincode. You may enter location manually.');
+      throw mapFriendlyApiError(err, 'Failed to lookup pincode. You may enter location manually.');
     }
   },
 
   async submitRegistration(wizardData: any, vendorId?: string) {
-    const token = localStorage.getItem('buildora_vendor_token');
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/submit`, {
+    const data = await apiRequest<any>('/vendor/registration/submit', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ vendorId, wizardData }),
+      body: { vendorId, wizardData },
+      fallbackErrorMessage: 'Unable to submit vendor application. Please try again.'
     });
-    const data = await res.json();
-    if (!res.ok) {
-      const err: any = new Error(data.message || 'Failed to submit vendor application.');
-      err.errors = data.errors;
-      throw err;
-    }
     if (data.token) {
       localStorage.setItem('buildora_vendor_token', data.token);
     }
@@ -659,16 +641,10 @@ export const vendorApi = {
   },
 
   async getApplicationDetails(applicationId: string) {
-    const token = localStorage.getItem('buildora_vendor_token');
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/application/${applicationId}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
+    return apiRequest(`/vendor/registration/application/${encodeURIComponent(applicationId)}`, {
+      method: 'GET',
+      fallbackErrorMessage: 'Failed to fetch application details.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to fetch application details.');
-    return data;
   },
 
   async uploadDocument(docPayload: {
@@ -678,71 +654,48 @@ export const vendorApi = {
     type: string;
     title: string;
   }) {
-    const token = localStorage.getItem('buildora_vendor_token');
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/upload-doc`, {
+    const data = await apiRequest<any>('/vendor/registration/upload-doc', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify(docPayload),
+      body: docPayload,
+      fallbackErrorMessage: 'Document upload failed.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Document upload failed.');
     return data.document;
   },
 
   async uploadDocumentFile(file: File, type: string, title: string) {
-    const token = localStorage.getItem('buildora_vendor_token');
     const formData = new FormData();
     formData.append('document', file);
     formData.append('type', type);
     formData.append('title', title);
 
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/upload-doc-file`, {
+    const data = await apiRequest<any>('/vendor/registration/upload-doc-file', {
       method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
       body: formData,
+      fallbackErrorMessage: 'Document upload failed.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Document upload failed.');
     return data.document;
   },
 
   async uploadRegistrationLogo(file: File) {
-    const token = localStorage.getItem('buildora_vendor_token');
     const formData = new FormData();
     formData.append('logo', file);
 
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/upload-logo`, {
+    return apiRequest('/vendor/registration/upload-logo', {
       method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: formData
+      body: formData,
+      fallbackErrorMessage: 'Failed to upload business logo.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to upload business logo.');
-    return data;
   },
 
   async uploadProfileLogo(file: File) {
-    const token = localStorage.getItem('buildora_vendor_token');
     const formData = new FormData();
     formData.append('logo', file);
 
-    const res = await fetch(`${API_BASE_URL}/vendor/profile/upload-logo`, {
+    return apiRequest('/vendor/profile/upload-logo', {
       method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: formData
+      body: formData,
+      fallbackErrorMessage: 'Failed to update business logo.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to update business logo.');
-    return data;
   },
 
   // ==========================================
@@ -852,30 +805,18 @@ export const vendorApi = {
   },
 
   async getRegistrationStatus() {
-    const token = localStorage.getItem('buildora_vendor_token');
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/status`, {
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
+    return apiRequest('/vendor/registration/status', {
+      method: 'GET',
+      fallbackErrorMessage: 'Failed to fetch registration status.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to fetch registration status.');
-    return data;
   },
 
   async resubmitApplication(notes?: string) {
-    const token = localStorage.getItem('buildora_vendor_token');
-    const res = await fetch(`${API_BASE_URL}/vendor/registration/resubmit`, {
+    return apiRequest('/vendor/registration/resubmit', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ notes }),
+      body: { notes },
+      fallbackErrorMessage: 'Failed to resubmit application.'
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to resubmit application.');
-    return data;
   },
 
   async getProfile(): Promise<VendorProfile> {

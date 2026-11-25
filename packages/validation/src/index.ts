@@ -152,26 +152,26 @@ export function validateAccountBeneficiaryName(name: string): FieldValidationRes
  */
 export function validateEmail(email: string): FieldValidationResult {
   if (typeof email !== 'string' || !email.trim()) {
-    return { isValid: false, error: 'Business email address is required.' };
+    return { isValid: false, error: 'Please enter a valid business email address.' };
   }
   const clean = email.trim().toLowerCase();
   if (clean.length > VALIDATION_LIMITS.EMAIL_MAX) {
     return { isValid: false, error: `Email address cannot exceed ${VALIDATION_LIMITS.EMAIL_MAX} characters.` };
   }
   if (/\s/.test(clean) || clean.includes('..')) {
-    return { isValid: false, error: 'Enter a valid business email address.' };
+    return { isValid: false, error: 'Please enter a valid business email address.' };
   }
   if (!VALIDATION_PATTERNS.EMAIL.test(clean)) {
-    return { isValid: false, error: 'Enter a valid business email address.' };
+    return { isValid: false, error: 'Please enter a valid business email address.' };
   }
   const [localPart, domainPart] = clean.split('@');
   if (!localPart || !domainPart || localPart.startsWith('.') || localPart.endsWith('.')) {
-    return { isValid: false, error: 'Enter a valid business email address.' };
+    return { isValid: false, error: 'Please enter a valid business email address.' };
   }
   const domainLabels = domainPart.split('.');
   const tld = domainLabels[domainLabels.length - 1];
   if (!tld || tld.length < 2 || !/^[a-z]{2,}$/i.test(tld)) {
-    return { isValid: false, error: 'Enter a valid business email address.' };
+    return { isValid: false, error: 'Please enter a valid business email address.' };
   }
   return { isValid: true, normalized: clean };
 }

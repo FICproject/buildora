@@ -5,14 +5,61 @@ dotenv.config();
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
+function buildAllowedOriginChecker() {
+  const configured = (process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const staticAllowed = new Set<string>([
+    'https://buildora-jtns.vercel.app',
+    'https://buildora-vendor.vercel.app',
+    'https://buildora-customer.vercel.app',
+    ...configured
+  ]);
+
+  return (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow non-browser requests (curl, health checks, server-to-server)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (staticAllowed.has(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow localhost / 127.0.0.1 dev servers on any port
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow approved Vercel & Render HTTPS deployments for BUILDORA 60
+    if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin) || /^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS origin not allowed: ${origin}`), false);
+  };
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS for customer-web and development origins
+  // Enable strict origin-aware CORS with credentials and OPTIONS preflight support
   app.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    origin: buildAllowedOriginChecker(),
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Tenant-ID',
+      'x-tenant-id',
+      'x-admin-key',
+      'x-admin-id'
+    ],
     credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   });
 
   const port = process.env.PORT || 3000;
