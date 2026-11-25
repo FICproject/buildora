@@ -1,30 +1,35 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Package,
   Plus,
   Search,
-  Filter,
   Edit2,
   Trash2,
   Layers,
-  CheckCircle,
-  AlertCircle,
   Eye,
-  Boxes,
   Sliders,
   Sparkles,
   RefreshCw,
-  X
+  X,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useVendorProductStore } from '../../store/useVendorProductStore';
-import { Card, CardHeader, CardContent } from '../../components/common/Card';
-import { Button } from '../../components/common/Button';
-import { Badge } from '../../components/common/Badge';
-import { Modal } from '../../components/common/Modal';
+import {
+  PageHeader,
+  Card,
+  CardContent,
+  Button,
+  Badge,
+  Modal,
+  ConfirmDialog,
+  EmptyState,
+  TablePagination,
+} from '../../components/common';
 import { VendorProduct, AttributeSelectorType } from '@buildora/types';
 import { getAttributeTemplatesForCategory } from '@buildora/constants';
 import { vendorApi } from '../../services/vendorApi';
+import { toast } from '../../store/useToastStore';
 
 interface FormAttribute {
   id: string;
@@ -50,8 +55,20 @@ interface FormVariant {
   image?: string;
 }
 
+const DEFAULT_CATEGORIES = [
+  'Cement & Concrete',
+  'Steel & Structural Metals',
+  'Electrical Wires & MCBs',
+  'Plumbing & Sanitary',
+  'Hardware & Locks',
+  'Paints & Primers',
+  'Plywood & Boards',
+  'Tiles & Adhesives',
+];
+
 export const VendorProductsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const {
     products,
     fetchProducts,
@@ -61,13 +78,17 @@ export const VendorProductsPage: React.FC = () => {
     isLoading,
   } = useVendorProductStore();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [selectedStatus, setSelectedStatus] = useState(searchParams.get('status') || 'ALL');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
-  // Modal state
+  // Modal & Delete confirmation
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<VendorProduct | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VendorProduct | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form states
   const [name, setName] = useState('');
@@ -76,19 +97,24 @@ export const VendorProductsPage: React.FC = () => {
   const [subCategory, setSubCategory] = useState('OPC 53 Grade Cement');
   const [brand, setBrand] = useState('UltraTech Cement');
   const [unit, setUnit] = useState('50 Kg Bag');
+  const [gstRate, setGstRate] = useState('18');
   const [mrp, setMrp] = useState('420');
   const [price, setPrice] = useState('380');
   const [stock, setStock] = useState('250');
   const [lowStockThreshold, setLowStockThreshold] = useState('40');
+  const [productStatus, setProductStatus] = useState<'ACTIVE' | 'DRAFT' | 'OUT_OF_STOCK'>('ACTIVE');
+  const [inStock, setInStock] = useState(true);
+  const [imageUrlsText, setImageUrlsText] = useState('');
   const [description, setDescription] = useState('');
   const [productType, setProductType] = useState('');
   const [size, setSize] = useState('');
   const [isNewLaunch, setIsNewLaunch] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Attribute & Variant configuration states (Phase 7)
+  // Variants
   const [hasVariants, setHasVariants] = useState(false);
   const [formAttributes, setFormAttributes] = useState<FormAttribute[]>([
-    { id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'M6, M8' }
+    { id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'M6, M8' },
   ]);
   const [formVariants, setFormVariants] = useState<FormVariant[]>([]);
 
@@ -96,25 +122,45 @@ export const VendorProductsPage: React.FC = () => {
     fetchProducts();
   }, []);
 
+  useEffect(() => {
+    const qSearch = searchParams.get('search');
+    const qStatus = searchParams.get('status');
+    if (qSearch !== null) setSearch(qSearch);
+    if (qStatus !== null) setSelectedStatus(qStatus);
+  }, [searchParams]);
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set(DEFAULT_CATEGORIES);
+    products.forEach((p) => {
+      if (p.category) set.add(p.category);
+    });
+    return Array.from(set);
+  }, [products]);
+
   const openAddModal = () => {
     setEditingProduct(null);
+    setFormError(null);
     setName('');
     setSku(`SKU-BLR-${Math.floor(1000 + Math.random() * 9000)}`);
     setCategory('Cement & Concrete');
     setSubCategory('OPC 53 Grade Cement');
-    setBrand('UltraTech Cement');
+    setBrand('');
     setUnit('50 Kg Bag');
-    setMrp('420');
-    setPrice('380');
-    setStock('250');
-    setLowStockThreshold('40');
-    setDescription('High-strength grade cement manufactured directly at tier-1 plants for structural RCC work.');
+    setGstRate('18');
+    setMrp('');
+    setPrice('');
+    setStock('100');
+    setLowStockThreshold('30');
+    setProductStatus('ACTIVE');
+    setInStock(true);
+    setImageUrlsText('');
+    setDescription('');
     setProductType('');
-    setSize('50 Kg Bag');
+    setSize('');
     setIsNewLaunch(false);
     setHasVariants(false);
     setFormAttributes([
-      { id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard', required: true }
+      { id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard', required: true },
     ]);
     setFormVariants([]);
     setIsModalOpen(true);
@@ -122,22 +168,32 @@ export const VendorProductsPage: React.FC = () => {
 
   const openEditModal = (p: VendorProduct) => {
     setEditingProduct(p);
+    setFormError(null);
+    const resolvedStock = p.stockCount ?? p.stock ?? 0;
     setName(p.name);
     setSku(p.sku);
     setCategory(p.category);
-    setSubCategory(p.subCategory || '');
+    setSubCategory(p.subCategory || p.subcategory || '');
     setBrand(p.brand);
     setUnit(p.unit);
-    setMrp(p.mrp.toString());
-    setPrice(p.price.toString());
-    setStock(p.stock.toString());
-    setLowStockThreshold((p.lowStockThreshold || 30).toString());
+    setGstRate(String(p.gstRate ?? 18));
+    setMrp(String(p.mrp ?? 0));
+    setPrice(String(p.price ?? 0));
+    setStock(String(resolvedStock));
+    setLowStockThreshold(String(p.lowStockThreshold ?? 30));
+    setProductStatus(p.status || (resolvedStock > 0 ? 'ACTIVE' : 'OUT_OF_STOCK'));
+    setInStock(p.inStock !== false && resolvedStock > 0);
+    setImageUrlsText((p.images || []).join('\n'));
     setDescription(p.description || '');
-    setProductType((p as any).productType || p.specifications?.['Product Type'] || p.specifications?.['Type'] || '');
+    setProductType(
+      (p as any).productType || p.specifications?.['Product Type'] || p.specifications?.['Type'] || ''
+    );
     setSize((p as any).size || p.specifications?.['Size'] || p.packSize || p.unit || '');
     setIsNewLaunch(Boolean(p.isNewLaunch));
 
-    const hasV = Boolean((p.variants && p.variants.length > 1) || (p.attributes && p.attributes.length > 0));
+    const hasV = Boolean(
+      (p.variants && p.variants.length > 1) || (p.attributes && p.attributes.length > 0)
+    );
     setHasVariants(hasV);
 
     if (p.attributes && p.attributes.length > 0) {
@@ -149,11 +205,13 @@ export const VendorProductsPage: React.FC = () => {
           optionsStr: a.options
             .map((o: any) => (typeof o === 'string' ? o : o.value || ''))
             .join(', '),
-          required: a.required ?? true
+          required: a.required ?? true,
         }))
       );
     } else {
-      setFormAttributes([{ id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard', required: true }]);
+      setFormAttributes([
+        { id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard', required: true },
+      ]);
     }
 
     if (p.variants && p.variants.length > 0) {
@@ -171,7 +229,7 @@ export const VendorProductsPage: React.FC = () => {
           barcode: v.barcode,
           weight: v.weight,
           dimensions: v.dimensions,
-          image: v.image
+          image: v.image,
         }))
       );
     } else {
@@ -182,10 +240,15 @@ export const VendorProductsPage: React.FC = () => {
   };
 
   const handleAddOptionGroup = () => {
-    const newId = `attr-${Date.now()}`;
     setFormAttributes([
       ...formAttributes,
-      { id: newId, name: `Option ${formAttributes.length + 1}`, uiType: 'cards', optionsStr: 'Option A, Option B', required: true }
+      {
+        id: `attr-${Date.now()}`,
+        name: `Option ${formAttributes.length + 1}`,
+        uiType: 'cards',
+        optionsStr: 'Option A, Option B',
+        required: true,
+      },
     ]);
   };
 
@@ -200,28 +263,32 @@ export const VendorProductsPage: React.FC = () => {
   };
 
   const handleAddTemplateOption = (tpl: any) => {
-    const newAttr: FormAttribute = {
-      id: `attr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      name: tpl.name,
-      uiType: tpl.suggestedUiType || 'cards',
-      optionsStr: (tpl.suggestedOptions || []).join(', '),
-      required: true
-    };
-    setFormAttributes([...formAttributes, newAttr]);
+    setFormAttributes([
+      ...formAttributes,
+      {
+        id: `attr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        name: tpl.name,
+        uiType: tpl.suggestedUiType || 'cards',
+        optionsStr: (tpl.suggestedOptions || []).join(', '),
+        required: true,
+      },
+    ]);
   };
 
   const handleGenerateVariantMatrix = () => {
     const activeAttrs = formAttributes
       .map((a) => ({
         name: a.name.trim(),
-        options: a.optionsStr.split(',').map((s) => s.trim()).filter(Boolean)
+        options: a.optionsStr
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
       }))
       .filter((a) => a.name && a.options.length > 0);
 
     if (activeAttrs.length === 0) return;
 
     let combos: Array<Record<string, string>> = [{}];
-
     for (const attr of activeAttrs) {
       const nextCombos: Array<Record<string, string>> = [];
       for (const combo of combos) {
@@ -238,20 +305,13 @@ export const VendorProductsPage: React.FC = () => {
         if (!v.attributes) return v.name === comboName;
         return Object.entries(c).every(([k, val]) => v.attributes[k] === val);
       });
-
       if (existing) {
-        return {
-          ...existing,
-          name: comboName,
-          attributes: c
-        };
+        return { ...existing, name: comboName, attributes: c };
       }
-
       const cleanSkuPart = Object.values(c)
         .join('-')
         .replace(/[^a-zA-Z0-9]/g, '')
         .toUpperCase();
-
       return {
         id: `v-matrix-${Date.now()}-${idx + 1}`,
         name: comboName,
@@ -261,10 +321,9 @@ export const VendorProductsPage: React.FC = () => {
         mrp: Number(mrp) || 150,
         stock: Number(stock) || 50,
         inStock: true,
-        isAvailable: true
+        isAvailable: true,
       };
     });
-
     setFormVariants(generated);
   };
 
@@ -281,8 +340,8 @@ export const VendorProductsPage: React.FC = () => {
         mrp: Number(mrp) || 150,
         stock: 50,
         inStock: true,
-        isAvailable: true
-      }
+        isAvailable: true,
+      },
     ]);
   };
 
@@ -298,174 +357,237 @@ export const VendorProductsPage: React.FC = () => {
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
 
-    const finalAttributes = hasVariants
-      ? formAttributes.map((a) => ({
-          id: a.id,
-          name: a.name.trim(),
-          uiType: a.uiType,
-          options: a.optionsStr
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean),
-          required: a.required ?? true
-        })).filter((a) => a.name && a.options.length > 0)
-      : undefined;
+    const mrpNum = Number(mrp);
+    const priceNum = Number(price);
+    const stockNum = Number(stock);
 
-    const finalVariants =
-      hasVariants && formVariants.length > 0
-        ? formVariants.map((v) => ({
-            id: v.id,
-            name: v.name,
-            sku: v.sku,
-            attributes: v.attributes || { [formAttributes[0]?.name || 'Option']: v.name },
-            price: Number(v.price),
-            mrp: Number(v.mrp),
-            stock: Number(v.stock),
-            inStock: Boolean(v.inStock && Number(v.stock) > 0),
-            isAvailable: v.isAvailable !== false,
-            discount: v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0,
-            barcode: v.barcode,
-            weight: v.weight,
-            dimensions: v.dimensions,
-            image: v.image
-          }))
+    if (!name.trim() || !sku.trim() || !brand.trim()) {
+      setFormError('Please fill in Product Title, SKU, and Brand.');
+      return;
+    }
+    if (priceNum <= 0 || mrpNum <= 0) {
+      setFormError('MRP and Selling Price must be greater than 0.');
+      return;
+    }
+    if (priceNum > mrpNum) {
+      setFormError('Selling Price cannot exceed MRP.');
+      return;
+    }
+
+    setFormError(null);
+    setIsSaving(true);
+
+    try {
+      const parsedImages = imageUrlsText
+        .split(/[\n,]/)
+        .map((u) => u.trim())
+        .filter(Boolean);
+
+      const finalAttributes = hasVariants
+        ? formAttributes
+            .map((a) => ({
+              id: a.id,
+              name: a.name.trim(),
+              uiType: a.uiType,
+              options: a.optionsStr
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+              required: a.required ?? true,
+            }))
+            .filter((a) => a.name && a.options.length > 0)
         : undefined;
 
-    const productData = {
-      name,
-      sku,
-      category,
-      subCategory,
-      brand,
-      unit,
-      mrp: Number(mrp),
-      price: Number(price),
-      stock: Number(stock),
-      lowStockThreshold: Number(lowStockThreshold),
-      description,
-      status: Number(stock) > 0 ? ('ACTIVE' as const) : ('OUT_OF_STOCK' as const),
-      isNewLaunch,
-      productType,
-      size,
-      specifications: {
-        ...(editingProduct?.specifications || {}),
-        'Product Type': productType || 'Material',
-        'Type': productType || 'Material',
-        'Size': size || unit,
-        'Packaging': unit,
-        'Origin': 'Bengaluru Depot'
-      },
-      bulkPricing: editingProduct?.bulkPricing || [
-        { minQuantity: 10, discountPercentage: 5, unitPrice: Math.round(Number(price) * 0.95) },
-        { minQuantity: 50, discountPercentage: 8, unitPrice: Math.round(Number(price) * 0.92) },
-      ],
-      warehouseLocation: 'WH-BLR-04 Peenya Hub',
-      attributes: finalAttributes,
-      variants: finalVariants
-    };
+      const finalVariants =
+        hasVariants && formVariants.length > 0
+          ? formVariants.map((v) => ({
+              id: v.id,
+              name: v.name,
+              sku: v.sku,
+              attributes: v.attributes || { [formAttributes[0]?.name || 'Option']: v.name },
+              price: Number(v.price),
+              mrp: Number(v.mrp),
+              stock: Number(v.stock),
+              inStock: Boolean(v.inStock && Number(v.stock) > 0),
+              isAvailable: v.isAvailable !== false,
+              discount: v.mrp > v.price ? Math.round(((v.mrp - v.price) / v.mrp) * 100) : 0,
+              barcode: v.barcode,
+              weight: v.weight,
+              dimensions: v.dimensions,
+              image: v.image,
+            }))
+          : undefined;
 
-    if (editingProduct) {
-      await updateProduct(editingProduct.id, productData as any);
-      if (finalVariants && finalVariants.length > 0) {
-        await vendorApi.updateProductVariants(editingProduct.id, finalVariants, finalAttributes);
+      const resolvedStatus =
+        stockNum === 0 ? 'OUT_OF_STOCK' : productStatus;
+
+      const productData = {
+        name: name.trim(),
+        sku: sku.trim(),
+        category,
+        subCategory: subCategory.trim(),
+        subcategory: subCategory.trim(),
+        brand: brand.trim(),
+        unit: unit.trim(),
+        gstRate: Number(gstRate),
+        mrp: mrpNum,
+        price: priceNum,
+        discount: mrpNum > priceNum ? Math.round(((mrpNum - priceNum) / mrpNum) * 100) : 0,
+        stock: stockNum,
+        stockCount: stockNum,
+        inStock: inStock && stockNum > 0,
+        lowStockThreshold: Number(lowStockThreshold) || 30,
+        images: parsedImages.length > 0 ? parsedImages : editingProduct?.images || [],
+        description: description.trim(),
+        status: resolvedStatus,
+        isActive: resolvedStatus === 'ACTIVE',
+        isNewLaunch,
+        productType,
+        size,
+        specifications: {
+          ...(editingProduct?.specifications || {}),
+          'Product Type': productType || 'Material',
+          Size: size || unit,
+          Packaging: unit,
+        },
+        bulkPricing: editingProduct?.bulkPricing || [
+          { minQuantity: 10, discountPercentage: 5, unitPrice: Math.round(priceNum * 0.95) },
+          { minQuantity: 50, discountPercentage: 8, unitPrice: Math.round(priceNum * 0.92) },
+        ],
+        warehouseLocation: editingProduct?.warehouseLocation || 'WH-BLR-04 Peenya Hub',
+        attributes: finalAttributes,
+        variants: finalVariants,
+      };
+
+      if (editingProduct) {
+        const ok = await updateProduct(editingProduct.id, productData as any);
+        if (ok && finalVariants && finalVariants.length > 0) {
+          await vendorApi.updateProductVariants(editingProduct.id, finalVariants, finalAttributes);
+        }
+        if (ok) toast.success('Product updated successfully.');
+      } else {
+        const ok = await addProduct(productData as any);
+        if (ok) toast.success('New product added to catalog.');
       }
-    } else {
-      await addProduct(productData as any);
-    }
-    setIsModalOpen(false);
-  };
-
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this product from your vendor catalog?')) {
-      await deleteProduct(id);
+      setIsModalOpen(false);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Filtered list
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    const ok = await deleteProduct(deleteTarget.id);
+    if (ok) {
+      toast.success(`"${deleteTarget.name}" removed from catalog.`);
+    }
+    setDeleteTarget(null);
+  };
+
   const filteredProducts = products.filter((p) => {
+    const q = search.toLowerCase();
     const matchesSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.sku.toLowerCase().includes(search.toLowerCase()) ||
-      p.brand.toLowerCase().includes(search.toLowerCase());
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      p.sku.toLowerCase().includes(q) ||
+      p.brand.toLowerCase().includes(q);
     const matchesCat = selectedCategory === 'ALL' || p.category === selectedCategory;
-    const matchesStatus = selectedStatus === 'ALL' || p.status === selectedStatus;
+    const resolvedStatus =
+      p.status || ((p.stockCount ?? p.stock ?? 0) > 0 ? 'ACTIVE' : 'OUT_OF_STOCK');
+    const matchesStatus =
+      selectedStatus === 'ALL' ||
+      resolvedStatus === selectedStatus ||
+      p.approvalStatus === selectedStatus;
     return matchesSearch && matchesCat && matchesStatus;
   });
 
+  const paginatedProducts = filteredProducts.slice((page - 1) * pageSize, page * pageSize);
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Products & Material Catalog
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Manage your SKU catalog, live pricing, specifications, and inventory availability.
-          </p>
-        </div>
+    <div className="space-y-6 pb-8">
+      <PageHeader
+        title="Products"
+        description="Manage your catalog SKUs, GST rates, pricing, variants, and availability."
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/new-launches')}
+              leftIcon={<Sparkles className="w-4 h-4 text-[#F58220]" />}
+            >
+              New Launches
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate('/pricing-offers')}
+              leftIcon={<Layers className="w-4 h-4" />}
+            >
+              Bulk Pricing
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={openAddModal}
+              leftIcon={<Plus className="w-4 h-4" />}
+            >
+              Add Product
+            </Button>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/bulk-pricing')}
-            leftIcon={<Layers className="w-4 h-4" />}
-          >
-            Manage Bulk Tiers
-          </Button>
-
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={openAddModal}
-            leftIcon={<Plus className="w-4 h-4" />}
-          >
-            Add New Product
-          </Button>
-        </div>
-      </div>
-
-      {/* Filter & Search Bar */}
+      {/* Search & Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col md:flex-row items-center gap-3">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-[#718096] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products by title, SKU, brand..."
-                className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by product name, SKU, or brand..."
+                className="portal-input pl-9"
               />
             </div>
 
-            <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <select
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  setPage(1);
+                }}
+                className="portal-input sm:w-48"
               >
                 <option value="ALL">All Categories</option>
-                <option value="Cement & Concrete">Cement & Concrete</option>
-                <option value="Steel & Structural Metals">Steel & Structural Metals</option>
-                <option value="Electrical Wires & MCBs">Electrical Wires & MCBs</option>
-                <option value="Plumbing & Sanitary">Plumbing & Sanitary</option>
-                <option value="Hardware & Locks">Hardware & Locks</option>
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
 
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setPage(1);
+                }}
+                className="portal-input sm:w-40"
               >
                 <option value="ALL">All Status</option>
                 <option value="ACTIVE">Active</option>
                 <option value="OUT_OF_STOCK">Out of Stock</option>
                 <option value="DRAFT">Draft</option>
+                <option value="PENDING_APPROVAL">Pending Approval</option>
               </select>
             </div>
           </div>
@@ -475,139 +597,134 @@ export const VendorProductsPage: React.FC = () => {
       {/* Products Table */}
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
               <tr>
-                <th className="py-3 px-4">Product Details</th>
+                <th className="py-3 px-4">Product</th>
                 <th className="py-3 px-4">SKU & Brand</th>
                 <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4">Unit Pricing</th>
-                <th className="py-3 px-4">Bulk Tiers</th>
+                <th className="py-3 px-4">Price / MRP</th>
+                <th className="py-3 px-4">GST</th>
                 <th className="py-3 px-4">Stock</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredProducts.length === 0 ? (
+            <tbody className="divide-y divide-[#E5E9F0]">
+              {paginatedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
-                    No products found matching your search.
+                  <td colSpan={8}>
+                    <EmptyState
+                      icon={<Package className="w-5 h-5" />}
+                      title="No products found"
+                      description="Try clearing your filters or add a new product to your catalog."
+                      action={
+                        <Button size="sm" variant="primary" onClick={openAddModal}>
+                          Add Product
+                        </Button>
+                      }
+                    />
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((p) => {
-                  const hasBulk = p.bulkPricing && p.bulkPricing.length > 0;
-                  const stockNum = p.stockCount !== undefined ? p.stockCount : p.stock || 0;
-                  const isLow = stockNum <= (p.lowStockThreshold || 30);
+                paginatedProducts.map((p) => {
+                  const stockNum = p.stockCount ?? p.stock ?? 0;
+                  const isLow = stockNum > 0 && stockNum <= (p.lowStockThreshold || 30);
+                  const statusLabel = p.status || (stockNum > 0 ? 'ACTIVE' : 'OUT_OF_STOCK');
 
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={p.id} className="hover:bg-[#F7F8FA] transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-400">
-                            <Package className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="font-semibold text-slate-900 line-clamp-1">{p.name}</p>
-                              {p.isNewLaunch && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                                  New Launch
-                                </span>
-                              )}
+                          {p.images?.[0] ? (
+                            <img
+                              src={p.images[0]}
+                              alt={p.name}
+                              className="w-10 h-10 rounded-lg object-cover border border-[#E5E9F0] shrink-0 bg-[#F7F8FA]"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-[#EEF3FA] flex items-center justify-center text-[#23438F] shrink-0">
+                              <Package className="w-4 h-4" />
                             </div>
-                            <p className="text-[11px] text-slate-400">Unit: {p.unit}</p>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[#263247] line-clamp-1">{p.name}</p>
+                            <p className="text-[11px] text-[#718096]">
+                              {p.unit}
+                              {p.variants && p.variants.length > 0
+                                ? ` • ${p.variants.length} variants`
+                                : ''}
+                            </p>
                           </div>
                         </div>
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-mono text-slate-700">{p.sku}</div>
-                        <div className="text-[11px] text-slate-500 font-medium">{p.brand}</div>
+                        <div className="font-mono text-[#263247]">{p.sku}</div>
+                        <div className="text-[11px] text-[#718096]">{p.brand}</div>
                       </td>
 
-                      <td className="py-3.5 px-4">
-                        <span className="font-medium text-slate-800">{p.category}</span>
-                        {p.subCategory && (
-                          <div className="text-[10px] text-slate-400 truncate max-w-[140px]">
-                            {p.subCategory}
-                          </div>
-                        )}
-                      </td>
+                      <td className="py-3.5 px-4 text-[#263247]">{p.category}</td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900">₹{p.price.toLocaleString('en-IN')}</div>
+                        <div className="font-semibold text-[#263247]">
+                          ₹{(p.price || 0).toLocaleString('en-IN')}
+                        </div>
                         {p.mrp > p.price && (
-                          <div className="text-[10px] text-slate-400 line-through">
+                          <div className="text-[11px] text-[#718096] line-through">
                             ₹{p.mrp.toLocaleString('en-IN')}
                           </div>
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4">
-                        {hasBulk ? (
-                          <button
-                            onClick={() => navigate('/bulk-pricing')}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
-                          >
-                            <Layers className="w-3 h-3 text-blue-600" />
-                            {p.bulkPricing!.length} Tiers
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => navigate('/bulk-pricing')}
-                            className="text-[11px] text-slate-400 hover:text-blue-600 underline"
-                          >
-                            + Add Tiers
-                          </button>
-                        )}
-                      </td>
+                      <td className="py-3.5 px-4 text-[#718096]">{p.gstRate ?? 18}%</td>
 
                       <td className="py-3.5 px-4">
-                        <div
+                        <span
                           className={`font-semibold ${
                             stockNum === 0
-                              ? 'text-rose-600'
+                              ? 'text-[#DC4545]'
                               : isLow
-                              ? 'text-amber-600'
-                              : 'text-slate-800'
+                              ? 'text-[#E6A23C]'
+                              : 'text-[#263247]'
                           }`}
                         >
-                          {stockNum} units
-                        </div>
-                        {isLow && stockNum > 0 && (
-                          <span className="text-[10px] text-amber-600 font-medium">Low Stock</span>
-                        )}
+                          {stockNum}
+                        </span>
                       </td>
 
                       <td className="py-3.5 px-4">
                         <Badge
                           variant={
-                            p.status === 'ACTIVE'
+                            statusLabel === 'ACTIVE'
                               ? 'success'
-                              : p.status === 'OUT_OF_STOCK'
+                              : statusLabel === 'OUT_OF_STOCK'
                               ? 'danger'
                               : 'neutral'
                           }
+                          size="sm"
                         >
-                          {p.status}
+                          {statusLabel.replace(/_/g, ' ')}
                         </Badge>
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="inline-flex items-center gap-1">
                           <button
+                            type="button"
                             onClick={() => openEditModal(p)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 transition-colors"
+                            className="p-1.5 rounded-lg text-[#718096] hover:text-[#23438F] hover:bg-[#EEF3FA] transition-colors cursor-pointer"
                             title="Edit Product"
+                            aria-label={`Edit ${p.name}`}
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={(e) => handleDelete(p.id, e)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-slate-100 transition-colors"
+                            type="button"
+                            onClick={() => setDeleteTarget(p)}
+                            className="p-1.5 rounded-lg text-[#718096] hover:text-[#DC4545] hover:bg-[#DC4545]/10 transition-colors cursor-pointer"
                             title="Delete Product"
+                            aria-label={`Delete ${p.name}`}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -620,568 +737,545 @@ export const VendorProductsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={filteredProducts.length}
+          onPageChange={setPage}
+        />
       </Card>
 
       {/* Add / Edit Product Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingProduct ? 'Edit Product & Pricing' : 'Add New Material SKU'}
-        subtitle="Ensure specifications and bulk tier prices conform to HomeRun customer website parity."
+        title={editingProduct ? 'Edit Product' : 'Add New Product'}
+        subtitle="Organize product identity, GST pricing, inventory, and optional variants."
         maxWidth="2xl"
       >
-        <form onSubmit={handleSaveProduct} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Product Title *
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder="e.g. UltraTech Super Cement OPC 53 Grade (50 Kg Bag)"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+        <form onSubmit={handleSaveProduct} className="space-y-6">
+          {formError && (
+            <div className="p-3 rounded-lg bg-[#DC4545]/10 border border-[#DC4545]/20 text-[#DC4545] text-xs font-medium">
+              {formError}
             </div>
+          )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                SKU Identifier *
-              </label>
-              <input
-                type="text"
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+          {/* Section 1: Basic Information */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+              Basic Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="portal-label">Product Name *</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  placeholder="e.g. UltraTech Super Cement OPC 53 Grade (50 Kg Bag)"
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">SKU *</label>
+                <input
+                  type="text"
+                  value={sku}
+                  onChange={(e) => setSku(e.target.value)}
+                  required
+                  className="portal-input font-mono"
+                />
+              </div>
+              <div>
+                <label className="portal-label">Brand *</label>
+                <input
+                  type="text"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  required
+                  placeholder="e.g. UltraTech, Havells, Astral"
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">Category *</label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="portal-input"
+                >
+                  {categoryOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="portal-label">Subcategory</label>
+                <input
+                  type="text"
+                  value={subCategory}
+                  onChange={(e) => setSubCategory(e.target.value)}
+                  placeholder="e.g. OPC 53 Grade"
+                  className="portal-input"
+                />
+              </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Manufacturer / Brand *
-              </label>
-              <input
-                type="text"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                required
-                placeholder="e.g. UltraTech, Havells, Astral"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+          {/* Section 2: Pricing, GST & Availability */}
+          <div className="space-y-3 pt-4 border-t border-[#E5E9F0]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+              Pricing, GST & Availability
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="portal-label">MRP (₹) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={mrp}
+                  onChange={(e) => setMrp(e.target.value)}
+                  required
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">Selling Price (₹) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  required
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">GST Rate (%) *</label>
+                <select
+                  value={gstRate}
+                  onChange={(e) => setGstRate(e.target.value)}
+                  className="portal-input"
+                >
+                  <option value="0">0% (Exempt)</option>
+                  <option value="5">5% GST</option>
+                  <option value="12">12% GST</option>
+                  <option value="18">18% GST</option>
+                  <option value="28">28% GST</option>
+                </select>
+              </div>
+              <div>
+                <label className="portal-label">Unit / Pack Size *</label>
+                <input
+                  type="text"
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value)}
+                  required
+                  placeholder="e.g. 50 Kg Bag, 90m Coil"
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">Product Status</label>
+                <select
+                  value={productStatus}
+                  onChange={(e) => setProductStatus(e.target.value as any)}
+                  className="portal-input"
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="DRAFT">Draft</option>
+                  <option value="OUT_OF_STOCK">Out of Stock</option>
+                </select>
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-[#263247] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={inStock}
+                    onChange={(e) => setInStock(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#23438F]"
+                  />
+                  <span>Available for ordering (In Stock)</span>
+                </label>
+              </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Master Category *
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="Cement & Concrete">Cement & Concrete</option>
-                <option value="Steel & Structural Metals">Steel & Structural Metals</option>
-                <option value="Electrical Wires & MCBs">Electrical Wires & MCBs</option>
-                <option value="Plumbing & Sanitary">Plumbing & Sanitary</option>
-                <option value="Hardware & Locks">Hardware & Locks</option>
-                <option value="Paints & Primers">Paints & Primers</option>
-              </select>
+          {/* Section 3: Stock & Specifications */}
+          <div className="space-y-3 pt-4 border-t border-[#E5E9F0]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+              Stock & Specifications
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="portal-label">Available Stock (Units) *</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={stock}
+                  onChange={(e) => setStock(e.target.value)}
+                  required
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">Low Stock Alert Threshold</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={lowStockThreshold}
+                  onChange={(e) => setLowStockThreshold(e.target.value)}
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">Product Type</label>
+                <input
+                  type="text"
+                  value={productType}
+                  onChange={(e) => setProductType(e.target.value)}
+                  placeholder="e.g. Rotary Hammer, PPC Cement"
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">Specification Size</label>
+                <input
+                  type="text"
+                  value={size}
+                  onChange={(e) => setSize(e.target.value)}
+                  placeholder="e.g. 18 Inch, 25 Litres"
+                  className="portal-input"
+                />
+              </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Pack Size / Unit *
-              </label>
-              <input
-                type="text"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                required
-                placeholder="e.g. 50 Kg Bag, 12m Rod, 90m Coil"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Maximum Retail Price (MRP ₹) *
-              </label>
-              <input
-                type="number"
-                value={mrp}
-                onChange={(e) => setMrp(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Selling Price (Incl. GST ₹) *
-              </label>
-              <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Available Physical Stock (Units) *
-              </label>
-              <input
-                type="number"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Low Stock Threshold (Alert)
-              </label>
-              <input
-                type="number"
-                value={lowStockThreshold}
-                onChange={(e) => setLowStockThreshold(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Product Type (Catalog Filter)
-              </label>
-              <input
-                type="text"
-                value={productType}
-                onChange={(e) => setProductType(e.target.value)}
-                placeholder="e.g. Rotary Hammer, Concealed Cistern, Ball Bearing Slide"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Specification Size (Catalog Filter)
-              </label>
-              <input
-                type="text"
-                value={size}
-                onChange={(e) => setSize(e.target.value)}
-                placeholder="e.g. 18 Inch (450mm), 25 Litres, 25mm"
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="md:col-span-2 p-3 bg-amber-50/70 rounded-xl border border-amber-200">
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          {/* Section 4: Images & Description */}
+          <div className="space-y-3 pt-4 border-t border-[#E5E9F0]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+              Images & Description
+            </h3>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="portal-label">Product Image URLs (one per line)</label>
+                <textarea
+                  rows={2}
+                  value={imageUrlsText}
+                  onChange={(e) => setImageUrlsText(e.target.value)}
+                  placeholder="https://images.unsplash.com/..."
+                  className="portal-input"
+                />
+                {imageUrlsText.trim() && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {imageUrlsText
+                      .split(/[\n,]/)
+                      .map((u) => u.trim())
+                      .filter(Boolean)
+                      .slice(0, 4)
+                      .map((url, idx) => (
+                        <div
+                          key={idx}
+                          className="w-14 h-14 rounded-lg border border-[#E5E9F0] overflow-hidden bg-[#F7F8FA] flex items-center justify-center"
+                        >
+                          <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="portal-label">Description</label>
+                <textarea
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Key material specifications and usage details..."
+                  className="portal-input"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-xs font-medium text-[#263247] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isNewLaunch}
                   onChange={(e) => setIsNewLaunch(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                  className="w-4 h-4 rounded text-[#23438F]"
                 />
-                <div>
-                  <span className="text-xs font-bold text-slate-900">
-                    Feature in New Launches
-                  </span>
-                  <p className="text-[11px] text-slate-500">
-                    When enabled, this material appears immediately in the customer New Launches collection with Brand, Type, Price, and Size filtering.
-                  </p>
-                </div>
+                <span>Feature this product in New Launches</span>
               </label>
             </div>
+          </div>
 
-            <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Product Description & Highlights
-              </label>
-              <textarea
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Dedicated Product Variants & Options Configuration Engine (Phases 3 & 4) */}
-            <div className="md:col-span-2 p-4 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                    <Sliders className="w-4 h-4 text-blue-600" />
-                    <span>Product Variants & Configurable Options</span>
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    Configure option groups (Thickness, Size, Colour, Finish, Model) with custom display selectors and price matrix.
-                  </div>
+          {/* Section 5: Variants & Configurable Options */}
+          <div className="p-4 rounded-xl border border-[#E5E9F0] bg-[#F7F8FA] space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <div className="text-xs font-semibold text-[#263247] flex items-center gap-1.5">
+                  <Sliders className="w-4 h-4 text-[#23438F]" />
+                  <span>Product Variants</span>
                 </div>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-2xs select-none">
-                  <input
-                    type="checkbox"
-                    checked={hasVariants}
-                    onChange={(e) => setHasVariants(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                  />
-                  <span>Enable Product Options / Variants</span>
-                </label>
+                <p className="text-[11px] text-[#718096]">
+                  Optional size, thickness, or colour options with separate SKUs and pricing.
+                </p>
               </div>
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-[#263247] bg-white px-3 py-1.5 rounded-lg border border-[#E5E9F0]">
+                <input
+                  type="checkbox"
+                  checked={hasVariants}
+                  onChange={(e) => setHasVariants(e.target.checked)}
+                  className="w-4 h-4 text-[#23438F] rounded"
+                />
+                <span>Enable Variants</span>
+              </label>
+            </div>
 
-              {hasVariants && (
-                <div className="space-y-4 pt-3 border-t border-slate-200">
-                  {/* Category Template Suggestions */}
-                  {(() => {
-                    const templates = getAttributeTemplatesForCategory(category);
-                    if (templates.length === 0) return null;
-                    return (
-                      <div className="p-3 bg-blue-50/80 rounded-xl border border-blue-200/80 space-y-1.5">
-                        <div className="text-[11px] font-bold text-blue-900 flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Suggested Option Templates for {category}:</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {templates.map((tpl) => {
-                            const isAdded = formAttributes.some(
-                              (a) => a.name.toLowerCase() === tpl.name.toLowerCase()
-                            );
-                            return (
-                              <button
-                                key={tpl.id}
-                                type="button"
-                                disabled={isAdded}
-                                onClick={() => handleAddTemplateOption(tpl)}
-                                className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all ${
-                                  isAdded
-                                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                                    : 'bg-white text-blue-700 border-blue-300 hover:bg-blue-100 cursor-pointer shadow-2xs'
-                                }`}
-                              >
-                                + {tpl.name} ({tpl.suggestedUiType})
-                              </button>
-                            );
-                          })}
-                        </div>
+            {hasVariants && (
+              <div className="space-y-4 pt-3 border-t border-[#E5E9F0]">
+                {(() => {
+                  const templates = getAttributeTemplatesForCategory(category);
+                  if (templates.length === 0) return null;
+                  return (
+                    <div className="p-3 bg-[#EEF3FA] rounded-lg border border-[#23438F]/15 space-y-1.5">
+                      <div className="text-[11px] font-semibold text-[#23438F]">
+                        Suggested Option Templates for {category}:
                       </div>
-                    );
-                  })()}
-
-                  {/* Option Groups Builder */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                        Configured Option Groups ({formAttributes.length})
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleAddOptionGroup}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add Option Group
-                      </button>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {formAttributes.map((attr, idx) => (
-                        <div
-                          key={attr.id}
-                          className="p-3 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-bold text-slate-800">
-                              Option Group {idx + 1}
-                            </span>
-                            {formAttributes.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveOptionGroup(attr.id)}
-                                className="text-rose-500 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-                                title="Remove Option Group"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5">
-                            <div className="md:col-span-4">
-                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                                Option Group Name *
-                              </label>
-                              <input
-                                type="text"
-                                value={attr.name}
-                                onChange={(e) => handleOptionGroupChange(idx, 'name', e.target.value)}
-                                placeholder="e.g. Thickness, Size, Colour"
-                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
-                              />
-                            </div>
-
-                            <div className="md:col-span-3">
-                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                                Customer Display Style *
-                              </label>
-                              <select
-                                value={attr.uiType}
-                                onChange={(e) =>
-                                  handleOptionGroupChange(idx, 'uiType', e.target.value as AttributeSelectorType)
-                                }
-                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
-                              >
-                                <option value="cards">Cards with Price (e.g. Size, Pack)</option>
-                                <option value="pills">Pill Buttons (e.g. Thickness, Finish)</option>
-                                <option value="dropdown">Dropdown Selector (e.g. Modules)</option>
-                                <option value="color_swatches">Colour Swatches (e.g. Paint)</option>
-                                <option value="radio">Radio Buttons</option>
-                              </select>
-                            </div>
-
-                            <div className="md:col-span-5">
-                              <label className="block text-[10px] font-bold text-slate-600 mb-0.5">
-                                Option Values (Comma Separated) *
-                              </label>
-                              <input
-                                type="text"
-                                value={attr.optionsStr}
-                                onChange={(e) => handleOptionGroupChange(idx, 'optionsStr', e.target.value)}
-                                placeholder="e.g. 6mm, 8mm, 12mm, 16mm, 18mm"
-                                className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="pt-1 flex items-center justify-between flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={handleGenerateVariantMatrix}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3.5 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Generate / Sync Variant Combinations Matrix
-                      </button>
-                      <span className="text-[11px] text-slate-500">
-                        Generates combination rows while preserving customized prices and stock.
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Variant Matrix Table */}
-                  <div className="space-y-2 pt-2 border-t border-slate-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
-                          Variant Combination Matrix ({formVariants.length} Combinations)
-                        </span>
-                        <p className="text-[10px] text-slate-500">
-                          Configure price, MRP, stock, and toggle "Available" to disable unsupported combinations (e.g. 25mm in 7' X 4').
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleAddVariantRow}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add Custom Variant
-                      </button>
-                    </div>
-
-                    {formVariants.length === 0 ? (
-                      <div className="text-center py-6 text-xs text-slate-400 bg-white rounded-xl border border-dashed border-slate-300 space-y-2">
-                        <Package className="w-8 h-8 mx-auto text-slate-300" />
-                        <div>
-                          Click <strong>"Generate / Sync Variant Combinations Matrix"</strong> above to auto-create variant rows from your configured option groups.
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto max-h-80 overflow-y-auto rounded-xl border border-slate-200">
-                        <table className="w-full text-left text-xs bg-white">
-                          <thead className="bg-slate-100 text-[10px] uppercase font-bold text-slate-600 border-b border-slate-200 sticky top-0 z-10">
-                            <tr>
-                              <th className="p-2.5">Combination</th>
-                              <th className="p-2.5">SKU</th>
-                              <th className="p-2.5">Selling Price (₹)</th>
-                              <th className="p-2.5">MRP (₹)</th>
-                              <th className="p-2.5">Stock</th>
-                              <th className="p-2.5 text-center" title="If unchecked, combination is marked Unavailable on Customer PDP">
-                                Available?
-                              </th>
-                              <th className="p-2.5 text-center">In Stock?</th>
-                              <th className="p-2.5 text-center">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {formVariants.map((v, vIdx) => {
-                              const isAvail = v.isAvailable !== false;
-                              return (
-                                <tr
-                                  key={v.id || vIdx}
-                                  className={`hover:bg-slate-50/80 transition-colors ${
-                                    !isAvail ? 'bg-slate-50/50 opacity-60' : ''
-                                  }`}
-                                >
-                                  <td className="p-2 font-semibold text-slate-800">
-                                    <input
-                                      type="text"
-                                      value={v.name}
-                                      onChange={(e) => handleVariantChange(vIdx, 'name', e.target.value)}
-                                      className="w-36 px-2 py-1 border border-slate-200 rounded text-xs"
-                                    />
-                                  </td>
-                                  <td className="p-2">
-                                    <input
-                                      type="text"
-                                      value={v.sku}
-                                      onChange={(e) => handleVariantChange(vIdx, 'sku', e.target.value)}
-                                      className="w-32 px-2 py-1 border border-slate-200 rounded text-xs font-mono"
-                                    />
-                                  </td>
-                                  <td className="p-2">
-                                    <input
-                                      type="number"
-                                      value={v.price}
-                                      onChange={(e) => handleVariantChange(vIdx, 'price', Number(e.target.value))}
-                                      className="w-20 px-2 py-1 border border-slate-200 rounded text-xs font-bold"
-                                    />
-                                  </td>
-                                  <td className="p-2">
-                                    <input
-                                      type="number"
-                                      value={v.mrp}
-                                      onChange={(e) => handleVariantChange(vIdx, 'mrp', Number(e.target.value))}
-                                      className="w-20 px-2 py-1 border border-slate-200 rounded text-xs text-slate-500"
-                                    />
-                                  </td>
-                                  <td className="p-2">
-                                    <input
-                                      type="number"
-                                      value={v.stock}
-                                      onChange={(e) => handleVariantChange(vIdx, 'stock', Number(e.target.value))}
-                                      className="w-16 px-2 py-1 border border-slate-200 rounded text-xs"
-                                    />
-                                  </td>
-                                  <td className="p-2 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={isAvail}
-                                      onChange={(e) => handleVariantChange(vIdx, 'isAvailable', e.target.checked)}
-                                      className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
-                                      title="Toggle whether this combination is sellable"
-                                    />
-                                  </td>
-                                  <td className="p-2 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={v.inStock}
-                                      onChange={(e) => handleVariantChange(vIdx, 'inStock', e.target.checked)}
-                                      className="w-4 h-4 text-blue-600 rounded cursor-pointer"
-                                    />
-                                  </td>
-                                  <td className="p-2 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveVariantRow(vIdx)}
-                                      className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
-                                      title="Delete Variant Row"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Customer PDP Interactive Preview Card */}
-                  {formAttributes.length > 0 && formVariants.length > 0 && (
-                    <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
-                      <div className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5">
-                          <Eye className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Customer PDP Live Preview</span>
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-normal">
-                          Simulating how options will render on customer PDP
-                        </span>
-                      </div>
-
-                      <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100 space-y-3">
-                        {formAttributes.map((attr) => {
-                          const options = attr.optionsStr.split(',').map((s) => s.trim()).filter(Boolean);
-                          if (options.length === 0) return null;
-
+                      <div className="flex flex-wrap gap-1.5">
+                        {templates.map((tpl) => {
+                          const isAdded = formAttributes.some(
+                            (a) => a.name.toLowerCase() === tpl.name.toLowerCase()
+                          );
                           return (
-                            <div key={attr.id} className="space-y-1.5">
-                              <span className="text-[11px] font-bold text-slate-800">{attr.name}</span>
-                              {attr.uiType === 'pills' ? (
-                                <div className="flex flex-wrap gap-1.5">
-                                  {options.map((opt, oIdx) => (
-                                    <span
-                                      key={opt}
-                                      className={`px-3 py-1 rounded-full text-[11px] font-semibold border ${
-                                        oIdx === 0
-                                          ? 'bg-black text-white border-black'
-                                          : 'bg-white text-slate-800 border-slate-300'
-                                      }`}
-                                    >
-                                      {opt}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : attr.uiType === 'cards' ? (
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                  {options.map((opt, oIdx) => (
-                                    <div
-                                      key={opt}
-                                      className={`p-2 rounded-xl border text-left ${
-                                        oIdx === 0
-                                          ? 'border-[#f59e0b] bg-[#fef9c3] ring-1 ring-amber-500/20'
-                                          : 'border-slate-200 bg-white'
-                                      }`}
-                                    >
-                                      <div className="font-bold text-xs text-slate-900">{opt}</div>
-                                      <div className="font-black text-xs text-slate-800 mt-0.5">
-                                        ₹{Number(price) || 100}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <select
-                                  disabled
-                                  className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
-                                >
-                                  {options.map((opt) => (
-                                    <option key={opt}>{opt}</option>
-                                  ))}
-                                </select>
-                              )}
-                            </div>
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              disabled={isAdded}
+                              onClick={() => handleAddTemplateOption(tpl)}
+                              className={`text-[11px] font-medium px-2.5 py-1 rounded-md border ${
+                                isAdded
+                                  ? 'bg-[#F7F8FA] text-[#718096] border-[#E5E9F0] cursor-not-allowed'
+                                  : 'bg-white text-[#23438F] border-[#E5E9F0] hover:border-[#23438F] cursor-pointer'
+                              }`}
+                            >
+                              + {tpl.name}
+                            </button>
                           );
                         })}
                       </div>
                     </div>
-                  )}
+                  );
+                })()}
+
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[#263247]">
+                      Option Groups ({formAttributes.length})
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleAddOptionGroup}
+                      leftIcon={<Plus className="w-3.5 h-3.5" />}
+                    >
+                      Add Option Group
+                    </Button>
+                  </div>
+
+                  {formAttributes.map((attr, idx) => (
+                    <div
+                      key={attr.id}
+                      className="p-3 bg-white rounded-lg border border-[#E5E9F0] space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-[#263247]">
+                          Group {idx + 1}
+                        </span>
+                        {formAttributes.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOptionGroup(attr.id)}
+                            className="text-[#DC4545] p-1 rounded hover:bg-[#DC4545]/10 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#718096] mb-1">
+                            Option Name
+                          </label>
+                          <input
+                            type="text"
+                            value={attr.name}
+                            onChange={(e) => handleOptionGroupChange(idx, 'name', e.target.value)}
+                            className="portal-input py-1.5 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#718096] mb-1">
+                            Display Type
+                          </label>
+                          <select
+                            value={attr.uiType}
+                            onChange={(e) =>
+                              handleOptionGroupChange(
+                                idx,
+                                'uiType',
+                                e.target.value as AttributeSelectorType
+                              )
+                            }
+                            className="portal-input py-1.5 text-xs"
+                          >
+                            <option value="cards">Cards</option>
+                            <option value="pills">Pills</option>
+                            <option value="dropdown">Dropdown</option>
+                            <option value="color_swatches">Colour Swatches</option>
+                            <option value="radio">Radio</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-[#718096] mb-1">
+                            Values (comma separated)
+                          </label>
+                          <input
+                            type="text"
+                            value={attr.optionsStr}
+                            onChange={(e) =>
+                              handleOptionGroupChange(idx, 'optionsStr', e.target.value)
+                            }
+                            className="portal-input py-1.5 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="primary"
+                      onClick={handleGenerateVariantMatrix}
+                      leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                    >
+                      Generate Variant Matrix
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={handleAddVariantRow}
+                      className="text-xs font-medium text-[#23438F] hover:underline cursor-pointer"
+                    >
+                      + Add Custom Row
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                {formVariants.length > 0 && (
+                  <div className="overflow-x-auto max-h-64 rounded-lg border border-[#E5E9F0] bg-white">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0] sticky top-0">
+                        <tr>
+                          <th className="p-2.5">Variant</th>
+                          <th className="p-2.5">SKU</th>
+                          <th className="p-2.5">Price (₹)</th>
+                          <th className="p-2.5">MRP (₹)</th>
+                          <th className="p-2.5">Stock</th>
+                          <th className="p-2.5 text-center">Available</th>
+                          <th className="p-2.5 text-center">In Stock</th>
+                          <th className="p-2.5 text-center">Remove</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E5E9F0]">
+                        {formVariants.map((v, vIdx) => (
+                          <tr key={v.id || vIdx}>
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                value={v.name}
+                                onChange={(e) => handleVariantChange(vIdx, 'name', e.target.value)}
+                                className="w-32 px-2 py-1 border border-[#E5E9F0] rounded text-xs"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                value={v.sku}
+                                onChange={(e) => handleVariantChange(vIdx, 'sku', e.target.value)}
+                                className="w-28 px-2 py-1 border border-[#E5E9F0] rounded text-xs font-mono"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="number"
+                                value={v.price}
+                                onChange={(e) =>
+                                  handleVariantChange(vIdx, 'price', Number(e.target.value))
+                                }
+                                className="w-20 px-2 py-1 border border-[#E5E9F0] rounded text-xs"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="number"
+                                value={v.mrp}
+                                onChange={(e) =>
+                                  handleVariantChange(vIdx, 'mrp', Number(e.target.value))
+                                }
+                                className="w-20 px-2 py-1 border border-[#E5E9F0] rounded text-xs"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="number"
+                                value={v.stock}
+                                onChange={(e) =>
+                                  handleVariantChange(vIdx, 'stock', Number(e.target.value))
+                                }
+                                className="w-16 px-2 py-1 border border-[#E5E9F0] rounded text-xs"
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <input
+                                type="checkbox"
+                                checked={v.isAvailable !== false}
+                                onChange={(e) =>
+                                  handleVariantChange(vIdx, 'isAvailable', e.target.checked)
+                                }
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <input
+                                type="checkbox"
+                                checked={v.inStock}
+                                onChange={(e) =>
+                                  handleVariantChange(vIdx, 'inStock', e.target.checked)
+                                }
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveVariantRow(vIdx)}
+                                className="text-[#DC4545] p-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+          <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#E5E9F0]">
             <Button
               type="button"
               variant="secondary"
@@ -1190,17 +1284,22 @@ export const VendorProductsPage: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              isLoading={isLoading}
-            >
-              {editingProduct ? 'Update Product' : 'Add to Catalog'}
+            <Button type="submit" variant="primary" size="sm" isLoading={isSaving || isLoading}>
+              {editingProduct ? 'Save Changes' : 'Add Product'}
             </Button>
           </div>
         </form>
       </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Product"
+        message={`Are you sure you want to delete "${deleteTarget?.name}" (${deleteTarget?.sku}) from your catalog?`}
+        confirmLabel="Delete Product"
+      />
     </div>
   );
 };

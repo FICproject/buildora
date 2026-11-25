@@ -44,36 +44,35 @@ export const Drawer: React.FC<DrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
+    <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
       <div
-        className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-[#263247]/40 transition-opacity"
         onClick={onClose}
       />
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-8">
         <div
-          className={`w-screen ${widthClasses[width]} bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out`}
+          className={`w-screen ${widthClasses[width]} bg-white border-l border-[#E5E9F0] shadow-xl flex flex-col`}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
-          <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-[#E5E9F0] bg-[#F7F8FA] flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-              {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+              <h2 className="text-base font-semibold text-[#263247]">{title}</h2>
+              {subtitle && <p className="text-xs text-[#718096] mt-0.5">{subtitle}</p>}
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+              aria-label="Close panel"
+              className="p-1.5 rounded-lg text-[#718096] hover:text-[#263247] hover:bg-[#E5E9F0]/60 transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Body */}
           <div className="flex-1 overflow-y-auto p-6">{children}</div>
 
-          {/* Footer */}
           {footer && (
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+            <div className="px-6 py-4 bg-[#F7F8FA] border-t border-[#E5E9F0] flex items-center justify-end gap-3">
               {footer}
             </div>
           )}

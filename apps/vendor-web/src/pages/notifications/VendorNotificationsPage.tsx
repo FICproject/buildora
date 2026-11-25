@@ -1,18 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Bell,
-  CheckCheck,
-  ShoppingCart,
-  Boxes,
-  IndianRupee,
-  AlertCircle,
-  Clock,
-  Info,
-} from 'lucide-react';
+import { Bell, CheckCheck, ShoppingCart, Boxes, IndianRupee, Info } from 'lucide-react';
 import { useVendorNotificationStore } from '../../store/useVendorNotificationStore';
-import { Card, CardHeader, CardContent } from '../../components/common/Card';
-import { Button } from '../../components/common/Button';
-import { Badge } from '../../components/common/Badge';
+import { PageHeader, Card, Button, Badge, EmptyState } from '../../components/common';
 
 export const VendorNotificationsPage: React.FC = () => {
   const { notifications, unreadCount, markAsRead, markAllAsRead } =
@@ -22,110 +11,103 @@ export const VendorNotificationsPage: React.FC = () => {
 
   const filtered = notifications.filter((n) => {
     if (filterType === 'ALL') return true;
+    if (filterType === 'STOCK') return n.type === 'STOCK' || (n.type as string) === 'INVENTORY';
     return n.type === filterType;
   });
 
   const getIcon = (type: string) => {
     switch (type) {
       case 'ORDER':
-        return <ShoppingCart className="w-4 h-4 text-blue-600" />;
+        return <ShoppingCart className="w-4 h-4 text-[#23438F]" />;
+      case 'STOCK':
       case 'INVENTORY':
-        return <Boxes className="w-4 h-4 text-amber-500" />;
+        return <Boxes className="w-4 h-4 text-[#E6A23C]" />;
       case 'SETTLEMENT':
-        return <IndianRupee className="w-4 h-4 text-emerald-600" />;
+        return <IndianRupee className="w-4 h-4 text-[#15966B]" />;
       default:
-        return <Info className="w-4 h-4 text-slate-500" />;
+        return <Info className="w-4 h-4 text-[#718096]" />;
     }
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Store Notifications
-            </h1>
-            {unreadCount > 0 && (
-              <Badge variant="brand">{unreadCount} New</Badge>
-            )}
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Real-time fulfillment alerts, customer order placements, and payout confirmations.
-          </p>
-        </div>
+    <div className="space-y-6 pb-8">
+      <PageHeader
+        title="Notifications"
+        description="Order alerts, low-stock warnings, and settlement updates."
+        actions={
+          unreadCount > 0 ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => markAllAsRead()}
+              leftIcon={<CheckCheck className="w-3.5 h-3.5" />}
+            >
+              Mark All Read ({unreadCount})
+            </Button>
+          ) : null
+        }
+      />
 
-        {unreadCount > 0 && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => markAllAsRead()}
-            leftIcon={<CheckCheck className="w-3.5 h-3.5" />}
-          >
-            Mark All as Read
-          </Button>
-        )}
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="flex gap-2">
-        {['ALL', 'ORDER', 'INVENTORY', 'SETTLEMENT'].map((t) => (
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: 'ALL', label: 'All Alerts' },
+          { id: 'ORDER', label: 'Orders' },
+          { id: 'STOCK', label: 'Stock Alerts' },
+          { id: 'SETTLEMENT', label: 'Settlements' },
+        ].map((t) => (
           <button
-            key={t}
-            onClick={() => setFilterType(t)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-              filterType === t
-                ? 'bg-slate-900 text-white'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            key={t.id}
+            type="button"
+            onClick={() => setFilterType(t.id)}
+            className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+              filterType === t.id
+                ? 'bg-[#23438F] text-white'
+                : 'bg-white border border-[#E5E9F0] text-[#718096] hover:text-[#263247]'
             }`}
           >
-            {t === 'ALL'
-              ? 'All Alerts'
-              : t === 'ORDER'
-              ? 'Orders'
-              : t === 'INVENTORY'
-              ? 'Stock Alerts'
-              : 'Settlements'}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* Notifications List */}
       <Card>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-[#E5E9F0]">
           {filtered.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400">
-              No notifications found in this category.
-            </div>
+            <EmptyState
+              icon={<Bell className="w-5 h-5" />}
+              title="No notifications"
+              description="There are no alerts in this category."
+            />
           ) : (
             filtered.map((item) => (
               <div
                 key={item.id}
                 onClick={() => markAsRead(item.id)}
                 className={`p-4 flex items-start gap-3.5 cursor-pointer transition-colors ${
-                  !item.read ? 'bg-blue-50/40 hover:bg-blue-50/70' : 'hover:bg-slate-50'
+                  !item.read ? 'bg-[#EEF3FA]/60 hover:bg-[#EEF3FA]' : 'hover:bg-[#F7F8FA]'
                 }`}
               >
-                <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-2xs flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-white border border-[#E5E9F0] flex items-center justify-center shrink-0">
                   {getIcon(item.type)}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-xs font-bold text-slate-900">{item.title}</h4>
-                    <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                    <h4 className="text-xs font-semibold text-[#263247]">{item.title}</h4>
+                    <span className="text-[11px] text-[#718096] whitespace-nowrap">
                       {new Date(item.createdAt).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">{item.message}</p>
+                  <p className="text-xs text-[#718096] mt-0.5">{item.message}</p>
                 </div>
 
                 {!item.read && (
-                  <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0 self-center" />
+                  <Badge variant="accent" size="sm">
+                    New
+                  </Badge>
                 )}
               </div>
             ))
@@ -135,3 +117,5 @@ export const VendorNotificationsPage: React.FC = () => {
     </div>
   );
 };
+
+export default VendorNotificationsPage;

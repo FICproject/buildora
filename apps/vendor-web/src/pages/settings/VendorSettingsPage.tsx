@@ -1,374 +1,522 @@
-import React, { useState } from 'react';
-import {
-  Settings,
-  Store,
-  Building,
-  CreditCard,
-  Clock,
-  Users,
-  ShieldCheck,
-  Save,
-  CheckCircle2,
-  Warehouse,
-  UploadCloud,
-  Trash2,
-  Loader2,
-  Image as ImageIcon
-} from 'lucide-react';
-import { useVendorAuthStore } from '../../store/useVendorAuthStore';
+import React, { useState, useEffect } from 'react';
+import { Users, ShieldCheck, Bell, Clock, Plus, Trash2, Save } from 'lucide-react';
 import { vendorApi } from '../../services/vendorApi';
-import { validateLogoFileMetadata } from '@buildora/validation';
-import { Card, CardHeader, CardContent, CardFooter } from '../../components/common/Card';
-import { Button } from '../../components/common/Button';
-import { Badge } from '../../components/common/Badge';
+import { VendorEmployee, VendorRole } from '@buildora/types';
+import {
+  PageHeader,
+  Card,
+  CardHeader,
+  CardContent,
+  Button,
+  Badge,
+  Modal,
+  ConfirmDialog,
+  EmptyState,
+} from '../../components/common';
+import { toast } from '../../store/useToastStore';
 
-export const VendorSettingsPage: React.FC = () => {
-  const { vendor, fetchProfile } = useVendorAuthStore();
+type SettingsTab = 'TEAM' | 'SECURITY' | 'NOTIFICATIONS' | 'HOURS';
 
-  const [storeName, setStoreName] = useState(vendor?.businessInfo?.storeName || vendor?.storeName || 'Supreme Materials BLR');
-  const [email, setEmail] = useState(vendor?.businessInfo?.email || vendor?.email || 'vendor@buildora.in');
-  const [phone, setPhone] = useState(vendor?.businessInfo?.phone || vendor?.phone || '+91 98450 12345');
-  const [legalName, setLegalName] = useState(vendor?.businessInfo?.businessName || vendor?.business?.legalName || 'Supreme Materials Private Limited');
-  const [gstin, setGstin] = useState(vendor?.businessInfo?.gstin || vendor?.business?.gstin || '29AAAAA0000A1Z5');
-  const [pan, setPan] = useState(vendor?.businessInfo?.pan || vendor?.business?.pan || 'AAAAA0000A');
-  const [logoPreview, setLogoPreview] = useState(vendor?.logoUrl || vendor?.businessInfo?.logo || '');
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const [logoError, setLogoError] = useState<string | null>(null);
-  const [savedSuccess, setSavedSuccess] = useState(false);
+export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
+  initialTab = 'TEAM',
+}) => {
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoError(null);
+  // Team & RBAC
+  const [team, setTeam] = useState<VendorEmployee[]>([]);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<VendorEmployee | null>(null);
+  const [empName, setEmpName] = useState('');
+  const [empEmail, setEmpEmail] = useState('');
+  const [empPhone, setEmpPhone] = useState('');
+  const [empRole, setEmpRole] = useState<VendorRole>('INVENTORY_MANAGER');
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([
+    'INVENTORY_MANAGE',
+    'ORDERS_MANAGE',
+  ]);
+  const [inviting, setInviting] = useState(false);
 
-    const check = validateLogoFileMetadata(file.type, file.size, file.name);
-    if (!check.isValid) {
-      setLogoError(check.error || 'Invalid logo file.');
-      e.target.value = '';
+  // Security
+  const [enable2FA, setEnable2FA] = useState(true);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [savingSecurity, setSavingSecurity] = useState(false);
+
+  // Notifications
+  const [notifPrefs, setNotifPrefs] = useState({
+    smsDispatch: true,
+    whatsappDispatch: true,
+    emailSettlement: true,
+    stockWarning: true,
+  });
+  const [savingNotifs, setSavingNotifs] = useState(false);
+
+  const loadTeam = async () => {
+    try {
+      const members = await vendorApi.getTeam();
+      setTeam(members || []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadTeam();
+  }, []);
+
+  const rolesConfig: { role: VendorRole; title: string; desc: string }[] = [
+    { role: 'VENDOR_OWNER', title: 'Store Owner', desc: 'Full access across all modules.' },
+    { role: 'VENDOR_ADMIN', title: 'General Admin', desc: 'Manages catalog, orders, and team.' },
+    { role: 'CATALOG_MANAGER', title: 'Catalog Manager', desc: 'Manages products and pricing.' },
+    { role: 'INVENTORY_MANAGER', title: 'Inventory Manager', desc: 'Manages stock and warehouses.' },
+    { role: 'ORDER_MANAGER', title: 'Order Manager', desc: 'Handles orders and dispatch.' },
+    { role: 'FINANCE_MANAGER', title: 'Finance Manager', desc: 'Handles settlements and invoices.' },
+    { role: 'SUPPORT_STAFF', title: 'Support Staff', desc: 'Handles reviews and support tickets.' },
+  ];
+
+  const permissionsList = [
+    { id: 'CATALOG_MANAGE', label: 'Manage Catalog & Pricing' },
+    { id: 'INVENTORY_MANAGE', label: 'Adjust Stock & Warehouses' },
+    { id: 'ORDERS_MANAGE', label: 'Manage Orders & Dispatch' },
+    { id: 'FINANCE_MANAGE', label: 'View Settlements & Payouts' },
+    { id: 'INVOICES_EXPORT', label: 'Export GST Invoices' },
+    { id: 'SUPPORT_TICKETS', label: 'Manage Support Tickets' },
+  ];
+
+  const handleTogglePerm = (id: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empName.trim() || !empEmail.trim() || inviting) return;
+    setInviting(true);
+    try {
+      await vendorApi.inviteTeamMember({
+        name: empName.trim(),
+        email: empEmail.trim(),
+        phone: empPhone.trim(),
+        role: empRole,
+        permissions: selectedPermissions,
+      });
+      toast.success(`Invitation sent to ${empName.trim()}.`);
+      setIsInviteOpen(false);
+      setEmpName('');
+      setEmpEmail('');
+      setEmpPhone('');
+      loadTeam();
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!removeTarget) return;
+    await vendorApi.removeTeamMember(removeTarget.id);
+    toast.success(`${removeTarget.name} removed from team.`);
+    setRemoveTarget(null);
+    loadTeam();
+  };
+
+  const handleSaveSecurity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (savingSecurity) return;
+    if (newPassword && newPassword.length < 8) {
+      toast.error('New password must be at least 8 characters.');
       return;
     }
-
-    setIsUploadingLogo(true);
+    setSavingSecurity(true);
     try {
-      const res = await vendorApi.uploadProfileLogo(file);
-      setLogoPreview(res.logoUrl);
-      await fetchProfile();
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3000);
-    } catch (err: any) {
-      setLogoError(err.message || 'Failed to upload business logo.');
+      await vendorApi.updateSecuritySettings({
+        enable2FA,
+        currentPassword: currentPassword || undefined,
+        newPassword: newPassword || undefined,
+      });
+      toast.success('Security settings updated.');
+      setCurrentPassword('');
+      setNewPassword('');
     } finally {
-      setIsUploadingLogo(false);
-      e.target.value = '';
+      setSavingSecurity(false);
     }
   };
 
-  const handleRemoveLogo = async () => {
-    setLogoError(null);
-    try {
-      await vendorApi.updateProfile({ logoUrl: '', logoMetadata: null });
-      setLogoPreview('');
-      await fetchProfile();
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3000);
-    } catch (err: any) {
-      setLogoError(err.message || 'Failed to remove logo.');
-    }
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveNotifications = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingNotifs) return;
+    setSavingNotifs(true);
     try {
-      await vendorApi.updateProfile({ storeName });
-      await fetchProfile();
-    } catch {}
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+      await vendorApi.updateNotificationSettings(notifPrefs);
+      toast.success('Notification preferences saved.');
+    } finally {
+      setSavingNotifs(false);
+    }
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Store Profile & Partner Settings
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Manage your legal entity, contact information, settlement accounts, and operating team.
-          </p>
-        </div>
+    <div className="space-y-6 pb-8 max-w-5xl">
+      <PageHeader
+        title="Settings"
+        description="Manage team access roles, account security, notification preferences, and operating hours."
+      />
 
-        <div className="flex items-center gap-2">
-          <Badge variant="success" dot>Store Verified & Live</Badge>
-        </div>
+      {/* Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E9F0] pb-2">
+        {[
+          { id: 'TEAM', label: 'Team & Access', icon: Users },
+          { id: 'SECURITY', label: 'Security & 2FA', icon: ShieldCheck },
+          { id: 'NOTIFICATIONS', label: 'Notifications', icon: Bell },
+          { id: 'HOURS', label: 'Operating Hours', icon: Clock },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as SettingsTab)}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                activeTab === tab.id
+                  ? 'bg-[#23438F] text-white'
+                  : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {savedSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>Store settings updated successfully.</span>
-        </div>
+      {/* Tab 1: Team & Access */}
+      {activeTab === 'TEAM' && (
+        <Card>
+          <CardHeader
+            title="Team Members & Roles"
+            subtitle="Invite team members and assign role-based permissions."
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsInviteOpen(true)}
+                leftIcon={<Plus className="w-4 h-4" />}
+              >
+                Invite Member
+              </Button>
+            }
+          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                <tr>
+                  <th className="py-3 px-4">Member</th>
+                  <th className="py-3 px-4">Role</th>
+                  <th className="py-3 px-4">Phone</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E9F0]">
+                {team.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>
+                      <EmptyState
+                        icon={<Users className="w-5 h-5" />}
+                        title="No team members"
+                        description="Invite staff members to help manage orders and inventory."
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  team.map((emp) => (
+                    <tr key={emp.id} className="hover:bg-[#F7F8FA]">
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-[#263247]">{emp.name}</div>
+                        <div className="text-[11px] text-[#718096]">{emp.email}</div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <Badge variant="brand" size="sm">
+                          {emp.role.replace(/_/g, ' ')}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-[#718096]">
+                        {emp.phone || '—'}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <Badge variant={emp.status === 'ACTIVE' ? 'success' : 'warning'} size="sm">
+                          {emp.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        {emp.role !== 'VENDOR_OWNER' && (
+                          <button
+                            type="button"
+                            onClick={() => setRemoveTarget(emp)}
+                            className="p-1.5 rounded-lg text-[#718096] hover:text-[#DC4545] hover:bg-[#DC4545]/10 cursor-pointer"
+                            title="Revoke Access"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
-      <form onSubmit={handleSave} className="space-y-6">
-        {/* Store Information */}
-        <Card>
-          <CardHeader
-            title="Business Identification"
-            subtitle="Display name and legal registered details in Karnataka"
-          />
-          <CardContent className="space-y-4">
-            {/* Business Logo Upload / Management */}
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center gap-4">
-              <div className="w-16 h-16 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
-                {isUploadingLogo ? (
-                  <Loader2 className="w-5 h-5 text-[#203D91] animate-spin" />
-                ) : logoPreview ? (
-                  <img src={logoPreview} alt="Business Logo" className="w-full h-full object-cover" />
-                ) : (
-                  <ImageIcon className="w-6 h-6 text-slate-400" />
-                )}
-              </div>
-              <div className="flex-1 min-w-[200px] space-y-1.5">
-                <p className="text-xs font-bold text-slate-800">Business / Brand Logo</p>
-                <p className="text-[11px] text-slate-500">JPG, JPEG, PNG or WEBP • Max 5 MB</p>
-                <div className="flex items-center gap-2 pt-1">
-                  <label className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#203D91] text-white hover:bg-[#162b66] cursor-pointer inline-flex items-center gap-1.5">
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    <span>{logoPreview ? 'Change Logo' : 'Upload Logo'}</span>
-                    <input
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                      onChange={handleLogoChange}
-                      disabled={isUploadingLogo}
-                      className="hidden"
-                    />
-                  </label>
-                  {logoPreview && (
-                    <button
-                      type="button"
-                      onClick={handleRemoveLogo}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 inline-flex items-center gap-1 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Remove
-                    </button>
-                  )}
-                </div>
-                {logoError && <p className="text-[11px] text-rose-600 font-medium">{logoError}</p>}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Store Display Name
-                </label>
-                <input
-                  type="text"
-                  value={storeName}
-                  onChange={(e) => setStoreName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Legal Entity Name
-                </label>
-                <input
-                  type="text"
-                  value={legalName}
-                  onChange={(e) => setLegalName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Official Email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Dispatch Hotline / WhatsApp
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  GSTIN (Karnataka)
-                </label>
-                <input
-                  type="text"
-                  value={gstin}
-                  disabled
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 font-mono text-slate-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  PAN Identifier
-                </label>
-                <input
-                  type="text"
-                  value={pan}
-                  disabled
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 font-mono text-slate-600"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Security & 2FA */}
-        <Card>
-          <CardHeader
-            title="Security & Two-Factor Authentication (2FA)"
-            subtitle="Secure your merchant account with multi-factor authentication"
-          />
-          <CardContent className="space-y-4 text-xs">
-            <div className="flex items-center justify-between p-3.5 bg-[#F4F7FC] rounded-xl border border-[#E2E8F0]">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-[#203D91]/10 text-[#203D91] flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
+      {/* Tab 2: Security */}
+      {activeTab === 'SECURITY' && (
+        <form onSubmit={handleSaveSecurity}>
+          <Card>
+            <CardHeader
+              title="Security & Two-Factor Authentication"
+              subtitle="Protect your vendor account with 2FA and strong passwords."
+            />
+            <CardContent className="space-y-5">
+              <label className="flex items-center justify-between p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] cursor-pointer">
                 <div>
-                  <p className="font-extrabold text-[#17233C]">Two-Factor Authentication (SMS OTP)</p>
-                  <p className="text-[11px] text-slate-500">Require an SMS verification code on login from unverified devices.</p>
+                  <p className="text-xs font-semibold text-[#263247]">
+                    Two-Factor Authentication (SMS OTP)
+                  </p>
+                  <p className="text-[11px] text-[#718096] mt-0.5">
+                    Require an OTP verification code when signing in from new devices.
+                  </p>
                 </div>
-              </div>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="w-4 h-4 rounded text-[#203D91] focus:ring-[#203D91]"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Current Password</label>
-                <input
-                  type="password"
-                  placeholder="••••••••••••"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 outline-hidden"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">New Password</label>
-                <input
-                  type="password"
-                  placeholder="Min 8 characters with number & symbol"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 outline-hidden"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Notification Channel Preferences */}
-        <Card>
-          <CardHeader
-            title="Order & Stock Notification Channels"
-            subtitle="Choose where dispatch alerts, low-stock warnings, and settlement notices are sent"
-          />
-          <CardContent className="space-y-3 text-xs">
-            {[
-              { id: 'sms_dispatch', label: 'SMS Instant Alert on New 60-Min Site Orders', default: true },
-              { id: 'whatsapp_dispatch', label: 'WhatsApp Order Dispatch Confirmation & Customer Handoff', default: true },
-              { id: 'email_settlement', label: 'Email Weekly Payout Statements & Form GSTR-1 Invoices', default: true },
-              { id: 'stock_warning', label: 'Low Stock Emergency Notifications (Below Safety Threshold)', default: true },
-            ].map((pref) => (
-              <label key={pref.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-[#F4F7FC] cursor-pointer">
                 <input
                   type="checkbox"
-                  defaultChecked={pref.default}
-                  className="w-4 h-4 rounded text-[#203D91]"
+                  checked={enable2FA}
+                  onChange={(e) => setEnable2FA(e.target.checked)}
+                  className="w-4 h-4 rounded text-[#23438F]"
                 />
-                <span className="font-medium text-slate-700">{pref.label}</span>
               </label>
-            ))}
-          </CardContent>
-        </Card>
 
-        {/* Operating Hours */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="portal-label">Current Password</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    className="portal-input"
+                  />
+                </div>
+                <div>
+                  <label className="portal-label">New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Min 8 characters"
+                    className="portal-input"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  isLoading={savingSecurity}
+                  leftIcon={<Save className="w-4 h-4" />}
+                >
+                  Save Security Settings
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
+      )}
+
+      {/* Tab 3: Notifications */}
+      {activeTab === 'NOTIFICATIONS' && (
+        <form onSubmit={handleSaveNotifications}>
+          <Card>
+            <CardHeader
+              title="Notification Preferences"
+              subtitle="Choose how you receive order, stock, and settlement alerts."
+            />
+            <CardContent className="space-y-3">
+              {[
+                { key: 'smsDispatch', label: 'SMS alerts for new incoming orders' },
+                { key: 'whatsappDispatch', label: 'WhatsApp updates for order dispatch' },
+                { key: 'emailSettlement', label: 'Email statements for weekly settlements & GST invoices' },
+                { key: 'stockWarning', label: 'Low-stock alert notifications' },
+              ].map((item) => (
+                <label
+                  key={item.key}
+                  className="flex items-center justify-between p-3.5 rounded-xl border border-[#E5E9F0] hover:bg-[#F7F8FA] cursor-pointer text-xs"
+                >
+                  <span className="font-medium text-[#263247]">{item.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={(notifPrefs as any)[item.key]}
+                    onChange={(e) =>
+                      setNotifPrefs((prev) => ({ ...prev, [item.key]: e.target.checked }))
+                    }
+                    className="w-4 h-4 rounded text-[#23438F]"
+                  />
+                </label>
+              ))}
+              <div className="flex justify-end pt-3">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  isLoading={savingNotifs}
+                  leftIcon={<Save className="w-4 h-4" />}
+                >
+                  Save Preferences
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
+      )}
+
+      {/* Tab 4: Operating Hours */}
+      {activeTab === 'HOURS' && (
         <Card>
           <CardHeader
-            title="Operating Hours & Dispatch Window"
-            subtitle="Timeframes when your dark store warehouse confirms and packs material"
+            title="Operating Hours"
+            subtitle="Standard dispatch windows for order fulfillment."
           />
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Monday - Saturday</span>
-                <span className="font-bold text-slate-800">07:00 AM – 09:00 PM</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Sunday Express</span>
-                <span className="font-bold text-slate-800">08:00 AM – 06:00 PM</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Primary Dark Store</span>
-                <span className="font-bold text-blue-700">WH-BLR-04 Peenya</span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Fulfillment SLA</span>
-                <span className="font-bold text-emerald-700">60-Min Express</span>
-              </div>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
+              <span className="text-[#718096] block">Monday – Saturday</span>
+              <span className="text-sm font-semibold text-[#263247] mt-1 block">
+                07:00 AM – 09:00 PM
+              </span>
+            </div>
+            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
+              <span className="text-[#718096] block">Sunday</span>
+              <span className="text-sm font-semibold text-[#263247] mt-1 block">
+                08:00 AM – 06:00 PM
+              </span>
+            </div>
+            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
+              <span className="text-[#718096] block">Primary Hub</span>
+              <span className="text-sm font-semibold text-[#23438F] mt-1 block">
+                WH-BLR-04 Peenya
+              </span>
+            </div>
+            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
+              <span className="text-[#718096] block">Express SLA</span>
+              <span className="text-sm font-semibold text-[#15966B] mt-1 block">
+                60 Minutes
+              </span>
             </div>
           </CardContent>
         </Card>
+      )}
 
-        {/* Team Members */}
-        <Card>
-          <CardHeader
-            title="Authorized Team & Roles"
-            subtitle="Personnel with access to catalog, dispatch and settlement statements"
-          />
-          <CardContent>
-            <div className="divide-y divide-slate-100 text-xs">
-              <div className="py-2.5 flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-slate-900">{vendor?.businessInfo?.contactPerson || vendor?.name || 'Arjun Vendor'}</p>
-                  <p className="text-[11px] text-slate-400">{vendor?.businessInfo?.email || vendor?.email || 'vendor@buildora.in'}</p>
-                </div>
-                <Badge variant="brand">Store Owner / Admin</Badge>
-              </div>
-              <div className="py-2.5 flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-slate-900">Ramesh Kumar (Peenya Warehouse)</p>
-                  <p className="text-[11px] text-slate-400">dispatch.peenya@supremematerials.com</p>
-                </div>
-                <Badge variant="neutral">Warehouse Dispatcher</Badge>
-              </div>
+      {/* Invite Member Modal */}
+      <Modal
+        isOpen={isInviteOpen}
+        onClose={() => setIsInviteOpen(false)}
+        title="Invite Team Member"
+        subtitle="Assign a role and permissions for this portal user."
+        maxWidth="lg"
+      >
+        <form onSubmit={handleInvite} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="portal-label">Full Name *</label>
+              <input
+                type="text"
+                required
+                value={empName}
+                onChange={(e) => setEmpName(e.target.value)}
+                className="portal-input"
+              />
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <label className="portal-label">Phone Number</label>
+              <input
+                type="tel"
+                value={empPhone}
+                onChange={(e) => setEmpPhone(e.target.value)}
+                className="portal-input"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="portal-label">Email Address *</label>
+              <input
+                type="email"
+                required
+                value={empEmail}
+                onChange={(e) => setEmpEmail(e.target.value)}
+                className="portal-input"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="portal-label">Role *</label>
+              <select
+                value={empRole}
+                onChange={(e: any) => setEmpRole(e.target.value)}
+                className="portal-input"
+              >
+                {rolesConfig.map((r) => (
+                  <option key={r.role} value={r.role}>
+                    {r.title}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-[#718096] mt-1">
+                {rolesConfig.find((r) => r.role === empRole)?.desc}
+              </p>
+            </div>
+          </div>
 
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            variant="primary"
-            leftIcon={<Save className="w-4 h-4" />}
-          >
-            Save All Changes
-          </Button>
-        </div>
-      </form>
+          <div>
+            <label className="portal-label">Permissions</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
+              {permissionsList.map((perm) => (
+                <label
+                  key={perm.id}
+                  className="flex items-center gap-2 text-xs text-[#263247] cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedPermissions.includes(perm.id)}
+                    onChange={() => handleTogglePerm(perm.id)}
+                    className="w-3.5 h-3.5 rounded text-[#23438F]"
+                  />
+                  <span>{perm.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2.5 border-t border-[#E5E9F0]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsInviteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm" isLoading={inviting}>
+              Send Invitation
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={Boolean(removeTarget)}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={handleConfirmRemove}
+        title="Remove Team Member"
+        message={`Revoke portal access for ${removeTarget?.name}?`}
+        confirmLabel="Remove Member"
+      />
     </div>
   );
 };
+
+export default VendorSettingsPage;

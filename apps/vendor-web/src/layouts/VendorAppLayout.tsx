@@ -10,6 +10,7 @@ import { AlertCircle, ArrowRight, X } from 'lucide-react';
 
 export const VendorAppLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
   const location = useLocation();
 
@@ -25,44 +26,51 @@ export const VendorAppLayout: React.FC = () => {
     fetchNotifications();
   }, []);
 
-  // Compute page title from path
   const getPageTitle = (pathname: string) => {
-    if (pathname.includes('/products')) return 'Product & Dynamic Attributes';
-    if (pathname.includes('/bulk-pricing')) return 'Bulk Pricing & Quantity Tiers';
-    if (pathname.includes('/new-launches')) return 'New Launches 60-Min Spotlight';
-    if (pathname.includes('/orders')) return 'Order Dispatch & 60-Min SLAs';
-    if (pathname.includes('/inventory')) return 'Real-Time Inventory & Stock Inwarding';
-    if (pathname.includes('/warehouses')) return 'Warehouses & Bengaluru Dark Stores';
-    if (pathname.includes('/returns')) return 'Returns, Inspections & Restocking';
-    if (pathname.includes('/promotions')) return 'Offers, Deals & Promotions';
-    if (pathname.includes('/reviews')) return 'Customer Reviews & Ratings';
-    if (pathname.includes('/delivery')) return 'Delivery Hub & SLA Settings';
-    if (pathname.includes('/earnings')) return 'Settlements & Payout Ledger';
-    if (pathname.includes('/invoices')) return 'B2B GST Invoices & ITC';
-    if (pathname.includes('/reports')) return 'Sales & Performance Reports';
-    if (pathname.includes('/team')) return 'Team & RBAC Permissions (7 Roles)';
-    if (pathname.includes('/support')) return 'Partner Support Centre & Tickets';
-    if (pathname.includes('/notifications')) return 'Store Notifications';
-    if (pathname.includes('/settings')) return 'Store & Security Settings';
-    if (pathname.includes('/onboarding')) return 'Vendor Onboarding & KYC';
-    return 'Store Performance Dashboard';
+    if (pathname.includes('/products')) return 'Products';
+    if (pathname.includes('/inventory')) return 'Inventory';
+    if (pathname.includes('/orders') || pathname.includes('/shipping')) return 'Orders';
+    if (pathname.includes('/quotations')) return 'Bulk Orders / Quotations';
+    if (
+      pathname.includes('/pricing-offers') ||
+      pathname.includes('/bulk-pricing') ||
+      pathname.includes('/promotions')
+    )
+      return 'Pricing & Offers';
+    if (pathname.includes('/warehouses')) return 'Warehouses';
+    if (pathname.includes('/delivery')) return 'Delivery & Dispatch';
+    if (pathname.includes('/customers') || pathname.includes('/reviews')) return 'Customers';
+    if (pathname.includes('/earnings') || pathname.includes('/invoices'))
+      return 'Payments & Settlements';
+    if (pathname.includes('/reports')) return 'Reports & Analytics';
+    if (pathname.includes('/notifications')) return 'Notifications';
+    if (pathname.includes('/support')) return 'Support';
+    if (pathname.includes('/business-profile') || pathname.includes('/onboarding'))
+      return 'Business Profile';
+    if (pathname.includes('/settings') || pathname.includes('/team')) return 'Settings';
+    if (pathname.includes('/returns')) return 'Returns';
+    if (pathname.includes('/new-launches')) return 'New Launches';
+    return 'Overview';
   };
 
   const isKycIncomplete =
     vendor?.status === 'DRAFT' || vendor?.status === 'PENDING_VERIFICATION';
 
   return (
-    <div className="flex h-screen bg-[#F4F7FC] text-[#17233C] antialiased overflow-hidden">
+    <div className="flex h-screen bg-[#F7F8FA] text-[#263247] antialiased overflow-hidden">
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
-        <VendorSidebar />
+        <VendorSidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+        />
       </div>
 
       {/* Mobile Drawer Sidebar */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            className="fixed inset-0 bg-[#263247]/40"
             onClick={() => setMobileMenuOpen(false)}
           />
           <div className="relative z-10">
@@ -80,25 +88,26 @@ export const VendorAppLayout: React.FC = () => {
 
         {/* KYC Incomplete Banner */}
         {isKycIncomplete && showBanner && location.pathname !== '/onboarding' && (
-          <div className="bg-amber-500 text-slate-950 px-4 py-2.5 flex items-center justify-between text-xs font-medium shadow-xs">
+          <div className="bg-[#E6A23C]/15 border-b border-[#E6A23C]/30 text-[#263247] px-4 py-2.5 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-slate-900" />
+              <AlertCircle className="w-4 h-4 shrink-0 text-[#E6A23C]" />
               <span>
-                <strong>KYC Action Required:</strong> Your store is currently under onboarding review.
-                Complete bank verification and dark store allocation to enable live ordering.
+                <strong>Action Required:</strong> Complete onboarding verification to enable live
+                order fulfillment.
               </span>
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <Link
                 to="/onboarding"
-                className="inline-flex items-center gap-1 bg-slate-950 text-white px-2.5 py-1 rounded text-xs hover:bg-slate-800 transition-colors"
+                className="inline-flex items-center gap-1 bg-[#23438F] text-white px-2.5 py-1 rounded-md text-xs font-medium hover:bg-[#1B3573] transition-colors"
               >
                 Complete Onboarding
                 <ArrowRight className="w-3 h-3" />
               </Link>
               <button
+                type="button"
                 onClick={() => setShowBanner(false)}
-                className="text-slate-900 hover:text-slate-700"
+                className="text-[#718096] hover:text-[#263247] cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -107,8 +116,10 @@ export const VendorAppLayout: React.FC = () => {
         )}
 
         {/* Scrollable Page Body */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="max-w-7xl mx-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

@@ -1,26 +1,31 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart,
   Search,
-  Clock,
   MapPin,
-  CheckCircle2,
-  Truck,
-  FileText,
-  AlertCircle,
-  ExternalLink,
-  Phone,
   Printer,
   ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 import { useVendorOrderStore } from '../../store/useVendorOrderStore';
-import { Card, CardHeader, CardContent } from '../../components/common/Card';
-import { Button } from '../../components/common/Button';
-import { Badge } from '../../components/common/Badge';
-import { Drawer } from '../../components/common/Drawer';
+import {
+  PageHeader,
+  Card,
+  CardContent,
+  Button,
+  Badge,
+  Drawer,
+  ConfirmDialog,
+  EmptyState,
+  TablePagination,
+} from '../../components/common';
 import { VendorOrder, VendorOrderStatus } from '@buildora/types';
+import { toast } from '../../store/useToastStore';
 
 export const VendorOrdersPage: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const {
     orders,
     fetchOrders,
@@ -30,13 +35,23 @@ export const VendorOrdersPage: React.FC = () => {
     isLoading,
   } = useVendorOrderStore();
 
-  const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<string>('ALL');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [activeTab, setActiveTab] = useState<string>(searchParams.get('status') || 'ALL');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<VendorOrder | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  useEffect(() => {
+    const qSearch = searchParams.get('search');
+    const qStatus = searchParams.get('status');
+    if (qSearch !== null) setSearch(qSearch);
+    if (qStatus !== null) setActiveTab(qStatus);
+  }, [searchParams]);
 
   const openDetails = (order: VendorOrder) => {
     setSelectedOrder(order);
@@ -44,51 +59,150 @@ export const VendorOrdersPage: React.FC = () => {
   };
 
   const handleStatusChange = async (orderId: string, status: VendorOrderStatus) => {
-    await updateOrderStatus(orderId, status);
+    const ok = await updateOrderStatus(orderId, status);
+    if (ok) {
+      toast.success(`Order updated to ${status.replace(/_/g, ' ').toLowerCase()}.`);
+    } else {
+      toast.error('Failed to update order status.');
+    }
   };
 
-  const tabs = [
-    { id: 'ALL', label: 'All Orders' },
-    { id: 'NEW', label: 'New Orders' },
-    { id: 'ACCEPTED', label: 'Packing' },
-    { id: 'READY_FOR_DISPATCH', label: 'Ready for Pickup' },
-    { id: 'DISPATCHED', label: 'In Transit' },
+  const tabs: { id: string; label: string }[] = [
+    { id: 'ALL', label: 'All' },
+    { id: 'NEW', label: 'New' },
+    { id: 'ACCEPTED', label: 'Accepted' },
+    { id: 'PROCESSING', label: 'Processing' },
+    { id: 'READY_FOR_DISPATCH', label: 'Ready for Dispatch' },
+    { id: 'DISPATCHED', label: 'Dispatched' },
     { id: 'DELIVERED', label: 'Delivered' },
+    { id: 'CANCELLED', label: 'Cancelled' },
+    { id: 'RETURNED', label: 'Returned' },
   ];
+
+  const getBadgeVariant = (status: VendorOrderStatus) => {
+    switch (status) {
+      case 'DELIVERED':
+        return 'success';
+      case 'NEW':
+        return 'accent';
+      case 'ACCEPTED':
+      case 'PROCESSING':
+      case 'READY_FOR_DISPATCH':
+        return 'warning';
+      case 'DISPATCHED':
+        return 'brand';
+      case 'CANCELLED':
+      case 'RETURNED':
+        return 'danger';
+      default:
+        return 'neutral';
+    }
+  };
 
   const filteredOrders = orders.filter((o) => {
     const matchesTab = activeTab === 'ALL' || o.status === activeTab;
+    const q = search.toLowerCase();
     const matchesSearch =
-      o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-      o.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      o.deliveryAddress.pincode.includes(search);
+      !q ||
+      o.orderNumber.toLowerCase().includes(q) ||
+      (o.customerName || '').toLowerCase().includes(q) ||
+      (o.deliveryAddress?.pincode || '').includes(q);
     return matchesTab && matchesSearch;
   });
 
-  return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Order Fulfillment & Dispatch Queue
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Manage incoming contractor orders, pack items, and hand over to Bengaluru express riders.
-          </p>
-        </div>
+  const paginatedOrders = filteredOrders.slice((page - 1) * pageSize, page * pageSize);
 
-        <div className="flex items-center gap-2">
-          <Badge variant="brand" dot>
-            60-Min Express Hub Active
-          </Badge>
-        </div>
-      </div>
+  const renderPrimaryAction = (order: VendorOrder) => {
+    switch (order.status) {
+      case 'NEW':
+        return (
+          <Button
+            size="sm"
+            variant="accent"
+            onClick={() => handleStatusChange(order.id, 'ACCEPTED')}
+            disabled={isLoading}
+          >
+            Accept
+          </Button>
+        );
+      case 'ACCEPTED':
+        return (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => handleStatusChange(order.id, 'PROCESSING')}
+            disabled={isLoading}
+          >
+            Start Processing
+          </Button>
+        );
+      case 'PROCESSING':
+        return (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => handleStatusChange(order.id, 'READY_FOR_DISPATCH')}
+            disabled={isLoading}
+          >
+            Mark Ready
+          </Button>
+        );
+      case 'READY_FOR_DISPATCH':
+        return (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => handleStatusChange(order.id, 'DISPATCHED')}
+            disabled={isLoading}
+          >
+            Dispatch
+          </Button>
+        );
+      case 'DISPATCHED':
+        return (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => handleStatusChange(order.id, 'DELIVERED')}
+            disabled={isLoading}
+          >
+            Mark Delivered
+          </Button>
+        );
+      default:
+        return (
+          <button
+            type="button"
+            onClick={() => openDetails(order)}
+            className="text-xs font-medium text-[#23438F] hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+          >
+            View <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        );
+    }
+  };
+
+  return (
+    <div className="space-y-6 pb-8">
+      <PageHeader
+        title="Orders"
+        description="Manage incoming orders from acceptance through dispatch and delivery."
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate('/returns')}
+            leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+          >
+            Returns & Inspections
+          </Button>
+        }
+      />
 
       {/* Tabs & Search */}
       <Card>
         <CardContent className="p-4 space-y-4">
-          <div className="flex flex-wrap gap-1.5 border-b border-slate-100 pb-3">
+          <div className="flex flex-wrap gap-1.5 border-b border-[#E5E9F0] pb-3">
             {tabs.map((tab) => {
               const count =
                 tab.id === 'ALL'
@@ -98,20 +212,24 @@ export const VendorOrdersPage: React.FC = () => {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setPage(1);
+                  }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
                     activeTab === tab.id
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      ? 'bg-[#23438F] text-white'
+                      : 'text-[#718096] hover:text-[#263247] hover:bg-[#F7F8FA]'
                   }`}
                 >
                   <span>{tab.label}</span>
                   {count > 0 && (
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
                         activeTab === tab.id
-                          ? 'bg-slate-800 text-white'
-                          : 'bg-slate-200 text-slate-700'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-[#EEF3FA] text-[#23438F]'
                       }`}
                     >
                       {count}
@@ -122,14 +240,17 @@ export const VendorOrdersPage: React.FC = () => {
             })}
           </div>
 
-          <div className="relative w-full">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <div className="relative">
+            <Search className="w-4 h-4 text-[#718096] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by Order ID (e.g. ORD-BLR-), customer name, or pincode..."
-              className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by Order ID, customer name, or pincode..."
+              className="portal-input pl-9"
             />
           </div>
         </CardContent>
@@ -138,247 +259,170 @@ export const VendorOrdersPage: React.FC = () => {
       {/* Orders Table */}
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
               <tr>
-                <th className="py-3 px-4">Order ID & Date</th>
-                <th className="py-3 px-4">Delivery Site (Bengaluru)</th>
-                <th className="py-3 px-4">Items Summary</th>
-                <th className="py-3 px-4">Order Value</th>
-                <th className="py-3 px-4">Fulfillment SLA</th>
+                <th className="py-3 px-4">Order ID</th>
+                <th className="py-3 px-4">Customer</th>
+                <th className="py-3 px-4">Items</th>
+                <th className="py-3 px-4">Amount</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredOrders.length === 0 ? (
+            <tbody className="divide-y divide-[#E5E9F0]">
+              {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400">
-                    No orders in this status category.
+                  <td colSpan={6}>
+                    <EmptyState
+                      icon={<ShoppingCart className="w-5 h-5" />}
+                      title="No orders found"
+                      description="No orders match the selected status or search filter."
+                    />
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((order) => {
-                  return (
-                    <tr
-                      key={order.id}
-                      onClick={() => openDetails(order)}
-                      className="hover:bg-slate-50/80 cursor-pointer transition-colors"
-                    >
-                      <td className="py-3.5 px-4">
-                        <div className="font-mono font-bold text-slate-900">{order.orderNumber}</div>
-                        <div className="text-[11px] text-slate-400">
-                          {new Date(order.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                          , {new Date(order.createdAt).toLocaleDateString()}
-                        </div>
-                      </td>
+                paginatedOrders.map((order) => (
+                  <tr
+                    key={order.id}
+                    onClick={() => openDetails(order)}
+                    className="hover:bg-[#F7F8FA] cursor-pointer transition-colors"
+                  >
+                    <td className="py-3.5 px-4">
+                      <div className="font-mono font-semibold text-[#263247]">
+                        {order.orderNumber}
+                      </div>
+                      <div className="text-[11px] text-[#718096]">
+                        {new Date(order.createdAt).toLocaleDateString('en-IN')}
+                      </div>
+                    </td>
 
-                      <td className="py-3.5 px-4">
-                        <div className="font-medium text-slate-900">{order.customerName}</div>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>
-                            {order.deliveryAddress.city} - {order.deliveryAddress.pincode}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="text-slate-800 font-medium">
-                          {order.items[0]?.name}{' '}
-                          {order.items.length > 1 && (
-                            <span className="text-slate-400 font-normal">
-                              +{order.items.length - 1} more
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          Qty: {order.items.reduce((sum, item) => sum + item.quantity, 0)} units total
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-900">
-                          ₹{(order.totalAmount || order.subtotal || 0).toLocaleString('en-IN')}
-                        </div>
-                        <div className="text-[10px] text-emerald-600 font-semibold">Paid Online</div>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          <Clock className="w-3 h-3 text-blue-600" /> 60 Mins Express
+                    <td className="py-3.5 px-4">
+                      <div className="font-medium text-[#263247]">{order.customerName}</div>
+                      <div className="text-[11px] text-[#718096] flex items-center gap-1">
+                        <MapPin className="w-3 h-3 shrink-0" />
+                        <span>
+                          {order.deliveryAddress?.city} - {order.deliveryAddress?.pincode}
                         </span>
-                      </td>
+                      </div>
+                    </td>
 
-                      <td className="py-3.5 px-4">
-                        <Badge
-                          variant={
-                            order.status === 'DELIVERED'
-                              ? 'success'
-                              : order.status === 'DISPATCHED'
-                              ? 'brand'
-                              : order.status === 'READY_FOR_DISPATCH'
-                              ? 'info'
-                              : order.status === 'ACCEPTED'
-                              ? 'brand'
-                              : 'warning'
-                          }
-                        >
-                          {order.status.replace(/_/g, ' ')}
-                        </Badge>
-                      </td>
+                    <td className="py-3.5 px-4">
+                      <div className="text-[#263247] font-medium line-clamp-1">
+                        {order.items[0]?.name}
+                        {order.items.length > 1 ? ` +${order.items.length - 1} more` : ''}
+                      </div>
+                      <div className="text-[11px] text-[#718096]">
+                        {order.items.reduce((sum, item) => sum + item.quantity, 0)} units
+                      </div>
+                    </td>
 
-                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        {order.status === 'NEW' ? (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => handleStatusChange(order.id, 'ACCEPTED')}
-                            className="text-[11px] py-1 px-2.5"
-                          >
-                            Accept Order
-                          </Button>
-                        ) : order.status === 'ACCEPTED' ? (
-                          <Button
-                            size="sm"
-                            variant="accent"
-                            onClick={() => handleStatusChange(order.id, 'READY_FOR_DISPATCH')}
-                            className="text-[11px] py-1 px-2.5"
-                          >
-                            Ready to Ship
-                          </Button>
-                        ) : order.status === 'READY_FOR_DISPATCH' ? (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => handleStatusChange(order.id, 'DISPATCHED')}
-                            className="text-[11px] py-1 px-2.5"
-                          >
-                            Handover Rider
-                          </Button>
-                        ) : (
-                          <button
-                            onClick={() => openDetails(order)}
-                            className="text-xs text-blue-600 font-semibold hover:underline inline-flex items-center gap-0.5"
-                          >
-                            <span>View</span>
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
+                    <td className="py-3.5 px-4 font-semibold text-[#263247]">
+                      ₹{(order.totalAmount || order.subtotal || 0).toLocaleString('en-IN')}
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <Badge variant={getBadgeVariant(order.status)} size="sm">
+                        {order.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </td>
+
+                    <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      {renderPrimaryAction(order)}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalItems={filteredOrders.length}
+          onPageChange={setPage}
+        />
       </Card>
 
-      {/* Order Details Slide-over Drawer */}
+      {/* Order Details Drawer */}
       <Drawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        title={`Order ${selectedOrder?.orderNumber}`}
-        subtitle={`Placed on ${selectedOrder ? new Date(selectedOrder.createdAt).toLocaleString() : ''}`}
+        title={`Order ${selectedOrder?.orderNumber || ''}`}
+        subtitle={
+          selectedOrder ? `Placed ${new Date(selectedOrder.createdAt).toLocaleString('en-IN')}` : ''
+        }
         width="xl"
       >
         {selectedOrder && (
-          <div className="space-y-6 text-xs text-slate-700">
-            {/* Status & Quick Action Banner */}
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+          <div className="space-y-6 text-xs text-[#263247]">
+            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] flex flex-wrap items-center justify-between gap-3">
               <div>
-                <span className="text-slate-400 text-[10px] uppercase font-bold block">
-                  Current Status
-                </span>
-                <span className="text-sm font-bold text-slate-900 mt-0.5">
-                  {selectedOrder.status.replace(/_/g, ' ')}
-                </span>
+                <span className="text-[#718096] block text-[11px]">Status</span>
+                <div className="mt-1">
+                  <Badge variant={getBadgeVariant(selectedOrder.status)}>
+                    {selectedOrder.status.replace(/_/g, ' ')}
+                  </Badge>
+                </div>
               </div>
-
-              {selectedOrder.status === 'NEW' && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => handleStatusChange(selectedOrder.id, 'ACCEPTED')}
-                >
-                  Accept Order
-                </Button>
-              )}
-
-              {selectedOrder.status === 'ACCEPTED' && (
-                <Button
-                  size="sm"
-                  variant="accent"
-                  onClick={() => handleStatusChange(selectedOrder.id, 'READY_FOR_DISPATCH')}
-                >
-                  Mark Ready for Pickup
-                </Button>
-              )}
-
-              {selectedOrder.status === 'READY_FOR_DISPATCH' && (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => handleStatusChange(selectedOrder.id, 'DISPATCHED')}
-                >
-                  Handover to Rider
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {renderPrimaryAction(selectedOrder)}
+                {(selectedOrder.status === 'NEW' || selectedOrder.status === 'ACCEPTED') && (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => setCancelTarget(selectedOrder)}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
             </div>
 
-            {/* Customer & Delivery Site Info */}
             <div>
-              <h4 className="font-bold text-slate-900 text-sm mb-2">Delivery Job Site Address</h4>
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2">
+              <h4 className="font-semibold text-sm text-[#263247] mb-2">Delivery Address</h4>
+              <div className="p-4 rounded-xl border border-[#E5E9F0] bg-white space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-900">
-                    {selectedOrder.customerName || 'Contractor Site'}
-                  </span>
-                  <span className="text-slate-400 font-mono">
-                    {selectedOrder.customerPhone || '+91 98450 11223'}
+                  <span className="font-semibold">{selectedOrder.customerName || 'Customer'}</span>
+                  <span className="text-[#718096] font-mono">
+                    {selectedOrder.customerPhone || '—'}
                   </span>
                 </div>
-                <p className="text-slate-600">
-                  {selectedOrder.deliveryAddress.street}, {selectedOrder.deliveryAddress.city},{' '}
-                  {selectedOrder.deliveryAddress.state} -{' '}
-                  <strong>{selectedOrder.deliveryAddress.pincode}</strong>
+                <p className="text-[#718096]">
+                  {selectedOrder.deliveryAddress?.building}, {selectedOrder.deliveryAddress?.street},{' '}
+                  {selectedOrder.deliveryAddress?.city}, {selectedOrder.deliveryAddress?.state} -{' '}
+                  <strong className="text-[#263247]">
+                    {selectedOrder.deliveryAddress?.pincode}
+                  </strong>
                 </p>
-                <div className="text-[11px] text-blue-600 bg-blue-50 p-2 rounded-lg flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  <span>Verified Bengaluru Serviceable Pincode Zone</span>
-                </div>
               </div>
             </div>
 
-            {/* Ordered Materials Table */}
             <div>
-              <h4 className="font-bold text-slate-900 text-sm mb-2">Ordered Materials</h4>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <h4 className="font-semibold text-sm text-[#263247] mb-2">Order Items</h4>
+              <div className="border border-[#E5E9F0] rounded-xl overflow-hidden">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                  <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
                     <tr>
                       <th className="py-2.5 px-3">Item</th>
                       <th className="py-2.5 px-3">SKU</th>
                       <th className="py-2.5 px-3 text-right">Qty</th>
-                      <th className="py-2.5 px-3 text-right">Unit Price</th>
                       <th className="py-2.5 px-3 text-right">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-[#E5E9F0]">
                     {selectedOrder.items.map((item, idx) => (
                       <tr key={idx}>
-                        <td className="py-2.5 px-3 font-medium text-slate-900">{item.name}</td>
-                        <td className="py-2.5 px-3 font-mono text-slate-500">{item.sku}</td>
-                        <td className="py-2.5 px-3 text-right font-bold">{item.quantity}</td>
-                        <td className="py-2.5 px-3 text-right">
-                          ₹{(item.unitPrice || 0).toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-slate-900">
-                          ₹{(item.totalAmount || (item.unitPrice * item.quantity) || 0).toLocaleString('en-IN')}
+                        <td className="py-2.5 px-3 font-medium">{item.name}</td>
+                        <td className="py-2.5 px-3 font-mono text-[#718096]">{item.sku}</td>
+                        <td className="py-2.5 px-3 text-right font-semibold">{item.quantity}</td>
+                        <td className="py-2.5 px-3 text-right font-semibold">
+                          ₹
+                          {(
+                            item.totalAmount ||
+                            item.unitPrice * item.quantity ||
+                            0
+                          ).toLocaleString('en-IN')}
                         </td>
                       </tr>
                     ))}
@@ -387,38 +431,38 @@ export const VendorOrdersPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Price & Payout Breakdown */}
             <div>
-              <h4 className="font-bold text-slate-900 text-sm mb-2">Financial Breakdown</h4>
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <h4 className="font-semibold text-sm text-[#263247] mb-2">Payout Breakdown</h4>
+              <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-slate-600">Gross Material Subtotal:</span>
-                  <span className="font-semibold text-slate-900">
-                    ₹{(selectedOrder.totalAmount || selectedOrder.subtotal || 0).toLocaleString('en-IN')}
+                  <span className="text-[#718096]">Order Subtotal:</span>
+                  <span className="font-semibold">
+                    ₹{(selectedOrder.subtotal || selectedOrder.totalAmount || 0).toLocaleString('en-IN')}
                   </span>
                 </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>Platform Commission (8%):</span>
-                  <span>
-                    - ₹{Math.round((selectedOrder.totalAmount || selectedOrder.subtotal || 0) * 0.08).toLocaleString('en-IN')}
+                <div className="flex justify-between">
+                  <span className="text-[#718096]">Platform Commission:</span>
+                  <span className="text-[#DC4545]">
+                    - ₹
+                    {(
+                      selectedOrder.commissionTotal ??
+                      Math.round((selectedOrder.subtotal || 0) * 0.08)
+                    ).toLocaleString('en-IN')}
                   </span>
                 </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>TDS / GST Withholding (1%):</span>
-                  <span>
-                    - ₹{Math.round((selectedOrder.totalAmount || selectedOrder.subtotal || 0) * 0.01).toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-bold">
-                  <span className="text-slate-900">Estimated Vendor Payout:</span>
-                  <span className="text-emerald-700">
-                    ₹{Math.round((selectedOrder.totalAmount || selectedOrder.subtotal || 0) * 0.91).toLocaleString('en-IN')}
+                <div className="flex justify-between pt-2 border-t border-[#E5E9F0] text-sm font-bold">
+                  <span>Net Vendor Payout:</span>
+                  <span className="text-[#15966B]">
+                    ₹
+                    {(
+                      selectedOrder.netPayout ??
+                      Math.round((selectedOrder.subtotal || 0) * 0.92)
+                    ).toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Print Slip Action */}
             <div className="pt-2 flex justify-end">
               <Button
                 variant="outline"
@@ -426,12 +470,26 @@ export const VendorOrdersPage: React.FC = () => {
                 onClick={() => window.print()}
                 leftIcon={<Printer className="w-4 h-4" />}
               >
-                Print Dispatch Note & Handoff Slip
+                Print Packing Slip
               </Button>
             </div>
           </div>
         )}
       </Drawer>
+
+      {/* Cancel Order Confirmation */}
+      <ConfirmDialog
+        isOpen={Boolean(cancelTarget)}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={async () => {
+          if (!cancelTarget) return;
+          await handleStatusChange(cancelTarget.id, 'CANCELLED');
+          setCancelTarget(null);
+        }}
+        title="Cancel Order"
+        message={`Are you sure you want to cancel order ${cancelTarget?.orderNumber}?`}
+        confirmLabel="Cancel Order"
+      />
     </div>
   );
 };

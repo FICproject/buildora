@@ -388,12 +388,22 @@ let localNotifications: VendorNotification[] = [
   },
 ];
 
+function getAuthHeaders(): Record<string, string> {
+  try {
+    const token = localStorage.getItem('buildora_vendor_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}, fallbackData?: T): Promise<T> {
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...getAuthHeaders(),
         ...options.headers,
       },
     });
@@ -913,20 +923,22 @@ export const vendorApi = {
   },
 
   // Dashboard Metrics & Charts
-  async getDashboardMetrics(): Promise<VendorDashboardMetrics> {
-    return request<VendorDashboardMetrics>(
-      '/vendor/dashboard/metrics',
+  async getDashboardMetrics(period?: string): Promise<VendorDashboardMetrics & Record<string, any>> {
+    const q = period ? `?period=${encodeURIComponent(period)}` : '';
+    return request<VendorDashboardMetrics & Record<string, any>>(
+      `/vendor/dashboard/metrics${q}`,
       {},
       {
         totalProducts: localProducts.length,
         activeProducts: localProducts.filter((p) => p.isActive).length,
         pendingApprovalProducts: localProducts.filter((p) => p.approvalStatus === 'PENDING_APPROVAL').length,
-        lowStockCount: localProducts.filter((p) => p.stockCount <= p.lowStockThreshold).length,
+        lowStockCount: localProducts.filter((p) => p.stockCount <= p.lowStockThreshold && p.stockCount > 0).length,
         outOfStockCount: localProducts.filter((p) => p.stockCount === 0).length,
         totalOrders: localOrders.length + 46,
-        pendingOrders: 1,
-        processingOrders: 1,
-        dispatchedOrders: 0,
+        newOrders: localOrders.filter((o) => o.status === 'NEW').length,
+        pendingOrders: localOrders.filter((o) => o.status === 'NEW' || o.status === 'ACCEPTED').length,
+        processingOrders: localOrders.filter((o) => o.status === 'PROCESSING' || o.status === 'READY_FOR_DISPATCH').length,
+        dispatchedOrders: localOrders.filter((o) => o.status === 'DISPATCHED').length,
         deliveredOrders: 46,
         grossRevenue: 156650,
         netEarnings: 147290,
@@ -936,20 +948,24 @@ export const vendorApi = {
     );
   },
 
-  async getDashboardCharts() {
+  async getDashboardCharts(period?: string) {
+    const q = period ? `?period=${encodeURIComponent(period)}` : '';
+    const fallbackTrends = [
+      { date: '18 Nov', revenue: 18500, orders: 6 },
+      { date: '19 Nov', revenue: 16800, orders: 5 },
+      { date: '20 Nov', revenue: 22400, orders: 8 },
+      { date: '21 Nov', revenue: 26900, orders: 9 },
+      { date: '22 Nov', revenue: 31200, orders: 11 },
+      { date: '23 Nov', revenue: 22700, orders: 7 },
+      { date: '24 Nov', revenue: 34100, orders: 12 },
+    ];
     return request(
-      '/vendor/dashboard/charts',
+      `/vendor/dashboard/charts${q}`,
       {},
       {
-        salesTrend: [
-          { date: 'Mon', revenue: 42000 },
-          { date: 'Tue', revenue: 58000 },
-          { date: 'Wed', revenue: 51000 },
-          { date: 'Thu', revenue: 76000 },
-          { date: 'Fri', revenue: 64000 },
-          { date: 'Sat', revenue: 92000 },
-          { date: 'Sun', revenue: 48750 },
-        ],
+        revenueTrends: fallbackTrends,
+        salesTrend: fallbackTrends,
+        recentOrders: localOrders,
       }
     );
   },
@@ -1062,12 +1078,46 @@ export const vendorApi = {
 
   // Inventory
   async getInventory() {
-    return localProducts.map((p) => ({
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/inventory`, {
+        headers: { ...getAuthHeaders() },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const items = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+        if (items.length > 0) {
+          return items.map((item: any, idx: number) => {
+            const stock = Number(item.stockCount ?? item.stock ?? 0);
+            const threshold = Number(item.lowStockThreshold ?? 30);
+            return {
+              id: item.productId || item.id,
+              name: item.name,
+              sku: item.sku,
+              category: item.category,
+              stock,
+              reservedStock: Number(item.reservedStock ?? (idx % 3 === 0 ? 10 : 4)),
+              lowStockThreshold: threshold,
+              reorderPoint: threshold * 1.5,
+              warehouseLocation: item.warehouse || item.warehouseLocation || 'WH-BLR-04 Peenya Hub',
+              status:
+                stock <= 0
+                  ? ('OUT_OF_STOCK' as const)
+                  : stock <= threshold
+                  ? ('LOW_STOCK' as const)
+                  : ('IN_STOCK' as const),
+            };
+          });
+        }
+      }
+    } catch {}
+
+    return localProducts.map((p, idx) => ({
       id: p.id,
       name: p.name,
       sku: p.sku,
       category: p.category,
-      stock: p.stockCount || 100,
+      stock: p.stockCount || 0,
+      reservedStock: idx % 3 === 0 ? 10 : 4,
       lowStockThreshold: p.lowStockThreshold || 30,
       reorderPoint: (p.lowStockThreshold || 30) * 1.5,
       warehouseLocation: p.warehouseLocation || 'WH-BLR-04 Peenya Hub',
@@ -1149,13 +1199,30 @@ export const vendorApi = {
   },
 
   async getSettlementSummary() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/settlements/summary`, {
+        headers: { ...getAuthHeaders() },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        return {
+          totalGrossRevenue: json.grossSales ?? json.totalGrossRevenue ?? 312500,
+          totalCommissionPaid: json.platformCommission ?? json.totalCommissionPaid ?? 25000,
+          totalGstDeductions: json.taxDeducted ?? json.totalGstDeductions ?? 3125,
+          totalNetPayout: json.netEarnings ?? json.totalNetPayout ?? 284375,
+          pendingPayout: json.pendingPayout ?? 74200,
+          nextPayoutDate: json.nextPayoutDate ?? 'Friday 27 Nov 2026',
+        };
+      }
+    } catch {}
+
     return {
       totalGrossRevenue: 312500,
       totalCommissionPaid: 25000,
       totalGstDeductions: 3125,
       totalNetPayout: 284375,
       pendingPayout: 74200,
-      nextPayoutDate: 'Friday 27 Feb 2026',
+      nextPayoutDate: 'Friday 27 Nov 2026',
     };
   },
 
@@ -1791,11 +1858,225 @@ export const vendorApi = {
     try {
       const res = await fetch(`${API_BASE_URL}/vendor/delivery/settings`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(data),
       });
       if (res.ok) return await res.json();
     } catch {}
+    localVendor.businessInfo = { ...localVendor.businessInfo, ...data };
     return { success: true, data };
+  },
+
+  // Bulk Orders & Quotations (RFQ)
+  async getQuotations() {
+    const fallback = [
+      {
+        id: 'rfq-2026-101',
+        rfqNumber: 'RFQ-BLR-2026-401',
+        customerName: 'Prestige Civil Works Pvt Ltd',
+        contactPerson: 'Mahesh Kulkarni',
+        phone: '+91 98450 33112',
+        siteLocation: 'Whitefield ITPL Phase 2, Bengaluru 560066',
+        createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+        requiredBy: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+        status: 'PENDING_QUOTE' as const,
+        negotiationStatus: 'AWAITING_VENDOR',
+        notes: 'Need batch test certificate along with delivery.',
+        items: [
+          { name: 'UltraTech Super Cement (PPC)', sku: 'CEM-ULT-PPC-50KG', quantity: 400, unit: '50 kg Bag', targetPrice: 365 },
+          { name: 'Astral CPVC PRO Class 1 Pipe (1 inch)', sku: 'PLM-AST-CPVC-1IN', quantity: 120, unit: '3m Length', targetPrice: 390 },
+        ],
+        quotedTotal: 0,
+      },
+      {
+        id: 'rfq-2026-102',
+        rfqNumber: 'RFQ-BLR-2026-398',
+        customerName: 'Gowda Infrastructure & Builders',
+        contactPerson: 'Suresh Gowda',
+        phone: '+91 98451 22334',
+        siteLocation: 'Nagarabhavi Outer Ring Road, Bengaluru 560072',
+        createdAt: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
+        requiredBy: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
+        status: 'QUOTED' as const,
+        negotiationStatus: 'UNDER_NEGOTIATION',
+        notes: 'Delivery required in two phased trips.',
+        items: [
+          { name: 'Finolex FR 2.5 sq mm Copper Wire (90m)', sku: 'ELE-FIN-25-RED', quantity: 50, unit: '90m Coil', targetPrice: 1620, quotedPrice: 1650 },
+        ],
+        quotedTotal: 82500,
+        validUntil: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
+      },
+      {
+        id: 'rfq-2026-103',
+        rfqNumber: 'RFQ-BLR-2026-385',
+        customerName: 'Apex Residential Projects',
+        contactPerson: 'Kavitha Reddy',
+        phone: '+91 99887 76655',
+        siteLocation: 'Indiranagar 100ft Road, Bengaluru 560038',
+        createdAt: new Date(Date.now() - 72 * 3600 * 1000).toISOString(),
+        requiredBy: new Date(Date.now() + 1 * 24 * 3600 * 1000).toISOString(),
+        status: 'ACCEPTED' as const,
+        negotiationStatus: 'APPROVED_BY_BUYER',
+        notes: 'Converted to PO #PO-BLR-991.',
+        items: [
+          { name: 'Greenply Marine 710 BWP Plywood (18mm)', sku: 'PLY-GRN-BWP-18', quantity: 80, unit: '8x4 Sheet', targetPrice: 2150, quotedPrice: 2180 },
+        ],
+        quotedTotal: 174400,
+      },
+    ];
+    try {
+      const saved = localStorage.getItem('buildora_vendor_quotations');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return request<any[]>('/vendor/quotations', {}, fallback);
+  },
+
+  async submitQuotation(id: string, payload: { quotedTotal: number; items: any[]; validUntil?: string; vendorNotes?: string }) {
+    const list = await this.getQuotations();
+    const updated = list.map((q: any) =>
+      q.id === id
+        ? {
+            ...q,
+            ...payload,
+            status: 'QUOTED',
+            negotiationStatus: 'QUOTATION_SENT',
+            quotedAt: new Date().toISOString(),
+          }
+        : q
+    );
+    try {
+      localStorage.setItem('buildora_vendor_quotations', JSON.stringify(updated));
+    } catch {}
+    return updated.find((q: any) => q.id === id);
+  },
+
+  async updateQuotationStatus(id: string, status: 'ACCEPTED' | 'REJECTED') {
+    const list = await this.getQuotations();
+    const updated = list.map((q: any) =>
+      q.id === id
+        ? {
+            ...q,
+            status,
+            negotiationStatus: status === 'ACCEPTED' ? 'APPROVED_BY_BUYER' : 'DECLINED',
+          }
+        : q
+    );
+    try {
+      localStorage.setItem('buildora_vendor_quotations', JSON.stringify(updated));
+    } catch {}
+    return updated.find((q: any) => q.id === id);
+  },
+
+  // Customers Directory
+  async getCustomers() {
+    const orders = await this.getOrders();
+    const baseCustomers = [
+      {
+        id: 'cust-1',
+        name: 'Suresh Gowda',
+        company: 'Gowda Constructions',
+        phone: '+91 98451 22334',
+        email: 'suresh@gowdaconstructions.in',
+        gstin: '29AABCG1234D1Z1',
+        city: 'Bengaluru',
+        pincode: '560072',
+        totalOrders: 14,
+        totalSpend: 428500,
+        lastOrderDate: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+        type: 'B2B Contractor',
+      },
+      {
+        id: 'cust-2',
+        name: 'Kavitha Reddy',
+        company: 'Apex Builders',
+        phone: '+91 99887 76655',
+        email: 'procurement@apexbuilders.co.in',
+        gstin: '29AADCA5521H1Z9',
+        city: 'Bengaluru',
+        pincode: '560038',
+        totalOrders: 9,
+        totalSpend: 294800,
+        lastOrderDate: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+        type: 'B2B Builder',
+      },
+      {
+        id: 'cust-3',
+        name: 'Vinay Kumar',
+        company: 'Individual Site Owner',
+        phone: '+91 97410 98765',
+        email: 'vinay.k@gmail.com',
+        city: 'Bengaluru',
+        pincode: '560076',
+        totalOrders: 3,
+        totalSpend: 48200,
+        lastOrderDate: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+        type: 'Direct Buyer',
+      },
+      {
+        id: 'cust-4',
+        name: 'Arjun Verma',
+        company: 'Green Horizon Enclave',
+        phone: '+91 98765 43210',
+        email: 'arjun.verma@greenhorizon.in',
+        gstin: '29AAFCG9012M1Z4',
+        city: 'Bengaluru',
+        pincode: '560038',
+        totalOrders: 11,
+        totalSpend: 312400,
+        lastOrderDate: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
+        type: 'Site Engineer',
+      },
+    ];
+    // Ensure any new order customers are represented
+    const existingNames = new Set(baseCustomers.map((c) => c.name.toLowerCase()));
+    orders.forEach((o, idx) => {
+      const name = (o.customerName || '').split('(')[0].trim();
+      if (name && !existingNames.has(name.toLowerCase())) {
+        existingNames.add(name.toLowerCase());
+        baseCustomers.push({
+          id: `cust-ord-${idx}`,
+          name,
+          company: o.deliveryAddress?.area || 'Bengaluru Site',
+          phone: o.customerPhone || '—',
+          email: '—',
+          city: o.deliveryAddress?.city || 'Bengaluru',
+          pincode: o.deliveryAddress?.pincode || '560001',
+          totalOrders: 1,
+          totalSpend: o.totalAmount || o.subtotal || 0,
+          lastOrderDate: o.createdAt,
+          type: 'Customer',
+        });
+      }
+    });
+    return baseCustomers;
+  },
+
+  // Delivery & Dispatch
+  async getDispatches() {
+    const orders = await this.getOrders();
+    try {
+      const saved = localStorage.getItem('buildora_vendor_dispatch_meta');
+      const meta = saved ? JSON.parse(saved) : {};
+      return orders.map((o) => ({
+        ...o,
+        driverName: meta[o.id]?.driverName || (o.status === 'DISPATCHED' || o.status === 'DELIVERED' ? 'Raju Nayak (EV Mini-Truck)' : ''),
+        vehicleNumber: meta[o.id]?.vehicleNumber || (o.status === 'DISPATCHED' || o.status === 'DELIVERED' ? 'KA-04-EV-4819' : ''),
+        driverPhone: meta[o.id]?.driverPhone || (o.status === 'DISPATCHED' || o.status === 'DELIVERED' ? '+91 98801 44556' : ''),
+        hubName: meta[o.id]?.hubName || 'WH-BLR-04 Peenya Hub',
+      }));
+    } catch {
+      return orders;
+    }
+  },
+
+  async assignDelivery(orderId: string, details: { driverName: string; vehicleNumber: string; driverPhone: string; hubName?: string }) {
+    try {
+      const saved = localStorage.getItem('buildora_vendor_dispatch_meta');
+      const meta = saved ? JSON.parse(saved) : {};
+      meta[orderId] = details;
+      localStorage.setItem('buildora_vendor_dispatch_meta', JSON.stringify(meta));
+    } catch {}
+    await this.updateOrderStatus(orderId, 'DISPATCHED', `Assigned to ${details.driverName} (${details.vehicleNumber})`);
+    return { success: true };
   },
 };

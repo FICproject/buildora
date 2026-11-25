@@ -7,6 +7,7 @@ interface InventoryItem {
   sku: string;
   category: string;
   stock: number;
+  reservedStock?: number;
   lowStockThreshold: number;
   reorderPoint: number;
   warehouseLocation: string;

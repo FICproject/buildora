@@ -46,38 +46,36 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
       <div
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-[#263247]/40 transition-opacity"
         onClick={onClose}
       />
 
       <div className="flex min-h-full items-center justify-center p-4">
         <div
-          className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150`}
+          className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-xl shadow-lg border border-[#E5E9F0] overflow-hidden`}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E9F0] bg-[#F7F8FA]">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-              {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+              <h2 className="text-base font-semibold text-[#263247]">{title}</h2>
+              {subtitle && <p className="text-xs text-[#718096] mt-0.5">{subtitle}</p>}
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              aria-label="Close dialog"
+              className="p-1.5 rounded-lg text-[#718096] hover:text-[#263247] hover:bg-[#E5E9F0]/60 transition-colors cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Body */}
           <div className="p-6 max-h-[75vh] overflow-y-auto">{children}</div>
 
-          {/* Optional Footer */}
           {footer && (
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+            <div className="px-6 py-4 bg-[#F7F8FA] border-t border-[#E5E9F0] flex items-center justify-end gap-3">
               {footer}
             </div>
           )}

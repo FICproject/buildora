@@ -8,55 +8,57 @@ export default {
     extend: {
       colors: {
         vendor: {
-          navy: '#203D91',
-          'navy-dark': '#162b66',
-          'navy-light': '#2b4fb8',
-          orange: '#FF7417',
-          'orange-dark': '#e05e07',
-          'orange-light': '#ff8d3d',
-          bg: '#F4F7FC',
-          text: '#17233C',
-          border: '#E2E8F0',
+          navy: '#23438F',
+          'navy-dark': '#1B3573',
+          'navy-light': '#2E54AD',
+          soft: '#EEF3FA',
+          orange: '#F58220',
+          'orange-dark': '#D96D12',
+          'orange-light': '#F79A4A',
+          bg: '#F7F8FA',
+          card: '#FFFFFF',
+          text: '#263247',
+          muted: '#718096',
+          border: '#E5E9F0',
+          success: '#15966B',
+          warning: '#E6A23C',
+          error: '#DC4545',
         },
         brand: {
           blue: {
-            50: '#eff6ff',
-            100: '#dbeafe',
-            200: '#bfdbfe',
-            300: '#93c5fd',
-            400: '#60a5fa',
-            500: '#3b82f6',
-            600: '#2563eb',
-            700: '#1d4ed8',
-            800: '#1e40af',
-            900: '#1e3a8a',
-            950: '#172554'
+            50: '#EEF3FA',
+            100: '#DCE6F5',
+            200: '#B9CEEB',
+            300: '#8FB0DF',
+            400: '#5E8ACF',
+            500: '#3566B8',
+            600: '#23438F',
+            700: '#1B3573',
+            800: '#152A5C',
+            900: '#102047',
+            950: '#0B1633'
           },
           orange: {
-            50: '#fff7ed',
-            100: '#ffedd5',
-            200: '#fed7aa',
-            300: '#fdba74',
-            400: '#fb923c',
-            500: '#f97316',
-            600: '#ea580c',
-            700: '#c2410c',
-            800: '#9a3412',
-            900: '#7c2d12',
-            950: '#431407'
+            50: '#FFF4EB',
+            100: '#FFE5CF',
+            200: '#FFC899',
+            300: '#FFA961',
+            400: '#F58220',
+            500: '#F58220',
+            600: '#D96D12',
+            700: '#B5570A',
+            800: '#8F4308',
+            900: '#6E3306',
+            950: '#471F02'
           },
-          cyan: {
-            500: '#06b6d4',
-            600: '#0891b2'
-          }
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       },
       boxShadow: {
-        'card': '0 2px 8px -2px rgba(0, 0, 0, 0.05), 0 1px 4px -1px rgba(0, 0, 0, 0.03)',
-        'card-hover': '0 12px 24px -6px rgba(0, 0, 0, 0.08), 0 4px 8px -2px rgba(0, 0, 0, 0.03)'
+        'card': '0 1px 2px 0 rgba(38, 50, 71, 0.04)',
+        'card-hover': '0 4px 12px -2px rgba(38, 50, 71, 0.08)'
       }
     },
   },

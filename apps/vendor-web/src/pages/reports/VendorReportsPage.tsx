@@ -1,185 +1,345 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, Download, IndianRupee, ShoppingCart, Package, Boxes } from 'lucide-react';
+import { vendorApi } from '../../services/vendorApi';
+import { useVendorOrderStore } from '../../store/useVendorOrderStore';
+import { useVendorInventoryStore } from '../../store/useVendorInventoryStore';
+import { useVendorSettlementStore } from '../../store/useVendorSettlementStore';
 import {
-  BarChart3,
-  Download,
-  Calendar,
-  TrendingUp,
-  CheckCircle,
-  Clock,
-  ArrowUpRight,
-  Filter,
-} from 'lucide-react';
-import { Card, CardHeader, CardContent } from '../../components/common/Card';
-import { Button } from '../../components/common/Button';
-import { StatCard } from '../../components/common/StatCard';
+  PageHeader,
+  StatCard,
+  Card,
+  CardHeader,
+  CardContent,
+  Button,
+  Badge,
+} from '../../components/common';
+
+type ReportTab = 'SALES' | 'ORDERS' | 'PRODUCTS' | 'INVENTORY' | 'SETTLEMENTS';
 
 export const VendorReportsPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<ReportTab>('SALES');
   const [dateRange, setDateRange] = useState('30d');
+  const [salesReport, setSalesReport] = useState<any>(null);
+  const [metrics, setMetrics] = useState<any>(null);
 
-  const topSkus = [
-    {
-      sku: 'SKU-BLR-001',
-      name: 'UltraTech Super Cement OPC 53 Grade (50 Kg)',
-      category: 'Cement & Concrete',
-      unitsSold: 840,
-      revenue: 319200,
-      slaRate: '99.1%',
-    },
-    {
-      sku: 'SKU-BLR-002',
-      name: 'Tata Tiscon 550D TMT Rebar (12mm)',
-      category: 'Steel & Structural Metals',
-      unitsSold: 320,
-      revenue: 217600,
-      slaRate: '98.5%',
-    },
-    {
-      sku: 'SKU-BLR-003',
-      name: 'Havells Life Line Plus S3 FRLS Wire (2.5 sq mm)',
-      category: 'Electrical Wires & MCBs',
-      unitsSold: 110,
-      revenue: 294800,
-      slaRate: '97.8%',
-    },
-    {
-      sku: 'SKU-BLR-004',
-      name: 'Supreme Silencio Low-Noise Drainage Pipe (110mm)',
-      category: 'Plumbing & Sanitary',
-      unitsSold: 95,
-      revenue: 83600,
-      slaRate: '98.9%',
-    },
-  ];
+  const { orders, fetchOrders } = useVendorOrderStore();
+  const { inventory, fetchInventory } = useVendorInventoryStore();
+  const { settlements, fetchSettlements } = useVendorSettlementStore();
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [sr, m] = await Promise.all([
+          vendorApi.getSalesReport(dateRange),
+          vendorApi.getDashboardMetrics(dateRange),
+        ]);
+        setSalesReport(sr);
+        setMetrics(m);
+      } catch {}
+    };
+    load();
+    fetchOrders();
+    fetchInventory();
+    fetchSettlements();
+  }, [dateRange]);
+
+  const dailySummary: { date: string; sales: number; orders: number }[] =
+    salesReport?.dailySummary || [];
+  const maxSales = Math.max(1, ...dailySummary.map((d) => d.sales || 0));
+
+  const topCategories: { name: string; revenue: number; percentage: number }[] =
+    salesReport?.topCategories || [];
 
   const exportCsv = () => {
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      'SKU,Product Name,Category,Units Sold,Revenue (INR),SLA Compliance\n' +
-      topSkus.map((e) => `"${e.sku}","${e.name}","${e.category}",${e.unitsSold},${e.revenue},"${e.slaRate}"`).join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const rows = [
+      'Date,Sales (INR),Orders',
+      ...dailySummary.map((d) => `${d.date},${d.sales},${d.orders}`),
+    ];
+    const encodedUri = encodeURI('data:text/csv;charset=utf-8,' + rows.join('\n'));
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `buildora_vendor_sales_report_${dateRange}.csv`);
+    link.setAttribute('download', `buildora_vendor_report_${dateRange}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Performance Analytics & Sales Reports
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Deep dive into fulfillment speeds, fast-moving construction SKUs, and buyer retention.
-          </p>
-        </div>
+    <div className="space-y-6 pb-8">
+      <PageHeader
+        title="Reports & Analytics"
+        description="Review sales trends, order fulfillment, product performance, inventory health, and settlement summaries."
+        actions={
+          <>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="portal-input w-40 py-1.5 text-xs"
+            >
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="90d">Last 90 Days</option>
+            </select>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={exportCsv}
+              leftIcon={<Download className="w-3.5 h-3.5" />}
+            >
+              Export CSV
+            </Button>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-3">
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-            className="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white font-medium"
-          >
-            <option value="7d">Last 7 Days</option>
-            <option value="30d">Last 30 Days</option>
-            <option value="90d">This Quarter (90 Days)</option>
-          </select>
-
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={exportCsv}
-            leftIcon={<Download className="w-3.5 h-3.5" />}
-          >
-            Export CSV
-          </Button>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
+      {/* Summary KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Orders Fulfilled"
-          value="184 Orders"
-          subtitle="99.4% completed successfully"
-          icon={<BarChart3 className="w-5 h-5 text-blue-600" />}
-          trend={{ value: 16.5, isPositive: true, period: 'last month' }}
+          title="Total Revenue"
+          value={`₹${(salesReport?.totalRevenue || metrics?.grossRevenue || 0).toLocaleString('en-IN')}`}
+          subtitle="Selected period"
+          icon={<IndianRupee className="w-4 h-4 text-[#15966B]" />}
         />
-
         <StatCard
-          title="60-Min SLA On-Time Rate"
-          value="98.4%"
-          subtitle="Avg rider handoff: 18m"
-          icon={<Clock className="w-5 h-5 text-emerald-600" />}
-          trend={{ value: 2.1, isPositive: true, period: 'last month' }}
+          title="Total Orders"
+          value={salesReport?.totalOrders || metrics?.totalOrders || orders.length}
+          subtitle="Fulfilled & in progress"
+          icon={<ShoppingCart className="w-4 h-4" />}
         />
-
         <StatCard
           title="Average Order Value"
-          value="₹14,850"
-          subtitle="Contractor bulk orders"
-          icon={<TrendingUp className="w-5 h-5 text-indigo-600" />}
-          trend={{ value: 8.7, isPositive: true, period: 'last month' }}
+          value={`₹${(salesReport?.averageOrderValue || 3238).toLocaleString('en-IN')}`}
+          subtitle="Per order"
+          icon={<BarChart3 className="w-4 h-4" />}
         />
-
         <StatCard
-          title="Return / Dispute Rate"
-          value="0.4%"
-          subtitle="Well below 2% platform cap"
-          icon={<CheckCircle className="w-5 h-5 text-emerald-600" />}
+          title="Low / Out of Stock"
+          value={inventory.filter((i) => i.status !== 'IN_STOCK').length}
+          subtitle="Items needing attention"
+          icon={<Boxes className="w-4 h-4 text-[#E6A23C]" />}
         />
       </div>
 
-      {/* Top SKUs Table */}
-      <Card>
-        <CardHeader
-          title="Top Moving Construction Materials"
-          subtitle="Ranked by gross sales volume across Bengaluru jobsites"
-        />
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-4">SKU & Item Name</th>
-                <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4 text-right">Units Dispatched</th>
-                <th className="py-3 px-4 text-right">Gross Revenue</th>
-                <th className="py-3 px-4 text-right">SLA Fulfillment</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {topSkus.map((item) => (
-                <tr key={item.sku} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-3.5 px-4">
-                    <div className="font-semibold text-slate-900">{item.name}</div>
-                    <div className="text-[11px] font-mono text-slate-400">{item.sku}</div>
-                  </td>
+      {/* Report Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E9F0] pb-2">
+        {[
+          { id: 'SALES', label: 'Sales Reports' },
+          { id: 'ORDERS', label: 'Order Reports' },
+          { id: 'PRODUCTS', label: 'Product Performance' },
+          { id: 'INVENTORY', label: 'Inventory Reports' },
+          { id: 'SETTLEMENTS', label: 'Settlement Reports' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id as ReportTab)}
+            className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === tab.id
+                ? 'bg-[#23438F] text-white'
+                : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-                  <td className="py-3.5 px-4 font-medium text-slate-800">{item.category}</td>
+      {activeTab === 'SALES' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2">
+            <CardHeader title="Daily Sales Trend" subtitle="Gross revenue by day" />
+            <CardContent>
+              <div className="h-56 flex items-end gap-4 pt-4 pb-2 border-b border-[#E5E9F0]">
+                {dailySummary.map((d) => {
+                  const pct = Math.max(12, Math.round((d.sales / maxSales) * 100));
+                  return (
+                    <div
+                      key={d.date}
+                      className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full"
+                    >
+                      <span className="text-[11px] font-medium text-[#718096]">
+                        ₹{Math.round(d.sales / 1000)}k
+                      </span>
+                      <div
+                        style={{ height: `${pct}%` }}
+                        className="w-full max-w-[44px] bg-[#23438F] rounded-t-md"
+                      />
+                      <span className="text-[11px] text-[#718096]">{d.date.slice(5)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
-                  <td className="py-3.5 px-4 text-right font-bold text-slate-900">
-                    {item.unitsSold.toLocaleString('en-IN')}
-                  </td>
-
-                  <td className="py-3.5 px-4 text-right font-bold text-slate-900">
-                    ₹{item.revenue.toLocaleString('en-IN')}
-                  </td>
-
-                  <td className="py-3.5 px-4 text-right">
-                    <span className="font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      {item.slaRate}
-                    </span>
-                  </td>
-                </tr>
+          <Card>
+            <CardHeader title="Category Breakdown" subtitle="Revenue share by category" />
+            <CardContent className="space-y-4">
+              {topCategories.map((cat) => (
+                <div key={cat.name} className="space-y-1.5 text-xs">
+                  <div className="flex justify-between font-medium text-[#263247]">
+                    <span>{cat.name}</span>
+                    <span>₹{cat.revenue.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="h-2 bg-[#F7F8FA] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#23438F] rounded-full"
+                      style={{ width: `${cat.percentage}%` }}
+                    />
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </CardContent>
+          </Card>
         </div>
-      </Card>
+      )}
+
+      {activeTab === 'ORDERS' && (
+        <Card>
+          <CardHeader title="Order Summary" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                <tr>
+                  <th className="py-3 px-4">Order ID</th>
+                  <th className="py-3 px-4">Customer</th>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4 text-right">Amount</th>
+                  <th className="py-3 px-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E9F0]">
+                {orders.map((o) => (
+                  <tr key={o.id}>
+                    <td className="py-3 px-4 font-mono font-semibold text-[#263247]">
+                      {o.orderNumber}
+                    </td>
+                    <td className="py-3 px-4 text-[#263247]">{o.customerName}</td>
+                    <td className="py-3 px-4 text-[#718096]">
+                      {new Date(o.createdAt).toLocaleDateString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4 text-right font-semibold">
+                      ₹{(o.totalAmount || o.subtotal || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <Badge variant="brand" size="sm">
+                        {o.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'PRODUCTS' && (
+        <Card>
+          <CardHeader title="Top Performing Categories" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                <tr>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4 text-right">Revenue</th>
+                  <th className="py-3 px-4 text-right">Share</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E9F0]">
+                {topCategories.map((c) => (
+                  <tr key={c.name}>
+                    <td className="py-3 px-4 font-medium text-[#263247]">{c.name}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-[#263247]">
+                      ₹{c.revenue.toLocaleString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4 text-right text-[#718096]">{c.percentage}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'INVENTORY' && (
+        <Card>
+          <CardHeader title="Inventory Health Report" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                <tr>
+                  <th className="py-3 px-4">Product</th>
+                  <th className="py-3 px-4">SKU</th>
+                  <th className="py-3 px-4 text-right">Available</th>
+                  <th className="py-3 px-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E9F0]">
+                {inventory.map((i) => (
+                  <tr key={i.id}>
+                    <td className="py-3 px-4 font-medium text-[#263247]">{i.name}</td>
+                    <td className="py-3 px-4 font-mono text-[#718096]">{i.sku}</td>
+                    <td className="py-3 px-4 text-right font-semibold">{i.stock}</td>
+                    <td className="py-3 px-4 text-right">
+                      <Badge
+                        variant={
+                          i.status === 'IN_STOCK'
+                            ? 'success'
+                            : i.status === 'LOW_STOCK'
+                            ? 'warning'
+                            : 'danger'
+                        }
+                        size="sm"
+                      >
+                        {i.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'SETTLEMENTS' && (
+        <Card>
+          <CardHeader title="Settlements Summary" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                <tr>
+                  <th className="py-3 px-4">Settlement ID</th>
+                  <th className="py-3 px-4">Period</th>
+                  <th className="py-3 px-4 text-right">Net Payable</th>
+                  <th className="py-3 px-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E9F0]">
+                {settlements.map((s) => (
+                  <tr key={s.id}>
+                    <td className="py-3 px-4 font-mono font-semibold text-[#263247]">
+                      {s.settlementNumber || s.id}
+                    </td>
+                    <td className="py-3 px-4 text-[#718096]">{s.period}</td>
+                    <td className="py-3 px-4 text-right font-semibold">
+                      ₹{(s.netPayable || s.netAmount || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <Badge variant={s.status === 'PAID' ? 'success' : 'warning'} size="sm">
+                        {s.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 };
+
+export default VendorReportsPage;
