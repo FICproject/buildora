@@ -477,7 +477,11 @@ export const vendorApi = {
       body: JSON.stringify({ identifier, type }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to send verification code.');
+    if (!res.ok) {
+      const err: any = new Error(data.message || 'Failed to send verification code.');
+      err.errors = data.errors;
+      throw err;
+    }
     return data;
   },
 
@@ -559,7 +563,11 @@ export const vendorApi = {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Registration failed.');
+    if (!res.ok) {
+      const err: any = new Error(data.message || 'Registration failed.');
+      err.errors = data.errors;
+      throw err;
+    }
     if (data.token) {
       localStorage.setItem('buildora_vendor_token', data.token);
     }
@@ -577,7 +585,11 @@ export const vendorApi = {
       body: JSON.stringify({ vendorId, wizardData, currentStep }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to save registration draft.');
+    if (!res.ok) {
+      const err: any = new Error(data.message || 'Failed to save registration draft.');
+      err.errors = data.errors;
+      throw err;
+    }
     return data;
   },
 
@@ -625,7 +637,11 @@ export const vendorApi = {
       body: JSON.stringify({ vendorId, wizardData }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to submit vendor application.');
+    if (!res.ok) {
+      const err: any = new Error(data.message || 'Failed to submit vendor application.');
+      err.errors = data.errors;
+      throw err;
+    }
     if (data.token) {
       localStorage.setItem('buildora_vendor_token', data.token);
     }
@@ -660,6 +676,25 @@ export const vendorApi = {
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       body: JSON.stringify(docPayload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Document upload failed.');
+    return data.document;
+  },
+
+  async uploadDocumentFile(file: File, type: string, title: string) {
+    const token = localStorage.getItem('buildora_vendor_token');
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('type', type);
+    formData.append('title', title);
+
+    const res = await fetch(`${API_BASE_URL}/vendor/registration/upload-doc-file`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: formData,
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Document upload failed.');

@@ -84,7 +84,10 @@ async function runTestSuite() {
   assert(validateIndianMobile('8765432109').isValid === true, 'Valid 10-digit starting with 8 accepted');
   assert(validateIndianMobile('7019876543').isValid === true, 'Valid 10-digit starting with 7 accepted');
   assert(validateIndianMobile('6362145890').isValid === true, 'Valid 10-digit starting with 6 accepted');
-  assert(validateIndianMobile('+91 98450 12345').isValid === true, '+91 prefix formatted mobile accepted');
+  assert(validateIndianMobile('+91 98450 12345').isValid === false, 'Formatted +91/spaces rejected by strict ^[6-9][0-9]{9}$ mobile check');
+  assert(validateIndianMobile('98765432101').isValid === false, '11-digit mobile rejected (never truncated)');
+  assert(validateIndianMobile('98765abc10').isValid === false, 'Alphanumeric mobile rejected');
+  assert(validateIdentifier('+91 98450 12345').isValid === true, 'Login identifier accepts +91 formatted mobile');
   assert(validateIndianMobile('5845012345').isValid === false, 'Mobile starting with 5 rejected');
   assert(validateIndianMobile('1234567890').isValid === false, 'Mobile starting with 1 rejected');
   assert(validateIndianMobile('98450ABCD5').isValid === false, 'Alphabets in mobile rejected');

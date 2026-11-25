@@ -1,54 +1,179 @@
-// Shared schema validations for BUILDORA 60
+// Shared schema validations and data integrity checkers for BUILDORA 60
+// Single source of truth used by both frontend (apps/vendor-web) and backend (services/backend/api).
+
+export const VALIDATION_PATTERNS = {
+  // Unicode-aware name: letters, combining marks, spaces, dots, apostrophes, hyphens (min 2, max 100)
+  NAME: /^[\p{L}][\p{L}\p{M} .'-]{1,99}$/u,
+  // Strict business email pattern
+  EMAIL: /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/,
+  // Strict Indian 10-digit mobile number starting with 6, 7, 8, or 9
+  INDIAN_MOBILE: /^[6-9][0-9]{9}$/,
+  // Strict 6-digit Indian postal pincode starting with 1-9
+  PINCODE: /^[1-9][0-9]{5}$/,
+  // Indian PAN: 5 uppercase letters + 4 digits + 1 uppercase letter
+  PAN: /^[A-Z]{5}[0-9]{4}[A-Z]$/,
+  // Indian GSTIN structural pattern: 2-digit state + 10-char PAN + entity + 'Z' + check char
+  GSTIN: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/,
+  // Indian IFSC: 4 uppercase letters + '0' + 6 alphanumeric characters
+  IFSC: /^[A-Z]{4}0[A-Z0-9]{6}$/,
+  // Numeric bank account number (9 to 18 digits)
+  BANK_ACCOUNT: /^[0-9]{9,18}$/,
+  // Legal business name (letters, numbers, spaces, business punctuation, Unicode letters)
+  LEGAL_BUSINESS_NAME: /^[\p{L}\p{N}][\p{L}\p{N}\p{M}\s.&,'\-\/()]{1,149}$/u,
+  // Store / trade name
+  STORE_NAME: /^[\p{L}\p{N}][\p{L}\p{N}\p{M}\s.&,'\-\/()]{1,99}$/u,
+  // Location (city/state)
+  CITY_OR_STATE: /^[\p{L}][\p{L}\p{M}\s.\-\/()]{1,79}$/u,
+  // Registered address
+  ADDRESS: /^[\p{L}\p{N}\p{M}\s.,\-\/#()&:'\r\n]{5,250}$/u,
+  // Bank name
+  BANK_NAME: /^[\p{L}\p{N}][\p{L}\p{N}\s.&'\-()]{1,79}$/u,
+  // Website URL
+  WEBSITE: /^https?:\/\/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?(\/[^\s]*)?$/i
+} as const;
+
+export const VALIDATION_LIMITS = {
+  NAME_MIN: 2,
+  NAME_MAX: 100,
+  EMAIL_MAX: 100,
+  PASSWORD_MIN: 8,
+  PASSWORD_MAX: 128,
+  LEGAL_BUSINESS_NAME_MIN: 2,
+  LEGAL_BUSINESS_NAME_MAX: 150,
+  STORE_NAME_MIN: 2,
+  STORE_NAME_MAX: 100,
+  DESCRIPTION_MAX: 1000,
+  ADDRESS_MIN: 5,
+  ADDRESS_MAX: 250,
+  BANK_NAME_MIN: 2,
+  BANK_NAME_MAX: 80,
+  BANK_ACCOUNT_MIN: 9,
+  BANK_ACCOUNT_MAX: 18,
+  MAX_LOGO_SIZE_BYTES: 5 * 1024 * 1024, // 5 MB
+  MAX_KYC_DOC_SIZE_BYTES: 5 * 1024 * 1024 // 5 MB
+} as const;
+
+export const ALLOWED_BUSINESS_TYPES = [
+  'MANUFACTURER',
+  'DISTRIBUTOR',
+  'WHOLESALER',
+  'DEALER',
+  'RETAILER',
+  'OTHER'
+] as const;
+
+export const ALLOWED_BUSINESS_REGISTRATION_TYPES = [
+  'PRIVATE_LIMITED',
+  'PUBLIC_LIMITED',
+  'LLP',
+  'PARTNERSHIP',
+  'PROPRIETORSHIP',
+  'OTHER'
+] as const;
+
+export const ALLOWED_BANK_ACCOUNT_TYPES = ['CURRENT', 'SAVINGS'] as const;
+
+export const ALLOWED_KYC_DOCUMENT_TYPES = [
+  'BUSINESS_REGISTRATION',
+  'GST_CERTIFICATE',
+  'PAN_CARD',
+  'AUTHORIZED_ID',
+  'CANCELLED_CHEQUE',
+  'CATALOGUE',
+  'OTHER'
+] as const;
+
+export const ALLOWED_LOGO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'] as const;
+export const ALLOWED_KYC_DOC_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'] as const;
+
+export const MAX_LOGO_SIZE_BYTES = VALIDATION_LIMITS.MAX_LOGO_SIZE_BYTES;
+export const MAX_KYC_DOC_SIZE_BYTES = VALIDATION_LIMITS.MAX_KYC_DOC_SIZE_BYTES;
+
+// Valid Indian GST State Codes (01-38, 97 Other Territory, 99 Centre Jurisdiction)
+const VALID_GST_STATE_CODES = new Set([
+  '01', '02', '03', '04', '05', '06', '07', '08', '09', '10',
+  '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
+  '21', '22', '23', '24', '25', '26', '27', '28', '29', '30',
+  '31', '32', '33', '34', '35', '36', '37', '38', '97', '99'
+]);
+
+const GSTIN_CHARSET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+export interface FieldValidationResult {
+  isValid: boolean;
+  error?: string;
+  normalized?: string;
+}
 
 /**
- * Validates full name fields (Owner Name, Authorized Person, Account Holder, Contact Person).
- * Accepts alphabetic letters, spaces, dots, hyphens, and Unicode letters (e.g. Indian regional characters).
- * Strictly rejects numbers and special symbols.
+ * Validates full name fields (Owner / Authorized Person Full Name, Account Beneficiary Name).
+ * Accepts Unicode letters, spaces, dots, apostrophes, and hyphens (2 to 100 chars).
+ * Strictly rejects numbers and unnecessary special symbols.
  */
-export function validateName(name: string): { isValid: boolean; error?: string } {
-  if (!name || !name.trim()) {
-    return { isValid: false, error: 'Name is required.' };
+export function validateName(name: string, fieldLabel = 'Full Name'): FieldValidationResult {
+  if (typeof name !== 'string' || !name.trim()) {
+    return { isValid: false, error: `${fieldLabel} is required.` };
   }
-  const clean = name.trim();
-  if (clean.length < 2) {
-    return { isValid: false, error: 'Name must be at least 2 characters long.' };
+  const clean = name.trim().replace(/\s+/g, ' ');
+  if (clean.length < VALIDATION_LIMITS.NAME_MIN) {
+    return { isValid: false, error: `${fieldLabel} must be at least ${VALIDATION_LIMITS.NAME_MIN} characters long.` };
   }
-  if (clean.length > 70) {
-    return { isValid: false, error: 'Name cannot exceed 70 characters.' };
+  if (clean.length > VALIDATION_LIMITS.NAME_MAX) {
+    return { isValid: false, error: `${fieldLabel} cannot exceed ${VALIDATION_LIMITS.NAME_MAX} characters.` };
   }
-  // Reject digits
   if (/\d/.test(clean)) {
-    return { isValid: false, error: 'Name must not contain numbers.' };
+    return { isValid: false, error: `${fieldLabel} must not contain numbers.` };
   }
-  // Accept letters, spaces, dots, single quotes, hyphens, and Unicode alphabetic scripts
-  const nameRegex = /^[a-zA-Z\s.'\-\u00C0-\u024F\u0900-\u0D7F]+$/;
-  if (!nameRegex.test(clean)) {
-    return { isValid: false, error: 'Name must contain only alphabetic letters, spaces, and dots.' };
+  if (!VALIDATION_PATTERNS.NAME.test(clean)) {
+    return {
+      isValid: false,
+      error: `${fieldLabel} must contain only letters, spaces, dots, hyphens, or apostrophes.`
+    };
   }
-  return { isValid: true };
+  // Ensure it contains at least 2 actual letters (prevents strings like "A...")
+  const letterCount = (clean.match(/\p{L}/gu) || []).length;
+  if (letterCount < 2) {
+    return { isValid: false, error: `${fieldLabel} must contain at least 2 alphabetic letters.` };
+  }
+  return { isValid: true, normalized: clean };
 }
 
 export function isValidName(name: string): boolean {
   return validateName(name).isValid;
 }
 
+export function validateAccountBeneficiaryName(name: string): FieldValidationResult {
+  return validateName(name, 'Account Beneficiary Name');
+}
+
 /**
  * Validates official business email address.
- * Standard RFC-compliant format check.
+ * Rejects spaces, invalid domains, consecutive dots, and malformed addresses.
  */
-export function validateEmail(email: string): { isValid: boolean; error?: string } {
-  if (!email || !email.trim()) {
-    return { isValid: false, error: 'Email address is required.' };
+export function validateEmail(email: string): FieldValidationResult {
+  if (typeof email !== 'string' || !email.trim()) {
+    return { isValid: false, error: 'Business email address is required.' };
   }
   const clean = email.trim().toLowerCase();
-  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  if (!emailRegex.test(clean)) {
-    return { isValid: false, error: 'Please enter a valid business email address (e.g. partner@supplierdomain.com).' };
+  if (clean.length > VALIDATION_LIMITS.EMAIL_MAX) {
+    return { isValid: false, error: `Email address cannot exceed ${VALIDATION_LIMITS.EMAIL_MAX} characters.` };
   }
-  if (clean.length > 100) {
-    return { isValid: false, error: 'Email address cannot exceed 100 characters.' };
+  if (/\s/.test(clean) || clean.includes('..')) {
+    return { isValid: false, error: 'Enter a valid business email address.' };
   }
-  return { isValid: true };
+  if (!VALIDATION_PATTERNS.EMAIL.test(clean)) {
+    return { isValid: false, error: 'Enter a valid business email address.' };
+  }
+  const [localPart, domainPart] = clean.split('@');
+  if (!localPart || !domainPart || localPart.startsWith('.') || localPart.endsWith('.')) {
+    return { isValid: false, error: 'Enter a valid business email address.' };
+  }
+  const domainLabels = domainPart.split('.');
+  const tld = domainLabels[domainLabels.length - 1];
+  if (!tld || tld.length < 2 || !/^[a-z]{2,}$/i.test(tld)) {
+    return { isValid: false, error: 'Enter a valid business email address.' };
+  }
+  return { isValid: true, normalized: clean };
 }
 
 export function isValidEmail(email: string): boolean {
@@ -56,26 +181,18 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
- * Validates Indian 10-digit mobile number.
- * Must start with 6, 7, 8, or 9 and be exactly 10 numeric digits.
+ * Strictly validates Indian 10-digit mobile number using ^[6-9][0-9]{9}$.
+ * Does NOT strip characters or silently truncate invalid numbers.
+ * Rejects spaces, alphabets, special characters, <10 digits, >10 digits, or numbers starting with 0-5.
  */
-export function validateIndianMobile(phone: string): { isValid: boolean; error?: string } {
-  if (!phone || !phone.trim()) {
-    return { isValid: false, error: 'Mobile number is required.' };
+export function validateIndianMobile(phone: string): FieldValidationResult {
+  if (typeof phone !== 'string' || phone.length === 0 || !phone.trim()) {
+    return { isValid: false, error: 'Enter a valid 10-digit mobile number starting with 6–9.' };
   }
-  // Check if non-digits are present
-  const clean = phone.trim().replace(/\D/g, '');
-  if (phone.trim().length !== clean.length && !phone.trim().startsWith('+91')) {
-    return { isValid: false, error: 'Mobile number must contain digits only.' };
+  if (!VALIDATION_PATTERNS.INDIAN_MOBILE.test(phone)) {
+    return { isValid: false, error: 'Enter a valid 10-digit mobile number starting with 6–9.' };
   }
-  const digits10 = clean.slice(-10);
-  if (digits10.length !== 10) {
-    return { isValid: false, error: 'Enter a valid 10-digit Indian mobile number.' };
-  }
-  if (!/^[6-9]\d{9}$/.test(digits10)) {
-    return { isValid: false, error: 'Indian mobile numbers must start with 6, 7, 8, or 9.' };
-  }
-  return { isValid: true };
+  return { isValid: true, normalized: phone };
 }
 
 export function isValidMobile(phone: string): boolean {
@@ -83,44 +200,45 @@ export function isValidMobile(phone: string): boolean {
 }
 
 /**
- * Validates login identifier which can be either an email address or a 10-digit mobile number.
+ * Validates login identifier which can be either an email address or a 10-digit mobile number
+ * (optionally prefixed with +91 on login forms).
  */
-export function validateIdentifier(identifier: string): { isValid: boolean; type: 'EMAIL' | 'MOBILE' | 'INVALID'; error?: string } {
-  if (!identifier || !identifier.trim()) {
+export function validateIdentifier(identifier: string): {
+  isValid: boolean;
+  type: 'EMAIL' | 'MOBILE' | 'INVALID';
+  error?: string;
+  normalized?: string;
+} {
+  if (typeof identifier !== 'string' || !identifier.trim()) {
     return { isValid: false, type: 'INVALID', error: 'Please enter your registered email or 10-digit mobile number.' };
   }
   const clean = identifier.trim();
   if (clean.includes('@')) {
     const res = validateEmail(clean);
-    return { isValid: res.isValid, type: res.isValid ? 'EMAIL' : 'INVALID', error: res.error };
+    return { isValid: res.isValid, type: res.isValid ? 'EMAIL' : 'INVALID', error: res.error, normalized: res.normalized };
   }
-  const digitsOnly = clean.replace(/\D/g, '');
-  if (digitsOnly.length === 10) {
-    const res = validateIndianMobile(clean);
-    return { isValid: res.isValid, type: res.isValid ? 'MOBILE' : 'INVALID', error: res.error };
-  }
-  return { isValid: false, type: 'INVALID', error: 'Enter a valid business email or 10-digit mobile number.' };
+  // Allow optional +91 prefix only for login identifier lookup while enforcing strict 10-digit rule
+  const candidate = clean.startsWith('+91') ? clean.slice(3).replace(/\s+/g, '') : clean;
+  const res = validateIndianMobile(candidate);
+  return {
+    isValid: res.isValid,
+    type: res.isValid ? 'MOBILE' : 'INVALID',
+    error: res.isValid ? undefined : 'Enter a valid business email or 10-digit mobile number starting with 6–9.',
+    normalized: res.normalized
+  };
 }
 
 /**
- * Validates 6-digit Indian Postal Pincode.
- * Must be exactly 6 digits and cannot start with 0.
+ * Strictly validates 6-digit Indian Postal Pincode using ^[1-9][0-9]{5}$.
  */
-export function validatePincode(pincode: string): { isValid: boolean; error?: string } {
-  if (!pincode || !pincode.trim()) {
-    return { isValid: false, error: 'Pincode is required.' };
+export function validatePincode(pincode: string): FieldValidationResult {
+  if (typeof pincode !== 'string' || !pincode.trim()) {
+    return { isValid: false, error: 'Enter a valid 6-digit pincode starting with 1–9.' };
   }
-  const clean = pincode.trim();
-  if (/\D/.test(clean)) {
-    return { isValid: false, error: 'Pincode must contain numeric digits only.' };
+  if (!VALIDATION_PATTERNS.PINCODE.test(pincode)) {
+    return { isValid: false, error: 'Enter a valid 6-digit pincode starting with 1–9.' };
   }
-  if (clean.length !== 6) {
-    return { isValid: false, error: 'Pincode must be exactly 6 digits.' };
-  }
-  if (!/^[1-9][0-9]{5}$/.test(clean)) {
-    return { isValid: false, error: 'Enter a valid 6-digit Indian Postal Pincode (e.g. 560058).' };
-  }
-  return { isValid: true };
+  return { isValid: true, normalized: pincode };
 }
 
 export function isValidPincode(pincode: string): boolean {
@@ -128,22 +246,67 @@ export function isValidPincode(pincode: string): boolean {
 }
 
 /**
- * Validates Indian GSTIN (Goods and Services Tax Identification Number).
- * Format: 2-digit state code + 10-char PAN + 1 entity code + 'Z' + 1 checksum.
+ * Computes official Mod-36 GSTIN check digit for the first 14 characters.
  */
-export function validateGSTIN(gstin: string): { isValid: boolean; error?: string } {
-  if (!gstin || !gstin.trim()) {
-    return { isValid: false, error: 'GSTIN is required.' };
+export function computeGstinChecksum(gstin14: string): string {
+  const clean = (gstin14 || '').trim().toUpperCase();
+  if (clean.length < 14) return '';
+  let factor = 1;
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    const code = GSTIN_CHARSET.indexOf(clean[i]);
+    if (code === -1) return '';
+    const product = code * factor;
+    sum += Math.floor(product / 36) + (product % 36);
+    factor = factor === 1 ? 2 : 1;
+  }
+  const remainder = sum % 36;
+  return GSTIN_CHARSET[(36 - remainder) % 36];
+}
+
+/**
+ * Validates Indian GSTIN structural pattern, valid state code, embedded PAN holder code,
+ * and evaluates the official Mod-36 checksum.
+ */
+export function validateGSTIN(
+  gstin: string,
+  options?: { strictChecksum?: boolean }
+): FieldValidationResult & { checksumValid?: boolean; warning?: string } {
+  if (typeof gstin !== 'string' || !gstin.trim()) {
+    return { isValid: false, error: 'Enter a valid GSTIN.' };
   }
   const clean = gstin.trim().toUpperCase();
-  if (clean.length !== 15) {
-    return { isValid: false, error: 'GSTIN must be exactly 15 alphanumeric characters.' };
+  if (clean.length !== 15 || !VALIDATION_PATTERNS.GSTIN.test(clean)) {
+    return { isValid: false, error: 'Enter a valid GSTIN.' };
   }
-  const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-  if (!gstinRegex.test(clean)) {
-    return { isValid: false, error: 'Invalid GSTIN format (e.g. 29AABCB9876F1Z2).' };
+  const stateCode = clean.slice(0, 2);
+  if (!VALID_GST_STATE_CODES.has(stateCode)) {
+    return { isValid: false, error: 'GSTIN has an invalid Indian state code.' };
   }
-  return { isValid: true };
+  const panEntityCode = clean[5];
+  if (!/[CPHFATBLJG]/.test(panEntityCode)) {
+    return { isValid: false, error: 'Enter a valid GSTIN.' };
+  }
+
+  const expectedChecksum = computeGstinChecksum(clean);
+  const checksumValid = Boolean(expectedChecksum && clean[14] === expectedChecksum);
+
+  if (options?.strictChecksum && !checksumValid) {
+    return {
+      isValid: false,
+      checksumValid: false,
+      error: 'GSTIN checksum verification failed. Please check the 15th character.'
+    };
+  }
+
+  return {
+    isValid: true,
+    normalized: clean,
+    checksumValid,
+    warning: checksumValid
+      ? undefined
+      : 'Structure matches GSTIN format, but check digit does not match Mod-36 checksum — verify against your GST REG-06 certificate.'
+  };
 }
 
 export function isValidGSTIN(gstin: string): boolean {
@@ -151,28 +314,25 @@ export function isValidGSTIN(gstin: string): boolean {
 }
 
 /**
- * Validates Indian PAN (Permanent Account Number).
- * Format: 5 uppercase letters + 4 digits + 1 uppercase letter.
- * 4th character indicates holder status: [CPHFATBLJG].
+ * Validates Indian PAN (Permanent Account Number): ^[A-Z]{5}[0-9]{4}[A-Z]$.
+ * Normalizes to uppercase and validates 4th-character entity status [CPHFATBLJG].
  */
-export function validatePAN(pan: string): { isValid: boolean; error?: string } {
-  if (!pan || !pan.trim()) {
-    return { isValid: false, error: 'PAN is required.' };
+export function validatePAN(pan: string): FieldValidationResult {
+  if (typeof pan !== 'string' || !pan.trim()) {
+    return { isValid: false, error: 'Enter a valid 10-character PAN.' };
   }
   const clean = pan.trim().toUpperCase();
-  if (clean.length !== 10) {
-    return { isValid: false, error: 'PAN must be exactly 10 alphanumeric characters.' };
+  if (clean.length !== 10 || !VALIDATION_PATTERNS.PAN.test(clean)) {
+    return { isValid: false, error: 'Enter a valid 10-character PAN.' };
   }
-  const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-  if (!panRegex.test(clean)) {
-    return { isValid: false, error: 'Invalid PAN format (e.g. AABCB9876F).' };
-  }
-  // Check 4th character status
   const fourthChar = clean[3];
   if (!/[CPHFATBLJG]/.test(fourthChar)) {
-    return { isValid: false, error: 'Invalid PAN entity code at 4th position (must be C, P, H, F, A, T, B, L, J, or G).' };
+    return {
+      isValid: false,
+      error: 'Invalid PAN entity code at 4th position (must be C, P, H, F, A, T, B, L, J, or G).'
+    };
   }
-  return { isValid: true };
+  return { isValid: true, normalized: clean };
 }
 
 export function isValidPAN(pan: string): boolean {
@@ -180,44 +340,54 @@ export function isValidPAN(pan: string): boolean {
 }
 
 /**
- * Validates Indian Bank Account Number.
- * Standard Indian banking account numbers range from 9 to 18 numeric digits.
+ * Validates Indian Bank Account Number (numeric only, 9 to 18 digits).
  */
-export function validateBankAccount(accountNumber: string): { isValid: boolean; error?: string } {
-  if (!accountNumber || !accountNumber.trim()) {
+export function validateBankAccount(accountNumber: string): FieldValidationResult {
+  if (typeof accountNumber !== 'string' || !accountNumber.trim()) {
     return { isValid: false, error: 'Bank account number is required.' };
   }
-  const clean = accountNumber.trim();
-  if (/\D/.test(clean)) {
-    return { isValid: false, error: 'Account number must contain digits only.' };
-  }
-  if (clean.length < 9 || clean.length > 18) {
+  if (!VALIDATION_PATTERNS.BANK_ACCOUNT.test(accountNumber)) {
+    if (/\D/.test(accountNumber)) {
+      return { isValid: false, error: 'Bank account number must contain numeric digits only.' };
+    }
     return { isValid: false, error: 'Bank account number must be between 9 and 18 digits.' };
   }
-  return { isValid: true };
+  // Reject trivial repeated single digit like 000000000
+  if (/^(\d)\1+$/.test(accountNumber)) {
+    return { isValid: false, error: 'Enter a valid bank account number.' };
+  }
+  return { isValid: true, normalized: accountNumber };
 }
 
 export function isValidBankAccount(accountNumber: string): boolean {
   return validateBankAccount(accountNumber).isValid;
 }
 
+export function validateConfirmBankAccount(accountNumber: string, confirmAccountNumber: string): FieldValidationResult {
+  if (typeof confirmAccountNumber !== 'string' || !confirmAccountNumber) {
+    return { isValid: false, error: 'Please confirm your bank account number.' };
+  }
+  if (/\D/.test(confirmAccountNumber)) {
+    return { isValid: false, error: 'Confirm account number must contain numeric digits only.' };
+  }
+  if (accountNumber !== confirmAccountNumber) {
+    return { isValid: false, error: 'Bank account numbers do not match.' };
+  }
+  return { isValid: true, normalized: confirmAccountNumber };
+}
+
 /**
- * Validates Indian Financial System Code (IFSC).
- * Format: 4 uppercase alphabetic bank code + '0' + 6 alphanumeric branch code (11 characters total).
+ * Validates Indian Financial System Code (IFSC): ^[A-Z]{4}0[A-Z0-9]{6}$.
  */
-export function validateIFSC(ifsc: string): { isValid: boolean; error?: string } {
-  if (!ifsc || !ifsc.trim()) {
-    return { isValid: false, error: 'IFSC code is required.' };
+export function validateIFSC(ifsc: string): FieldValidationResult {
+  if (typeof ifsc !== 'string' || !ifsc.trim()) {
+    return { isValid: false, error: 'Enter a valid 11-character IFSC code.' };
   }
   const clean = ifsc.trim().toUpperCase();
-  if (clean.length !== 11) {
-    return { isValid: false, error: 'IFSC code must be exactly 11 characters.' };
+  if (clean.length !== 11 || !VALIDATION_PATTERNS.IFSC.test(clean)) {
+    return { isValid: false, error: 'Enter a valid 11-character IFSC code.' };
   }
-  const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-  if (!ifscRegex.test(clean)) {
-    return { isValid: false, error: 'Invalid IFSC format (e.g. HDFC0000053: 4 letters + 0 + 6 alphanumeric).' };
-  }
-  return { isValid: true };
+  return { isValid: true, normalized: clean };
 }
 
 export function isValidIFSC(ifsc: string): boolean {
@@ -226,7 +396,7 @@ export function isValidIFSC(ifsc: string): boolean {
 
 /**
  * Validates enterprise password and computes security strength.
- * Requirements: min 8 characters, at least 1 uppercase, 1 lowercase, 1 digit, 1 special character.
+ * Requirements: min 8 characters (max 128), at least 1 uppercase, 1 lowercase, 1 digit, 1 special character.
  */
 export function validatePassword(password: string): {
   isValid: boolean;
@@ -241,12 +411,13 @@ export function validatePassword(password: string): {
     special: boolean;
   };
 } {
+  const val = typeof password === 'string' ? password : '';
   const criteria = {
-    length: (password || '').length >= 8,
-    uppercase: /[A-Z]/.test(password || ''),
-    lowercase: /[a-z]/.test(password || ''),
-    number: /[0-9]/.test(password || ''),
-    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password || '')
+    length: val.length >= VALIDATION_LIMITS.PASSWORD_MIN && val.length <= VALIDATION_LIMITS.PASSWORD_MAX,
+    uppercase: /[A-Z]/.test(val),
+    lowercase: /[a-z]/.test(val),
+    number: /[0-9]/.test(val),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(val)
   };
 
   const score = Object.values(criteria).filter(Boolean).length;
@@ -254,18 +425,16 @@ export function validatePassword(password: string): {
   if (score >= 5) strength = 'STRONG';
   else if (score >= 3) strength = 'MEDIUM';
 
-  const isValid = score === 5;
+  const isValid = score === 5 && !/\s/.test(val);
   let error: string | undefined;
-  if (!criteria.length) {
-    error = 'Password must be at least 8 characters long.';
-  } else if (!criteria.uppercase) {
-    error = 'Password must include at least one uppercase letter (A-Z).';
-  } else if (!criteria.lowercase) {
-    error = 'Password must include at least one lowercase letter (a-z).';
-  } else if (!criteria.number) {
-    error = 'Password must include at least one number (0-9).';
-  } else if (!criteria.special) {
-    error = 'Password must include at least one special character (!@#$%^&*).';
+  if (!val) {
+    error = 'Password is required.';
+  } else if (val.length > VALIDATION_LIMITS.PASSWORD_MAX) {
+    error = `Password cannot exceed ${VALIDATION_LIMITS.PASSWORD_MAX} characters.`;
+  } else if (/\s/.test(val)) {
+    error = 'Password must not contain spaces.';
+  } else if (!isValid) {
+    error = 'Password does not meet the required security criteria.';
   }
 
   return { isValid, score, strength, error, criteria };
@@ -274,7 +443,7 @@ export function validatePassword(password: string): {
 /**
  * Validates confirm password matches password.
  */
-export function validateConfirmPassword(password: string, confirmPassword: string): { isValid: boolean; error?: string } {
+export function validateConfirmPassword(password: string, confirmPassword: string): FieldValidationResult {
   if (!confirmPassword) {
     return { isValid: false, error: 'Please confirm your password.' };
   }
@@ -285,28 +454,34 @@ export function validateConfirmPassword(password: string, confirmPassword: strin
 }
 
 /**
- * Validates registered address.
+ * Validates registered business address.
  */
-export function validateAddress(address: string): { isValid: boolean; error?: string } {
-  if (!address || !address.trim()) {
+export function validateAddress(address: string): FieldValidationResult {
+  if (typeof address !== 'string' || !address.trim()) {
     return { isValid: false, error: 'Registered business address is required.' };
   }
   const clean = address.trim();
-  if (clean.length < 5) {
+  if (clean.length < VALIDATION_LIMITS.ADDRESS_MIN) {
     return { isValid: false, error: 'Address must be at least 5 characters long.' };
   }
-  if (clean.length > 250) {
+  if (clean.length > VALIDATION_LIMITS.ADDRESS_MAX) {
     return { isValid: false, error: 'Address cannot exceed 250 characters.' };
   }
-  return { isValid: true };
+  if (!VALIDATION_PATTERNS.ADDRESS.test(clean)) {
+    return { isValid: false, error: 'Address contains unsupported special characters.' };
+  }
+  if (!/[\p{L}\p{N}]/u.test(clean)) {
+    return { isValid: false, error: 'Enter a valid street and building address.' };
+  }
+  return { isValid: true, normalized: clean };
 }
 
 /**
- * Validates year of establishment.
+ * Validates year of establishment (optional).
  */
-export function validateYearOfEstablishment(year: string): { isValid: boolean; error?: string } {
+export function validateYearOfEstablishment(year: string): FieldValidationResult {
   if (!year || !year.trim()) {
-    return { isValid: true }; // Optional field
+    return { isValid: true, normalized: '' };
   }
   const clean = year.trim();
   if (!/^\d{4}$/.test(clean)) {
@@ -317,90 +492,207 @@ export function validateYearOfEstablishment(year: string): { isValid: boolean; e
   if (num < 1800 || num > currentYear) {
     return { isValid: false, error: `Year must be between 1800 and ${currentYear}.` };
   }
-  return { isValid: true };
+  return { isValid: true, normalized: clean };
 }
 
 /**
- * Validates website URL.
+ * Validates website URL (optional).
  */
-export function validateWebsite(website: string): { isValid: boolean; error?: string } {
+export function validateWebsite(website: string): FieldValidationResult {
   if (!website || !website.trim()) {
-    return { isValid: true }; // Optional
+    return { isValid: true, normalized: '' };
   }
   const clean = website.trim();
-  const urlRegex = /^https?:\/\/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(:\d+)?(\/[^\s]*)?$/i;
-  if (!urlRegex.test(clean)) {
-    return { isValid: false, error: 'Please enter a valid website URL starting with http:// or https://' };
+  if (clean.length > 200 || !VALIDATION_PATTERNS.WEBSITE.test(clean)) {
+    return { isValid: false, error: 'Enter a valid website URL starting with http:// or https://.' };
   }
-  return { isValid: true };
+  return { isValid: true, normalized: clean };
 }
 
 /**
- * Validates Legal Entity Business Name or Store/Trade Name.
- * Allows letters, numbers, spaces, &, ., -, ', (, ), / and regional scripts.
+ * Validates business description (optional, max 1000 chars).
  */
-export function validateBusinessName(name: string, fieldLabel = 'Business Name'): { isValid: boolean; error?: string } {
-  if (!name || !name.trim()) {
+export function validateBusinessDescription(description: string): FieldValidationResult {
+  if (!description || !description.trim()) {
+    return { isValid: true, normalized: '' };
+  }
+  const clean = description.trim();
+  if (clean.length > VALIDATION_LIMITS.DESCRIPTION_MAX) {
+    return { isValid: false, error: `Description cannot exceed ${VALIDATION_LIMITS.DESCRIPTION_MAX} characters.` };
+  }
+  return { isValid: true, normalized: clean };
+}
+
+/**
+ * Validates Legal Entity Business Name (max 150) or Store / Trade Name (max 100).
+ */
+export function validateBusinessName(
+  name: string,
+  fieldLabel = 'Business Name',
+  maxLength: number = VALIDATION_LIMITS.LEGAL_BUSINESS_NAME_MAX
+): FieldValidationResult {
+  if (typeof name !== 'string' || !name.trim()) {
     return { isValid: false, error: `${fieldLabel} is required.` };
   }
-  const clean = name.trim();
+  const clean = name.trim().replace(/\s+/g, ' ');
   if (clean.length < 2) {
     return { isValid: false, error: `${fieldLabel} must be at least 2 characters long.` };
   }
-  if (clean.length > 120) {
-    return { isValid: false, error: `${fieldLabel} cannot exceed 120 characters.` };
+  if (clean.length > maxLength) {
+    return { isValid: false, error: `${fieldLabel} cannot exceed ${maxLength} characters.` };
   }
-  const bizRegex = /^[a-zA-Z0-9\s.&,'\-\/()\u00C0-\u024F\u0900-\u0D7F]+$/;
-  if (!bizRegex.test(clean)) {
+  const pattern =
+    maxLength <= VALIDATION_LIMITS.STORE_NAME_MAX
+      ? VALIDATION_PATTERNS.STORE_NAME
+      : VALIDATION_PATTERNS.LEGAL_BUSINESS_NAME;
+  if (!pattern.test(clean)) {
     return { isValid: false, error: `${fieldLabel} contains unsupported special characters.` };
   }
-  return { isValid: true };
+  // Reject meaningless values without at least 2 letters
+  const letterCount = (clean.match(/\p{L}/gu) || []).length;
+  if (letterCount < 2) {
+    return { isValid: false, error: `Enter a valid ${fieldLabel.toLowerCase()}.` };
+  }
+  return { isValid: true, normalized: clean };
+}
+
+export function validateLegalBusinessName(name: string): FieldValidationResult {
+  return validateBusinessName(name, 'Legal Entity Business Name', VALIDATION_LIMITS.LEGAL_BUSINESS_NAME_MAX);
+}
+
+export function validateStoreName(name: string): FieldValidationResult {
+  return validateBusinessName(name, 'Trade Name / Store Name', VALIDATION_LIMITS.STORE_NAME_MAX);
+}
+
+export function validateBusinessType(value: string): FieldValidationResult {
+  if (!value || !ALLOWED_BUSINESS_TYPES.includes(value as any)) {
+    return { isValid: false, error: 'Please select a valid Business Supplier Type.' };
+  }
+  return { isValid: true, normalized: value };
+}
+
+export function validateBusinessRegistrationType(value: string): FieldValidationResult {
+  if (!value || !ALLOWED_BUSINESS_REGISTRATION_TYPES.includes(value as any)) {
+    return { isValid: false, error: 'Please select a valid Business Registration Constitution.' };
+  }
+  return { isValid: true, normalized: value };
 }
 
 /**
  * Validates City or State name.
- * Letters, spaces, dots, hyphens, slashes only (no digits or symbols).
  */
-export function validateCityOrState(value: string, fieldLabel = 'Location'): { isValid: boolean; error?: string } {
-  if (!value || !value.trim()) {
+export function validateCityOrState(value: string, fieldLabel = 'Location'): FieldValidationResult {
+  if (typeof value !== 'string' || !value.trim()) {
     return { isValid: false, error: `${fieldLabel} is required.` };
   }
-  const clean = value.trim();
+  const clean = value.trim().replace(/\s+/g, ' ');
   if (clean.length < 2 || clean.length > 80) {
     return { isValid: false, error: `${fieldLabel} must be between 2 and 80 characters.` };
   }
-  const locRegex = /^[a-zA-Z\s.\-\/\u00C0-\u024F\u0900-\u0D7F]+$/;
-  if (!locRegex.test(clean)) {
+  if (!VALIDATION_PATTERNS.CITY_OR_STATE.test(clean)) {
     return { isValid: false, error: `${fieldLabel} must contain alphabetic characters only.` };
   }
-  return { isValid: true };
+  return { isValid: true, normalized: clean };
 }
 
 /**
- * Validates Bank Name.
+ * Validates Bank Name (requires letters, rejects numeric-only or meaningless values).
  */
-export function validateBankName(bankName: string): { isValid: boolean; error?: string } {
-  if (!bankName || !bankName.trim()) {
+export function validateBankName(bankName: string): FieldValidationResult {
+  if (typeof bankName !== 'string' || !bankName.trim()) {
     return { isValid: false, error: 'Bank Name is required.' };
   }
-  const clean = bankName.trim();
-  if (clean.length < 2 || clean.length > 80) {
+  const clean = bankName.trim().replace(/\s+/g, ' ');
+  if (clean.length < VALIDATION_LIMITS.BANK_NAME_MIN || clean.length > VALIDATION_LIMITS.BANK_NAME_MAX) {
     return { isValid: false, error: 'Bank Name must be between 2 and 80 characters.' };
   }
-  const bankRegex = /^[a-zA-Z0-9\s.&'\-()]+$/;
-  if (!bankRegex.test(clean)) {
+  if (!VALIDATION_PATTERNS.BANK_NAME.test(clean)) {
     return { isValid: false, error: 'Bank Name contains invalid characters.' };
   }
-  return { isValid: true };
+  const letterCount = (clean.match(/\p{L}/gu) || []).length;
+  if (letterCount < 2) {
+    return { isValid: false, error: 'Enter a valid Bank Name.' };
+  }
+  return { isValid: true, normalized: clean };
 }
 
-export const ALLOWED_LOGO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'] as const;
-export const MAX_LOGO_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+export function validateBankAccountType(accountType: string): FieldValidationResult {
+  if (!accountType || !ALLOWED_BANK_ACCOUNT_TYPES.includes(accountType as any)) {
+    return { isValid: false, error: 'Select a valid bank account type (Current or Savings).' };
+  }
+  return { isValid: true, normalized: accountType };
+}
 
 /**
- * Validates logo file MIME type and size on client & server.
+ * Inspects leading magic bytes to detect genuine JPEG, PNG, or WEBP image signatures.
+ * Works with both browser Uint8Array and Node Buffer.
  */
-export function validateLogoFileMetadata(mimeType: string, sizeBytes: number, fileName?: string): { isValid: boolean; error?: string } {
+export function detectImageSignature(bytes: Uint8Array): { mimeType: string; ext: string } | null {
+  if (!bytes || bytes.length < 12) return null;
+
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { mimeType: 'image/jpeg', ext: 'jpg' };
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return { mimeType: 'image/png', ext: 'png' };
+  }
+
+  // WEBP: "RIFF" .... "WEBP"
+  const riff = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+  const webp = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+  if (riff === 'RIFF' && webp === 'WEBP') {
+    return { mimeType: 'image/webp', ext: 'webp' };
+  }
+
+  return null;
+}
+
+/**
+ * Inspects leading magic bytes to detect genuine PDF, JPEG, or PNG document signatures.
+ */
+export function detectKycDocumentSignature(bytes: Uint8Array): { mimeType: string; ext: string } | null {
+  if (!bytes || bytes.length < 8) return null;
+
+  // PDF: "%PDF-"
+  if (
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
+    bytes[3] === 0x46 &&
+    bytes[4] === 0x2d
+  ) {
+    return { mimeType: 'application/pdf', ext: 'pdf' };
+  }
+
+  // JPEG or PNG
+  const img = detectImageSignature(bytes);
+  if (img && (img.mimeType === 'image/jpeg' || img.mimeType === 'image/png')) {
+    return img;
+  }
+
+  return null;
+}
+
+/**
+ * Validates logo file MIME type, extension, and size on client & server.
+ */
+export function validateLogoFileMetadata(
+  mimeType: string,
+  sizeBytes: number,
+  fileName?: string
+): FieldValidationResult {
   if (!mimeType || !ALLOWED_LOGO_MIME_TYPES.includes(mimeType.toLowerCase() as any)) {
     return { isValid: false, error: 'Only JPG, JPEG, PNG, and WEBP image formats are supported for business logos.' };
   }
@@ -417,4 +709,295 @@ export function validateLogoFileMetadata(mimeType: string, sizeBytes: number, fi
     return { isValid: false, error: 'Business logo file size must not exceed 5 MB.' };
   }
   return { isValid: true };
+}
+
+/**
+ * Validates KYC document file MIME type, extension, and size (PDF, JPG, JPEG, PNG <= 5 MB).
+ */
+export function validateKycDocumentMetadata(
+  mimeType: string,
+  sizeBytes: number,
+  fileName?: string
+): FieldValidationResult {
+  if (!mimeType || !ALLOWED_KYC_DOC_MIME_TYPES.includes(mimeType.toLowerCase() as any)) {
+    return { isValid: false, error: 'Only PDF, JPG, JPEG, and PNG formats are supported for KYC documents.' };
+  }
+  if (fileName) {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (!ext || !['pdf', 'jpg', 'jpeg', 'png'].includes(ext)) {
+      return { isValid: false, error: 'Invalid document extension. Allowed: .pdf, .jpg, .jpeg, .png.' };
+    }
+  }
+  if (!sizeBytes || sizeBytes <= 0) {
+    return { isValid: false, error: 'Uploaded document file is empty.' };
+  }
+  if (sizeBytes > MAX_KYC_DOC_SIZE_BYTES) {
+    return { isValid: false, error: 'KYC document file size must not exceed 5 MB.' };
+  }
+  return { isValid: true };
+}
+
+export interface StepValidationResult {
+  isValid: boolean;
+  errors: Record<string, string>;
+}
+
+/**
+ * Validates Step 1 registration payload consistently across frontend & backend.
+ */
+export function validateVendorStep1(data: {
+  ownerName?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+  confirmPassword?: string;
+}): StepValidationResult {
+  const errors: Record<string, string> = {};
+
+  const nameCheck = validateName(data.ownerName || '', 'Owner / Authorized Person Full Name');
+  if (!nameCheck.isValid && nameCheck.error) errors.ownerName = nameCheck.error;
+
+  const emailCheck = validateEmail(data.email || '');
+  if (!emailCheck.isValid && emailCheck.error) errors.email = emailCheck.error;
+
+  const phoneCheck = validateIndianMobile(data.phone || '');
+  if (!phoneCheck.isValid && phoneCheck.error) errors.phone = phoneCheck.error;
+
+  if (data.password !== undefined) {
+    const passCheck = validatePassword(data.password || '');
+    if (!passCheck.isValid && passCheck.error) errors.password = passCheck.error;
+
+    if (data.confirmPassword !== undefined) {
+      const confirmCheck = validateConfirmPassword(data.password || '', data.confirmPassword || '');
+      if (!confirmCheck.isValid && confirmCheck.error) errors.confirmPassword = confirmCheck.error;
+    }
+  }
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}
+
+/**
+ * Validates Step 2 Business Information payload consistently across frontend & backend.
+ */
+export function validateVendorStep2(data: {
+  legalBusinessName?: string;
+  storeName?: string;
+  businessType?: string;
+  businessRegistrationType?: string;
+  yearOfEstablishment?: string;
+  website?: string;
+  description?: string;
+}): StepValidationResult {
+  const errors: Record<string, string> = {};
+
+  const legalCheck = validateLegalBusinessName(data.legalBusinessName || '');
+  if (!legalCheck.isValid && legalCheck.error) errors.legalBusinessName = legalCheck.error;
+
+  const storeCheck = validateStoreName(data.storeName || '');
+  if (!storeCheck.isValid && storeCheck.error) errors.storeName = storeCheck.error;
+
+  const bizTypeCheck = validateBusinessType(data.businessType || '');
+  if (!bizTypeCheck.isValid && bizTypeCheck.error) errors.businessType = bizTypeCheck.error;
+
+  const regTypeCheck = validateBusinessRegistrationType(data.businessRegistrationType || '');
+  if (!regTypeCheck.isValid && regTypeCheck.error) errors.businessRegistrationType = regTypeCheck.error;
+
+  const yearCheck = validateYearOfEstablishment(data.yearOfEstablishment || '');
+  if (!yearCheck.isValid && yearCheck.error) errors.yearOfEstablishment = yearCheck.error;
+
+  const webCheck = validateWebsite(data.website || '');
+  if (!webCheck.isValid && webCheck.error) errors.website = webCheck.error;
+
+  const descCheck = validateBusinessDescription(data.description || '');
+  if (!descCheck.isValid && descCheck.error) errors.description = descCheck.error;
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}
+
+/**
+ * Validates Step 3 Address Information payload consistently across frontend & backend.
+ */
+export function validateVendorStep3(data: {
+  pincode?: string;
+  country?: string;
+  state?: string;
+  city?: string;
+  completeAddress?: string;
+}): StepValidationResult {
+  const errors: Record<string, string> = {};
+
+  const pinCheck = validatePincode(data.pincode || '');
+  if (!pinCheck.isValid && pinCheck.error) errors.pincode = pinCheck.error;
+
+  if (data.country && data.country.trim().toLowerCase() !== 'india') {
+    errors.country = 'Currently only Indian vendor locations are supported.';
+  }
+
+  const stateCheck = validateCityOrState(data.state || '', 'State');
+  if (!stateCheck.isValid && stateCheck.error) errors.state = stateCheck.error;
+
+  const cityCheck = validateCityOrState(data.city || '', 'City / Region');
+  if (!cityCheck.isValid && cityCheck.error) errors.city = cityCheck.error;
+
+  const addrCheck = validateAddress(data.completeAddress || '');
+  if (!addrCheck.isValid && addrCheck.error) errors.completeAddress = addrCheck.error;
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}
+
+/**
+ * Validates Step 4 KYC & Tax Information payload consistently across frontend & backend.
+ */
+export function validateVendorStep4(data: {
+  gstin?: string;
+  pan?: string;
+  documents?: Array<{ type?: string; fileName?: string; fileSize?: number; mimeType?: string }>;
+}): StepValidationResult {
+  const errors: Record<string, string> = {};
+
+  const cleanGst = (data.gstin || '').trim().toUpperCase();
+  const cleanPan = (data.pan || '').trim().toUpperCase();
+
+  if (!cleanGst && !cleanPan) {
+    errors.gstin = 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
+    errors.pan = 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
+  } else {
+    if (cleanGst) {
+      const gstCheck = validateGSTIN(cleanGst);
+      if (!gstCheck.isValid && gstCheck.error) errors.gstin = gstCheck.error;
+    }
+    if (cleanPan) {
+      const panCheck = validatePAN(cleanPan);
+      if (!panCheck.isValid && panCheck.error) errors.pan = panCheck.error;
+    }
+  }
+
+  const docs = Array.isArray(data.documents) ? data.documents : [];
+  if (docs.length === 0) {
+    errors.documents = 'Please upload at least one required KYC document (GST Certificate or PAN Card).';
+  } else {
+    for (const doc of docs) {
+      if (!doc.type || !ALLOWED_KYC_DOCUMENT_TYPES.includes(doc.type as any)) {
+        errors.documents = 'Invalid KYC document category.';
+        break;
+      }
+      if (doc.mimeType && doc.fileSize !== undefined) {
+        const meta = validateKycDocumentMetadata(doc.mimeType, doc.fileSize, doc.fileName);
+        if (!meta.isValid) {
+          errors.documents = meta.error || 'Invalid KYC document file.';
+          break;
+        }
+      }
+    }
+  }
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}
+
+/**
+ * Validates Step 5 Bank & Compliance Information payload consistently across frontend & backend.
+ */
+export function validateVendorStep5(
+  data: {
+    bankDetails?: {
+      accountHolderName?: string;
+      bankName?: string;
+      accountNumber?: string;
+      confirmAccountNumber?: string;
+      ifsc?: string;
+      accountType?: string;
+    };
+    termsAccepted?: boolean;
+    privacyAccepted?: boolean;
+  },
+  options?: { requireConfirmAccountNumber?: boolean }
+): StepValidationResult {
+  const errors: Record<string, string> = {};
+  const bank = data.bankDetails || {};
+
+  const holderCheck = validateAccountBeneficiaryName(bank.accountHolderName || '');
+  if (!holderCheck.isValid && holderCheck.error) errors.accountHolderName = holderCheck.error;
+
+  const bankCheck = validateBankName(bank.bankName || '');
+  if (!bankCheck.isValid && bankCheck.error) errors.bankName = bankCheck.error;
+
+  const accCheck = validateBankAccount(bank.accountNumber || '');
+  if (!accCheck.isValid && accCheck.error) errors.accountNumber = accCheck.error;
+
+  if (options?.requireConfirmAccountNumber || bank.confirmAccountNumber !== undefined) {
+    const confirmAccCheck = validateConfirmBankAccount(
+      bank.accountNumber || '',
+      bank.confirmAccountNumber || ''
+    );
+    if (!confirmAccCheck.isValid && confirmAccCheck.error) {
+      errors.confirmAccountNumber = confirmAccCheck.error;
+    }
+  }
+
+  const ifscCheck = validateIFSC(bank.ifsc || '');
+  if (!ifscCheck.isValid && ifscCheck.error) errors.ifsc = ifscCheck.error;
+
+  if (bank.accountType !== undefined) {
+    const typeCheck = validateBankAccountType(bank.accountType);
+    if (!typeCheck.isValid && typeCheck.error) errors.accountType = typeCheck.error;
+  }
+
+  if (!data.termsAccepted) {
+    errors.termsAccepted = 'You must accept the BUILDORA 60 Supplier Terms of Partnership.';
+  }
+  if (!data.privacyAccepted) {
+    errors.privacyAccepted = 'You must confirm the accuracy of submitted documents.';
+  }
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}
+
+/**
+ * Validates complete 5-step registration submission payload.
+ */
+export function validateVendorRegistrationPayload(data: any): StepValidationResult {
+  const s1 = validateVendorStep1({
+    ownerName: data?.ownerName,
+    email: data?.email,
+    phone: data?.phone
+  });
+  const s2 = validateVendorStep2({
+    legalBusinessName: data?.legalBusinessName,
+    storeName: data?.storeName,
+    businessType: data?.businessType,
+    businessRegistrationType: data?.businessRegistrationType,
+    yearOfEstablishment: data?.yearOfEstablishment,
+    website: data?.website,
+    description: data?.description
+  });
+  const s3 = validateVendorStep3({
+    pincode: data?.pincode,
+    country: data?.country,
+    state: data?.state,
+    city: data?.city,
+    completeAddress: data?.completeAddress
+  });
+  const s4 = validateVendorStep4({
+    gstin: data?.gstin,
+    pan: data?.pan,
+    documents: data?.documents
+  });
+  const s5 = validateVendorStep5({
+    bankDetails: data?.bankDetails,
+    termsAccepted: data?.termsAccepted,
+    privacyAccepted: data?.privacyAccepted
+  });
+
+  const errors = {
+    ...s1.errors,
+    ...s2.errors,
+    ...s3.errors,
+    ...s4.errors,
+    ...s5.errors
+  };
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
+  };
 }

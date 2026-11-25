@@ -10,7 +10,12 @@ import {
 } from '@buildora/types';
 import {
   validateName,
-  validateBusinessName,
+  validateAccountBeneficiaryName,
+  validateLegalBusinessName,
+  validateStoreName,
+  validateBusinessType,
+  validateBusinessRegistrationType,
+  validateBusinessDescription,
   validateEmail,
   validateIndianMobile,
   validatePincode,
@@ -19,13 +24,18 @@ import {
   validatePAN,
   validateBankName,
   validateBankAccount,
+  validateConfirmBankAccount,
+  validateBankAccountType,
   validateIFSC,
   validatePassword,
   validateConfirmPassword,
   validateAddress,
   validateYearOfEstablishment,
   validateWebsite,
-  validateLogoFileMetadata
+  validateLogoFileMetadata,
+  validateKycDocumentMetadata,
+  detectImageSignature,
+  detectKycDocumentSignature
 } from '@buildora/validation';
 import {
   User,
@@ -45,13 +55,9 @@ import {
   UploadCloud,
   Trash2,
   Plus,
-  ShieldCheck,
   Clock,
   Loader2,
   RotateCcw,
-  Search,
-  Sparkles,
-  Check,
   Image as ImageIcon
 } from 'lucide-react';
 
@@ -71,17 +77,8 @@ export const VendorRegisterPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const clearFieldError = (field: string) => {
-    if (fieldErrors[field]) {
-      setFieldErrors((prev) => {
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
-    }
-    if (error) setError(null);
-  };
+  const [fieldWarnings, setFieldWarnings] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   // ----------------------------------------------------
   // STEP 1: ACCOUNT INFORMATION (Initially 100% empty)
@@ -95,11 +92,13 @@ export const VendorRegisterPage: React.FC = () => {
 
   // Email verification state
   const [emailOtp, setEmailOtp] = useState('');
+  const [isSendingEmailOtp, setIsSendingEmailOtp] = useState(false);
   const [isEmailOtpSent, setIsEmailOtpSent] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   // Mobile verification state
   const [mobileOtp, setMobileOtp] = useState('');
+  const [isSendingMobileOtp, setIsSendingMobileOtp] = useState(false);
   const [isMobileOtpSent, setIsMobileOtpSent] = useState(false);
   const [isMobileVerified, setIsMobileVerified] = useState(false);
 
@@ -129,8 +128,8 @@ export const VendorRegisterPage: React.FC = () => {
   const [area, setArea] = useState('');
   const [pincode, setPincode] = useState('');
   const [completeAddress, setCompleteAddress] = useState('');
-  const [sameDispatchAddress, setSameDispatchAddress] = useState(true);
-  const [dispatchAddress, setDispatchAddress] = useState('');
+  const [sameDispatchAddress] = useState(true);
+  const [dispatchAddress] = useState('');
   const [warehouses, setWarehouses] = useState<VendorWarehouse[]>([]);
 
   // Pincode Lookup States
@@ -141,6 +140,223 @@ export const VendorRegisterPage: React.FC = () => {
   const [selectedLocality, setSelectedLocality] = useState('');
   const [isManualAddress, setIsManualAddress] = useState(false);
 
+  // ----------------------------------------------------
+  // STEP 4: KYC & TAX DOCUMENTS (Initially 100% empty)
+  // ----------------------------------------------------
+  const [gstin, setGstin] = useState('');
+  const [pan, setPan] = useState('');
+  const [documents, setDocuments] = useState<VendorKycDocument[]>([]);
+  const [isUploadingDocType, setIsUploadingDocType] = useState<string | null>(null);
+
+  // ----------------------------------------------------
+  // STEP 5: BANK & COMPLIANCE INFORMATION (Initially 100% empty)
+  // ----------------------------------------------------
+  const [accountHolderName, setAccountHolderName] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [confirmAccountNumber, setConfirmAccountNumber] = useState('');
+  const [showAccountNumber, setShowAccountNumber] = useState(false);
+  const [ifsc, setIfsc] = useState('');
+  const [accountType, setAccountType] = useState<'CURRENT' | 'SAVINGS'>('CURRENT');
+  const [chequeDocName] = useState<string | null>(null);
+
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+
+  // ----------------------------------------------------
+  // REUSABLE REAL-TIME VALIDATION ENGINE
+  // ----------------------------------------------------
+  const setSingleFieldError = (field: string, msg?: string) => {
+    setFieldErrors((prev) => {
+      if (!msg) {
+        if (!prev[field]) return prev;
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      }
+      return { ...prev, [field]: msg };
+    });
+  };
+
+  const setSingleFieldWarning = (field: string, msg?: string) => {
+    setFieldWarnings((prev) => {
+      if (!msg) {
+        if (!prev[field]) return prev;
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      }
+      return { ...prev, [field]: msg };
+    });
+  };
+
+  const clearFieldError = (field: string) => {
+    setSingleFieldError(field, undefined);
+    if (error) setError(null);
+  };
+
+  const validateSingleField = (
+    field: string,
+    rawValue: any,
+    overrides?: {
+      password?: string;
+      confirmPassword?: string;
+      accountNumber?: string;
+      confirmAccountNumber?: string;
+      gstin?: string;
+      pan?: string;
+    }
+  ): string | undefined => {
+    const val = typeof rawValue === 'string' ? rawValue : '';
+
+    switch (field) {
+      case 'ownerName':
+        return validateName(val, 'Owner / Authorized Person Full Name').error;
+      case 'email':
+        return validateEmail(val).error;
+      case 'phone':
+        return validateIndianMobile(val).error;
+      case 'password':
+        return validatePassword(val).error;
+      case 'confirmPassword':
+        return validateConfirmPassword(overrides?.password ?? password, val).error;
+      case 'legalBusinessName':
+        return validateLegalBusinessName(val).error;
+      case 'storeName':
+        return validateStoreName(val).error;
+      case 'businessType':
+        return validateBusinessType(val).error;
+      case 'businessRegistrationType':
+        return validateBusinessRegistrationType(val).error;
+      case 'yearOfEstablishment':
+        return validateYearOfEstablishment(val).error;
+      case 'website':
+        return validateWebsite(val).error;
+      case 'description':
+        return validateBusinessDescription(val).error;
+      case 'pincode':
+        return validatePincode(val).error;
+      case 'state':
+        return validateCityOrState(val, 'State').error;
+      case 'city':
+        return validateCityOrState(val, 'City / Region').error;
+      case 'completeAddress':
+        return validateAddress(val).error;
+      case 'gstin': {
+        const cleanGst = val.trim().toUpperCase();
+        const cleanPan = (overrides?.pan ?? pan).trim().toUpperCase();
+        if (!cleanGst) {
+          setSingleFieldWarning('gstin', undefined);
+          if (!cleanPan && (touched.gstin || touched.pan)) {
+            return 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
+          }
+          return undefined;
+        }
+        const gstRes = validateGSTIN(cleanGst);
+        setSingleFieldWarning('gstin', gstRes.isValid ? gstRes.warning : undefined);
+        return gstRes.error;
+      }
+      case 'pan': {
+        const cleanPan = val.trim().toUpperCase();
+        const cleanGst = (overrides?.gstin ?? gstin).trim().toUpperCase();
+        if (!cleanPan) {
+          if (!cleanGst && (touched.gstin || touched.pan)) {
+            return 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
+          }
+          return undefined;
+        }
+        return validatePAN(cleanPan).error;
+      }
+      case 'accountHolderName':
+        return validateAccountBeneficiaryName(val).error;
+      case 'bankName':
+        return validateBankName(val).error;
+      case 'accountNumber':
+        return validateBankAccount(val).error;
+      case 'confirmAccountNumber':
+        return validateConfirmBankAccount(overrides?.accountNumber ?? accountNumber, val).error;
+      case 'ifsc':
+        return validateIFSC(val).error;
+      case 'accountType':
+        return validateBankAccountType(val).error;
+      case 'termsAccepted':
+        return rawValue ? undefined : 'You must accept the BUILDORA 60 Supplier Terms of Partnership.';
+      case 'privacyAccepted':
+        return rawValue ? undefined : 'You must confirm the accuracy of submitted documents.';
+      default:
+        return undefined;
+    }
+  };
+
+  const handleFieldChange = (
+    field: string,
+    nextValue: string,
+    setter: (v: string) => void,
+    options?: {
+      autoTouchOnInput?: boolean;
+      onExtraChange?: (v: string) => void;
+    }
+  ) => {
+    setter(nextValue);
+    if (error) setError(null);
+    if (options?.onExtraChange) options.onExtraChange(nextValue);
+
+    const isAlreadyTouched = Boolean(touched[field]);
+    const shouldValidateNow =
+      isAlreadyTouched || (options?.autoTouchOnInput && nextValue.length > 0);
+
+    if (options?.autoTouchOnInput && nextValue.length > 0 && !isAlreadyTouched) {
+      setTouched((prev) => ({ ...prev, [field]: true }));
+    }
+
+    if (shouldValidateNow) {
+      const errMsg = validateSingleField(field, nextValue);
+      setSingleFieldError(field, errMsg);
+    } else {
+      clearFieldError(field);
+    }
+
+    // Cross-field real-time sync
+    if (field === 'password' && (touched.confirmPassword || confirmPassword.length > 0)) {
+      const confirmErr = validateConfirmPassword(nextValue, confirmPassword).error;
+      setSingleFieldError('confirmPassword', confirmErr);
+    }
+    if (field === 'accountNumber' && (touched.confirmAccountNumber || confirmAccountNumber.length > 0)) {
+      const confirmAccErr = validateConfirmBankAccount(nextValue, confirmAccountNumber).error;
+      setSingleFieldError('confirmAccountNumber', confirmAccErr);
+    }
+    if (field === 'gstin') {
+      const cleanGst = nextValue.trim().toUpperCase();
+      if (cleanGst && !pan.trim()) {
+        clearFieldError('pan');
+      } else if (!cleanGst && !pan.trim() && touched.pan) {
+        setSingleFieldError('pan', 'At least GSTIN or PAN is mandatory for B2B supplier verification.');
+      }
+    }
+    if (field === 'pan') {
+      const cleanPan = nextValue.trim().toUpperCase();
+      if (cleanPan && !gstin.trim()) {
+        clearFieldError('gstin');
+      } else if (!cleanPan && !gstin.trim() && touched.gstin) {
+        setSingleFieldError('gstin', 'At least GSTIN or PAN is mandatory for B2B supplier verification.');
+      }
+    }
+  };
+
+  const handleFieldBlur = (
+    field: string,
+    currentValue: string,
+    options?: { normalize?: (v: string) => string; setter?: (v: string) => void }
+  ) => {
+    const finalVal = options?.normalize ? options.normalize(currentValue) : currentValue;
+    if (options?.setter && finalVal !== currentValue) {
+      options.setter(finalVal);
+    }
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const errMsg = validateSingleField(field, finalVal);
+    setSingleFieldError(field, errMsg);
+  };
+
   // Helper to transition steps cleanly with no lingering notices
   const goToStep = (targetStep: number) => {
     setSuccessNotice(null);
@@ -148,27 +364,6 @@ export const VendorRegisterPage: React.FC = () => {
     setCurrentStep(targetStep);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
-  // ----------------------------------------------------
-  // STEP 4: KYC & TAX DOCUMENTS (Initially 100% empty)
-  // ----------------------------------------------------
-  const [gstin, setGstin] = useState('');
-  const [pan, setPan] = useState('');
-  const [documents, setDocuments] = useState<VendorKycDocument[]>([]);
-
-  // ----------------------------------------------------
-  // STEP 5: BANK & PRODUCT INFORMATION (Initially 100% empty)
-  // ----------------------------------------------------
-  const [accountHolderName, setAccountHolderName] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [confirmAccountNumber, setConfirmAccountNumber] = useState('');
-  const [ifsc, setIfsc] = useState('');
-  const [accountType, setAccountType] = useState<'CURRENT' | 'SAVINGS'>('CURRENT');
-  const [chequeDocName, setChequeDocName] = useState<string | null>(null);
-
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   // Resume saved draft OR resubmission data
   useEffect(() => {
@@ -235,12 +430,12 @@ export const VendorRegisterPage: React.FC = () => {
   // SMART PINCODE LOOKUP (DEBOUNCED ~300MS)
   // ----------------------------------------------------
   const performPincodeLookup = async (code: string) => {
-    const clean = code.trim().replace(/\D/g, '');
-    if (clean.length !== 6) return;
-
-    const pinCheck = validatePincode(clean);
+    const pinCheck = validatePincode(code);
     if (!pinCheck.isValid) {
-      setFieldErrors((prev) => ({ ...prev, pincode: pinCheck.error || 'Invalid 6-digit Indian Postal Pincode.' }));
+      setFieldErrors((prev) => ({
+        ...prev,
+        pincode: pinCheck.error || 'Enter a valid 6-digit pincode starting with 1–9.'
+      }));
       return;
     }
 
@@ -249,7 +444,7 @@ export const VendorRegisterPage: React.FC = () => {
     clearFieldError('pincode');
 
     try {
-      const data = await vendorApi.lookupPincode(clean);
+      const data = await vendorApi.lookupPincode(code);
       if (data && data.success) {
         setState(data.state || '');
         setCity(data.city || '');
@@ -279,16 +474,14 @@ export const VendorRegisterPage: React.FC = () => {
     }
   };
 
-  // Debounced effect: triggers automatic lookup upon 6 numeric digits
+  // Debounced effect: triggers lookup ONLY when exact 6-digit pincode matches ^[1-9][0-9]{5}$
   useEffect(() => {
-    const clean = pincode.trim().replace(/\D/g, '');
-    if (clean.length === 6) {
+    if (validatePincode(pincode).isValid) {
       const timer = setTimeout(() => {
-        performPincodeLookup(clean);
+        performPincodeLookup(pincode);
       }, 300);
       return () => clearTimeout(timer);
     } else {
-      // Clear previously fetched location if user edits pincode
       if (pincodeLookupSuccess) {
         setPincodeLookupSuccess(false);
         if (!isManualAddress) {
@@ -304,36 +497,50 @@ export const VendorRegisterPage: React.FC = () => {
     }
   }, [pincode]);
 
+  const isEmailFormatValid = validateEmail(email).isValid;
+  const isMobileFormatValid = validateIndianMobile(phone).isValid;
+
   // ----------------------------------------------------
   // STEP 1 HANDLERS
   // ----------------------------------------------------
   const handleSendEmailOtp = async () => {
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setFieldErrors((prev) => ({ ...prev, email: 'Please provide a valid official business email.' }));
-      setError('Please provide a valid official business email.');
+    setTouched((prev) => ({ ...prev, email: true }));
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      const msg = emailCheck.error || 'Enter a valid business email address.';
+      setFieldErrors((prev) => ({ ...prev, email: msg }));
+      setError(msg);
       return;
     }
+    const cleanEmail = email.trim().toLowerCase();
+    setEmail(cleanEmail);
     setError(null);
     clearFieldError('email');
+    setIsSendingEmailOtp(true);
     try {
-      const res = await vendorApi.sendOtp(email.trim(), 'REGISTRATION_EMAIL');
+      const res = await vendorApi.sendOtp(cleanEmail, 'REGISTRATION_EMAIL');
       setIsEmailOtpSent(true);
       if (res.devOtpHint) {
         setEmailOtp(res.devOtpHint);
       }
-      setSuccessNotice(`Verification code sent to ${email}`);
+      setSuccessNotice(`Verification code sent to ${cleanEmail}`);
     } catch (err: any) {
-      setError(err.message || 'Failed to send email verification code.');
+      const msg = err.message || 'Failed to send email verification code.';
+      setFieldErrors((prev) => ({ ...prev, email: msg }));
+      setError(msg);
+    } finally {
+      setIsSendingEmailOtp(false);
     }
   };
 
   const handleVerifyEmailOtp = async () => {
-    if (!emailOtp || emailOtp.length < 4) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!/^\d{6}$/.test(emailOtp.trim())) {
       setError('Please enter the 6-digit email verification code.');
       return;
     }
     try {
-      await vendorApi.verifyOtp(email.trim(), 'REGISTRATION_EMAIL', emailOtp);
+      await vendorApi.verifyOtp(cleanEmail, 'REGISTRATION_EMAIL', emailOtp.trim());
       setIsEmailVerified(true);
       setSuccessNotice('Business email verified successfully!');
       setError(null);
@@ -344,34 +551,48 @@ export const VendorRegisterPage: React.FC = () => {
   };
 
   const handleSendMobileOtp = async () => {
-    const clean = phone.replace(/\D/g, '').slice(-10);
-    if (clean.length !== 10) {
-      setFieldErrors((prev) => ({ ...prev, phone: 'Please provide a valid 10-digit mobile number.' }));
-      setError('Please provide a valid 10-digit mobile number.');
+    setTouched((prev) => ({ ...prev, phone: true }));
+    const phoneCheck = validateIndianMobile(phone);
+    if (!phoneCheck.isValid) {
+      const msg = phoneCheck.error || 'Enter a valid 10-digit mobile number starting with 6–9.';
+      setFieldErrors((prev) => ({ ...prev, phone: msg }));
+      setError(msg);
       return;
     }
     setError(null);
     clearFieldError('phone');
+    setIsSendingMobileOtp(true);
     try {
-      const res = await vendorApi.sendOtp(clean, 'REGISTRATION_MOBILE');
+      const res = await vendorApi.sendOtp(phone, 'REGISTRATION_MOBILE');
       setIsMobileOtpSent(true);
       if (res.devOtpHint) {
         setMobileOtp(res.devOtpHint);
       }
-      setSuccessNotice(`Verification code sent to +91 ${clean}`);
+      setSuccessNotice(`Verification code sent to +91 ${phone}`);
     } catch (err: any) {
-      setError(err.message || 'Failed to send mobile verification code.');
+      const msg = err.message || 'Failed to send mobile verification code.';
+      setFieldErrors((prev) => ({ ...prev, phone: msg }));
+      setError(msg);
+    } finally {
+      setIsSendingMobileOtp(false);
     }
   };
 
   const handleVerifyMobileOtp = async () => {
-    const clean = phone.replace(/\D/g, '').slice(-10);
-    if (!mobileOtp || mobileOtp.length < 4) {
+    const phoneCheck = validateIndianMobile(phone);
+    if (!phoneCheck.isValid) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        phone: phoneCheck.error || 'Enter a valid 10-digit mobile number starting with 6–9.'
+      }));
+      return;
+    }
+    if (!/^\d{6}$/.test(mobileOtp.trim())) {
       setError('Please enter the 6-digit SMS OTP code.');
       return;
     }
     try {
-      await vendorApi.verifyOtp(clean, 'REGISTRATION_MOBILE', mobileOtp);
+      await vendorApi.verifyOtp(phone, 'REGISTRATION_MOBILE', mobileOtp.trim());
       setIsMobileVerified(true);
       setSuccessNotice('Mobile number verified successfully!');
       setError(null);
@@ -384,31 +605,39 @@ export const VendorRegisterPage: React.FC = () => {
   const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setTouched((prev) => ({
+      ...prev,
+      ownerName: true,
+      email: true,
+      phone: true,
+      password: true,
+      confirmPassword: true
+    }));
+
     const errors: Record<string, string> = {};
 
-    const nameCheck = validateName(ownerName);
+    const nameCheck = validateName(ownerName, 'Owner / Authorized Person Full Name');
     if (!nameCheck.isValid) {
-      errors.ownerName = nameCheck.error || 'Authorized person name is required (letters only, min 2 chars).';
+      errors.ownerName = nameCheck.error || 'Authorized person name is required.';
     }
 
     const emailCheck = validateEmail(email);
     if (!emailCheck.isValid) {
-      errors.email = emailCheck.error || 'Please provide a valid business email address.';
+      errors.email = emailCheck.error || 'Enter a valid business email address.';
     } else if (!isEmailVerified) {
       errors.email = 'Please verify your business email with the OTP code.';
     }
 
-    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     const phoneCheck = validateIndianMobile(phone);
     if (!phoneCheck.isValid) {
-      errors.phone = phoneCheck.error || 'Please provide a valid 10-digit mobile number.';
+      errors.phone = phoneCheck.error || 'Enter a valid 10-digit mobile number starting with 6–9.';
     } else if (!isMobileVerified) {
       errors.phone = 'Please verify your mobile number with the SMS OTP.';
     }
 
     const passCheck = validatePassword(password);
     if (!passCheck.isValid) {
-      errors.password = passCheck.error || 'Password must be min 8 chars with uppercase, lowercase, number, and special character.';
+      errors.password = passCheck.error || 'Password does not meet the required security criteria.';
     }
 
     const confirmCheck = validateConfirmPassword(password, confirmPassword);
@@ -425,10 +654,15 @@ export const VendorRegisterPage: React.FC = () => {
     setFieldErrors({});
     setIsLoading(true);
     try {
+      const cleanName = ownerName.trim().replace(/\s+/g, ' ');
+      const cleanEmail = email.trim().toLowerCase();
+      setOwnerName(cleanName);
+      setEmail(cleanEmail);
+
       const res = await vendorApi.registerStep1({
-        ownerName: ownerName.trim(),
-        email: email.trim(),
-        phone: cleanPhone,
+        ownerName: cleanName,
+        email: cleanEmail,
+        phone,
         password,
         confirmPassword
       });
@@ -442,9 +676,11 @@ export const VendorRegisterPage: React.FC = () => {
         navigate('/registration/review');
         return;
       }
-      // Clean step transition with NO previous-step message
       goToStep(2);
     } catch (err: any) {
+      if (err.errors && typeof err.errors === 'object') {
+        setFieldErrors((prev) => ({ ...prev, ...err.errors }));
+      }
       setError(err.message || 'Failed to register account credentials.');
     } finally {
       setIsLoading(false);
@@ -453,13 +689,13 @@ export const VendorRegisterPage: React.FC = () => {
 
   // Build normalized wizard payload
   const buildWizardPayload = (stepOverride?: number): VendorRegistrationWizardData => ({
-    ownerName: ownerName.trim(),
+    ownerName: ownerName.trim().replace(/\s+/g, ' '),
     email: email.trim().toLowerCase(),
-    phone: phone.replace(/\D/g, '').slice(-10),
-    isEmailVerified: true,
-    isPhoneVerified: true,
-    legalBusinessName: legalBusinessName.trim(),
-    storeName: storeName.trim(),
+    phone: phone.trim(),
+    isEmailVerified,
+    isPhoneVerified: isMobileVerified,
+    legalBusinessName: legalBusinessName.trim().replace(/\s+/g, ' '),
+    storeName: storeName.trim().replace(/\s+/g, ' '),
     businessType: businessType as any,
     businessRegistrationType,
     yearOfEstablishment: yearOfEstablishment.trim(),
@@ -480,9 +716,9 @@ export const VendorRegisterPage: React.FC = () => {
     pan: pan.trim().toUpperCase(),
     documents,
     bankDetails: {
-      accountHolderName: accountHolderName.trim(),
-      bankName: bankName.trim(),
-      accountNumber: accountNumber.replace(/\D/g, ''),
+      accountHolderName: accountHolderName.trim().replace(/\s+/g, ' '),
+      bankName: bankName.trim().replace(/\s+/g, ' '),
+      accountNumber: accountNumber.trim(),
       ifsc: ifsc.trim().toUpperCase(),
       accountType,
       chequeDocUrl: chequeDocName || undefined
@@ -501,31 +737,53 @@ export const VendorRegisterPage: React.FC = () => {
         const token = localStorage.getItem('buildora_vendor_token') || '';
         setSession(token, res.vendor, returnTo === 'review' ? '/registration/review' : '/register');
       }
-    } catch {
-      // Also update local store registrationData so review page always sees latest edits
+    } catch (err: any) {
+      if (err?.errors) {
+        setFieldErrors((prev) => ({ ...prev, ...err.errors }));
+        throw err;
+      }
       if (activeVendor) {
         const token = localStorage.getItem('buildora_vendor_token') || '';
-        setSession(token, { ...activeVendor, registrationData: payload, logoUrl: payload.logoUrl, logoMetadata: payload.logoMetadata });
+        setSession(token, {
+          ...activeVendor,
+          registrationData: payload,
+          logoUrl: payload.logoUrl,
+          logoMetadata: payload.logoMetadata
+        });
       }
     }
   };
 
   // ----------------------------------------------------
-  // LOGO UPLOAD HANDLER (STEP 2)
+  // LOGO UPLOAD HANDLER (STEP 2) WITH MAGIC BYTE CHECK
   // ----------------------------------------------------
   const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setLogoError(null);
-    const check = validateLogoFileMetadata(file.type, file.size, file.name);
-    if (!check.isValid) {
-      setLogoError(check.error || 'Invalid logo file.');
+    const metaCheck = validateLogoFileMetadata(file.type, file.size, file.name);
+    if (!metaCheck.isValid) {
+      setLogoError(metaCheck.error || 'Invalid logo file.');
       e.target.value = '';
       return;
     }
 
-    // Immediate local preview
+    // Verify actual image binary signature before previewing or uploading
+    try {
+      const headerBuffer = await file.slice(0, 12).arrayBuffer();
+      const detected = detectImageSignature(new Uint8Array(headerBuffer));
+      if (!detected) {
+        setLogoError('Invalid image file content. Only genuine JPG, JPEG, PNG, or WEBP images are allowed.');
+        e.target.value = '';
+        return;
+      }
+    } catch {
+      setLogoError('Unable to read image file. Please select a valid image.');
+      e.target.value = '';
+      return;
+    }
+
     const objectUrl = URL.createObjectURL(file);
     setLogoPreview(objectUrl);
     setIsUploadingLogo(true);
@@ -557,24 +815,38 @@ export const VendorRegisterPage: React.FC = () => {
   // ----------------------------------------------------
   const handleStep2Next = async () => {
     setError(null);
+    setTouched((prev) => ({
+      ...prev,
+      legalBusinessName: true,
+      storeName: true,
+      businessType: true,
+      businessRegistrationType: true,
+      yearOfEstablishment: true,
+      website: true,
+      description: true
+    }));
+
     const errors: Record<string, string> = {};
 
-    const legalCheck = validateBusinessName(legalBusinessName, 'Legal Entity Business Name');
+    const legalCheck = validateLegalBusinessName(legalBusinessName);
     if (!legalCheck.isValid) {
-      errors.legalBusinessName = legalCheck.error || 'Legal Entity Business Name is required (min 2 chars).';
+      errors.legalBusinessName = legalCheck.error || 'Legal Entity Business Name is required.';
     }
 
-    const storeCheck = validateBusinessName(storeName, 'Store / Brand Trade Name');
+    const storeCheck = validateStoreName(storeName);
     if (!storeCheck.isValid) {
-      errors.storeName = storeCheck.error || 'Store / Brand Trade Name is required (min 2 chars).';
+      errors.storeName = storeCheck.error || 'Trade Name / Store Name is required.';
     }
 
-    if (!businessType) {
-      errors.businessType = 'Please select your Business Supplier Type.';
+    const bizTypeCheck = validateBusinessType(businessType);
+    if (!bizTypeCheck.isValid) {
+      errors.businessType = bizTypeCheck.error || 'Please select your Business Supplier Type.';
     }
 
-    if (!businessRegistrationType) {
-      errors.businessRegistrationType = 'Please select your Business Registration Constitution.';
+    const regTypeCheck = validateBusinessRegistrationType(businessRegistrationType);
+    if (!regTypeCheck.isValid) {
+      errors.businessRegistrationType =
+        regTypeCheck.error || 'Please select your Business Registration Constitution.';
     }
 
     const yearCheck = validateYearOfEstablishment(yearOfEstablishment);
@@ -585,6 +857,15 @@ export const VendorRegisterPage: React.FC = () => {
     const webCheck = validateWebsite(website);
     if (!webCheck.isValid) {
       errors.website = webCheck.error || 'Invalid website URL.';
+    }
+
+    const descCheck = validateBusinessDescription(description);
+    if (!descCheck.isValid) {
+      errors.description = descCheck.error || 'Invalid description.';
+    }
+
+    if (logoError) {
+      errors.logo = logoError;
     }
 
     if (Object.keys(errors).length > 0) {
@@ -607,11 +888,22 @@ export const VendorRegisterPage: React.FC = () => {
   // ----------------------------------------------------
   const handleStep3Next = async () => {
     setError(null);
+    setTouched((prev) => ({
+      ...prev,
+      pincode: true,
+      state: true,
+      city: true,
+      completeAddress: true
+    }));
+
     const errors: Record<string, string> = {};
 
     const pinCheck = validatePincode(pincode);
     if (!pinCheck.isValid) {
-      errors.pincode = pinCheck.error || 'Please enter a valid 6-digit Indian Postal Pincode.';
+      errors.pincode = pinCheck.error || 'Enter a valid 6-digit pincode starting with 1–9.';
+    } else if (!isManualAddress && !pincodeLookupSuccess) {
+      errors.pincode =
+        pincodeLookupError || 'Please wait for pincode verification or switch to manual address entry.';
     }
 
     const stateCheck = validateCityOrState(state, 'State');
@@ -626,7 +918,8 @@ export const VendorRegisterPage: React.FC = () => {
 
     const addrCheck = validateAddress(completeAddress);
     if (!addrCheck.isValid) {
-      errors.completeAddress = addrCheck.error || 'Please enter your complete registered business address (min 5 chars).';
+      errors.completeAddress =
+        addrCheck.error || 'Please enter your complete registered business address (min 5 chars).';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -649,6 +942,13 @@ export const VendorRegisterPage: React.FC = () => {
   // ----------------------------------------------------
   const handleStep4Next = async () => {
     setError(null);
+    setTouched((prev) => ({
+      ...prev,
+      gstin: true,
+      pan: true,
+      documents: true
+    }));
+
     const errors: Record<string, string> = {};
 
     const cleanGst = gstin.trim().toUpperCase();
@@ -661,13 +961,14 @@ export const VendorRegisterPage: React.FC = () => {
       if (cleanGst) {
         const gstCheck = validateGSTIN(cleanGst);
         if (!gstCheck.isValid) {
-          errors.gstin = gstCheck.error || 'Invalid GSTIN format (15 characters, e.g. 29AABCB9876F1Z2).';
+          errors.gstin = gstCheck.error || 'Enter a valid GSTIN.';
         }
+        setSingleFieldWarning('gstin', gstCheck.isValid ? gstCheck.warning : undefined);
       }
       if (cleanPan) {
         const panCheck = validatePAN(cleanPan);
         if (!panCheck.isValid) {
-          errors.pan = panCheck.error || 'Invalid PAN format (10 characters, e.g. AABCB9876F).';
+          errors.pan = panCheck.error || 'Enter a valid 10-character PAN.';
         }
       }
     }
@@ -699,7 +1000,9 @@ export const VendorRegisterPage: React.FC = () => {
     setError(null);
     try {
       await saveDraftAndSyncStore(currentStep);
-      setSuccessNotice(`Registration progress saved successfully! You can resume from Step ${currentStep} at any time.`);
+      setSuccessNotice(
+        `Registration progress saved successfully! You can resume from Step ${currentStep} at any time.`
+      );
     } catch (err: any) {
       setError(err.message || 'Failed to save progress.');
     } finally {
@@ -718,7 +1021,7 @@ export const VendorRegisterPage: React.FC = () => {
         address: city ? `${city} Distribution Hub` : 'Main Dispatch Warehouse',
         city: city || 'Bengaluru',
         state: state || 'Karnataka',
-        pincode: pincode || '560001',
+        pincode: validatePincode(pincode).isValid ? pincode : '560001',
         isPrimary: warehouses.length === 0
       }
     ]);
@@ -728,34 +1031,53 @@ export const VendorRegisterPage: React.FC = () => {
     setWarehouses(warehouses.filter((w) => w.id !== id));
   };
 
-  // Document Upload Handler
+  // Document Upload Handler (Validates MIME, size <= 5MB, magic bytes, and uploads to backend)
   const handleFileUpload = (type: VendorKycDocument['type'], title: string) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.pdf,.jpg,.jpeg,.png';
+    input.accept = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
     input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
+      const file: File | undefined = e.target.files?.[0];
       if (!file) return;
 
-      if (file.size > 5 * 1024 * 1024) {
-        setError('File size must be 5 MB or less.');
+      clearFieldError('documents');
+      const metaCheck = validateKycDocumentMetadata(file.type, file.size, file.name);
+      if (!metaCheck.isValid) {
+        const msg = metaCheck.error || 'Unsupported KYC document file.';
+        setFieldErrors((prev) => ({ ...prev, documents: msg }));
+        setError(msg);
         return;
       }
 
-      const doc: VendorKycDocument = {
-        id: `doc-${Date.now()}`,
-        type,
-        title,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type || 'application/pdf',
-        fileUrl: `/secure/vault/documents/${file.name}`,
-        uploadedAt: new Date().toISOString(),
-        verificationStatus: 'PENDING'
-      };
+      try {
+        const headerBuffer = await file.slice(0, 12).arrayBuffer();
+        const detected = detectKycDocumentSignature(new Uint8Array(headerBuffer));
+        if (!detected) {
+          const msg =
+            'Corrupted or unsupported file content. Upload a genuine PDF, JPG, JPEG, or PNG document.';
+          setFieldErrors((prev) => ({ ...prev, documents: msg }));
+          setError(msg);
+          return;
+        }
+      } catch {
+        const msg = 'Unable to read selected document file.';
+        setFieldErrors((prev) => ({ ...prev, documents: msg }));
+        setError(msg);
+        return;
+      }
 
-      setDocuments((prev) => [...prev.filter((d) => d.type !== type), doc]);
-      clearFieldError('documents');
+      setIsUploadingDocType(type);
+      try {
+        const uploadedDoc = await vendorApi.uploadDocumentFile(file, type, title);
+        setDocuments((prev) => [...prev.filter((d) => d.type !== type), uploadedDoc]);
+        clearFieldError('documents');
+      } catch (err: any) {
+        const msg = err.message || 'Document upload failed on verification server.';
+        setFieldErrors((prev) => ({ ...prev, documents: msg }));
+        setError(msg);
+      } finally {
+        setIsUploadingDocType(null);
+      }
     };
     input.click();
   };
@@ -766,11 +1088,23 @@ export const VendorRegisterPage: React.FC = () => {
   const handleProceedToReview = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setTouched((prev) => ({
+      ...prev,
+      accountHolderName: true,
+      bankName: true,
+      accountNumber: true,
+      confirmAccountNumber: true,
+      ifsc: true,
+      accountType: true,
+      termsAccepted: true,
+      privacyAccepted: true
+    }));
+
     const errors: Record<string, string> = {};
 
-    const nameCheck = validateName(accountHolderName);
+    const nameCheck = validateAccountBeneficiaryName(accountHolderName);
     if (!nameCheck.isValid) {
-      errors.accountHolderName = nameCheck.error || 'Account Beneficiary Name is required (letters and spaces only).';
+      errors.accountHolderName = nameCheck.error || 'Account Beneficiary Name is required.';
     }
 
     const bankCheck = validateBankName(bankName);
@@ -778,24 +1112,29 @@ export const VendorRegisterPage: React.FC = () => {
       errors.bankName = bankCheck.error || 'Bank Name is required.';
     }
 
-    const cleanAcc = accountNumber.trim().replace(/\D/g, '');
-    const accCheck = validateBankAccount(cleanAcc);
+    const accCheck = validateBankAccount(accountNumber);
     if (!accCheck.isValid) {
       errors.accountNumber = accCheck.error || 'Bank account number must be between 9 and 18 digits.';
     }
 
-    if (accountNumber !== confirmAccountNumber) {
-      errors.confirmAccountNumber = 'Bank account numbers do not match.';
+    const confirmAccCheck = validateConfirmBankAccount(accountNumber, confirmAccountNumber);
+    if (!confirmAccCheck.isValid) {
+      errors.confirmAccountNumber = confirmAccCheck.error || 'Bank account numbers do not match.';
     }
 
     const cleanIfsc = ifsc.trim().toUpperCase();
     const ifscCheck = validateIFSC(cleanIfsc);
     if (!ifscCheck.isValid) {
-      errors.ifsc = ifscCheck.error || 'Invalid IFSC format (11 characters, e.g. HDFC0000053).';
+      errors.ifsc = ifscCheck.error || 'Enter a valid 11-character IFSC code.';
+    }
+
+    const typeCheck = validateBankAccountType(accountType);
+    if (!typeCheck.isValid) {
+      errors.accountType = typeCheck.error || 'Select a valid account type.';
     }
 
     if (!termsAccepted) {
-      errors.termsAccepted = 'You must accept the Supplier Terms of Partnership.';
+      errors.termsAccepted = 'You must accept the BUILDORA 60 Supplier Terms of Partnership.';
     }
 
     if (!privacyAccepted) {
@@ -812,9 +1151,11 @@ export const VendorRegisterPage: React.FC = () => {
     setIsLoading(true);
     try {
       await saveDraftAndSyncStore(5);
-      // Phase 3: Navigate to Final Registration Review Page (DO NOT auto-submit!)
       navigate('/registration/review');
     } catch (err: any) {
+      if (err.errors && typeof err.errors === 'object') {
+        setFieldErrors((prev) => ({ ...prev, ...err.errors }));
+      }
       setError(err.message || 'Failed to save step details. Please retry.');
     } finally {
       setIsLoading(false);
@@ -840,7 +1181,7 @@ export const VendorRegisterPage: React.FC = () => {
             disabled={isLoading}
             className="text-xs font-bold text-[#FF7417] hover:underline self-start sm:self-center cursor-pointer"
           >
-            💾 Save Progress & Continue Later
+            💾 Save Progress &amp; Continue Later
           </button>
         </div>
 
@@ -873,9 +1214,7 @@ export const VendorRegisterPage: React.FC = () => {
                     <span className="text-xs font-black">0{item.step}</span>
                   )}
                 </div>
-                <div className="text-[10px] sm:text-xs font-bold truncate">
-                  {item.title}
-                </div>
+                <div className="text-[10px] sm:text-xs font-bold truncate">{item.title}</div>
               </div>
             );
           })}
@@ -901,7 +1240,7 @@ export const VendorRegisterPage: React.FC = () => {
       {/* STEP 1: ACCOUNT INFORMATION                         */}
       {/* ==================================================== */}
       {currentStep === 1 && (
-        <form onSubmit={handleStep1Submit} className="space-y-4">
+        <form onSubmit={handleStep1Submit} noValidate className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-[#17233C] mb-1">
@@ -911,15 +1250,26 @@ export const VendorRegisterPage: React.FC = () => {
                 <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
+                  name="ownerName"
                   value={ownerName}
-                  onChange={(e) => {
-                    setOwnerName(e.target.value);
-                    clearFieldError('ownerName');
-                  }}
+                  maxLength={100}
+                  onChange={(e) =>
+                    handleFieldChange('ownerName', e.target.value, setOwnerName, {
+                      autoTouchOnInput: true
+                    })
+                  }
+                  onBlur={() =>
+                    handleFieldBlur('ownerName', ownerName, {
+                      normalize: (v) => v.trim().replace(/\s+/g, ' '),
+                      setter: setOwnerName
+                    })
+                  }
                   required
                   placeholder="e.g. Vikramaditya Rao"
-                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                    fieldErrors.ownerName ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                    fieldErrors.ownerName
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-[#E2E8F0] focus:ring-[#203D91]'
                   }`}
                 />
               </div>
@@ -938,18 +1288,31 @@ export const VendorRegisterPage: React.FC = () => {
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
+                    name="email"
                     value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setIsEmailVerified(false);
-                      setIsEmailOtpSent(false);
-                      clearFieldError('email');
-                    }}
+                    maxLength={100}
+                    onChange={(e) =>
+                      handleFieldChange('email', e.target.value, setEmail, {
+                        autoTouchOnInput: true,
+                        onExtraChange: () => {
+                          setIsEmailVerified(false);
+                          setIsEmailOtpSent(false);
+                        }
+                      })
+                    }
+                    onBlur={() =>
+                      handleFieldBlur('email', email, {
+                        normalize: (v) => v.trim().toLowerCase(),
+                        setter: setEmail
+                      })
+                    }
                     required
                     disabled={isEmailVerified}
                     placeholder="partner@supplierdomain.com"
-                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] disabled:bg-slate-50 ${
-                      fieldErrors.email ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 ${
+                      fieldErrors.email
+                        ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                        : 'border-[#E2E8F0] focus:ring-[#203D91]'
                     }`}
                   />
                 </div>
@@ -957,9 +1320,10 @@ export const VendorRegisterPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleSendEmailOtp}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] shrink-0 cursor-pointer"
+                    disabled={!isEmailFormatValid || isSendingEmailOtp}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isEmailOtpSent ? 'Resend' : 'Send Code'}
+                    {isSendingEmailOtp ? 'Sending...' : isEmailOtpSent ? 'Resend' : 'Send Code'}
                   </button>
                 )}
                 {isEmailVerified && (
@@ -980,7 +1344,7 @@ export const VendorRegisterPage: React.FC = () => {
                       type="text"
                       maxLength={6}
                       value={emailOtp}
-                      onChange={(e) => setEmailOtp(e.target.value)}
+                      onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       placeholder="6-digit"
                       className="w-24 px-2 py-1 text-xs font-mono rounded-lg border border-blue-300 bg-white"
                     />
@@ -996,28 +1360,37 @@ export const VendorRegisterPage: React.FC = () => {
               )}
             </div>
 
-            {/* Mobile + OTP Verification */}
+            {/* Mobile + OTP Verification (Strict ^[6-9][0-9]{9}$ Real-Time) */}
             <div className="md:col-span-2 space-y-1.5">
               <label className="block text-xs font-bold text-[#17233C]">
-                Mobile Number (For Dispatch & Dark Store SMS) *
+                Mobile Number (For Dispatch &amp; Dark Store SMS) *
               </label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
+                    name="phone"
+                    inputMode="numeric"
                     value={phone}
-                    onChange={(e) => {
-                      setPhone(e.target.value);
-                      setIsMobileVerified(false);
-                      setIsMobileOtpSent(false);
-                      clearFieldError('phone');
-                    }}
+                    onChange={(e) =>
+                      handleFieldChange('phone', e.target.value, setPhone, {
+                        autoTouchOnInput: true,
+                        onExtraChange: () => {
+                          setIsMobileVerified(false);
+                          setIsMobileOtpSent(false);
+                        }
+                      })
+                    }
+                    onBlur={() => handleFieldBlur('phone', phone)}
                     required
                     disabled={isMobileVerified}
                     placeholder="9845012345"
-                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] disabled:bg-slate-50 ${
-                      fieldErrors.phone ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                    aria-invalid={Boolean(fieldErrors.phone)}
+                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 ${
+                      fieldErrors.phone
+                        ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                        : 'border-[#E2E8F0] focus:ring-[#203D91]'
                     }`}
                   />
                 </div>
@@ -1025,9 +1398,10 @@ export const VendorRegisterPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleSendMobileOtp}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] shrink-0 cursor-pointer"
+                    disabled={!isMobileFormatValid || isSendingMobileOtp}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isMobileOtpSent ? 'Resend' : 'Send OTP'}
+                    {isSendingMobileOtp ? 'Sending...' : isMobileOtpSent ? 'Resend' : 'Send OTP'}
                   </button>
                 )}
                 {isMobileVerified && (
@@ -1048,7 +1422,7 @@ export const VendorRegisterPage: React.FC = () => {
                       type="text"
                       maxLength={6}
                       value={mobileOtp}
-                      onChange={(e) => setMobileOtp(e.target.value)}
+                      onChange={(e) => setMobileOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       placeholder="6-digit"
                       className="w-24 px-2 py-1 text-xs font-mono rounded-lg border border-blue-300 bg-white"
                     />
@@ -1066,28 +1440,32 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
-                Password *
-              </label>
+              <label className="block text-xs font-bold text-[#17233C] mb-1">Password *</label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="password"
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    clearFieldError('password');
-                  }}
+                  onChange={(e) =>
+                    handleFieldChange('password', e.target.value, setPassword, {
+                      autoTouchOnInput: true
+                    })
+                  }
+                  onBlur={() => handleFieldBlur('password', password)}
                   required
                   placeholder="Min 8 characters (letters & numbers)"
-                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                    fieldErrors.password ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                  className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                    fieldErrors.password
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-[#E2E8F0] focus:ring-[#203D91]'
                   }`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -1164,15 +1542,20 @@ export const VendorRegisterPage: React.FC = () => {
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="confirmPassword"
                   value={confirmPassword}
-                  onChange={(e) => {
-                    setConfirmPassword(e.target.value);
-                    clearFieldError('confirmPassword');
-                  }}
+                  onChange={(e) =>
+                    handleFieldChange('confirmPassword', e.target.value, setConfirmPassword, {
+                      autoTouchOnInput: true
+                    })
+                  }
+                  onBlur={() => handleFieldBlur('confirmPassword', confirmPassword)}
                   required
                   placeholder="Repeat password"
-                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                    fieldErrors.confirmPassword ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                    fieldErrors.confirmPassword
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-[#E2E8F0] focus:ring-[#203D91]'
                   }`}
                 />
               </div>
@@ -1210,19 +1593,32 @@ export const VendorRegisterPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                name="legalBusinessName"
+                maxLength={150}
                 value={legalBusinessName}
-                onChange={(e) => {
-                  setLegalBusinessName(e.target.value);
-                  clearFieldError('legalBusinessName');
-                }}
+                onChange={(e) =>
+                  handleFieldChange('legalBusinessName', e.target.value, setLegalBusinessName, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() =>
+                  handleFieldBlur('legalBusinessName', legalBusinessName, {
+                    normalize: (v) => v.trim().replace(/\s+/g, ' '),
+                    setter: setLegalBusinessName
+                  })
+                }
                 required
                 placeholder="e.g. Supreme Materials Private Limited"
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.legalBusinessName ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                  fieldErrors.legalBusinessName
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
                 }`}
               />
               {fieldErrors.legalBusinessName && (
-                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.legalBusinessName}</p>
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                  {fieldErrors.legalBusinessName}
+                </p>
               )}
             </div>
 
@@ -1232,15 +1628,26 @@ export const VendorRegisterPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                name="storeName"
+                maxLength={100}
                 value={storeName}
-                onChange={(e) => {
-                  setStoreName(e.target.value);
-                  clearFieldError('storeName');
-                }}
+                onChange={(e) =>
+                  handleFieldChange('storeName', e.target.value, setStoreName, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() =>
+                  handleFieldBlur('storeName', storeName, {
+                    normalize: (v) => v.trim().replace(/\s+/g, ' '),
+                    setter: setStoreName
+                  })
+                }
                 required
                 placeholder="e.g. Supreme Materials BLR"
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.storeName ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                  fieldErrors.storeName
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
                 }`}
               />
               {fieldErrors.storeName && (
@@ -1253,13 +1660,18 @@ export const VendorRegisterPage: React.FC = () => {
                 Business Supplier Type *
               </label>
               <select
+                name="businessType"
                 value={businessType}
-                onChange={(e) => {
-                  setBusinessType(e.target.value);
-                  clearFieldError('businessType');
-                }}
-                className={`w-full px-3.5 py-2.5 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.businessType ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                onChange={(e) =>
+                  handleFieldChange('businessType', e.target.value, setBusinessType, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() => handleFieldBlur('businessType', businessType)}
+                className={`w-full px-3.5 py-2.5 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 ${
+                  fieldErrors.businessType
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
                 }`}
               >
                 <option value="">Select Supplier Type...</option>
@@ -1280,13 +1692,21 @@ export const VendorRegisterPage: React.FC = () => {
                 Business Registration Constitution *
               </label>
               <select
+                name="businessRegistrationType"
                 value={businessRegistrationType}
-                onChange={(e) => {
-                  setBusinessRegistrationType(e.target.value);
-                  clearFieldError('businessRegistrationType');
-                }}
-                className={`w-full px-3.5 py-2.5 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.businessRegistrationType ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                onChange={(e) =>
+                  handleFieldChange(
+                    'businessRegistrationType',
+                    e.target.value,
+                    setBusinessRegistrationType,
+                    { autoTouchOnInput: true }
+                  )
+                }
+                onBlur={() => handleFieldBlur('businessRegistrationType', businessRegistrationType)}
+                className={`w-full px-3.5 py-2.5 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 ${
+                  fieldErrors.businessRegistrationType
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
                 }`}
               >
                 <option value="">Select Constitution...</option>
@@ -1298,7 +1718,9 @@ export const VendorRegisterPage: React.FC = () => {
                 <option value="OTHER">Other Registered Entity</option>
               </select>
               {fieldErrors.businessRegistrationType && (
-                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.businessRegistrationType}</p>
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                  {fieldErrors.businessRegistrationType}
+                </p>
               )}
             </div>
 
@@ -1308,11 +1730,32 @@ export const VendorRegisterPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                name="yearOfEstablishment"
+                maxLength={4}
                 value={yearOfEstablishment}
-                onChange={(e) => setYearOfEstablishment(e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange('yearOfEstablishment', e.target.value, setYearOfEstablishment, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() =>
+                  handleFieldBlur('yearOfEstablishment', yearOfEstablishment, {
+                    normalize: (v) => v.trim(),
+                    setter: setYearOfEstablishment
+                  })
+                }
                 placeholder="e.g. 2018"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91]"
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                  fieldErrors.yearOfEstablishment
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                }`}
               />
+              {fieldErrors.yearOfEstablishment && (
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                  {fieldErrors.yearOfEstablishment}
+                </p>
+              )}
             </div>
 
             <div>
@@ -1321,28 +1764,60 @@ export const VendorRegisterPage: React.FC = () => {
               </label>
               <input
                 type="url"
+                name="website"
                 value={website}
-                onChange={(e) => setWebsite(e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange('website', e.target.value, setWebsite, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() =>
+                  handleFieldBlur('website', website, {
+                    normalize: (v) => v.trim(),
+                    setter: setWebsite
+                  })
+                }
                 placeholder="https://company.com"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91]"
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                  fieldErrors.website
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                }`}
               />
+              {fieldErrors.website && (
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.website}</p>
+              )}
             </div>
 
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-[#17233C] mb-1">
-                Business & Inventory Capabilities Description (Optional)
+                Business &amp; Inventory Capabilities Description (Optional)
               </label>
               <textarea
                 rows={3}
+                name="description"
+                maxLength={1000}
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange('description', e.target.value, setDescription, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() => handleFieldBlur('description', description)}
                 placeholder="Describe your manufacturing, storage capacities, inventory lines, and Bengaluru distribution readiness..."
-                className="w-full px-3.5 py-2 rounded-xl border border-[#E2E8F0] text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91]"
+                className={`w-full px-3.5 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                  fieldErrors.description
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                }`}
               />
+              {fieldErrors.description && (
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.description}</p>
+              )}
             </div>
           </div>
 
-          {/* Upload Your Business Logo (Phase 2) */}
+          {/* Upload Your Business Logo */}
           <div className="p-4 rounded-2xl bg-[#F4F7FC] border border-[#E2E8F0] space-y-3">
             <div>
               <h4 className="text-xs font-bold text-[#17233C] flex items-center gap-1.5">
@@ -1350,7 +1825,7 @@ export const VendorRegisterPage: React.FC = () => {
                 Upload Your Business Logo
               </h4>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                JPG, JPEG, PNG or WEBP • Maximum 5 MB. Appears on your store profile & review summary.
+                JPG, JPEG, PNG or WEBP &bull; Maximum 5 MB. Appears on your store profile &amp; review summary.
               </p>
             </div>
 
@@ -1407,9 +1882,7 @@ export const VendorRegisterPage: React.FC = () => {
                   </p>
                 )}
 
-                {logoError && (
-                  <p className="text-[11px] text-rose-600 font-medium">{logoError}</p>
-                )}
+                {logoError && <p className="text-[11px] text-rose-600 font-medium">{logoError}</p>}
               </div>
             </div>
           </div>
@@ -1440,7 +1913,7 @@ export const VendorRegisterPage: React.FC = () => {
       {currentStep === 3 && (
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* 1. PINCODE (First Field - Required) */}
+            {/* 1. PINCODE (First Field - Required, Strict ^[1-9][0-9]{5}$) */}
             <div className="md:col-span-2">
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-bold text-[#17233C]">
@@ -1452,31 +1925,35 @@ export const VendorRegisterPage: React.FC = () => {
                   className="text-[11px] font-semibold text-[#203D91] hover:underline cursor-pointer flex items-center gap-1"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  {isManualAddress ? 'Switch to Auto Lookup' : 'Cannot find your pincode? Enter location manually'}
+                  {isManualAddress
+                    ? 'Switch to Auto Lookup'
+                    : 'Cannot find your pincode? Enter location manually'}
                 </button>
               </div>
               <div className="relative">
                 <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  maxLength={6}
+                  name="pincode"
+                  inputMode="numeric"
                   value={pincode}
-                  onChange={(e) => {
-                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 6);
-                    setPincode(cleanVal);
-                    clearFieldError('pincode');
-                  }}
+                  onChange={(e) =>
+                    handleFieldChange('pincode', e.target.value, setPincode, {
+                      autoTouchOnInput: true
+                    })
+                  }
+                  onBlur={() => handleFieldBlur('pincode', pincode)}
                   required
                   placeholder="Enter 6-digit Indian Pincode (e.g. 560072, 110001, 400001)"
-                  className={`w-full pl-10 pr-12 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] font-mono ${
-                    fieldErrors.pincode || pincodeLookupError ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                  className={`w-full pl-10 pr-24 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 font-mono ${
+                    fieldErrors.pincode || pincodeLookupError
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-[#E2E8F0] focus:ring-[#203D91]'
                   }`}
                 />
                 <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                  {isPincodeLoading && (
-                    <Loader2 className="w-4 h-4 text-[#203D91] animate-spin" />
-                  )}
-                  {!isPincodeLoading && pincodeLookupSuccess && (
+                  {isPincodeLoading && <Loader2 className="w-4 h-4 text-[#203D91] animate-spin" />}
+                  {!isPincodeLoading && pincodeLookupSuccess && !fieldErrors.pincode && (
                     <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                     </span>
@@ -1497,7 +1974,7 @@ export const VendorRegisterPage: React.FC = () => {
                     >
                       Retry
                     </button>
-                    <span>•</span>
+                    <span>&bull;</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -1513,7 +1990,7 @@ export const VendorRegisterPage: React.FC = () => {
               )}
               {!pincodeLookupError && !fieldErrors.pincode && (
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Enter 6 digits to automatically populate Country, State, City and Localities.
+                  Enter 6 digits starting with 1–9 to automatically populate Country, State, City and Localities.
                 </p>
               )}
             </div>
@@ -1557,54 +2034,60 @@ export const VendorRegisterPage: React.FC = () => {
               />
             </div>
 
-            {/* 3. State (Auto-filled) */}
+            {/* 3. State (Auto-filled or Manual) */}
             <div>
               <label className="block text-xs font-bold text-[#17233C] mb-1">
                 3. State {isManualAddress ? '*' : '(Auto-filled)'}
               </label>
               <input
                 type="text"
+                name="state"
                 value={state}
                 readOnly={!isManualAddress}
                 disabled={!isManualAddress && !state}
-                onChange={(e) => {
-                  setState(e.target.value);
-                  clearFieldError('state');
-                }}
+                onChange={(e) =>
+                  handleFieldChange('state', e.target.value, setState, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() => isManualAddress && handleFieldBlur('state', state)}
                 required
                 placeholder={isManualAddress ? 'Enter state (e.g. Karnataka)' : 'Auto-populated from Pincode'}
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   !isManualAddress
                     ? 'bg-slate-50 text-slate-700 cursor-not-allowed border-slate-200'
-                    : 'bg-white border-[#E2E8F0]'
-                } ${fieldErrors.state ? 'border-rose-400 bg-rose-50/20' : ''}`}
+                    : 'bg-white border-[#E2E8F0] focus:ring-[#203D91]'
+                } ${fieldErrors.state ? 'border-rose-500 bg-rose-50/30' : ''}`}
               />
               {fieldErrors.state && (
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.state}</p>
               )}
             </div>
 
-            {/* 4. City / Region (Auto-filled) */}
+            {/* 4. City / Region (Auto-filled or Manual) */}
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-[#17233C] mb-1">
                 4. City / Region {isManualAddress ? '*' : '(Auto-filled)'}
               </label>
               <input
                 type="text"
+                name="city"
                 value={city}
                 readOnly={!isManualAddress}
                 disabled={!isManualAddress && !city}
-                onChange={(e) => {
-                  setCity(e.target.value);
-                  clearFieldError('city');
-                }}
+                onChange={(e) =>
+                  handleFieldChange('city', e.target.value, setCity, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() => isManualAddress && handleFieldBlur('city', city)}
                 required
                 placeholder={isManualAddress ? 'Enter city (e.g. Bengaluru)' : 'Auto-populated from Pincode'}
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   !isManualAddress
                     ? 'bg-slate-50 text-slate-700 cursor-not-allowed border-slate-200'
-                    : 'bg-white border-[#E2E8F0]'
-                } ${fieldErrors.city ? 'border-rose-400 bg-rose-50/20' : ''}`}
+                    : 'bg-white border-[#E2E8F0] focus:ring-[#203D91]'
+                } ${fieldErrors.city ? 'border-rose-500 bg-rose-50/30' : ''}`}
               />
               {fieldErrors.city && (
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.city}</p>
@@ -1618,19 +2101,32 @@ export const VendorRegisterPage: React.FC = () => {
               </label>
               <textarea
                 rows={3}
+                name="completeAddress"
+                maxLength={250}
                 value={completeAddress}
-                onChange={(e) => {
-                  setCompleteAddress(e.target.value);
-                  clearFieldError('completeAddress');
-                }}
+                onChange={(e) =>
+                  handleFieldChange('completeAddress', e.target.value, setCompleteAddress, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() =>
+                  handleFieldBlur('completeAddress', completeAddress, {
+                    normalize: (v) => v.trim(),
+                    setter: setCompleteAddress
+                  })
+                }
                 required
                 placeholder="Building number / shed, Street name, Industrial layout or Commercial estate, Landmark..."
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.completeAddress ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                  fieldErrors.completeAddress
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
                 }`}
               />
               {fieldErrors.completeAddress && (
-                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.completeAddress}</p>
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                  {fieldErrors.completeAddress}
+                </p>
               )}
               <p className="text-[11px] text-slate-500 mt-1">
                 Must match the official registered address on your GST REG-06 or Company PAN card.
@@ -1642,7 +2138,9 @@ export const VendorRegisterPage: React.FC = () => {
           <div className="p-4 bg-[#F4F7FC] rounded-2xl border border-[#E2E8F0] space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-xs font-bold text-[#17233C]">Dispatch Warehouses & Dark Store Hubs</h4>
+                <h4 className="text-xs font-bold text-[#17233C]">
+                  Dispatch Warehouses &amp; Dark Store Hubs
+                </h4>
                 <p className="text-[11px] text-slate-500">
                   Locations from where BUILDORA 60 mini-trucks pick up orders for 60-min delivery.
                 </p>
@@ -1667,7 +2165,9 @@ export const VendorRegisterPage: React.FC = () => {
                       <Building2 className="w-4 h-4 text-[#203D91]" />
                       <div>
                         <span className="font-bold text-[#17233C]">{wh.name}</span>
-                        <p className="text-[11px] text-slate-500">{wh.address}, Pincode: {wh.pincode}</p>
+                        <p className="text-[11px] text-slate-500">
+                          {wh.address}, Pincode: {wh.pincode}
+                        </p>
                       </div>
                     </div>
                     <button
@@ -1682,7 +2182,7 @@ export const VendorRegisterPage: React.FC = () => {
               </div>
             ) : (
               <div className="p-3 bg-white rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500">
-                Primary business address will be used as default dispatch hub. Click "+ Add Warehouse" to add additional depots.
+                Primary business address will be used as default dispatch hub. Click &quot;+ Add Warehouse&quot; to add additional depots.
               </div>
             )}
           </div>
@@ -1700,7 +2200,7 @@ export const VendorRegisterPage: React.FC = () => {
               onClick={handleStep3Next}
               className="py-3 px-6 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center gap-2 cursor-pointer"
             >
-              Next: KYC & Tax Documents
+              Next: KYC &amp; Tax Documents
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -1719,19 +2219,32 @@ export const VendorRegisterPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                name="gstin"
                 value={gstin}
-                onChange={(e) => {
-                  setGstin(e.target.value.toUpperCase());
-                  clearFieldError('gstin');
-                }}
+                onChange={(e) =>
+                  handleFieldChange('gstin', e.target.value.toUpperCase(), setGstin, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() =>
+                  handleFieldBlur('gstin', gstin, {
+                    normalize: (v) => v.trim().toUpperCase(),
+                    setter: setGstin
+                  })
+                }
                 required
-                placeholder="e.g. 29AABCB9876F1Z2"
-                className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm tracking-wide focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.gstin ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                placeholder="e.g. 29AABCB9876F1Z8"
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
+                  fieldErrors.gstin
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
                 }`}
               />
               {fieldErrors.gstin && (
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.gstin}</p>
+              )}
+              {!fieldErrors.gstin && fieldWarnings.gstin && (
+                <p className="text-[11px] text-amber-700 mt-1 font-medium">{fieldWarnings.gstin}</p>
               )}
             </div>
 
@@ -1741,16 +2254,25 @@ export const VendorRegisterPage: React.FC = () => {
               </label>
               <input
                 type="text"
-                maxLength={10}
+                name="pan"
                 value={pan}
-                onChange={(e) => {
-                  setPan(e.target.value.toUpperCase());
-                  clearFieldError('pan');
-                }}
+                onChange={(e) =>
+                  handleFieldChange('pan', e.target.value.toUpperCase(), setPan, {
+                    autoTouchOnInput: true
+                  })
+                }
+                onBlur={() =>
+                  handleFieldBlur('pan', pan, {
+                    normalize: (v) => v.trim().toUpperCase(),
+                    setter: setPan
+                  })
+                }
                 required
                 placeholder="e.g. AABCB9876F"
-                className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm tracking-wide focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.pan ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
+                  fieldErrors.pan
+                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
                 }`}
               />
               {fieldErrors.pan && (
@@ -1761,7 +2283,7 @@ export const VendorRegisterPage: React.FC = () => {
 
           {/* Secure Document Vault Cards */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h4 className="text-xs font-bold text-[#17233C]">
                 Verification Documents (Max 5 MB each) *
               </h4>
@@ -1774,10 +2296,17 @@ export const VendorRegisterPage: React.FC = () => {
               {[
                 { type: 'GST_CERTIFICATE' as const, title: 'GST Registration Certificate (REG-06)' },
                 { type: 'PAN_CARD' as const, title: 'PAN Card Document' },
-                { type: 'BUSINESS_REGISTRATION' as const, title: 'Trade License / Incorporation Certificate' },
-                { type: 'AUTHORIZED_ID' as const, title: 'Authorized Signatory Govt ID (Aadhaar / Passport)' }
+                {
+                  type: 'BUSINESS_REGISTRATION' as const,
+                  title: 'Trade License / Incorporation Certificate'
+                },
+                {
+                  type: 'AUTHORIZED_ID' as const,
+                  title: 'Authorized Signatory Govt ID (Aadhaar / Passport)'
+                }
               ].map((docType) => {
                 const uploaded = documents.find((d) => d.type === docType.type);
+                const isUploadingThis = isUploadingDocType === docType.type;
                 return (
                   <div
                     key={docType.type}
@@ -1786,7 +2315,7 @@ export const VendorRegisterPage: React.FC = () => {
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-0.5">
                         <span className="text-xs font-bold text-[#17233C]">{docType.title}</span>
-                        <p className="text-[11px] text-slate-500">PDF, JPG, or PNG</p>
+                        <p className="text-[11px] text-slate-500">PDF, JPG, JPEG, or PNG (Max 5 MB)</p>
                       </div>
                       {uploaded ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -1816,11 +2345,21 @@ export const VendorRegisterPage: React.FC = () => {
                     ) : (
                       <button
                         type="button"
+                        disabled={Boolean(isUploadingDocType)}
                         onClick={() => handleFileUpload(docType.type, docType.title)}
-                        className="w-full py-2 px-3 rounded-xl border border-dashed border-[#203D91]/40 text-[#203D91] text-xs font-bold bg-blue-50/50 hover:bg-blue-50 flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full py-2 px-3 rounded-xl border border-dashed border-[#203D91]/40 text-[#203D91] text-xs font-bold bg-blue-50/50 hover:bg-blue-50 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
                       >
-                        <UploadCloud className="w-3.5 h-3.5 text-[#FF7417]" />
-                        Upload Document
+                        {isUploadingThis ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud className="w-3.5 h-3.5 text-[#FF7417]" />
+                            Upload Document
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
@@ -1842,7 +2381,7 @@ export const VendorRegisterPage: React.FC = () => {
               onClick={handleStep4Next}
               className="py-3 px-6 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center gap-2 cursor-pointer"
             >
-              Next: Bank & Product Details
+              Next: Bank &amp; Product Details
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -1853,7 +2392,7 @@ export const VendorRegisterPage: React.FC = () => {
       {/* STEP 5: BANK & COMPLIANCE INFORMATION                */}
       {/* ==================================================== */}
       {currentStep === 5 && (
-        <form onSubmit={handleProceedToReview} className="space-y-6">
+        <form onSubmit={handleProceedToReview} noValidate className="space-y-6">
           {/* Bank Settlement Section */}
           <div className="p-4 bg-[#F4F7FC] rounded-2xl border border-[#E2E8F0] space-y-3">
             <h4 className="text-xs font-bold text-[#17233C] flex items-center gap-1.5">
@@ -1868,19 +2407,32 @@ export const VendorRegisterPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  name="accountHolderName"
+                  maxLength={100}
                   value={accountHolderName}
-                  onChange={(e) => {
-                    setAccountHolderName(e.target.value);
-                    clearFieldError('accountHolderName');
-                  }}
+                  onChange={(e) =>
+                    handleFieldChange('accountHolderName', e.target.value, setAccountHolderName, {
+                      autoTouchOnInput: true
+                    })
+                  }
+                  onBlur={() =>
+                    handleFieldBlur('accountHolderName', accountHolderName, {
+                      normalize: (v) => v.trim().replace(/\s+/g, ' '),
+                      setter: setAccountHolderName
+                    })
+                  }
                   required
                   placeholder="As per bank passbook / statement"
-                  className={`w-full px-3.5 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                    fieldErrors.accountHolderName ? 'border-rose-400 bg-rose-50/20' : 'border-white bg-white'
+                  className={`w-full px-3.5 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 ${
+                    fieldErrors.accountHolderName
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-white bg-white focus:ring-[#203D91]'
                   }`}
                 />
                 {fieldErrors.accountHolderName && (
-                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.accountHolderName}</p>
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    {fieldErrors.accountHolderName}
+                  </p>
                 )}
               </div>
 
@@ -1888,15 +2440,26 @@ export const VendorRegisterPage: React.FC = () => {
                 <label className="block text-xs font-bold text-[#17233C] mb-1">Bank Name *</label>
                 <input
                   type="text"
+                  name="bankName"
+                  maxLength={80}
                   value={bankName}
-                  onChange={(e) => {
-                    setBankName(e.target.value);
-                    clearFieldError('bankName');
-                  }}
+                  onChange={(e) =>
+                    handleFieldChange('bankName', e.target.value, setBankName, {
+                      autoTouchOnInput: true
+                    })
+                  }
+                  onBlur={() =>
+                    handleFieldBlur('bankName', bankName, {
+                      normalize: (v) => v.trim().replace(/\s+/g, ' '),
+                      setter: setBankName
+                    })
+                  }
                   required
                   placeholder="e.g. HDFC Bank, ICICI Bank, SBI"
-                  className={`w-full px-3.5 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                    fieldErrors.bankName ? 'border-rose-400 bg-rose-50/20' : 'border-white bg-white'
+                  className={`w-full px-3.5 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 ${
+                    fieldErrors.bankName
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-white bg-white focus:ring-[#203D91]'
                   }`}
                 />
                 {fieldErrors.bankName && (
@@ -1908,21 +2471,43 @@ export const VendorRegisterPage: React.FC = () => {
                 <label className="block text-xs font-bold text-[#17233C] mb-1">
                   Bank Account Number *
                 </label>
-                <input
-                  type="password"
-                  value={accountNumber}
-                  onChange={(e) => {
-                    setAccountNumber(e.target.value);
-                    clearFieldError('accountNumber');
-                  }}
-                  required
-                  placeholder="Account number (9-18 digits)"
-                  className={`w-full px-3.5 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                    fieldErrors.accountNumber ? 'border-rose-400 bg-rose-50/20' : 'border-white bg-white'
-                  }`}
-                />
+                <div className="relative">
+                  <input
+                    type={showAccountNumber ? 'text' : 'password'}
+                    name="accountNumber"
+                    inputMode="numeric"
+                    value={accountNumber}
+                    onChange={(e) =>
+                      handleFieldChange('accountNumber', e.target.value, setAccountNumber, {
+                        autoTouchOnInput: true
+                      })
+                    }
+                    onBlur={() => handleFieldBlur('accountNumber', accountNumber)}
+                    required
+                    placeholder="Account number (9-18 digits)"
+                    className={`w-full px-3.5 pr-9 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 ${
+                      fieldErrors.accountNumber
+                        ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                        : 'border-white bg-white focus:ring-[#203D91]'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAccountNumber(!showAccountNumber)}
+                    aria-label={showAccountNumber ? 'Hide account number' : 'Show account number'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showAccountNumber ? (
+                      <EyeOff className="w-3.5 h-3.5" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
                 {fieldErrors.accountNumber && (
-                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.accountNumber}</p>
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    {fieldErrors.accountNumber}
+                  </p>
                 )}
               </div>
 
@@ -1932,19 +2517,30 @@ export const VendorRegisterPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  name="confirmAccountNumber"
+                  inputMode="numeric"
                   value={confirmAccountNumber}
-                  onChange={(e) => {
-                    setConfirmAccountNumber(e.target.value);
-                    clearFieldError('confirmAccountNumber');
-                  }}
+                  onChange={(e) =>
+                    handleFieldChange(
+                      'confirmAccountNumber',
+                      e.target.value,
+                      setConfirmAccountNumber,
+                      { autoTouchOnInput: true }
+                    )
+                  }
+                  onBlur={() => handleFieldBlur('confirmAccountNumber', confirmAccountNumber)}
                   required
                   placeholder="Re-enter account number"
-                  className={`w-full px-3.5 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                    fieldErrors.confirmAccountNumber ? 'border-rose-400 bg-rose-50/20' : 'border-white bg-white'
+                  className={`w-full px-3.5 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 ${
+                    fieldErrors.confirmAccountNumber
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-white bg-white focus:ring-[#203D91]'
                   }`}
                 />
                 {fieldErrors.confirmAccountNumber && (
-                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.confirmAccountNumber}</p>
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    {fieldErrors.confirmAccountNumber}
+                  </p>
                 )}
               </div>
 
@@ -1952,15 +2548,25 @@ export const VendorRegisterPage: React.FC = () => {
                 <label className="block text-xs font-bold text-[#17233C] mb-1">IFSC Code *</label>
                 <input
                   type="text"
+                  name="ifsc"
                   value={ifsc}
-                  onChange={(e) => {
-                    setIfsc(e.target.value.toUpperCase());
-                    clearFieldError('ifsc');
-                  }}
+                  onChange={(e) =>
+                    handleFieldChange('ifsc', e.target.value.toUpperCase(), setIfsc, {
+                      autoTouchOnInput: true
+                    })
+                  }
+                  onBlur={() =>
+                    handleFieldBlur('ifsc', ifsc, {
+                      normalize: (v) => v.trim().toUpperCase(),
+                      setter: setIfsc
+                    })
+                  }
                   required
                   placeholder="e.g. HDFC0000053"
-                  className={`w-full px-3.5 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                    fieldErrors.ifsc ? 'border-rose-400 bg-rose-50/20' : 'border-white bg-white'
+                  className={`w-full px-3.5 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 ${
+                    fieldErrors.ifsc
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-white bg-white focus:ring-[#203D91]'
                   }`}
                 />
                 {fieldErrors.ifsc && (
@@ -1969,15 +2575,30 @@ export const VendorRegisterPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#17233C] mb-1">Account Type</label>
+                <label className="block text-xs font-bold text-[#17233C] mb-1">Account Type *</label>
                 <select
+                  name="accountType"
                   value={accountType}
-                  onChange={(e) => setAccountType(e.target.value as any)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-white bg-white text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91]"
+                  onChange={(e) => {
+                    const next = e.target.value as 'CURRENT' | 'SAVINGS';
+                    setAccountType(next);
+                    setTouched((prev) => ({ ...prev, accountType: true }));
+                    setSingleFieldError('accountType', validateBankAccountType(next).error);
+                  }}
+                  className={`w-full px-3.5 py-2 rounded-xl border bg-white text-xs focus:outline-none focus:ring-2 ${
+                    fieldErrors.accountType
+                      ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                      : 'border-white focus:ring-[#203D91]'
+                  }`}
                 >
                   <option value="CURRENT">Current Account (Recommended for B2B)</option>
                   <option value="SAVINGS">Savings Account</option>
                 </select>
+                {fieldErrors.accountType && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    {fieldErrors.accountType}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1989,17 +2610,25 @@ export const VendorRegisterPage: React.FC = () => {
                 type="checkbox"
                 checked={termsAccepted}
                 onChange={(e) => {
-                  setTermsAccepted(e.target.checked);
-                  clearFieldError('termsAccepted');
+                  const checked = e.target.checked;
+                  setTermsAccepted(checked);
+                  setTouched((prev) => ({ ...prev, termsAccepted: true }));
+                  setSingleFieldError(
+                    'termsAccepted',
+                    checked ? undefined : 'You must accept the BUILDORA 60 Supplier Terms of Partnership.'
+                  );
                 }}
                 className="w-4 h-4 mt-0.5 rounded text-[#203D91] focus:ring-[#203D91]"
               />
               <span className="text-slate-700">
-                I agree to the <strong>BUILDORA 60 Supplier Terms of Partnership</strong>, 60-minute dispatch SLAs, and batch compressive testing standards. *
+                I agree to the <strong>BUILDORA 60 Supplier Terms of Partnership</strong>, 60-minute
+                dispatch SLAs, and batch compressive testing standards. *
               </span>
             </label>
             {fieldErrors.termsAccepted && (
-              <p className="text-[11px] text-rose-600 pl-6 font-medium">{fieldErrors.termsAccepted}</p>
+              <p className="text-[11px] text-rose-600 pl-6 font-medium">
+                {fieldErrors.termsAccepted}
+              </p>
             )}
 
             <label className="flex items-start gap-2.5 cursor-pointer">
@@ -2007,17 +2636,25 @@ export const VendorRegisterPage: React.FC = () => {
                 type="checkbox"
                 checked={privacyAccepted}
                 onChange={(e) => {
-                  setPrivacyAccepted(e.target.checked);
-                  clearFieldError('privacyAccepted');
+                  const checked = e.target.checked;
+                  setPrivacyAccepted(checked);
+                  setTouched((prev) => ({ ...prev, privacyAccepted: true }));
+                  setSingleFieldError(
+                    'privacyAccepted',
+                    checked ? undefined : 'You must confirm the accuracy of submitted documents.'
+                  );
                 }}
                 className="w-4 h-4 mt-0.5 rounded text-[#203D91] focus:ring-[#203D91]"
               />
               <span className="text-slate-700">
-                I confirm that all uploaded documents, GST credentials, and bank settlement details belong to the authorized entity. *
+                I confirm that all uploaded documents, GST credentials, and bank settlement details
+                belong to the authorized entity. *
               </span>
             </label>
             {fieldErrors.privacyAccepted && (
-              <p className="text-[11px] text-rose-600 pl-6 font-medium">{fieldErrors.privacyAccepted}</p>
+              <p className="text-[11px] text-rose-600 pl-6 font-medium">
+                {fieldErrors.privacyAccepted}
+              </p>
             )}
           </div>
 

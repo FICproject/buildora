@@ -2,25 +2,36 @@ import { Injectable, BadRequestException, NotFoundException, Logger } from '@nes
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { MAX_LOGO_SIZE_BYTES, validateLogoFileMetadata } from '@buildora/validation';
-import { VendorLogoMetadata } from '@buildora/types';
+import {
+  MAX_LOGO_SIZE_BYTES,
+  MAX_KYC_DOC_SIZE_BYTES,
+  ALLOWED_KYC_DOCUMENT_TYPES,
+  validateLogoFileMetadata,
+  validateKycDocumentMetadata,
+  detectImageSignature,
+  detectKycDocumentSignature
+} from '@buildora/validation';
+import { VendorLogoMetadata, VendorKycDocument } from '@buildora/types';
 
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly localLogoDir = path.resolve(process.cwd(), 'uploads', 'vendor-logos');
+  private readonly localDocDir = path.resolve(process.cwd(), 'uploads', 'vendor-docs');
 
   constructor() {
-    this.ensureLocalDir();
+    this.ensureLocalDirs();
   }
 
-  private ensureLocalDir() {
-    try {
-      if (!fs.existsSync(this.localLogoDir)) {
-        fs.mkdirSync(this.localLogoDir, { recursive: true });
+  private ensureLocalDirs() {
+    for (const dir of [this.localLogoDir, this.localDocDir]) {
+      try {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+      } catch (err: any) {
+        this.logger.warn(`Could not create upload dir ${dir}: ${err.message}`);
       }
-    } catch (err: any) {
-      this.logger.warn(`Could not create upload dir ${this.localLogoDir}: ${err.message}`);
     }
   }
 
@@ -29,36 +40,7 @@ export class StorageService {
    * Prevents spoofed extensions or malicious non-image uploads.
    */
   detectImageTypeFromBuffer(buffer: Buffer): { mimeType: string; ext: string } | null {
-    if (!buffer || buffer.length < 12) return null;
-
-    // JPEG: FF D8 FF
-    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-      return { mimeType: 'image/jpeg', ext: 'jpg' };
-    }
-
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    if (
-      buffer[0] === 0x89 &&
-      buffer[1] === 0x50 &&
-      buffer[2] === 0x4e &&
-      buffer[3] === 0x47 &&
-      buffer[4] === 0x0d &&
-      buffer[5] === 0x0a &&
-      buffer[6] === 0x1a &&
-      buffer[7] === 0x0a
-    ) {
-      return { mimeType: 'image/png', ext: 'png' };
-    }
-
-    // WEBP: "RIFF" .... "WEBP"
-    if (
-      buffer.toString('ascii', 0, 4) === 'RIFF' &&
-      buffer.toString('ascii', 8, 12) === 'WEBP'
-    ) {
-      return { mimeType: 'image/webp', ext: 'webp' };
-    }
-
-    return null;
+    return detectImageSignature(buffer);
   }
 
   /**
@@ -95,10 +77,8 @@ export class StorageService {
     const safeFileName = `vendor-logo-${crypto.randomUUID()}.${detected.ext}`;
     const uploadedAt = new Date().toISOString();
 
-    // If S3 is configured, upload to S3; otherwise use secure local object storage
     const s3Bucket = process.env.AWS_S3_BUCKET;
     if (s3Bucket && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-      // S3 integration hook when credentials are provided
       const region = process.env.AWS_REGION || 'ap-south-1';
       const url = `https://${s3Bucket}.s3.${region}.amazonaws.com/vendor-logos/${safeFileName}`;
       return {
@@ -111,7 +91,7 @@ export class StorageService {
       };
     }
 
-    this.ensureLocalDir();
+    this.ensureLocalDirs();
     const targetPath = path.join(this.localLogoDir, safeFileName);
     await fs.promises.writeFile(targetPath, buffer);
 
@@ -123,6 +103,61 @@ export class StorageService {
       fileSize: buffer.length,
       uploadedAt,
       storageProvider: 'LOCAL_OBJECT_STORAGE'
+    };
+  }
+
+  /**
+   * Validates actual magic bytes and stores an uploaded KYC document (PDF, JPG, PNG <= 5 MB).
+   */
+  async uploadKycDocument(
+    buffer: Buffer,
+    originalName: string,
+    reportedMimeType: string,
+    docType: VendorKycDocument['type'],
+    title: string,
+    baseUrl?: string
+  ): Promise<VendorKycDocument> {
+    if (!docType || !ALLOWED_KYC_DOCUMENT_TYPES.includes(docType as any)) {
+      throw new BadRequestException('Invalid KYC document type.');
+    }
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('Uploaded document file is empty.');
+    }
+    if (buffer.length > MAX_KYC_DOC_SIZE_BYTES) {
+      throw new BadRequestException('KYC document file size must not exceed 5 MB.');
+    }
+
+    const metaCheck = validateKycDocumentMetadata(reportedMimeType, buffer.length, originalName);
+    if (!metaCheck.isValid) {
+      throw new BadRequestException(metaCheck.error);
+    }
+
+    const detected = detectKycDocumentSignature(buffer);
+    if (!detected) {
+      throw new BadRequestException(
+        'Corrupted or unsupported document file. File signature must be genuine PDF, JPG, or PNG.'
+      );
+    }
+
+    const safeFileName = `vendor-doc-${crypto.randomUUID()}.${detected.ext}`;
+    const docId = `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const uploadedAt = new Date().toISOString();
+
+    this.ensureLocalDirs();
+    const targetPath = path.join(this.localDocDir, safeFileName);
+    await fs.promises.writeFile(targetPath, buffer);
+
+    const origin = baseUrl || `http://localhost:${process.env.PORT || 3000}`;
+    return {
+      id: docId,
+      type: docType,
+      title: title || originalName,
+      fileName: originalName,
+      fileSize: buffer.length,
+      mimeType: detected.mimeType,
+      fileUrl: `${origin}/api/v1/vendor/uploads/docs/${safeFileName}`,
+      uploadedAt,
+      verificationStatus: 'PENDING'
     };
   }
 
@@ -143,6 +178,27 @@ export class StorageService {
     const ext = path.extname(cleanName).toLowerCase();
     const mimeType =
       ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+
+    return { filePath, mimeType };
+  }
+
+  /**
+   * Safely retrieves a stored vendor KYC document while preventing path traversal.
+   */
+  getDocumentFilePath(filename: string): { filePath: string; mimeType: string } {
+    const cleanName = path.basename(filename || '');
+    if (!cleanName || !/^vendor-doc-[a-f0-9-]+\.(pdf|jpg|jpeg|png)$/i.test(cleanName)) {
+      throw new NotFoundException('Requested document file not found.');
+    }
+
+    const filePath = path.join(this.localDocDir, cleanName);
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('Document file does not exist in storage.');
+    }
+
+    const ext = path.extname(cleanName).toLowerCase();
+    const mimeType =
+      ext === '.pdf' ? 'application/pdf' : ext === '.png' ? 'image/png' : 'image/jpeg';
 
     return { filePath, mimeType };
   }

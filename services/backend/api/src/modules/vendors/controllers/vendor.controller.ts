@@ -56,6 +56,11 @@ import { vendorPersistenceService } from '../services/vendor-persistence.service
 import {
   validateName,
   validateBusinessName,
+  validateLegalBusinessName,
+  validateStoreName,
+  validateBusinessType,
+  validateBusinessRegistrationType,
+  validateBusinessDescription,
   validateEmail,
   validateIndianMobile,
   validateIdentifier,
@@ -65,13 +70,19 @@ import {
   validatePAN,
   validateBankName,
   validateBankAccount,
+  validateBankAccountType,
   validateIFSC,
   validatePassword,
   validateConfirmPassword,
   validateAddress,
   validateYearOfEstablishment,
   validateWebsite,
-  MAX_LOGO_SIZE_BYTES
+  validateKycDocumentMetadata,
+  validateVendorStep1,
+  validateVendorRegistrationPayload,
+  ALLOWED_KYC_DOCUMENT_TYPES,
+  MAX_LOGO_SIZE_BYTES,
+  MAX_KYC_DOC_SIZE_BYTES
 } from '@buildora/validation';
 
 // Initial Demo Vendor Profile
@@ -1372,6 +1383,29 @@ export class VendorController implements OnModuleInit {
       throw new BadRequestException('Identifier (email or mobile) and verification type are required.');
     }
 
+    if (type === 'REGISTRATION_EMAIL') {
+      const emailCheck = validateEmail(identifier);
+      if (!emailCheck.isValid) {
+        throw new BadRequestException({
+          message: emailCheck.error || 'Enter a valid business email address.',
+          errors: { email: emailCheck.error || 'Enter a valid business email address.' }
+        });
+      }
+    } else if (type === 'REGISTRATION_MOBILE') {
+      const phoneCheck = validateIndianMobile(identifier);
+      if (!phoneCheck.isValid) {
+        throw new BadRequestException({
+          message: phoneCheck.error || 'Enter a valid 10-digit mobile number starting with 6–9.',
+          errors: { phone: phoneCheck.error || 'Enter a valid 10-digit mobile number starting with 6–9.' }
+        });
+      }
+    } else if (type === 'LOGIN' || type === 'PASSWORD_RESET') {
+      const identCheck = validateIdentifier(identifier);
+      if (!identCheck.isValid) {
+        throw new BadRequestException(identCheck.error || 'Enter a valid business email or 10-digit mobile number.');
+      }
+    }
+
     const clean = identifier.trim().toLowerCase();
 
     // For LOGIN or PASSWORD_RESET, verify that vendor exists
@@ -1418,6 +1452,22 @@ export class VendorController implements OnModuleInit {
     const { identifier, type, otp } = body;
     if (!identifier || !type || !otp) {
       throw new BadRequestException('Identifier, verification type, and OTP code are required.');
+    }
+
+    if (type === 'REGISTRATION_EMAIL') {
+      const emailCheck = validateEmail(identifier);
+      if (!emailCheck.isValid) {
+        throw new BadRequestException(emailCheck.error || 'Enter a valid business email address.');
+      }
+    } else if (type === 'REGISTRATION_MOBILE') {
+      const phoneCheck = validateIndianMobile(identifier);
+      if (!phoneCheck.isValid) {
+        throw new BadRequestException(phoneCheck.error || 'Enter a valid 10-digit mobile number starting with 6–9.');
+      }
+    }
+
+    if (!/^\d{6}$/.test(String(otp).trim())) {
+      throw new BadRequestException('Verification code must be exactly 6 digits.');
     }
 
     const isValid = vendorSecurityService.verifyOtp(identifier, type, otp);
@@ -1723,43 +1773,33 @@ export class VendorController implements OnModuleInit {
   ) {
     const { ownerName, email, phone, password, confirmPassword } = body;
 
-    const nameCheck = validateName(ownerName);
-    if (!nameCheck.isValid) {
-      throw new BadRequestException(nameCheck.error || 'Please enter a valid owner / authorized person name.');
-    }
-
-    const emailCheck = validateEmail(email);
-    if (!emailCheck.isValid) {
-      throw new BadRequestException(emailCheck.error || 'Please enter a valid business email address.');
-    }
-
-    const phoneCheck = validateIndianMobile(phone);
-    if (!phoneCheck.isValid) {
-      throw new BadRequestException(phoneCheck.error || 'Please enter a valid 10-digit Indian mobile number.');
-    }
-
-    const passCheck = validatePassword(password);
-    if (!passCheck.isValid) {
-      throw new BadRequestException(passCheck.error || 'Password does not meet enterprise security criteria.');
-    }
-
-    const confirmCheck = validateConfirmPassword(password, confirmPassword);
-    if (!confirmCheck.isValid) {
-      throw new BadRequestException(confirmCheck.error || 'Passwords do not match.');
+    const step1Check = validateVendorStep1({ ownerName, email, phone, password, confirmPassword });
+    if (!step1Check.isValid) {
+      const firstError = Object.values(step1Check.errors)[0] || 'Invalid account registration details.';
+      throw new BadRequestException({
+        message: firstError,
+        errors: step1Check.errors
+      });
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPhone = phone.trim().replace(/\D/g, '').slice(-10);
+    const cleanPhone = phone.trim();
 
     // Check duplicate email or phone among active/submitted vendors
     const existingEmail = findVendorByIdentifier(cleanEmail);
     if (existingEmail && existingEmail.status !== 'DRAFT') {
-      throw new BadRequestException('This business email is already registered with another vendor partner.');
+      throw new BadRequestException({
+        message: 'This business email is already registered with another vendor partner.',
+        errors: { email: 'This business email is already registered with another vendor partner.' }
+      });
     }
 
     const existingPhone = findVendorByIdentifier(cleanPhone);
     if (existingPhone && existingPhone.status !== 'DRAFT') {
-      throw new BadRequestException('This mobile number is already registered with another vendor partner.');
+      throw new BadRequestException({
+        message: 'This mobile number is already registered with another vendor partner.',
+        errors: { phone: 'This mobile number is already registered with another vendor partner.' }
+      });
     }
 
     // Create or update DRAFT vendor record
@@ -1849,6 +1889,106 @@ export class VendorController implements OnModuleInit {
     }
 
     const { wizardData, currentStep } = body;
+
+    // Validate any populated fields before persisting draft to prevent malformed data in MongoDB
+    if (wizardData) {
+      const draftErrors: Record<string, string> = {};
+      if (wizardData.ownerName) {
+        const res = validateName(wizardData.ownerName, 'Owner / Authorized Person Full Name');
+        if (!res.isValid && res.error) draftErrors.ownerName = res.error;
+      }
+      if (wizardData.email) {
+        const res = validateEmail(wizardData.email);
+        if (!res.isValid && res.error) draftErrors.email = res.error;
+      }
+      if (wizardData.phone) {
+        const res = validateIndianMobile(wizardData.phone);
+        if (!res.isValid && res.error) draftErrors.phone = res.error;
+      }
+      if (wizardData.legalBusinessName) {
+        const res = validateLegalBusinessName(wizardData.legalBusinessName);
+        if (!res.isValid && res.error) draftErrors.legalBusinessName = res.error;
+      }
+      if (wizardData.storeName) {
+        const res = validateStoreName(wizardData.storeName);
+        if (!res.isValid && res.error) draftErrors.storeName = res.error;
+      }
+      if (wizardData.businessType) {
+        const res = validateBusinessType(wizardData.businessType);
+        if (!res.isValid && res.error) draftErrors.businessType = res.error;
+      }
+      if (wizardData.businessRegistrationType) {
+        const res = validateBusinessRegistrationType(wizardData.businessRegistrationType);
+        if (!res.isValid && res.error) draftErrors.businessRegistrationType = res.error;
+      }
+      if (wizardData.yearOfEstablishment) {
+        const res = validateYearOfEstablishment(wizardData.yearOfEstablishment);
+        if (!res.isValid && res.error) draftErrors.yearOfEstablishment = res.error;
+      }
+      if (wizardData.website) {
+        const res = validateWebsite(wizardData.website);
+        if (!res.isValid && res.error) draftErrors.website = res.error;
+      }
+      if (wizardData.description) {
+        const res = validateBusinessDescription(wizardData.description);
+        if (!res.isValid && res.error) draftErrors.description = res.error;
+      }
+      if (wizardData.pincode) {
+        const res = validatePincode(wizardData.pincode);
+        if (!res.isValid && res.error) draftErrors.pincode = res.error;
+      }
+      if (wizardData.state) {
+        const res = validateCityOrState(wizardData.state, 'State');
+        if (!res.isValid && res.error) draftErrors.state = res.error;
+      }
+      if (wizardData.city) {
+        const res = validateCityOrState(wizardData.city, 'City / Region');
+        if (!res.isValid && res.error) draftErrors.city = res.error;
+      }
+      if (wizardData.completeAddress) {
+        const res = validateAddress(wizardData.completeAddress);
+        if (!res.isValid && res.error) draftErrors.completeAddress = res.error;
+      }
+      if (wizardData.gstin) {
+        const res = validateGSTIN(wizardData.gstin);
+        if (!res.isValid && res.error) draftErrors.gstin = res.error;
+      }
+      if (wizardData.pan) {
+        const res = validatePAN(wizardData.pan);
+        if (!res.isValid && res.error) draftErrors.pan = res.error;
+      }
+      if (wizardData.bankDetails) {
+        if (wizardData.bankDetails.accountHolderName) {
+          const res = validateName(wizardData.bankDetails.accountHolderName, 'Account Beneficiary Name');
+          if (!res.isValid && res.error) draftErrors.accountHolderName = res.error;
+        }
+        if (wizardData.bankDetails.bankName) {
+          const res = validateBankName(wizardData.bankDetails.bankName);
+          if (!res.isValid && res.error) draftErrors.bankName = res.error;
+        }
+        if (wizardData.bankDetails.accountNumber) {
+          const res = validateBankAccount(wizardData.bankDetails.accountNumber);
+          if (!res.isValid && res.error) draftErrors.accountNumber = res.error;
+        }
+        if (wizardData.bankDetails.ifsc) {
+          const res = validateIFSC(wizardData.bankDetails.ifsc);
+          if (!res.isValid && res.error) draftErrors.ifsc = res.error;
+        }
+        if (wizardData.bankDetails.accountType) {
+          const res = validateBankAccountType(wizardData.bankDetails.accountType);
+          if (!res.isValid && res.error) draftErrors.accountType = res.error;
+        }
+      }
+
+      if (Object.keys(draftErrors).length > 0) {
+        const firstError = Object.values(draftErrors)[0];
+        throw new BadRequestException({
+          message: firstError,
+          errors: draftErrors
+        });
+      }
+    }
+
     vendor.registrationStep = currentStep || vendor.registrationStep || 2;
     vendor.updatedAt = new Date().toISOString();
 
@@ -1972,95 +2112,22 @@ export class VendorController implements OnModuleInit {
       throw new BadRequestException('Registration wizard data is required for submission.');
     }
 
-    // Step 1 Validation
-    if (data.ownerName) {
-      const nameCheck = validateName(data.ownerName);
-      if (!nameCheck.isValid) throw new BadRequestException(nameCheck.error);
-    }
-    if (data.email) {
-      const emailCheck = validateEmail(data.email);
-      if (!emailCheck.isValid) throw new BadRequestException(emailCheck.error);
-    }
-    if (data.phone) {
-      const phoneCheck = validateIndianMobile(data.phone);
-      if (!phoneCheck.isValid) throw new BadRequestException(phoneCheck.error);
-    }
+    // Never trust client-only flags; validate every step's fields on the backend
+    const mergedValidationData = {
+      ...data,
+      ownerName: data.ownerName ?? vendor.name,
+      email: data.email ?? vendor.email,
+      phone: data.phone ?? vendor.phone,
+      country: data.country || 'India'
+    };
 
-    // Step 2 Validation: Business Information
-    const legalBizCheck = validateBusinessName(data.legalBusinessName || '', 'Legal Entity Business Name');
-    if (!legalBizCheck.isValid) {
-      throw new BadRequestException(legalBizCheck.error || 'Legal Entity Business Name is required.');
-    }
-    const storeBizCheck = validateBusinessName(data.storeName || '', 'Store / Brand Trade Name');
-    if (!storeBizCheck.isValid) {
-      throw new BadRequestException(storeBizCheck.error || 'Display Store Name is required.');
-    }
-    if (!data.businessType) {
-      throw new BadRequestException('Business Supplier Type is required in Step 2.');
-    }
-    if (data.yearOfEstablishment) {
-      const yearCheck = validateYearOfEstablishment(data.yearOfEstablishment);
-      if (!yearCheck.isValid) throw new BadRequestException(yearCheck.error);
-    }
-    if (data.website) {
-      const webCheck = validateWebsite(data.website);
-      if (!webCheck.isValid) throw new BadRequestException(webCheck.error);
-    }
-
-    // Step 3 Validation: Address & Pincode
-    if (!data.pincode) {
-      throw new BadRequestException('Pincode is required in Step 3.');
-    }
-    const pinCheck = validatePincode(data.pincode);
-    if (!pinCheck.isValid) {
-      throw new BadRequestException(pinCheck.error || 'Invalid 6-digit Indian PIN code in Step 3.');
-    }
-    const stateCheck = validateCityOrState(data.state || '', 'State');
-    if (!stateCheck.isValid) throw new BadRequestException(stateCheck.error);
-    const cityCheck = validateCityOrState(data.city || '', 'City / Region');
-    if (!cityCheck.isValid) throw new BadRequestException(cityCheck.error);
-    const addrCheck = validateAddress(data.completeAddress || '');
-    if (!addrCheck.isValid) {
-      throw new BadRequestException(addrCheck.error || 'Please enter a complete registered business address (minimum 5 characters) in Step 3.');
-    }
-
-    // Step 4 Validation: At least GST or PAN
-    if (!data.gstin && !data.pan) {
-      throw new BadRequestException('At least GSTIN or PAN is mandatory for B2B supplier verification in Step 4.');
-    }
-    if (data.gstin) {
-      const gstCheck = validateGSTIN(data.gstin);
-      if (!gstCheck.isValid) {
-        throw new BadRequestException(gstCheck.error || 'Invalid 15-character GSTIN format.');
-      }
-    }
-    if (data.pan) {
-      const panCheck = validatePAN(data.pan);
-      if (!panCheck.isValid) {
-        throw new BadRequestException(panCheck.error || 'Invalid 10-character PAN format.');
-      }
-    }
-
-    // Step 5 Validation: Bank details & Terms acceptance (NO category/brand requirements)
-    const holderCheck = validateName(data.bankDetails?.accountHolderName || '');
-    if (!holderCheck.isValid) {
-      throw new BadRequestException(holderCheck.error || 'Valid Account Beneficiary Name is required in Step 5.');
-    }
-    const bankCheck = validateBankName(data.bankDetails?.bankName || '');
-    if (!bankCheck.isValid) {
-      throw new BadRequestException(bankCheck.error || 'Valid Bank Name is required in Step 5.');
-    }
-    const accCheck = validateBankAccount(data.bankDetails?.accountNumber || '');
-    if (!accCheck.isValid) {
-      throw new BadRequestException(accCheck.error || 'Invalid bank account number.');
-    }
-    const ifscCheck = validateIFSC(data.bankDetails?.ifsc || '');
-    if (!ifscCheck.isValid) {
-      throw new BadRequestException(ifscCheck.error || 'Invalid 11-character IFSC code.');
-    }
-
-    if (!data.termsAccepted || !data.privacyAccepted) {
-      throw new BadRequestException('You must review and accept the BUILDORA 60 Supplier Terms and Privacy Policy.');
+    const fullCheck = validateVendorRegistrationPayload(mergedValidationData);
+    if (!fullCheck.isValid) {
+      const firstError = Object.values(fullCheck.errors)[0] || 'Invalid registration data submitted.';
+      throw new BadRequestException({
+        message: firstError,
+        errors: fullCheck.errors
+      });
     }
 
     const oldStatus = vendor.status;
@@ -2077,22 +2144,30 @@ export class VendorController implements OnModuleInit {
     vendor.registrationStep = 5;
     vendor.registrationData = {
       ...data,
-      email: (data.email || vendor.email).trim().toLowerCase(),
-      phone: (data.phone || vendor.phone).replace(/\D/g, '').slice(-10),
+      ownerName: mergedValidationData.ownerName.trim(),
+      email: mergedValidationData.email.trim().toLowerCase(),
+      phone: mergedValidationData.phone.trim(),
+      legalBusinessName: data.legalBusinessName.trim(),
+      storeName: data.storeName.trim(),
       pincode: data.pincode.trim(),
+      state: data.state.trim(),
+      city: data.city.trim(),
+      completeAddress: data.completeAddress.trim(),
       gstin: data.gstin ? data.gstin.trim().toUpperCase() : undefined,
       pan: data.pan ? data.pan.trim().toUpperCase() : undefined,
       bankDetails: {
         ...data.bankDetails,
-        accountNumber: data.bankDetails.accountNumber.replace(/\D/g, ''),
+        accountHolderName: data.bankDetails.accountHolderName.trim(),
+        bankName: data.bankDetails.bankName.trim(),
+        accountNumber: data.bankDetails.accountNumber.trim(),
         ifsc: data.bankDetails.ifsc.trim().toUpperCase()
       }
     };
 
-    if (data.ownerName) vendor.name = data.ownerName.trim();
+    if (mergedValidationData.ownerName) vendor.name = mergedValidationData.ownerName.trim();
     if (data.storeName) vendor.storeName = data.storeName.trim();
-    if (data.phone) vendor.phone = data.phone.replace(/\D/g, '').slice(-10);
-    if (data.email) vendor.email = data.email.trim().toLowerCase();
+    if (mergedValidationData.phone) vendor.phone = mergedValidationData.phone.trim();
+    if (mergedValidationData.email) vendor.email = mergedValidationData.email.trim().toLowerCase();
     if (data.logoUrl !== undefined) vendor.logoUrl = data.logoUrl || undefined;
     if (data.logoMetadata !== undefined) vendor.logoMetadata = data.logoMetadata || undefined;
     if (data.documents && data.documents.length > 0) {
@@ -2328,13 +2403,13 @@ export class VendorController implements OnModuleInit {
     }
   ) {
     const { fileName, fileSize, mimeType, type, title } = body;
-    if (!fileName || !type) {
-      throw new BadRequestException('File name and document type are required.');
+    if (!fileName || !type || !ALLOWED_KYC_DOCUMENT_TYPES.includes(type as any)) {
+      throw new BadRequestException('Valid file name and KYC document type are required.');
     }
 
-    // Size limit check (max 10MB)
-    if (fileSize > 10 * 1024 * 1024) {
-      throw new BadRequestException('File size exceeds the 10 MB limit.');
+    const metaCheck = validateKycDocumentMetadata(mimeType, fileSize, fileName);
+    if (!metaCheck.isValid) {
+      throw new BadRequestException(metaCheck.error);
     }
 
     const docId = `doc-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -2357,6 +2432,49 @@ export class VendorController implements OnModuleInit {
       message: 'Document uploaded securely to vendor private vault.',
       document: kycDoc
     };
+  }
+
+  @Post('registration/upload-doc-file')
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: { fileSize: MAX_KYC_DOC_SIZE_BYTES }
+    })
+  )
+  async uploadRegistrationDocFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { type?: VendorKycDocument['type']; title?: string },
+    @Req() req?: Request
+  ) {
+    if (!file) {
+      throw new BadRequestException('Please attach a valid KYC document (PDF, JPG, JPEG, or PNG up to 5 MB).');
+    }
+
+    const host = req?.get?.('host') || `localhost:${process.env.PORT || 3000}`;
+    const protocol = req?.protocol || 'http';
+    const baseUrl = `${protocol}://${host}`;
+
+    const document = await storageService.uploadKycDocument(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      (body?.type || 'OTHER') as VendorKycDocument['type'],
+      body?.title || file.originalname,
+      baseUrl
+    );
+
+    return {
+      success: true,
+      message: 'Document uploaded and verified securely.',
+      document
+    };
+  }
+
+  @Get('uploads/docs/:filename')
+  serveUploadedDocument(@Param('filename') filename: string, @Res() res: Response) {
+    const { filePath, mimeType } = storageService.getDocumentFilePath(filename);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    return res.sendFile(filePath);
   }
 
   @Post('registration/upload-logo')
