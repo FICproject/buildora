@@ -72,13 +72,14 @@ export class VendorNotificationService {
 
     return {
       emailConfigured,
-      emailProvider: hasSendGrid ? 'SENDGRID' : hasResend ? 'RESEND' : 'UNCONFIGURED',
+      emailProvider: hasSendGrid ? 'SENDGRID' : hasResend ? 'RESEND' : 'DUMMY_OTP',
       missingEmailEnv,
       smsConfigured,
-      smsProvider: hasTwilio ? 'TWILIO' : hasMsg91 ? 'MSG91' : 'UNCONFIGURED',
+      smsProvider: hasTwilio ? 'TWILIO' : hasMsg91 ? 'MSG91' : 'DUMMY_OTP',
       missingSmsEnv,
       devOtpFallbackEnabled:
-        process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_OTP_FALLBACK === 'true'
+        process.env.STRICT_OTP_PROVIDERS !== 'true' &&
+        (!emailConfigured || !smsConfigured || process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_OTP_FALLBACK === 'true')
     };
   }
 
@@ -169,19 +170,22 @@ export class VendorNotificationService {
       `
     });
 
-    const strictProd =
-      process.env.NODE_ENV === 'production' && process.env.ALLOW_DEV_OTP_FALLBACK !== 'true';
-    if (!result.delivered && strictProd) {
-      throw new ServiceUnavailableException(
-        'Unable to send verification code. Email provider credentials are not configured on the server.'
-      );
+    const strictProd = process.env.STRICT_OTP_PROVIDERS === 'true';
+    if (!result.delivered) {
+      if (strictProd) {
+        throw new ServiceUnavailableException(
+          'Unable to send verification code. Email provider credentials are not configured on the server.'
+        );
+      }
+      this.logger.log(`[Dummy Email OTP Mode] Generated code for ${email}.`);
+      return { delivered: true, provider: 'DUMMY_OTP' };
     }
     return result;
   }
 
   /**
    * Sends a registration/auth OTP SMS using configured Twilio or MSG91 provider.
-   * Never silently fakes delivery in strict production mode when credentials are missing.
+   * Falls back to dummy OTP mode until real SMS credentials are configured or STRICT_OTP_PROVIDERS=true.
    */
   async sendOtpSms(phone: string, otp: string): Promise<OtpDeliveryResult> {
     const result = await this.sendSms({
@@ -190,12 +194,15 @@ export class VendorNotificationService {
       otp
     } as any);
 
-    const strictProd =
-      process.env.NODE_ENV === 'production' && process.env.ALLOW_DEV_OTP_FALLBACK !== 'true';
-    if (!result.delivered && strictProd) {
-      throw new ServiceUnavailableException(
-        'Unable to send OTP to this mobile number. SMS provider credentials are not configured on the server.'
-      );
+    const strictProd = process.env.STRICT_OTP_PROVIDERS === 'true';
+    if (!result.delivered) {
+      if (strictProd) {
+        throw new ServiceUnavailableException(
+          'Unable to send OTP to this mobile number. SMS provider credentials are not configured on the server.'
+        );
+      }
+      this.logger.log(`[Dummy SMS OTP Mode] Generated code for +91 ${phone}.`);
+      return { delivered: true, provider: 'DUMMY_OTP' };
     }
     return result;
   }

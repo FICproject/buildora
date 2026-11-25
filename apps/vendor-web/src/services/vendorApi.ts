@@ -18,7 +18,7 @@ import {
 } from '@buildora/types';
 import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES } from '@buildora/constants';
 import { VENDOR_APP_CONFIG } from '../config';
-import { apiRequest, mapFriendlyApiError } from './apiClient';
+import { apiRequest, mapFriendlyApiError, warmupBackend } from './apiClient';
 
 const API_BASE_URL = VENDOR_APP_CONFIG.apiBaseUrl;
 
@@ -489,6 +489,10 @@ export const vendorApi = {
   // AUTHENTICATION & SECURITY
   // ==========================================
 
+  warmupBackend() {
+    warmupBackend();
+  },
+
   async sendOtp(identifier: string, type: 'REGISTRATION_EMAIL' | 'REGISTRATION_MOBILE' | 'LOGIN' | 'PASSWORD_RESET') {
     const fallbackMsg =
       type === 'REGISTRATION_EMAIL'
@@ -500,6 +504,7 @@ export const vendorApi = {
     return apiRequest('/vendor/auth/send-otp', {
       method: 'POST',
       includeAuth: false,
+      retryOnTransient: true,
       body: { identifier, type },
       fallbackErrorMessage: fallbackMsg
     });

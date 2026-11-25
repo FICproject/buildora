@@ -39,7 +39,7 @@ services:
       - key: MSG91_TEMPLATE_ID
         sync: false
       - key: ALLOW_DEV_OTP_FALLBACK
-        value: "false"
+        value: "true"
 
   # Customer Web on Render Static Site
   - type: web
@@ -62,7 +62,7 @@ services:
     staticPublishPath: ./apps/vendor-web/dist
     envVars:
       - key: VITE_API_URL
-        value: https://buildora-backend-api.onrender.com/api/v1
+        value: https://buildora-vl8k.onrender.com/api/v1
       - key: VITE_DEFAULT_TENANT_ID
         value: tenant-buildora-blr
     routes:

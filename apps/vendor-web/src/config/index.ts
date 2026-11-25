@@ -47,8 +47,8 @@ export const VENDOR_APP_CONFIG = {
   apiMisconfiguredReason: resolved.misconfiguredReason,
   defaultTenantId: import.meta.env?.VITE_DEFAULT_TENANT_ID || 'tenant-buildora-blr',
   appName: import.meta.env?.VITE_APP_NAME || 'BUILDORA 60 Vendor Portal',
-  requestTimeoutMs: 15000,
-  uploadTimeoutMs: 30000,
+  requestTimeoutMs: 45000,
+  uploadTimeoutMs: 60000,
   isDev: Boolean(import.meta.env?.DEV),
   isProd: Boolean(import.meta.env?.PROD)
 } as const;

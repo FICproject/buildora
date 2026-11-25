@@ -74,6 +74,11 @@ export const VendorLoginPage: React.FC = () => {
   // Demo Accounts Drawer (Discreet testing tool for all 5 statuses)
   const [isDemoDrawerOpen, setIsDemoDrawerOpen] = useState(false);
 
+  // Wake up Render backend container when login page loads
+  useEffect(() => {
+    vendorApi.warmupBackend();
+  }, []);
+
   // OTP Countdown Timer
   useEffect(() => {
     let timer: any;
@@ -134,8 +139,10 @@ export const VendorLoginPage: React.FC = () => {
       if (res.devOtpHint) {
         setDevOtpHint(res.devOtpHint);
         setOtpCode(res.devOtpHint);
+        setStatusNotice(`Verification code sent to ${identifier.trim()} (Demo OTP: ${res.devOtpHint})`);
+      } else {
+        setStatusNotice(`Verification code sent to ${identifier.trim()}`);
       }
-      setStatusNotice(`Verification code sent to ${identifier.trim()}`);
     } catch (err: any) {
       setFieldErrors({ identifier: err.message || 'Failed to send OTP. Please check your credentials.' });
     } finally {
@@ -185,8 +192,10 @@ export const VendorLoginPage: React.FC = () => {
       setForgotStep('RESET');
       if (res.devOtpHint) {
         setForgotOtp(res.devOtpHint);
+        setForgotSuccess(`Verification code sent to ${forgotIdentifier.trim()} (Demo OTP: ${res.devOtpHint})`);
+      } else {
+        setForgotSuccess(`Verification code sent to ${forgotIdentifier.trim()}`);
       }
-      setForgotSuccess(`Verification code sent to ${forgotIdentifier.trim()}`);
     } catch (err: any) {
       setForgotError(err.message || 'Failed to send password reset code.');
     } finally {

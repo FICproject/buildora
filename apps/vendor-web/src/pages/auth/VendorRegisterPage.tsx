@@ -365,6 +365,11 @@ export const VendorRegisterPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Wake up Render backend container while vendor fills out onboarding Step 1
+  useEffect(() => {
+    vendorApi.warmupBackend();
+  }, []);
+
   // Resume saved draft OR resubmission data
   useEffect(() => {
     if (
@@ -522,8 +527,10 @@ export const VendorRegisterPage: React.FC = () => {
       setIsEmailOtpSent(true);
       if (res.devOtpHint) {
         setEmailOtp(res.devOtpHint);
+        setSuccessNotice(`Verification code sent to ${cleanEmail} (Demo OTP: ${res.devOtpHint})`);
+      } else {
+        setSuccessNotice(`Verification code sent to ${cleanEmail}`);
       }
-      setSuccessNotice(`Verification code sent to ${cleanEmail}`);
     } catch (err: any) {
       const raw = String(err?.message || '');
       const msg =
@@ -571,8 +578,10 @@ export const VendorRegisterPage: React.FC = () => {
       setIsMobileOtpSent(true);
       if (res.devOtpHint) {
         setMobileOtp(res.devOtpHint);
+        setSuccessNotice(`Verification code sent to +91 ${phone} (Demo OTP: ${res.devOtpHint})`);
+      } else {
+        setSuccessNotice(`Verification code sent to +91 ${phone}`);
       }
-      setSuccessNotice(`Verification code sent to +91 ${phone}`);
     } catch (err: any) {
       const raw = String(err?.message || '');
       const msg =

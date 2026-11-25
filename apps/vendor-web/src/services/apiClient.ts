@@ -22,9 +22,30 @@ export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   timeoutMs?: number;
   includeAuth?: boolean;
   fallbackErrorMessage?: string;
+  retryOnTransient?: boolean;
 }
 
 const TOKEN_STORAGE_KEY = 'buildora_vendor_token';
+let warmupAttempted = false;
+
+/**
+ * Quietly pings /health once on auth page load so sleeping Free-tier hosts (e.g. Render)
+ * begin waking up before the vendor clicks Send Code or Sign In.
+ */
+export function warmupBackend(): void {
+  if (warmupAttempted || !VENDOR_APP_CONFIG.isApiConfigured || !VENDOR_APP_CONFIG.apiBaseUrl) {
+    return;
+  }
+  warmupAttempted = true;
+  fetch(`${VENDOR_APP_CONFIG.apiBaseUrl}/health`, {
+    method: 'GET',
+    headers: { 'X-Tenant-ID': VENDOR_APP_CONFIG.defaultTenantId },
+    signal: AbortSignal.timeout(VENDOR_APP_CONFIG.requestTimeoutMs)
+  }).catch(() => {
+    // Allow future warmup if initial attempt failed
+    warmupAttempted = false;
+  });
+}
 
 function isNetworkOrFetchFailure(err: unknown): boolean {
   if (!err) return false;
@@ -98,6 +119,7 @@ export async function apiRequest<T = any>(
       : VENDOR_APP_CONFIG.requestTimeoutMs,
     includeAuth = true,
     fallbackErrorMessage,
+    retryOnTransient = (options.method || 'GET').toUpperCase() === 'GET',
     headers: customHeaders,
     ...restInit
   } = options;
@@ -122,23 +144,47 @@ export async function apiRequest<T = any>(
     }
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const maxAttempts = retryOnTransient ? 2 : 1;
+  let response: Response | undefined;
+  let lastFetchError: unknown;
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      ...restInit,
-      headers,
-      body: isFormData ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal
-    });
-  } catch (err) {
-    clearTimeout(timeoutId);
-    throw mapFriendlyApiError(err, fallbackErrorMessage);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      response = await fetch(url, {
+        ...restInit,
+        headers,
+        body: isFormData ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      // Retry once on transient Render cold-start / upstream gateway statuses
+      if (attempt < maxAttempts && [502, 503, 504].includes(response.status)) {
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      break;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastFetchError = err;
+      const canRetry =
+        attempt < maxAttempts &&
+        (typeof navigator === 'undefined' || navigator.onLine !== false) &&
+        ((err as any)?.name === 'AbortError' || isNetworkOrFetchFailure(err));
+      if (canRetry) {
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      throw mapFriendlyApiError(err, fallbackErrorMessage);
+    }
   }
 
-  clearTimeout(timeoutId);
+  if (!response) {
+    throw mapFriendlyApiError(lastFetchError, fallbackErrorMessage);
+  }
 
   const contentType = response.headers.get('content-type') || '';
   const isJson = contentType.includes('application/json');

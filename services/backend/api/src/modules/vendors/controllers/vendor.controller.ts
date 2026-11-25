@@ -1459,12 +1459,15 @@ export class VendorController implements OnModuleInit {
       }
     }
 
+    const devOtpHint =
+      result.devOtpHint || (delivery.provider === 'DUMMY_OTP' ? result.otpForDelivery : undefined);
+
     return {
       success: true,
       message: result.message,
       cooldownSeconds: result.cooldownSeconds,
       deliveryProvider: delivery.provider,
-      ...(result.devOtpHint ? { devOtpHint: result.devOtpHint } : {})
+      ...(devOtpHint ? { devOtpHint } : {})
     };
   }
 
@@ -1656,7 +1659,14 @@ export class VendorController implements OnModuleInit {
       throw new NotFoundException(`No registered vendor account found for "${identifier}".`);
     }
 
-    return vendorSecurityService.generateAndStoreOtp(clean, 'PASSWORD_RESET');
+    const result = vendorSecurityService.generateAndStoreOtp(clean, 'PASSWORD_RESET');
+    const providerStatus = vendorNotificationService.getOtpProviderStatus();
+    const exposeDummy = !providerStatus.emailConfigured && !providerStatus.smsConfigured;
+    const devOtpHint = result.devOtpHint || (exposeDummy ? result.otpForDelivery : undefined);
+    return {
+      ...result,
+      ...(devOtpHint ? { devOtpHint } : {})
+    };
   }
 
   @Post('auth/forgot-password/reset')
