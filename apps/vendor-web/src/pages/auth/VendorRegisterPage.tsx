@@ -9,6 +9,19 @@ import {
   VendorRegistrationWizardData
 } from '@buildora/types';
 import {
+  validateName,
+  validateEmail,
+  validateIndianMobile,
+  validatePincode,
+  validateGSTIN,
+  validatePAN,
+  validateBankAccount,
+  validateIFSC,
+  validatePassword,
+  validateConfirmPassword,
+  validateAddress
+} from '@buildora/validation';
+import {
   User,
   Mail,
   Phone,
@@ -27,7 +40,12 @@ import {
   Trash2,
   Plus,
   ShieldCheck,
-  Clock
+  Clock,
+  Loader2,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Check
 } from 'lucide-react';
 
 export const VendorRegisterPage: React.FC = () => {
@@ -100,6 +118,22 @@ export const VendorRegisterPage: React.FC = () => {
   const [dispatchAddress, setDispatchAddress] = useState('');
   const [warehouses, setWarehouses] = useState<VendorWarehouse[]>([]);
 
+  // Pincode Lookup States
+  const [isPincodeLoading, setIsPincodeLoading] = useState(false);
+  const [pincodeLookupSuccess, setPincodeLookupSuccess] = useState(false);
+  const [pincodeLookupError, setPincodeLookupError] = useState<string | null>(null);
+  const [availableLocalities, setAvailableLocalities] = useState<string[]>([]);
+  const [selectedLocality, setSelectedLocality] = useState('');
+  const [isManualAddress, setIsManualAddress] = useState(false);
+
+  // Helper to transition steps cleanly with no lingering notices
+  const goToStep = (targetStep: number) => {
+    setSuccessNotice(null);
+    setError(null);
+    setCurrentStep(targetStep);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // ----------------------------------------------------
   // STEP 4: KYC & TAX DOCUMENTS (Initially 100% empty)
   // ----------------------------------------------------
@@ -170,6 +204,79 @@ export const VendorRegisterPage: React.FC = () => {
       if (d.currentStep && d.currentStep >= 1 && d.currentStep <= 5) setCurrentStep(d.currentStep);
     }
   }, []);
+
+  // ----------------------------------------------------
+  // SMART PINCODE LOOKUP (DEBOUNCED ~300MS)
+  // ----------------------------------------------------
+  const performPincodeLookup = async (code: string) => {
+    const clean = code.trim().replace(/\D/g, '');
+    if (clean.length !== 6) return;
+
+    const pinCheck = validatePincode(clean);
+    if (!pinCheck.isValid) {
+      setFieldErrors((prev) => ({ ...prev, pincode: pinCheck.error || 'Invalid 6-digit Indian Postal Pincode.' }));
+      return;
+    }
+
+    setIsPincodeLoading(true);
+    setPincodeLookupError(null);
+    clearFieldError('pincode');
+
+    try {
+      const data = await vendorApi.lookupPincode(clean);
+      if (data && data.success) {
+        setState(data.state || '');
+        setCity(data.city || '');
+        setDistrict(data.district || data.city || '');
+        setPincodeLookupSuccess(true);
+        setPincodeLookupError(null);
+        clearFieldError('state');
+        clearFieldError('city');
+
+        if (Array.isArray(data.localities) && data.localities.length > 0) {
+          setAvailableLocalities(data.localities);
+          setSelectedLocality(data.localities[0]);
+          setArea(data.localities[0]);
+        } else {
+          setAvailableLocalities([]);
+          setSelectedLocality('');
+        }
+      } else {
+        setPincodeLookupSuccess(false);
+        setPincodeLookupError('Pincode details not found in postal directory. Please enter location manually.');
+      }
+    } catch (err: any) {
+      setPincodeLookupSuccess(false);
+      setPincodeLookupError(err.message || 'Pincode not found. Please verify or enter location manually.');
+    } finally {
+      setIsPincodeLoading(false);
+    }
+  };
+
+  // Debounced effect: triggers automatic lookup upon 6 numeric digits
+  useEffect(() => {
+    const clean = pincode.trim().replace(/\D/g, '');
+    if (clean.length === 6) {
+      const timer = setTimeout(() => {
+        performPincodeLookup(clean);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      // Clear previously fetched location if user edits pincode
+      if (pincodeLookupSuccess) {
+        setPincodeLookupSuccess(false);
+        if (!isManualAddress) {
+          setState('');
+          setCity('');
+          setDistrict('');
+          setArea('');
+          setAvailableLocalities([]);
+          setSelectedLocality('');
+        }
+      }
+      setPincodeLookupError(null);
+    }
+  }, [pincode]);
 
   // ----------------------------------------------------
   // STEP 1 HANDLERS
@@ -253,33 +360,34 @@ export const VendorRegisterPage: React.FC = () => {
     setError(null);
     const errors: Record<string, string> = {};
 
-    if (!ownerName.trim() || ownerName.trim().length < 2) {
-      errors.ownerName = 'Authorized person name must be at least 2 characters.';
+    const nameCheck = validateName(ownerName);
+    if (!nameCheck.isValid) {
+      errors.ownerName = nameCheck.error || 'Authorized person name is required (letters only, min 2 chars).';
     }
 
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      errors.email = 'Please provide a valid business email address.';
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      errors.email = emailCheck.error || 'Please provide a valid business email address.';
     } else if (!isEmailVerified) {
       errors.email = 'Please verify your business email with the OTP code.';
     }
 
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      errors.phone = 'Please provide a valid 10-digit mobile number.';
+    const phoneCheck = validateIndianMobile(phone);
+    if (!phoneCheck.isValid) {
+      errors.phone = phoneCheck.error || 'Please provide a valid 10-digit mobile number.';
     } else if (!isMobileVerified) {
       errors.phone = 'Please verify your mobile number with the SMS OTP.';
     }
 
-    if (!password) {
-      errors.password = 'Password is required.';
-    } else if (password.length < 8) {
-      errors.password = 'Password must be at least 8 characters long.';
-    } else if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
-      errors.password = 'Password must contain uppercase letters and numbers.';
+    const passCheck = validatePassword(password);
+    if (!passCheck.isValid) {
+      errors.password = passCheck.error || 'Password must be min 8 chars with uppercase, lowercase, number, and special character.';
     }
 
-    if (password !== confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match.';
+    const confirmCheck = validateConfirmPassword(password, confirmPassword);
+    if (!confirmCheck.isValid) {
+      errors.confirmPassword = confirmCheck.error || 'Passwords do not match.';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -303,8 +411,8 @@ export const VendorRegisterPage: React.FC = () => {
       if (res.vendor) {
         setSession(res.token, res.vendor, '/register');
       }
-      setCurrentStep(2);
-      setSuccessNotice('Step 1 complete! Please provide your Business Information.');
+      // Clean step transition with NO previous-step message
+      goToStep(2);
     } catch (err: any) {
       setError(err.message || 'Failed to register account credentials.');
     } finally {
@@ -342,7 +450,7 @@ export const VendorRegisterPage: React.FC = () => {
     }
 
     setFieldErrors({});
-    setCurrentStep(3);
+    goToStep(3);
   };
 
   // ----------------------------------------------------
@@ -352,21 +460,22 @@ export const VendorRegisterPage: React.FC = () => {
     setError(null);
     const errors: Record<string, string> = {};
 
+    const pinCheck = validatePincode(pincode);
+    if (!pinCheck.isValid) {
+      errors.pincode = pinCheck.error || 'Please enter a valid 6-digit Indian Postal Pincode.';
+    }
+
     if (!state.trim()) {
-      errors.state = 'State is required.';
+      errors.state = 'State is required. Please enter a valid pincode or enter state manually.';
     }
 
     if (!city.trim()) {
-      errors.city = 'City / Region is required.';
+      errors.city = 'City / Region is required. Please enter a valid pincode or enter city manually.';
     }
 
-    const cleanPincode = pincode.replace(/\D/g, '');
-    if (!cleanPincode || cleanPincode.length !== 6) {
-      errors.pincode = 'Please enter a valid 6-digit Indian Postal Pincode.';
-    }
-
-    if (!completeAddress.trim() || completeAddress.trim().length < 5) {
-      errors.completeAddress = 'Please enter your complete registered business address.';
+    const addrCheck = validateAddress(completeAddress);
+    if (!addrCheck.isValid) {
+      errors.completeAddress = addrCheck.error || 'Please enter your complete registered business address (min 5 chars).';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -376,7 +485,7 @@ export const VendorRegisterPage: React.FC = () => {
     }
 
     setFieldErrors({});
-    setCurrentStep(4);
+    goToStep(4);
   };
 
   // ----------------------------------------------------
@@ -393,11 +502,17 @@ export const VendorRegisterPage: React.FC = () => {
       errors.gstin = 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
       errors.pan = 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
     } else {
-      if (cleanGst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGst)) {
-        errors.gstin = 'Invalid GSTIN format (15 characters, e.g. 29AABCB9876F1Z2).';
+      if (cleanGst) {
+        const gstCheck = validateGSTIN(cleanGst);
+        if (!gstCheck.isValid) {
+          errors.gstin = gstCheck.error || 'Invalid GSTIN format (15 characters, e.g. 29AABCB9876F1Z2).';
+        }
       }
-      if (cleanPan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanPan)) {
-        errors.pan = 'Invalid PAN format (10 characters, e.g. AABCB9876F).';
+      if (cleanPan) {
+        const panCheck = validatePAN(cleanPan);
+        if (!panCheck.isValid) {
+          errors.pan = panCheck.error || 'Invalid PAN format (10 characters, e.g. AABCB9876F).';
+        }
       }
     }
 
@@ -412,7 +527,7 @@ export const VendorRegisterPage: React.FC = () => {
     }
 
     setFieldErrors({});
-    setCurrentStep(5);
+    goToStep(5);
   };
 
   // ----------------------------------------------------
@@ -516,7 +631,7 @@ export const VendorRegisterPage: React.FC = () => {
       if (!file) return;
 
       if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be 5 MB or less.');
+        setError('File size must be 5 MB or less.');
         return;
       }
 
@@ -546,17 +661,19 @@ export const VendorRegisterPage: React.FC = () => {
     setError(null);
     const errors: Record<string, string> = {};
 
-    if (!accountHolderName.trim()) {
-      errors.accountHolderName = 'Account Beneficiary Name is required.';
+    const nameCheck = validateName(accountHolderName);
+    if (!nameCheck.isValid) {
+      errors.accountHolderName = nameCheck.error || 'Account Beneficiary Name is required (letters and spaces only).';
     }
 
     if (!bankName.trim()) {
       errors.bankName = 'Bank Name is required.';
     }
 
-    const cleanAcc = accountNumber.replace(/\D/g, '');
-    if (!cleanAcc || cleanAcc.length < 9 || cleanAcc.length > 18) {
-      errors.accountNumber = 'Bank account number must be between 9 and 18 digits.';
+    const cleanAcc = accountNumber.trim().replace(/\D/g, '');
+    const accCheck = validateBankAccount(cleanAcc);
+    if (!accCheck.isValid) {
+      errors.accountNumber = accCheck.error || 'Bank account number must be between 9 and 18 digits.';
     }
 
     if (accountNumber !== confirmAccountNumber) {
@@ -564,8 +681,9 @@ export const VendorRegisterPage: React.FC = () => {
     }
 
     const cleanIfsc = ifsc.trim().toUpperCase();
-    if (!cleanIfsc || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
-      errors.ifsc = 'Invalid IFSC format (11 characters, e.g. HDFC0000053).';
+    const ifscCheck = validateIFSC(cleanIfsc);
+    if (!ifscCheck.isValid) {
+      errors.ifsc = ifscCheck.error || 'Invalid IFSC format (11 characters, e.g. HDFC0000053).';
     }
 
     if (selectedCategories.length === 0) {
@@ -921,6 +1039,64 @@ export const VendorRegisterPage: React.FC = () => {
               {fieldErrors.password && (
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.password}</p>
               )}
+              {password && (
+                <div className="mt-2 space-y-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                  {(() => {
+                    const str = validatePassword(password);
+                    return (
+                      <>
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-semibold text-slate-600">Password Strength:</span>
+                          <span
+                            className={`font-bold ${
+                              str.strength === 'STRONG'
+                                ? 'text-emerald-600'
+                                : str.strength === 'MEDIUM'
+                                ? 'text-amber-600'
+                                : 'text-rose-600'
+                            }`}
+                          >
+                            {str.strength}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-5 gap-1 h-1.5">
+                          {[1, 2, 3, 4, 5].map((lvl) => (
+                            <div
+                              key={lvl}
+                              className={`rounded-full transition-all ${
+                                lvl <= str.score
+                                  ? str.score >= 5
+                                    ? 'bg-emerald-500'
+                                    : str.score >= 3
+                                    ? 'bg-amber-500'
+                                    : 'bg-rose-500'
+                                  : 'bg-slate-200'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-500 mt-1">
+                          <span className={str.criteria.length ? 'text-emerald-700 font-medium' : ''}>
+                            {str.criteria.length ? '✓' : '•'} 8+ characters
+                          </span>
+                          <span className={str.criteria.uppercase ? 'text-emerald-700 font-medium' : ''}>
+                            {str.criteria.uppercase ? '✓' : '•'} Uppercase (A-Z)
+                          </span>
+                          <span className={str.criteria.lowercase ? 'text-emerald-700 font-medium' : ''}>
+                            {str.criteria.lowercase ? '✓' : '•'} Lowercase (a-z)
+                          </span>
+                          <span className={str.criteria.number ? 'text-emerald-700 font-medium' : ''}>
+                            {str.criteria.number ? '✓' : '•'} Number (0-9)
+                          </span>
+                          <span className={`col-span-2 ${str.criteria.special ? 'text-emerald-700 font-medium' : ''}`}>
+                            {str.criteria.special ? '✓' : '•'} Special symbol (!@#$%^&*)
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
             {/* Confirm Password */}
@@ -1113,7 +1289,7 @@ export const VendorRegisterPage: React.FC = () => {
           <div className="pt-4 flex items-center justify-between border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setCurrentStep(1)}
+              onClick={() => goToStep(1)}
               className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Account
@@ -1136,90 +1312,191 @@ export const VendorRegisterPage: React.FC = () => {
       {currentStep === 3 && (
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 1. PINCODE (First Field - Required) */}
+            <div className="md:col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-[#17233C]">
+                  1. Pincode (Postal Code) *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsManualAddress(!isManualAddress)}
+                  className="text-[11px] font-semibold text-[#203D91] hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  {isManualAddress ? 'Switch to Auto Lookup' : 'Cannot find your pincode? Enter location manually'}
+                </button>
+              </div>
+              <div className="relative">
+                <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={pincode}
+                  onChange={(e) => {
+                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setPincode(cleanVal);
+                    clearFieldError('pincode');
+                  }}
+                  required
+                  placeholder="Enter 6-digit Indian Pincode (e.g. 560072, 110001, 400001)"
+                  className={`w-full pl-10 pr-12 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] font-mono ${
+                    fieldErrors.pincode || pincodeLookupError ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
+                  }`}
+                />
+                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  {isPincodeLoading && (
+                    <Loader2 className="w-4 h-4 text-[#203D91] animate-spin" />
+                  )}
+                  {!isPincodeLoading && pincodeLookupSuccess && (
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                    </span>
+                  )}
+                </div>
+              </div>
+              {fieldErrors.pincode && (
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.pincode}</p>
+              )}
+              {pincodeLookupError && !fieldErrors.pincode && (
+                <div className="mt-1.5 p-2.5 bg-rose-50 rounded-xl border border-rose-200 flex items-center justify-between text-[11px] text-rose-700">
+                  <span>{pincodeLookupError}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => performPincodeLookup(pincode)}
+                      className="font-bold underline text-rose-800 hover:text-rose-900 cursor-pointer"
+                    >
+                      Retry
+                    </button>
+                    <span>•</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsManualAddress(true);
+                        setPincodeLookupError(null);
+                      }}
+                      className="font-bold underline text-[#203D91] cursor-pointer"
+                    >
+                      Enter Manually
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!pincodeLookupError && !fieldErrors.pincode && (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Enter 6 digits to automatically populate Country, State, City and Localities.
+                </p>
+              )}
+            </div>
+
+            {/* If multiple localities exist: Sub-locality / Area Dropdown */}
+            {availableLocalities.length > 1 && (
+              <div className="md:col-span-2 p-3 bg-blue-50/60 rounded-xl border border-blue-200">
+                <label className="block text-xs font-bold text-[#17233C] mb-1">
+                  Select Area / Locality (Post Office) *
+                </label>
+                <select
+                  value={selectedLocality}
+                  onChange={(e) => {
+                    setSelectedLocality(e.target.value);
+                    setArea(e.target.value);
+                  }}
+                  className="w-full px-3.5 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] bg-white font-medium text-[#17233C]"
+                >
+                  {availableLocalities.map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-blue-700 mt-1">
+                  Multiple delivery postal circles found for pincode {pincode}. Please pick your exact trade locality.
+                </p>
+              </div>
+            )}
+
+            {/* 2. Country (Auto-filled) */}
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">Country</label>
+              <label className="block text-xs font-bold text-[#17233C] mb-1">
+                2. Country (Auto-filled)
+              </label>
               <input
                 type="text"
                 value="India"
                 disabled
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-500 cursor-not-allowed font-medium"
               />
             </div>
 
+            {/* 3. State (Auto-filled) */}
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">State *</label>
+              <label className="block text-xs font-bold text-[#17233C] mb-1">
+                3. State {isManualAddress ? '*' : '(Auto-filled)'}
+              </label>
               <input
                 type="text"
                 value={state}
+                readOnly={!isManualAddress}
+                disabled={!isManualAddress && !state}
                 onChange={(e) => {
                   setState(e.target.value);
                   clearFieldError('state');
                 }}
                 required
-                placeholder="e.g. Karnataka"
+                placeholder={isManualAddress ? 'Enter state (e.g. Karnataka)' : 'Auto-populated from Pincode'}
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.state ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
-                }`}
+                  !isManualAddress
+                    ? 'bg-slate-50 text-slate-700 cursor-not-allowed border-slate-200'
+                    : 'bg-white border-[#E2E8F0]'
+                } ${fieldErrors.state ? 'border-rose-400 bg-rose-50/20' : ''}`}
               />
               {fieldErrors.state && (
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.state}</p>
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">City / Region *</label>
+            {/* 4. City / Region (Auto-filled) */}
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-[#17233C] mb-1">
+                4. City / Region {isManualAddress ? '*' : '(Auto-filled)'}
+              </label>
               <input
                 type="text"
                 value={city}
+                readOnly={!isManualAddress}
+                disabled={!isManualAddress && !city}
                 onChange={(e) => {
                   setCity(e.target.value);
                   clearFieldError('city');
                 }}
                 required
-                placeholder="e.g. Bengaluru"
+                placeholder={isManualAddress ? 'Enter city (e.g. Bengaluru)' : 'Auto-populated from Pincode'}
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.city ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
-                }`}
+                  !isManualAddress
+                    ? 'bg-slate-50 text-slate-700 cursor-not-allowed border-slate-200'
+                    : 'bg-white border-[#E2E8F0]'
+                } ${fieldErrors.city ? 'border-rose-400 bg-rose-50/20' : ''}`}
               />
               {fieldErrors.city && (
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.city}</p>
               )}
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">Pincode *</label>
-              <input
-                type="text"
-                maxLength={6}
-                value={pincode}
-                onChange={(e) => {
-                  setPincode(e.target.value);
-                  clearFieldError('pincode');
-                }}
-                required
-                placeholder="e.g. 560058"
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
-                  fieldErrors.pincode ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
-                }`}
-              />
-              {fieldErrors.pincode && (
-                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.pincode}</p>
-              )}
-            </div>
-
+            {/* 5. Complete Registered Business Address (Required) */}
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-[#17233C] mb-1">
-                Complete Registered Business Address *
+                5. Complete Registered Business Address *
               </label>
-              <input
-                type="text"
+              <textarea
+                rows={3}
                 value={completeAddress}
                 onChange={(e) => {
                   setCompleteAddress(e.target.value);
                   clearFieldError('completeAddress');
                 }}
                 required
-                placeholder="Building name, Street, Industrial Layout, Landmark..."
+                placeholder="Building number / shed, Street name, Industrial layout or Commercial estate, Landmark..."
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] ${
                   fieldErrors.completeAddress ? 'border-rose-400 bg-rose-50/20' : 'border-[#E2E8F0]'
                 }`}
@@ -1227,6 +1504,9 @@ export const VendorRegisterPage: React.FC = () => {
               {fieldErrors.completeAddress && (
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.completeAddress}</p>
               )}
+              <p className="text-[11px] text-slate-500 mt-1">
+                Must match the official registered address on your GST REG-06 or Company PAN card.
+              </p>
             </div>
           </div>
 
@@ -1282,7 +1562,7 @@ export const VendorRegisterPage: React.FC = () => {
           <div className="pt-4 flex items-center justify-between border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setCurrentStep(2)}
+              onClick={() => goToStep(2)}
               className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Business
@@ -1424,7 +1704,7 @@ export const VendorRegisterPage: React.FC = () => {
           <div className="pt-4 flex items-center justify-between border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setCurrentStep(3)}
+              onClick={() => goToStep(3)}
               className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Address
@@ -1699,7 +1979,7 @@ export const VendorRegisterPage: React.FC = () => {
           <div className="pt-2 flex items-center justify-between border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setCurrentStep(4)}
+              onClick={() => goToStep(4)}
               className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Documents

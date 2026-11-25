@@ -623,6 +623,7 @@ export interface VendorBusinessAddress {
   city: string;
   state: string;
   pincode: string;
+  country?: string;
   lat?: number;
   lng?: number;
 }

@@ -43,6 +43,21 @@ import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES, CATEGORY_ATTRIB
 import { dbStore } from '../../../database/store';
 import { vendorSecurityService } from '../services/vendor-security.service';
 import { vendorNotificationService } from '../services/vendor-notification.service';
+import { postalLookupService } from '../services/postal-lookup.service';
+import {
+  validateName,
+  validateEmail,
+  validateIndianMobile,
+  validateIdentifier,
+  validatePincode,
+  validateGSTIN,
+  validatePAN,
+  validateBankAccount,
+  validateIFSC,
+  validatePassword,
+  validateConfirmPassword,
+  validateAddress
+} from '@buildora/validation';
 
 // Initial Demo Vendor Profile
 const DEFAULT_VENDOR_ID = 'vnd-apex-01';
@@ -1400,6 +1415,11 @@ export class VendorController {
       throw new BadRequestException('Registered email/mobile and password are required.');
     }
 
+    const identCheck = validateIdentifier(identifier);
+    if (!identCheck.isValid) {
+      throw new BadRequestException(identCheck.error || 'Please enter a valid registered email or 10-digit mobile number.');
+    }
+
     const clean = identifier.trim().toLowerCase();
 
     // 1. Check account lockout
@@ -1464,6 +1484,15 @@ export class VendorController {
       throw new BadRequestException('Identifier and OTP code are required.');
     }
 
+    const identCheck = validateIdentifier(identifier);
+    if (!identCheck.isValid) {
+      throw new BadRequestException(identCheck.error || 'Please enter a valid registered email or 10-digit mobile number.');
+    }
+
+    if (!/^\d{6}$/.test(otp.trim())) {
+      throw new BadRequestException('Verification code must be exactly 6 digits.');
+    }
+
     const clean = identifier.trim().toLowerCase();
     vendorSecurityService.checkLoginLockout(clean);
 
@@ -1509,6 +1538,11 @@ export class VendorController {
       throw new BadRequestException('Registered business email or mobile number is required.');
     }
 
+    const identCheck = validateIdentifier(identifier);
+    if (!identCheck.isValid) {
+      throw new BadRequestException(identCheck.error || 'Please enter a valid registered email or 10-digit mobile number.');
+    }
+
     const clean = identifier.trim().toLowerCase();
     const vendor = findVendorByIdentifier(clean);
     if (!vendor) {
@@ -1527,8 +1561,23 @@ export class VendorController {
       throw new BadRequestException('Identifier, OTP code, new password, and confirmation are required.');
     }
 
-    if (newPassword !== confirmPassword) {
-      throw new BadRequestException('New password and confirm password do not match.');
+    const identCheck = validateIdentifier(identifier);
+    if (!identCheck.isValid) {
+      throw new BadRequestException(identCheck.error || 'Please enter a valid registered email or 10-digit mobile number.');
+    }
+
+    if (!/^\d{6}$/.test(otp.trim())) {
+      throw new BadRequestException('Verification code must be exactly 6 digits.');
+    }
+
+    const passCheck = validatePassword(newPassword);
+    if (!passCheck.isValid) {
+      throw new BadRequestException(passCheck.error || 'Password does not meet security requirements.');
+    }
+
+    const confirmCheck = validateConfirmPassword(newPassword, confirmPassword);
+    if (!confirmCheck.isValid) {
+      throw new BadRequestException(confirmCheck.error || 'New password and confirm password do not match.');
     }
 
     const clean = identifier.trim().toLowerCase();
@@ -1630,20 +1679,34 @@ export class VendorController {
     }
   ) {
     const { ownerName, email, phone, password, confirmPassword } = body;
-    if (!ownerName || !email || !phone || !password) {
-      throw new BadRequestException('Owner name, business email, mobile number, and password are required.');
+
+    const nameCheck = validateName(ownerName);
+    if (!nameCheck.isValid) {
+      throw new BadRequestException(nameCheck.error || 'Please enter a valid owner / authorized person name.');
     }
 
-    if (password !== confirmPassword) {
-      throw new BadRequestException('Password and Confirm Password do not match.');
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      throw new BadRequestException(emailCheck.error || 'Please enter a valid business email address.');
+    }
+
+    const phoneCheck = validateIndianMobile(phone);
+    if (!phoneCheck.isValid) {
+      throw new BadRequestException(phoneCheck.error || 'Please enter a valid 10-digit Indian mobile number.');
+    }
+
+    const passCheck = validatePassword(password);
+    if (!passCheck.isValid) {
+      throw new BadRequestException(passCheck.error || 'Password does not meet enterprise security criteria.');
+    }
+
+    const confirmCheck = validateConfirmPassword(password, confirmPassword);
+    if (!confirmCheck.isValid) {
+      throw new BadRequestException(confirmCheck.error || 'Passwords do not match.');
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
-
-    if (cleanPhone.length !== 10) {
-      throw new BadRequestException('Please provide a valid 10-digit Indian mobile number.');
-    }
+    const cleanPhone = phone.trim().replace(/\D/g, '').slice(-10);
 
     // Check duplicate email or phone among active/submitted vendors
     const existingEmail = findVendorByIdentifier(cleanEmail);
@@ -1656,14 +1719,9 @@ export class VendorController {
       throw new BadRequestException('This mobile number is already registered with another vendor partner.');
     }
 
-    // Validate password strength
-    const strength = vendorSecurityService.validatePasswordStrength(password);
-    if (!strength.isValid) {
-      throw new BadRequestException(strength.message);
-    }
-
     // Create or update DRAFT vendor record
     const draftId = existingEmail?.id || `vnd-reg-${Date.now()}`;
+    const cleanOwnerName = ownerName.trim();
     const newDraft: BackendVendorRecord = {
       id: draftId,
       tenantId: DEFAULT_TENANT_ID,
@@ -1673,8 +1731,8 @@ export class VendorController {
       orderCount: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      storeName: `${ownerName}'s Store`,
-      name: ownerName,
+      storeName: '',
+      name: cleanOwnerName,
       email: cleanEmail,
       phone: cleanPhone,
       passwordHash: vendorSecurityService.hashPassword(password),
@@ -1685,7 +1743,7 @@ export class VendorController {
       registrationStep: 2,
       businessInfo: {
         businessName: '',
-        contactPerson: ownerName,
+        contactPerson: cleanOwnerName,
         phone: cleanPhone,
         email: cleanEmail,
         businessType: 'PROPRIETORSHIP',
@@ -1693,9 +1751,10 @@ export class VendorController {
           building: '',
           street: '',
           area: '',
-          city: 'Bengaluru',
-          state: 'Karnataka',
-          pincode: ''
+          city: '',
+          state: '',
+          pincode: '',
+          country: 'India'
         },
         bankDetails: {
           accountHolderName: '',
@@ -1706,7 +1765,7 @@ export class VendorController {
           isVerified: false
         },
         categories: [],
-        storeName: `${ownerName}'s Store`
+        storeName: ''
       },
       warehouses: [],
       kycDocuments: [],
@@ -1764,13 +1823,23 @@ export class VendorController {
       if (wizardData.description) vendor.businessInfo.description = wizardData.description;
       if (wizardData.gstin) vendor.businessInfo.gstin = wizardData.gstin;
       if (wizardData.pan) vendor.businessInfo.pan = wizardData.pan;
+      if (wizardData.pincode) {
+        vendor.businessInfo.address = {
+          ...vendor.businessInfo.address,
+          pincode: wizardData.pincode,
+          city: wizardData.city || vendor.businessInfo.address?.city || '',
+          state: wizardData.state || vendor.businessInfo.address?.state || '',
+          country: wizardData.country || 'India'
+        };
+      }
       if (wizardData.completeAddress) {
         vendor.businessInfo.address = {
           ...vendor.businessInfo.address,
           building: wizardData.completeAddress,
-          city: wizardData.city || 'Bengaluru',
-          state: wizardData.state || 'Karnataka',
-          pincode: wizardData.pincode || ''
+          city: wizardData.city || vendor.businessInfo.address?.city || '',
+          state: wizardData.state || vendor.businessInfo.address?.state || '',
+          pincode: wizardData.pincode || vendor.businessInfo.address?.pincode || '',
+          country: wizardData.country || 'India'
         };
       }
       if (wizardData.bankDetails) {
@@ -1847,24 +1916,71 @@ export class VendorController {
       throw new BadRequestException('Registration wizard data is required for submission.');
     }
 
-    // Step 2 Validation
-    if (!data.legalBusinessName || !data.storeName || !data.businessType) {
-      throw new BadRequestException('Please complete all required fields in Step 2: Business Information.');
+    // Step 1 Validation
+    if (data.ownerName) {
+      const nameCheck = validateName(data.ownerName);
+      if (!nameCheck.isValid) throw new BadRequestException(nameCheck.error);
+    }
+    if (data.email) {
+      const emailCheck = validateEmail(data.email);
+      if (!emailCheck.isValid) throw new BadRequestException(emailCheck.error);
+    }
+    if (data.phone) {
+      const phoneCheck = validateIndianMobile(data.phone);
+      if (!phoneCheck.isValid) throw new BadRequestException(phoneCheck.error);
     }
 
-    // Step 3 Validation
-    if (!data.completeAddress || !data.pincode || !data.city) {
-      throw new BadRequestException('Please complete your Registered Business Address and Pincode in Step 3.');
+    // Step 2 Validation: Business Information
+    if (!data.legalBusinessName || !data.storeName || !data.businessType) {
+      throw new BadRequestException('Please complete all required fields in Step 2: Legal Entity Name, Display Store Name, and Business Type.');
+    }
+    if (data.storeName.trim().length < 2) {
+      throw new BadRequestException('Display Store Name must be at least 2 characters.');
+    }
+
+    // Step 3 Validation: Address & Pincode
+    if (!data.pincode) {
+      throw new BadRequestException('Pincode is required in Step 3.');
+    }
+    const pinCheck = validatePincode(data.pincode);
+    if (!pinCheck.isValid) {
+      throw new BadRequestException(pinCheck.error || 'Invalid 6-digit Indian PIN code in Step 3.');
+    }
+    if (!data.completeAddress || data.completeAddress.trim().length < 5) {
+      throw new BadRequestException('Please enter a complete registered business address (minimum 5 characters) in Step 3.');
+    }
+    if (!data.city || !data.state) {
+      throw new BadRequestException('City and State are required in Step 3.');
     }
 
     // Step 4 Validation: At least GST or PAN
     if (!data.gstin && !data.pan) {
       throw new BadRequestException('At least GSTIN or PAN is mandatory for B2B supplier verification in Step 4.');
     }
+    if (data.gstin) {
+      const gstCheck = validateGSTIN(data.gstin);
+      if (!gstCheck.isValid) {
+        throw new BadRequestException(gstCheck.error || 'Invalid 15-character GSTIN format.');
+      }
+    }
+    if (data.pan) {
+      const panCheck = validatePAN(data.pan);
+      if (!panCheck.isValid) {
+        throw new BadRequestException(panCheck.error || 'Invalid 10-character PAN format.');
+      }
+    }
 
     // Step 5 Validation: Bank details & Terms acceptance
     if (!data.bankDetails?.accountHolderName || !data.bankDetails?.accountNumber || !data.bankDetails?.ifsc) {
       throw new BadRequestException('Please provide valid bank settlement account details in Step 5.');
+    }
+    const accCheck = validateBankAccount(data.bankDetails.accountNumber);
+    if (!accCheck.isValid) {
+      throw new BadRequestException(accCheck.error || 'Invalid bank account number.');
+    }
+    const ifscCheck = validateIFSC(data.bankDetails.ifsc);
+    if (!ifscCheck.isValid) {
+      throw new BadRequestException(ifscCheck.error || 'Invalid 11-character IFSC code.');
     }
 
     if (!data.termsAccepted || !data.privacyAccepted) {
@@ -1970,6 +2086,22 @@ export class VendorController {
         businessInfo: vendor.businessInfo
       }
     };
+  }
+
+  // ==========================================
+  // SMART PINCODE LOOKUP ENDPOINT
+  // ==========================================
+  @Get('pincode-lookup/:pincode')
+  async lookupPincode(@Param('pincode') pincode: string) {
+    if (!pincode) {
+      throw new BadRequestException('Pincode is required.');
+    }
+    const cleanPin = pincode.trim().replace(/\D/g, '');
+    const pinCheck = validatePincode(cleanPin);
+    if (!pinCheck.isValid) {
+      throw new BadRequestException(pinCheck.error || 'Invalid 6-digit Indian Postal Pincode.');
+    }
+    return await postalLookupService.lookup(cleanPin);
   }
 
   @Get('registration/application/:applicationId')

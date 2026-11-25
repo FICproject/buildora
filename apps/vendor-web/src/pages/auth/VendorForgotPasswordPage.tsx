@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { vendorApi } from '../../services/vendorApi';
 import {
+  validateIdentifier,
+  validatePassword,
+  validateConfirmPassword
+} from '@buildora/validation';
+import {
   Mail,
   Lock,
   KeyRound,
@@ -21,8 +26,8 @@ export const VendorForgotPasswordPage: React.FC = () => {
   // Multi-step flow: 'REQUEST_OTP' | 'VERIFY_AND_RESET' | 'SUCCESS'
   const [step, setStep] = useState<'REQUEST_OTP' | 'VERIFY_AND_RESET' | 'SUCCESS'>('REQUEST_OTP');
 
-  // Fields
-  const [identifier, setIdentifier] = useState('vendor@buildora.in');
+  // Fields - initially empty
+  const [identifier, setIdentifier] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -59,8 +64,9 @@ export const VendorForgotPasswordPage: React.FC = () => {
   // Handle Send OTP
   const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!identifier.trim()) {
-      setError('Please enter your registered business email or mobile number.');
+    const identCheck = validateIdentifier(identifier);
+    if (!identCheck.isValid) {
+      setError(identCheck.error || 'Please enter a valid registered business email or 10-digit mobile number.');
       return;
     }
 
@@ -87,18 +93,20 @@ export const VendorForgotPasswordPage: React.FC = () => {
     e.preventDefault();
     setError(null);
 
-    if (!otpCode || otpCode.length < 6) {
+    if (!otpCode || otpCode.replace(/\D/g, '').length !== 6) {
       setError('Please enter the 6-digit verification code.');
       return;
     }
 
-    if (!isPasswordValid) {
-      setError('Password does not satisfy enterprise security requirements.');
+    const passCheck = validatePassword(newPassword);
+    if (!passCheck.isValid) {
+      setError(passCheck.error || 'Password does not satisfy enterprise security requirements.');
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match. Please verify your new password.');
+    const confirmCheck = validateConfirmPassword(newPassword, confirmPassword);
+    if (!confirmCheck.isValid) {
+      setError(confirmCheck.error || 'Passwords do not match. Please verify your new password.');
       return;
     }
 

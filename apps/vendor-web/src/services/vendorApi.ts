@@ -581,6 +581,39 @@ export const vendorApi = {
     return data;
   },
 
+  async lookupPincode(pincode: string) {
+    const clean = (pincode || '').replace(/\D/g, '').slice(0, 6);
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendor/pincode-lookup/${encodeURIComponent(clean)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Location not found for this pincode.');
+      return data;
+    } catch (err: any) {
+      // Direct live India Post fallback in case backend server is offline or unreachable
+      try {
+        const liveRes = await fetch(`https://api.postalpincode.in/pincode/${clean}`);
+        if (liveRes.ok) {
+          const liveData = await liveRes.json();
+          if (Array.isArray(liveData) && liveData[0]?.Status === 'Success' && Array.isArray(liveData[0]?.PostOffice) && liveData[0].PostOffice.length > 0) {
+            const pos = liveData[0].PostOffice;
+            const localities = Array.from(new Set<string>(pos.map((p: any) => p.Name || '').filter(Boolean)));
+            return {
+              success: true,
+              pincode: clean,
+              country: pos[0].Country || 'India',
+              state: pos[0].State || 'Karnataka',
+              city: pos[0].District || pos[0].Division || 'Bengaluru',
+              district: pos[0].District || 'Bengaluru Urban',
+              localities: localities.length > 0 ? localities : [pos[0].Name || 'Postal Area'],
+              source: 'api'
+            };
+          }
+        }
+      } catch {}
+      throw new Error(err.message || 'Failed to lookup pincode. You may enter location manually.');
+    }
+  },
+
   async submitRegistration(wizardData: any, vendorId?: string) {
     const token = localStorage.getItem('buildora_vendor_token');
     const res = await fetch(`${API_BASE_URL}/vendor/registration/submit`, {

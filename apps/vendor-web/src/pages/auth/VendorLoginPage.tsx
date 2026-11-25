@@ -6,6 +6,11 @@ import { CircularCollage } from '../../components/auth/CircularCollage';
 import { SkylineIllustration } from '../../components/auth/SkylineIllustration';
 import { WaveDecorations } from '../../components/auth/WaveDecorations';
 import {
+  validateIdentifier,
+  validatePassword,
+  validateConfirmPassword
+} from '@buildora/validation';
+import {
   Mail,
   Lock,
   Phone,
@@ -28,11 +33,22 @@ export const VendorLoginPage: React.FC = () => {
   // Active Login Method Tab: 'password' | 'otp'
   const [loginMethod, setLoginMethod] = useState<'password' | 'otp'>('password');
 
-  // Form Fields
-  const [identifier, setIdentifier] = useState('vendor@buildora.in');
-  const [password, setPassword] = useState('Vendor@123');
+  // Form Fields - initially clean and empty
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    if (fieldErrors[key]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
 
   // OTP Login States
   const [otpCode, setOtpCode] = useState('');
@@ -74,16 +90,23 @@ export const VendorLoginPage: React.FC = () => {
     e.preventDefault();
     clearError();
     setStatusNotice(null);
+    const errors: Record<string, string> = {};
 
-    if (!identifier.trim()) {
-      alert('Please enter your registered Email or Mobile number.');
-      return;
+    const identCheck = validateIdentifier(identifier);
+    if (!identCheck.isValid) {
+      errors.identifier = identCheck.error || 'Please enter a valid registered email or 10-digit mobile number.';
     }
+
     if (!password) {
-      alert('Please enter your account password.');
+      errors.password = 'Please enter your account password.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
+    setFieldErrors({});
     const res = await login(identifier.trim(), password, rememberMe);
     if (res.success && res.redirectTo) {
       navigate(res.redirectTo);
@@ -92,13 +115,17 @@ export const VendorLoginPage: React.FC = () => {
 
   // Handle Request OTP
   const handleRequestOtp = async () => {
-    if (!identifier.trim()) {
-      alert('Please enter your registered mobile number or email address.');
-      return;
-    }
-    setIsSendingOtp(true);
     clearError();
     setStatusNotice(null);
+
+    const identCheck = validateIdentifier(identifier);
+    if (!identCheck.isValid) {
+      setFieldErrors({ identifier: identCheck.error || 'Please enter a valid registered mobile number or email.' });
+      return;
+    }
+
+    setFieldErrors({});
+    setIsSendingOtp(true);
 
     try {
       const res = await vendorApi.sendOtp(identifier.trim(), 'LOGIN');
@@ -110,7 +137,7 @@ export const VendorLoginPage: React.FC = () => {
       }
       setStatusNotice(`Verification code sent to ${identifier.trim()}`);
     } catch (err: any) {
-      alert(err.message || 'Failed to send OTP. Please check your credentials.');
+      setFieldErrors({ identifier: err.message || 'Failed to send OTP. Please check your credentials.' });
     } finally {
       setIsSendingOtp(false);
     }
@@ -119,13 +146,25 @@ export const VendorLoginPage: React.FC = () => {
   // Handle OTP Login Submit
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpCode || otpCode.length < 6) {
-      alert('Please enter the 6-digit verification code.');
-      return;
-    }
     clearError();
     setStatusNotice(null);
+    const errors: Record<string, string> = {};
 
+    const identCheck = validateIdentifier(identifier);
+    if (!identCheck.isValid) {
+      errors.identifier = identCheck.error || 'Please enter a valid email or 10-digit mobile number.';
+    }
+
+    if (!otpCode || otpCode.replace(/\D/g, '').length !== 6) {
+      errors.otpCode = 'Please enter the 6-digit verification code.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setFieldErrors({});
     const res = await loginWithOtp(identifier.trim(), otpCode.trim());
     if (res.success && res.redirectTo) {
       navigate(res.redirectTo);
@@ -367,12 +406,20 @@ export const VendorLoginPage: React.FC = () => {
                     <input
                       type="text"
                       value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
+                      onChange={(e) => {
+                        setIdentifier(e.target.value);
+                        clearFieldError('identifier');
+                      }}
                       required
                       placeholder="Email or Mobile"
-                      className="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs"
+                      className={`w-full pl-10 pr-3.5 py-3 rounded-xl border text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs ${
+                        fieldErrors.identifier ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200'
+                      }`}
                     />
                   </div>
+                  {fieldErrors.identifier && (
+                    <p className="text-[11px] text-rose-600 font-medium pl-1">{fieldErrors.identifier}</p>
+                  )}
                 </div>
 
                 {/* Password Input */}
@@ -382,10 +429,15 @@ export const VendorLoginPage: React.FC = () => {
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        clearFieldError('password');
+                      }}
                       required
                       placeholder="Password"
-                      className="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs"
+                      className={`w-full pl-10 pr-10 py-3 rounded-xl border text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs ${
+                        fieldErrors.password ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200'
+                      }`}
                     />
                     <button
                       type="button"
@@ -396,6 +448,9 @@ export const VendorLoginPage: React.FC = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {fieldErrors.password && (
+                    <p className="text-[11px] text-rose-600 font-medium pl-1">{fieldErrors.password}</p>
+                  )}
                 </div>
 
                 {/* Forgot Password Right-Aligned Link (Matches reference) */}
@@ -444,10 +499,15 @@ export const VendorLoginPage: React.FC = () => {
                       <input
                         type="text"
                         value={identifier}
-                        onChange={(e) => setIdentifier(e.target.value)}
+                        onChange={(e) => {
+                          setIdentifier(e.target.value);
+                          clearFieldError('identifier');
+                        }}
                         required
-                        placeholder="Registered Mobile (+91)"
-                        className="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs"
+                        placeholder="Registered Mobile (+91) or Email"
+                        className={`w-full pl-10 pr-3.5 py-3 rounded-xl border text-sm text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs ${
+                          fieldErrors.identifier ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200'
+                        }`}
                       />
                     </div>
                     <button
@@ -459,6 +519,9 @@ export const VendorLoginPage: React.FC = () => {
                       {isSendingOtp ? 'Sending...' : otpCooldown > 0 ? `${otpCooldown}s` : 'Send OTP'}
                     </button>
                   </div>
+                  {fieldErrors.identifier && (
+                    <p className="text-[11px] text-rose-600 font-medium pl-1">{fieldErrors.identifier}</p>
+                  )}
                 </div>
 
                 {/* 6-Digit OTP Code Input */}
@@ -470,12 +533,20 @@ export const VendorLoginPage: React.FC = () => {
                         type="text"
                         maxLength={6}
                         value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => {
+                          setOtpCode(e.target.value.replace(/\D/g, ''));
+                          clearFieldError('otpCode');
+                        }}
                         required
                         placeholder="Enter 6-digit OTP"
-                        className="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 text-sm font-mono tracking-widest text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs"
+                        className={`w-full pl-10 pr-3.5 py-3 rounded-xl border text-sm font-mono tracking-widest text-[#152B52] placeholder:text-slate-400 focus:outline-none focus:border-[#FF7900] focus:ring-1 focus:ring-[#FF7900] bg-white transition-all shadow-2xs ${
+                          fieldErrors.otpCode ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200'
+                        }`}
                       />
                     </div>
+                    {fieldErrors.otpCode && (
+                      <p className="text-[11px] text-rose-600 font-medium pl-1">{fieldErrors.otpCode}</p>
+                    )}
                     {devOtpHint && (
                       <p className="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center justify-between">
                         <span>Development Demo OTP:</span>
