@@ -38,7 +38,7 @@ function buildAllowedOriginChecker() {
       return callback(null, true);
     }
 
-    return callback(new Error(`CORS origin not allowed: ${origin}`), false);
+    return callback(null, false);
   };
 }
 
@@ -52,6 +52,9 @@ async function bootstrap() {
     allowedHeaders: [
       'Content-Type',
       'Authorization',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
       'X-Tenant-ID',
       'x-tenant-id',
       'x-admin-key',

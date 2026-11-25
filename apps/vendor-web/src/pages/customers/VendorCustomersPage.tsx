@@ -80,14 +80,14 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
       />
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E9F0] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E7E5E4] pb-2">
         <button
           type="button"
           onClick={() => setActiveTab('DIRECTORY')}
           className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
             activeTab === 'DIRECTORY'
-              ? 'bg-[#23438F] text-white'
-              : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+              ? 'bg-[#943D24] text-white'
+              : 'text-[#78716C] hover:text-[#292524] hover:bg-white'
           }`}
         >
           <Users className="w-3.5 h-3.5" />
@@ -98,8 +98,8 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
           onClick={() => setActiveTab('REVIEWS')}
           className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
             activeTab === 'REVIEWS'
-              ? 'bg-[#23438F] text-white'
-              : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+              ? 'bg-[#943D24] text-white'
+              : 'text-[#78716C] hover:text-[#292524] hover:bg-white'
           }`}
         >
           <Star className="w-3.5 h-3.5" />
@@ -112,7 +112,7 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
           <Card>
             <CardContent className="p-4">
               <div className="relative">
-                <Search className="w-4 h-4 text-[#718096] absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={search}
@@ -127,7 +127,7 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
           <Card>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                   <tr>
                     <th className="py-3 px-4">Customer</th>
                     <th className="py-3 px-4">Type</th>
@@ -137,7 +137,7 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
                     <th className="py-3 px-4 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E5E9F0]">
+                <tbody className="divide-y divide-[#E7E5E4]">
                   {filteredCustomers.length === 0 ? (
                     <tr>
                       <td colSpan={6}>
@@ -153,24 +153,24 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
                       <tr
                         key={c.id}
                         onClick={() => setSelectedCustomer(c)}
-                        className="hover:bg-[#F7F8FA] cursor-pointer transition-colors"
+                        className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
                       >
                         <td className="py-3.5 px-4">
-                          <div className="font-semibold text-[#263247]">{c.name}</div>
-                          <div className="text-[11px] text-[#718096]">{c.company}</div>
+                          <div className="font-semibold text-[#292524]">{c.name}</div>
+                          <div className="text-[11px] text-[#78716C]">{c.company}</div>
                         </td>
                         <td className="py-3.5 px-4">
                           <Badge variant="brand" size="sm">
                             {c.type}
                           </Badge>
                         </td>
-                        <td className="py-3.5 px-4 text-[#718096]">
+                        <td className="py-3.5 px-4 text-[#78716C]">
                           {c.city} - {c.pincode}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-medium text-[#263247]">
+                        <td className="py-3.5 px-4 text-right font-medium text-[#292524]">
                           {c.totalOrders}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-semibold text-[#263247]">
+                        <td className="py-3.5 px-4 text-right font-semibold text-[#292524]">
                           ₹{(c.totalSpend || 0).toLocaleString('en-IN')}
                         </td>
                         <td className="py-3.5 px-4 text-right">
@@ -212,7 +212,7 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[#263247]">
+                        <span className="text-sm font-semibold text-[#292524]">
                           {rev.customerName}
                         </span>
                         {rev.verifiedPurchase && (
@@ -221,28 +221,28 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-[#718096] mt-0.5">
+                      <p className="text-xs text-[#78716C] mt-0.5">
                         {rev.productName} ({rev.sku})
                       </p>
                     </div>
-                    <div className="flex items-center gap-1 text-[#E6A23C]">
+                    <div className="flex items-center gap-1 text-[#D99B16]">
                       {Array.from({ length: rev.rating }).map((_, idx) => (
-                        <Star key={idx} className="w-4 h-4 fill-[#E6A23C]" />
+                        <Star key={idx} className="w-4 h-4 fill-[#D99B16]" />
                       ))}
                     </div>
                   </div>
 
                   {rev.title && (
-                    <h4 className="text-xs font-semibold text-[#263247]">{rev.title}</h4>
+                    <h4 className="text-xs font-semibold text-[#292524]">{rev.title}</h4>
                   )}
-                  <p className="text-xs text-[#718096] leading-relaxed">{rev.comment}</p>
+                  <p className="text-xs text-[#78716C] leading-relaxed">{rev.comment}</p>
 
                   {rev.vendorReply ? (
-                    <div className="p-3 rounded-lg bg-[#F7F8FA] border border-[#E5E9F0] text-xs">
-                      <p className="font-semibold text-[#23438F]">
+                    <div className="p-3 rounded-lg bg-[#F8F7F5] border border-[#E7E5E4] text-xs">
+                      <p className="font-semibold text-[#943D24]">
                         Your Reply ({rev.vendorReply.repliedBy})
                       </p>
-                      <p className="text-[#263247] mt-1">{rev.vendorReply.message}</p>
+                      <p className="text-[#292524] mt-1">{rev.vendorReply.message}</p>
                     </div>
                   ) : (
                     <div>
@@ -276,25 +276,25 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
       >
         {selectedCustomer && (
           <div className="space-y-4 text-xs">
-            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] space-y-2.5">
-              <div className="flex items-center gap-2 text-[#263247]">
-                <Phone className="w-3.5 h-3.5 text-[#718096]" />
+            <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] space-y-2.5">
+              <div className="flex items-center gap-2 text-[#292524]">
+                <Phone className="w-3.5 h-3.5 text-[#78716C]" />
                 <span>{selectedCustomer.phone}</span>
               </div>
-              <div className="flex items-center gap-2 text-[#263247]">
-                <Mail className="w-3.5 h-3.5 text-[#718096]" />
+              <div className="flex items-center gap-2 text-[#292524]">
+                <Mail className="w-3.5 h-3.5 text-[#78716C]" />
                 <span>{selectedCustomer.email}</span>
               </div>
-              <div className="flex items-center gap-2 text-[#263247]">
-                <MapPin className="w-3.5 h-3.5 text-[#718096]" />
+              <div className="flex items-center gap-2 text-[#292524]">
+                <MapPin className="w-3.5 h-3.5 text-[#78716C]" />
                 <span>
                   {selectedCustomer.city} - {selectedCustomer.pincode}
                 </span>
               </div>
               {selectedCustomer.gstin && (
-                <div className="pt-2 border-t border-[#E5E9F0]">
-                  <span className="text-[#718096]">GSTIN: </span>
-                  <span className="font-mono font-semibold text-[#263247]">
+                <div className="pt-2 border-t border-[#E7E5E4]">
+                  <span className="text-[#78716C]">GSTIN: </span>
+                  <span className="font-mono font-semibold text-[#292524]">
                     {selectedCustomer.gstin}
                   </span>
                 </div>
@@ -302,15 +302,15 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-4 rounded-xl border border-[#E5E9F0] bg-white">
-                <span className="text-[#718096] block">Total Orders</span>
-                <span className="text-lg font-bold text-[#263247]">
+              <div className="p-4 rounded-xl border border-[#E7E5E4] bg-white">
+                <span className="text-[#78716C] block">Total Orders</span>
+                <span className="text-lg font-bold text-[#292524]">
                   {selectedCustomer.totalOrders}
                 </span>
               </div>
-              <div className="p-4 rounded-xl border border-[#E5E9F0] bg-white">
-                <span className="text-[#718096] block">Total Spend</span>
-                <span className="text-lg font-bold text-[#23438F]">
+              <div className="p-4 rounded-xl border border-[#E7E5E4] bg-white">
+                <span className="text-[#78716C] block">Total Spend</span>
+                <span className="text-lg font-bold text-[#943D24]">
                   ₹{(selectedCustomer.totalSpend || 0).toLocaleString('en-IN')}
                 </span>
               </div>
@@ -328,7 +328,7 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
         maxWidth="md"
       >
         <form onSubmit={handleSendReply} className="space-y-4">
-          <div className="p-3 rounded-lg bg-[#F7F8FA] border border-[#E5E9F0] text-xs text-[#718096]">
+          <div className="p-3 rounded-lg bg-[#F8F7F5] border border-[#E7E5E4] text-xs text-[#78716C]">
             "{replyTarget?.comment}"
           </div>
           <div>
@@ -345,7 +345,7 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
           <div className="flex justify-end gap-2.5">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setReplyTarget(null)}
             >

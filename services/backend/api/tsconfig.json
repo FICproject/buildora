@@ -15,7 +15,8 @@
       "@buildora/types": ["../../../packages/types/src/index.ts"],
       "@buildora/constants": ["../../../packages/constants/src/index.ts"],
       "@buildora/utils": ["../../../packages/utils/src/index.ts"],
-      "@buildora/config": ["../../../packages/config/src/index.ts"]
+      "@buildora/config": ["../../../packages/config/src/index.ts"],
+      "@buildora/validation": ["../../../packages/validation/src/index.ts"]
     }
   },
   "include": ["src"]

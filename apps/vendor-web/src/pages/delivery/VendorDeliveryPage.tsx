@@ -134,7 +134,7 @@ export const VendorDeliveryPage: React.FC = () => {
     <Card>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
-          <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+          <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
             <tr>
               <th className="py-3 px-4">Order ID</th>
               <th className="py-3 px-4">Customer & Destination</th>
@@ -143,7 +143,7 @@ export const VendorDeliveryPage: React.FC = () => {
               <th className="py-3 px-4 text-right">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#E5E9F0]">
+          <tbody className="divide-y divide-[#E7E5E4]">
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={5}>
@@ -156,13 +156,13 @@ export const VendorDeliveryPage: React.FC = () => {
               </tr>
             ) : (
               rows.map((d) => (
-                <tr key={d.id} className="hover:bg-[#F7F8FA]">
-                  <td className="py-3.5 px-4 font-mono font-semibold text-[#263247]">
+                <tr key={d.id} className="hover:bg-[#F8F7F5]">
+                  <td className="py-3.5 px-4 font-mono font-semibold text-[#292524]">
                     {d.orderNumber}
                   </td>
                   <td className="py-3.5 px-4">
-                    <div className="font-medium text-[#263247]">{d.customerName}</div>
-                    <div className="text-[11px] text-[#718096] flex items-center gap-1">
+                    <div className="font-medium text-[#292524]">{d.customerName}</div>
+                    <div className="text-[11px] text-[#78716C] flex items-center gap-1">
                       <MapPin className="w-3 h-3 shrink-0" />
                       <span>
                         {d.deliveryAddress?.area || d.deliveryAddress?.city} -{' '}
@@ -173,13 +173,13 @@ export const VendorDeliveryPage: React.FC = () => {
                   <td className="py-3.5 px-4">
                     {d.driverName ? (
                       <div>
-                        <div className="font-medium text-[#263247]">{d.driverName}</div>
-                        <div className="text-[11px] font-mono text-[#718096]">
+                        <div className="font-medium text-[#292524]">{d.driverName}</div>
+                        <div className="text-[11px] font-mono text-[#78716C]">
                           {d.vehicleNumber}
                         </div>
                       </div>
                     ) : (
-                      <span className="text-[#718096]">Unassigned</span>
+                      <span className="text-[#78716C]">Unassigned</span>
                     )}
                   </td>
                   <td className="py-3.5 px-4">
@@ -221,7 +221,7 @@ export const VendorDeliveryPage: React.FC = () => {
                         Mark Delivered
                       </Button>
                     ) : (
-                      <span className="text-[#718096]">
+                      <span className="text-[#78716C]">
                         {new Date(d.createdAt).toLocaleDateString('en-IN')}
                       </span>
                     )}
@@ -243,7 +243,7 @@ export const VendorDeliveryPage: React.FC = () => {
       />
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E9F0] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E7E5E4] pb-2">
         {[
           { id: 'DISPATCH', label: 'Dispatch Requests & Tracking' },
           { id: 'HISTORY', label: 'Delivery History' },
@@ -255,8 +255,8 @@ export const VendorDeliveryPage: React.FC = () => {
             onClick={() => setActiveTab(tab.id as DeliveryTab)}
             className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
               activeTab === tab.id
-                ? 'bg-[#23438F] text-white'
-                : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+                ? 'bg-[#943D24] text-white'
+                : 'text-[#78716C] hover:text-[#292524] hover:bg-white'
             }`}
           >
             {tab.label}
@@ -273,7 +273,7 @@ export const VendorDeliveryPage: React.FC = () => {
             <Card>
               <CardContent className="p-5 space-y-2">
                 <label className="portal-label flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-[#23438F]" />
+                  <Clock className="w-4 h-4 text-[#943D24]" />
                   <span>Preparation Lead Time (Minutes)</span>
                 </label>
                 <input
@@ -283,7 +283,7 @@ export const VendorDeliveryPage: React.FC = () => {
                   onChange={(e) => setLeadTime(e.target.value)}
                   className="portal-input"
                 />
-                <p className="text-xs text-[#718096]">
+                <p className="text-xs text-[#78716C]">
                   Time from order confirmation until rider handoff.
                 </p>
               </CardContent>
@@ -291,7 +291,7 @@ export const VendorDeliveryPage: React.FC = () => {
             <Card>
               <CardContent className="p-5 space-y-2">
                 <label className="portal-label flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-[#F58220]" />
+                  <Clock className="w-4 h-4 text-[#F6C453]" />
                   <span>Daily Dispatch Cutoff Time</span>
                 </label>
                 <input
@@ -300,7 +300,7 @@ export const VendorDeliveryPage: React.FC = () => {
                   onChange={(e) => setCutoffTime(e.target.value)}
                   className="portal-input"
                 />
-                <p className="text-xs text-[#718096]">
+                <p className="text-xs text-[#78716C]">
                   Orders placed after cutoff are scheduled for next morning.
                 </p>
               </CardContent>
@@ -321,21 +321,21 @@ export const VendorDeliveryPage: React.FC = () => {
                     onClick={() => setSelectedHub(hub.id)}
                     className={`p-4 rounded-xl border cursor-pointer transition-colors ${
                       isSelected
-                        ? 'border-[#23438F] bg-[#EEF3FA]/60'
-                        : 'border-[#E5E9F0] hover:border-[#23438F]/40 bg-white'
+                        ? 'border-[#943D24] bg-[#FBF3F0]/60'
+                        : 'border-[#E7E5E4] hover:border-[#943D24]/40 bg-white'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <Warehouse className="w-4 h-4 text-[#23438F]" />
-                        <span className="font-semibold text-sm text-[#263247]">{hub.name}</span>
+                        <Warehouse className="w-4 h-4 text-[#943D24]" />
+                        <span className="font-semibold text-sm text-[#292524]">{hub.name}</span>
                       </div>
                       <Badge variant={isSelected ? 'brand' : 'neutral'} size="sm">
                         {isSelected ? 'Selected' : hub.id}
                       </Badge>
                     </div>
-                    <p className="text-xs text-[#718096] mt-2">{hub.address}</p>
-                    <p className="text-[11px] text-[#718096] mt-2">Pincodes: {hub.coverage}</p>
+                    <p className="text-xs text-[#78716C] mt-2">{hub.address}</p>
+                    <p className="text-[11px] text-[#78716C] mt-2">Pincodes: {hub.coverage}</p>
                   </div>
                 );
               })}
@@ -397,7 +397,7 @@ export const VendorDeliveryPage: React.FC = () => {
           <div className="pt-2 flex justify-end gap-2.5">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setAssignTarget(null)}
             >

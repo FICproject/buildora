@@ -86,8 +86,8 @@ import {
 } from '@buildora/validation';
 
 // Initial Demo Vendor Profile
-const DEFAULT_VENDOR_ID = 'vnd-apex-01';
-const DEFAULT_TENANT_ID = 'tenant-buildora-blr';
+export const DEFAULT_VENDOR_ID = 'vnd-apex-01';
+export const DEFAULT_TENANT_ID = 'tenant-buildora-blr';
 
 export interface BackendVendorRecord extends VendorProfile {
   passwordHash: string;
@@ -557,7 +557,7 @@ export function getAuthenticatedVendor(authHeader?: string): BackendVendorRecord
 }
 
 // Seed Vendor Products derived from SEED_PRODUCTS
-let vendorProducts: VendorProduct[] = SEED_PRODUCTS.map((p, idx) => ({
+export let vendorProducts: VendorProduct[] = SEED_PRODUCTS.map((p, idx) => ({
   id: `vp-${p.id}`,
   vendorId: DEFAULT_VENDOR_ID,
   tenantId: DEFAULT_TENANT_ID,
@@ -601,7 +601,7 @@ let vendorProducts: VendorProduct[] = SEED_PRODUCTS.map((p, idx) => ({
 }));
 
 // Seed Vendor Orders
-let vendorOrders: VendorOrder[] = [
+export let vendorOrders: VendorOrder[] = [
   {
     id: 'vo-101',
     orderNumber: 'BLD-2026-8941',
@@ -703,7 +703,7 @@ let vendorOrders: VendorOrder[] = [
 ];
 
 // Seed Settlements
-let vendorSettlements: VendorSettlement[] = [
+export let vendorSettlements: VendorSettlement[] = [
   {
     id: 'stl-2026-04',
     settlementNumber: 'SETTL-BLD-09241',
@@ -735,7 +735,7 @@ let vendorSettlements: VendorSettlement[] = [
 ];
 
 // Seed Stock Movements
-let vendorStockMovements: VendorStockMovement[] = [
+export let vendorStockMovements: VendorStockMovement[] = [
   {
     id: 'sm-1',
     productId: 'vp-prod-cem-1',
@@ -819,7 +819,7 @@ let vendorStockMovements: VendorStockMovement[] = [
 ];
 
 // Seed Warehouses
-let vendorWarehouses: VendorWarehouse[] = [
+export let vendorWarehouses: VendorWarehouse[] = [
   {
     id: 'wh-1',
     name: 'Peenya Central Dispatch Depot',
@@ -878,7 +878,7 @@ let vendorWarehouses: VendorWarehouse[] = [
 ];
 
 // Seed Return Requests
-let vendorReturns: VendorReturnRequest[] = [
+export let vendorReturns: VendorReturnRequest[] = [
   {
     id: 'ret-101',
     orderId: 'vo-100',
@@ -958,7 +958,7 @@ let vendorReturns: VendorReturnRequest[] = [
 ];
 
 // Seed Promotions & Deals
-let vendorPromotions: VendorPromotion[] = [
+export let vendorPromotions: VendorPromotion[] = [
   {
     id: 'promo-01',
     vendorId: DEFAULT_VENDOR_ID,
@@ -1007,7 +1007,7 @@ let vendorPromotions: VendorPromotion[] = [
 ];
 
 // Seed Product Reviews
-let vendorReviews: VendorProductReview[] = [
+export let vendorReviews: VendorProductReview[] = [
   {
     id: 'rev-01',
     productId: 'vp-prod-cem-1',
@@ -1057,7 +1057,7 @@ let vendorReviews: VendorProductReview[] = [
 ];
 
 // Seed GST Invoices
-let vendorInvoices: VendorInvoice[] = [
+export let vendorInvoices: VendorInvoice[] = [
   {
     id: 'inv-1001',
     invoiceNumber: 'INV-BLD-2026-1001',
@@ -1163,7 +1163,7 @@ let vendorEmployees: VendorEmployee[] = [
 ];
 
 // Seed Support Tickets
-let vendorSupportTickets: VendorSupportTicket[] = [
+export let vendorSupportTickets: VendorSupportTicket[] = [
   {
     id: 'tkt-01',
     ticketNumber: 'TKT-2026-891',
@@ -1223,7 +1223,7 @@ let vendorSupportTickets: VendorSupportTicket[] = [
 ];
 
 // Seed Notifications
-let vendorNotifications: VendorNotification[] = [
+export let vendorNotifications: VendorNotification[] = [
   {
     id: 'notif-1',
     vendorId: DEFAULT_VENDOR_ID,
@@ -1256,7 +1256,7 @@ let vendorNotifications: VendorNotification[] = [
   }
 ];
 
-function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
+export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
   const targetSku = vp.sku;
   const targetSlug = vp.slug;
   const targetId = vp.id.replace(/^vp-/, '');

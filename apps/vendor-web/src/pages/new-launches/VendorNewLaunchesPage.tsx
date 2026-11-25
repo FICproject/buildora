@@ -98,7 +98,7 @@ export const VendorNewLaunchesPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setRemoveTarget(prod)}
-                      className="p-1 rounded-lg text-[#718096] hover:text-[#DC4545] hover:bg-[#DC4545]/10 cursor-pointer"
+                      className="p-1 rounded-lg text-[#78716C] hover:text-[#DC4545] hover:bg-[#DC4545]/10 cursor-pointer"
                       title="Remove from New Launches"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -109,27 +109,27 @@ export const VendorNewLaunchesPage: React.FC = () => {
                       <img
                         src={prod.images[0]}
                         alt={prod.name}
-                        className="w-14 h-14 rounded-lg object-cover border border-[#E5E9F0] shrink-0"
+                        className="w-14 h-14 rounded-lg object-cover border border-[#E7E5E4] shrink-0"
                       />
                     ) : (
-                      <div className="w-14 h-14 rounded-lg bg-[#EEF3FA] text-[#23438F] flex items-center justify-center shrink-0">
+                      <div className="w-14 h-14 rounded-lg bg-[#FBF3F0] text-[#943D24] flex items-center justify-center shrink-0">
                         <Package className="w-5 h-5" />
                       </div>
                     )}
                     <div className="min-w-0">
-                      <h3 className="text-xs font-semibold text-[#263247] line-clamp-2">
+                      <h3 className="text-xs font-semibold text-[#292524] line-clamp-2">
                         {prod.name}
                       </h3>
-                      <p className="text-[11px] font-mono text-[#718096] mt-1">{prod.sku}</p>
+                      <p className="text-[11px] font-mono text-[#78716C] mt-1">{prod.sku}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-[#E5E9F0] flex items-center justify-between text-xs">
-                  <span className="font-semibold text-[#263247]">
+                <div className="pt-3 border-t border-[#E7E5E4] flex items-center justify-between text-xs">
+                  <span className="font-semibold text-[#292524]">
                     ₹{prod.price.toLocaleString('en-IN')}
                   </span>
-                  <span className="text-[#718096]">{prod.stockCount || 0} in stock</span>
+                  <span className="text-[#78716C]">{prod.stockCount || 0} in stock</span>
                 </div>
               </CardContent>
             </Card>
@@ -163,7 +163,7 @@ export const VendorNewLaunchesPage: React.FC = () => {
           <div className="flex justify-end gap-2.5 pt-2">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setIsModalOpen(false)}
             >

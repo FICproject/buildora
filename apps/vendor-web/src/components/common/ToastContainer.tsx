@@ -16,16 +16,16 @@ export const ToastContainer: React.FC = () => {
           ) : t.type === 'error' ? (
             <AlertCircle className="w-4 h-4 text-[#DC4545] shrink-0" />
           ) : t.type === 'warning' ? (
-            <AlertTriangle className="w-4 h-4 text-[#E6A23C] shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-[#D99B16] shrink-0" />
           ) : (
-            <Info className="w-4 h-4 text-[#23438F] shrink-0" />
+            <Info className="w-4 h-4 text-[#943D24] shrink-0" />
           );
 
         return (
           <div
             key={t.id}
             role="status"
-            className="pointer-events-auto bg-white border border-[#E5E9F0] rounded-xl px-4 py-3 shadow-card-hover flex items-center gap-3 text-xs text-[#263247]"
+            className="pointer-events-auto bg-white border border-[#E7E5E4] rounded-xl px-4 py-3 shadow-card-hover flex items-center gap-3 text-xs text-[#292524]"
           >
             {icon}
             <span className="flex-1 font-medium">{t.message}</span>
@@ -33,7 +33,7 @@ export const ToastContainer: React.FC = () => {
               type="button"
               onClick={() => removeToast(t.id)}
               aria-label="Dismiss notification"
-              className="text-[#718096] hover:text-[#263247] cursor-pointer"
+              className="text-[#78716C] hover:text-[#292524] cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>

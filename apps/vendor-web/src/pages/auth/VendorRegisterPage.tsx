@@ -1171,15 +1171,15 @@ export const VendorRegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-[#E2E8F0] space-y-7 animate-in fade-in-0 duration-200">
+    <div className="w-full bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-[#E7E5E4] space-y-7 animate-in fade-in-0 duration-200">
       {/* Header and Step Indicators */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E7E5E4] pb-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-blue-50 text-[#203D91] text-[11px] font-bold mb-1">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#FBF3F0] text-[#943D24] text-[11px] font-bold mb-1">
               Supplier Partner Onboarding
             </div>
-            <h2 className="text-2xl font-black text-[#17233C] tracking-tight">
+            <h2 className="text-2xl font-black text-[#292524] tracking-tight">
               Register as a Certified Vendor
             </h2>
           </div>
@@ -1187,7 +1187,7 @@ export const VendorRegisterPage: React.FC = () => {
             type="button"
             onClick={handleSaveProgress}
             disabled={isLoading}
-            className="text-xs font-bold text-[#FF7417] hover:underline self-start sm:self-center cursor-pointer"
+            className="text-xs font-bold text-[#943D24] hover:underline self-start sm:self-center cursor-pointer"
           >
             💾 Save Progress &amp; Continue Later
           </button>
@@ -1209,10 +1209,10 @@ export const VendorRegisterPage: React.FC = () => {
                 key={item.step}
                 className={`p-2 rounded-xl text-center border transition-all ${
                   isCurrent
-                    ? 'bg-[#203D91] text-white border-[#203D91] shadow-sm'
+                    ? 'bg-[#943D24] text-white border-[#943D24] shadow-sm'
                     : isCompleted
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                    : 'bg-[#F4F7FC] text-slate-400 border-slate-200'
+                    : 'bg-[#FBF3F0] text-[#78716C] border-[#E7E5E4]'
                 }`}
               >
                 <div className="flex items-center justify-center mb-1">
@@ -1251,11 +1251,11 @@ export const VendorRegisterPage: React.FC = () => {
         <form onSubmit={handleStep1Submit} noValidate className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Owner / Authorized Person Full Name *
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <User className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   name="ownerName"
@@ -1277,7 +1277,7 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                     fieldErrors.ownerName
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                      : 'border-[#E7E5E4] focus:ring-[#943D24]'
                   }`}
                 />
               </div>
@@ -1288,12 +1288,12 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* Email + OTP Verification */}
             <div className="md:col-span-2 space-y-1.5">
-              <label className="block text-xs font-bold text-[#17233C]">
+              <label className="block text-xs font-bold text-[#292524]">
                 Official Business Email Address *
               </label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Mail className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     name="email"
@@ -1317,10 +1317,10 @@ export const VendorRegisterPage: React.FC = () => {
                     required
                     disabled={isEmailVerified}
                     placeholder="partner@supplierdomain.com"
-                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 ${
+                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-[#F8F7F5] ${
                       fieldErrors.email
                         ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                        : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                        : 'border-[#E7E5E4] focus:ring-[#943D24]'
                     }`}
                   />
                 </div>
@@ -1329,7 +1329,7 @@ export const VendorRegisterPage: React.FC = () => {
                     type="button"
                     onClick={handleSendEmailOtp}
                     disabled={!isEmailFormatValid || isSendingEmailOtp}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#F6C453] text-[#292524] hover:bg-[#F6C453] shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSendingEmailOtp ? 'Sending...' : isEmailOtpSent ? 'Resend' : 'Send Code'}
                   </button>
@@ -1345,9 +1345,9 @@ export const VendorRegisterPage: React.FC = () => {
               )}
 
               {isEmailOtpSent && !isEmailVerified && (
-                <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 flex items-center justify-between gap-2">
+                <div className="p-3 bg-[#FBF3F0]/70 rounded-xl border border-[#943D24]/25 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold text-blue-900">Enter Email Code:</span>
+                    <span className="font-semibold text-[#943D24]">Enter Email Code:</span>
                     <input
                       type="text"
                       maxLength={6}
@@ -1360,7 +1360,7 @@ export const VendorRegisterPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleVerifyEmailOtp}
-                    className="px-3 py-1 rounded-lg text-xs font-bold bg-[#203D91] text-white cursor-pointer"
+                    className="px-3 py-1 rounded-lg text-xs font-bold bg-[#943D24] text-white cursor-pointer"
                   >
                     Verify
                   </button>
@@ -1370,12 +1370,12 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* Mobile + OTP Verification (Strict ^[6-9][0-9]{9}$ Real-Time) */}
             <div className="md:col-span-2 space-y-1.5">
-              <label className="block text-xs font-bold text-[#17233C]">
+              <label className="block text-xs font-bold text-[#292524]">
                 Mobile Number (For Dispatch &amp; Dark Store SMS) *
               </label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Phone className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
                     name="phone"
@@ -1400,10 +1400,10 @@ export const VendorRegisterPage: React.FC = () => {
                     disabled={isMobileVerified}
                     placeholder="9845012345"
                     aria-invalid={Boolean(fieldErrors.phone)}
-                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 ${
+                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-[#F8F7F5] ${
                       fieldErrors.phone
                         ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                        : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                        : 'border-[#E7E5E4] focus:ring-[#943D24]'
                     }`}
                   />
                 </div>
@@ -1412,7 +1412,7 @@ export const VendorRegisterPage: React.FC = () => {
                     type="button"
                     onClick={handleSendMobileOtp}
                     disabled={!isMobileFormatValid || isSendingMobileOtp}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#F6C453] text-[#292524] hover:bg-[#F6C453] shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSendingMobileOtp ? 'Sending...' : isMobileOtpSent ? 'Resend' : 'Send OTP'}
                   </button>
@@ -1428,9 +1428,9 @@ export const VendorRegisterPage: React.FC = () => {
               )}
 
               {isMobileOtpSent && !isMobileVerified && (
-                <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 flex items-center justify-between gap-2">
+                <div className="p-3 bg-[#FBF3F0]/70 rounded-xl border border-[#943D24]/25 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold text-blue-900">Enter SMS OTP:</span>
+                    <span className="font-semibold text-[#943D24]">Enter SMS OTP:</span>
                     <input
                       type="text"
                       maxLength={6}
@@ -1443,7 +1443,7 @@ export const VendorRegisterPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleVerifyMobileOtp}
-                    className="px-3 py-1 rounded-lg text-xs font-bold bg-[#203D91] text-white cursor-pointer"
+                    className="px-3 py-1 rounded-lg text-xs font-bold bg-[#943D24] text-white cursor-pointer"
                   >
                     Verify
                   </button>
@@ -1453,9 +1453,9 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">Password *</label>
+              <label className="block text-xs font-bold text-[#292524] mb-1">Password *</label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Lock className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   name="password"
@@ -1471,14 +1471,14 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full pl-10 pr-10 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                     fieldErrors.password
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                      : 'border-[#E7E5E4] focus:ring-[#943D24]'
                   }`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#78716C] hover:text-[#78716C] cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -1487,13 +1487,13 @@ export const VendorRegisterPage: React.FC = () => {
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.password}</p>
               )}
               {password && (
-                <div className="mt-2 space-y-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="mt-2 space-y-1.5 p-2.5 bg-[#F8F7F5] rounded-xl border border-[#E7E5E4]">
                   {(() => {
                     const str = validatePassword(password);
                     return (
                       <>
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-semibold text-slate-600">Password Strength:</span>
+                          <span className="font-semibold text-[#78716C]">Password Strength:</span>
                           <span
                             className={`font-bold ${
                               str.strength === 'STRONG'
@@ -1522,7 +1522,7 @@ export const VendorRegisterPage: React.FC = () => {
                             />
                           ))}
                         </div>
-                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-500 mt-1">
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-[#78716C] mt-1">
                           <span className={str.criteria.length ? 'text-emerald-700 font-medium' : ''}>
                             {str.criteria.length ? '✓' : '•'} 8+ characters
                           </span>
@@ -1548,11 +1548,11 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Confirm Password *
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Lock className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   name="confirmPassword"
@@ -1568,7 +1568,7 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                     fieldErrors.confirmPassword
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                      : 'border-[#E7E5E4] focus:ring-[#943D24]'
                   }`}
                 />
               </div>
@@ -1579,13 +1579,13 @@ export const VendorRegisterPage: React.FC = () => {
           </div>
 
           <div className="pt-4 flex items-center justify-between">
-            <Link to="/login" className="text-xs font-bold text-slate-500 hover:underline">
+            <Link to="/login" className="text-xs font-bold text-[#78716C] hover:underline">
               Already have an account? Sign In
             </Link>
             <button
               type="submit"
               disabled={isLoading}
-              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center gap-2 cursor-pointer"
+              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center gap-2 cursor-pointer"
             >
               Next: Business Information
               <ArrowRight className="w-4 h-4" />
@@ -1601,7 +1601,7 @@ export const VendorRegisterPage: React.FC = () => {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Legal Entity Business Name *
               </label>
               <input
@@ -1625,7 +1625,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   fieldErrors.legalBusinessName
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               />
               {fieldErrors.legalBusinessName && (
@@ -1636,7 +1636,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Store / Brand Trade Name *
               </label>
               <input
@@ -1660,7 +1660,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   fieldErrors.storeName
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               />
               {fieldErrors.storeName && (
@@ -1669,7 +1669,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Business Supplier Type *
               </label>
               <select
@@ -1684,7 +1684,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 ${
                   fieldErrors.businessType
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               >
                 <option value="">Select Supplier Type...</option>
@@ -1701,7 +1701,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Business Registration Constitution *
               </label>
               <select
@@ -1719,7 +1719,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 ${
                   fieldErrors.businessRegistrationType
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               >
                 <option value="">Select Constitution...</option>
@@ -1738,7 +1738,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Year of Establishment (Optional)
               </label>
               <input
@@ -1761,7 +1761,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   fieldErrors.yearOfEstablishment
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               />
               {fieldErrors.yearOfEstablishment && (
@@ -1772,7 +1772,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Website URL (Optional)
               </label>
               <input
@@ -1794,7 +1794,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   fieldErrors.website
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               />
               {fieldErrors.website && (
@@ -1803,7 +1803,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Business &amp; Inventory Capabilities Description (Optional)
               </label>
               <textarea
@@ -1821,7 +1821,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   fieldErrors.description
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               />
               {fieldErrors.description && (
@@ -1831,21 +1831,21 @@ export const VendorRegisterPage: React.FC = () => {
           </div>
 
           {/* Upload Your Business Logo */}
-          <div className="p-4 rounded-2xl bg-[#F4F7FC] border border-[#E2E8F0] space-y-3">
+          <div className="p-4 rounded-2xl bg-[#FBF3F0] border border-[#E7E5E4] space-y-3">
             <div>
-              <h4 className="text-xs font-bold text-[#17233C] flex items-center gap-1.5">
-                <ImageIcon className="w-4 h-4 text-[#203D91]" />
+              <h4 className="text-xs font-bold text-[#292524] flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-[#943D24]" />
                 Upload Your Business Logo
               </h4>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <p className="text-[11px] text-[#78716C] mt-0.5">
                 JPG, JPEG, PNG or WEBP &bull; Maximum 5 MB. Appears on your store profile &amp; review summary.
               </p>
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs relative">
+              <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-[#E7E5E4] bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs relative">
                 {isUploadingLogo ? (
-                  <Loader2 className="w-6 h-6 text-[#203D91] animate-spin" />
+                  <Loader2 className="w-6 h-6 text-[#943D24] animate-spin" />
                 ) : logoPreview ? (
                   <img
                     src={logoPreview}
@@ -1853,9 +1853,9 @@ export const VendorRegisterPage: React.FC = () => {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="flex flex-col items-center justify-center text-slate-400 p-2 text-center">
-                    <Building2 className="w-6 h-6 text-[#203D91]/50 mb-0.5" />
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  <div className="flex flex-col items-center justify-center text-[#78716C] p-2 text-center">
+                    <Building2 className="w-6 h-6 text-[#943D24]/50 mb-0.5" />
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-[#78716C]">
                       {storeName ? storeName.slice(0, 2).toUpperCase() : 'LOGO'}
                     </span>
                   </div>
@@ -1864,8 +1864,8 @@ export const VendorRegisterPage: React.FC = () => {
 
               <div className="flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs">
-                    <UploadCloud className="w-3.5 h-3.5 text-[#FF7417]" />
+                  <label className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs">
+                    <UploadCloud className="w-3.5 h-3.5 text-[#F6C453]" />
                     <span>{logoPreview ? 'Replace Logo' : 'Choose Logo Image'}</span>
                     <input
                       type="file"
@@ -1900,18 +1900,18 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-4 flex items-center justify-between border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-between border-t border-[#E7E5E4]">
             <button
               type="button"
               onClick={() => goToStep(1)}
-              className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
+              className="py-2.5 px-4 rounded-xl text-xs font-bold text-[#78716C] border border-[#E7E5E4] hover:bg-[#F8F7F5] flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Account
             </button>
             <button
               type="button"
               onClick={handleStep2Next}
-              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center gap-2 cursor-pointer"
+              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center gap-2 cursor-pointer"
             >
               {returnTo === 'review' ? 'Save & Return to Review' : 'Next: Address & Hubs'}
               <ArrowRight className="w-4 h-4" />
@@ -1929,13 +1929,13 @@ export const VendorRegisterPage: React.FC = () => {
             {/* 1. PINCODE (First Field - Required, Strict ^[1-9][0-9]{5}$) */}
             <div className="md:col-span-2">
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-bold text-[#17233C]">
+                <label className="block text-xs font-bold text-[#292524]">
                   1. Pincode (Postal Code) *
                 </label>
                 <button
                   type="button"
                   onClick={() => setIsManualAddress(!isManualAddress)}
-                  className="text-[11px] font-semibold text-[#203D91] hover:underline cursor-pointer flex items-center gap-1"
+                  className="text-[11px] font-semibold text-[#943D24] hover:underline cursor-pointer flex items-center gap-1"
                 >
                   <RotateCcw className="w-3 h-3" />
                   {isManualAddress
@@ -1944,7 +1944,7 @@ export const VendorRegisterPage: React.FC = () => {
                 </button>
               </div>
               <div className="relative">
-                <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <MapPin className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   name="pincode"
@@ -1961,11 +1961,11 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full pl-10 pr-24 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 font-mono ${
                     fieldErrors.pincode || pincodeLookupError
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                      : 'border-[#E7E5E4] focus:ring-[#943D24]'
                   }`}
                 />
                 <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                  {isPincodeLoading && <Loader2 className="w-4 h-4 text-[#203D91] animate-spin" />}
+                  {isPincodeLoading && <Loader2 className="w-4 h-4 text-[#943D24] animate-spin" />}
                   {!isPincodeLoading && pincodeLookupSuccess && !fieldErrors.pincode && (
                     <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Verified
@@ -1994,7 +1994,7 @@ export const VendorRegisterPage: React.FC = () => {
                         setIsManualAddress(true);
                         setPincodeLookupError(null);
                       }}
-                      className="font-bold underline text-[#203D91] cursor-pointer"
+                      className="font-bold underline text-[#943D24] cursor-pointer"
                     >
                       Enter Manually
                     </button>
@@ -2002,7 +2002,7 @@ export const VendorRegisterPage: React.FC = () => {
                 </div>
               )}
               {!pincodeLookupError && !fieldErrors.pincode && (
-                <p className="text-[11px] text-slate-500 mt-1">
+                <p className="text-[11px] text-[#78716C] mt-1">
                   Enter 6 digits starting with 1–9 to automatically populate Country, State, City and Localities.
                 </p>
               )}
@@ -2010,8 +2010,8 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* If multiple localities exist: Sub-locality / Area Dropdown */}
             {availableLocalities.length > 1 && (
-              <div className="md:col-span-2 p-3 bg-blue-50/60 rounded-xl border border-blue-200">
-                <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <div className="md:col-span-2 p-3 bg-[#FBF3F0]/60 rounded-xl border border-[#943D24]/25">
+                <label className="block text-xs font-bold text-[#292524] mb-1">
                   Select Area / Locality (Post Office) *
                 </label>
                 <select
@@ -2020,7 +2020,7 @@ export const VendorRegisterPage: React.FC = () => {
                     setSelectedLocality(e.target.value);
                     setArea(e.target.value);
                   }}
-                  className="w-full px-3.5 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#203D91] bg-white font-medium text-[#17233C]"
+                  className="w-full px-3.5 py-2 rounded-lg border border-[#943D24]/25 text-sm focus:outline-none focus:ring-2 focus:ring-[#943D24] bg-white font-medium text-[#292524]"
                 >
                   {availableLocalities.map((loc) => (
                     <option key={loc} value={loc}>
@@ -2028,7 +2028,7 @@ export const VendorRegisterPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-blue-700 mt-1">
+                <p className="text-[11px] text-[#943D24] mt-1">
                   Multiple delivery postal circles found for pincode {pincode}. Please pick your exact trade locality.
                 </p>
               </div>
@@ -2036,20 +2036,20 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* 2. Country (Auto-filled) */}
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 2. Country (Auto-filled)
               </label>
               <input
                 type="text"
                 value="India"
                 disabled
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-500 cursor-not-allowed font-medium"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] text-sm text-[#78716C] cursor-not-allowed font-medium"
               />
             </div>
 
             {/* 3. State (Auto-filled or Manual) */}
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 3. State {isManualAddress ? '*' : '(Auto-filled)'}
               </label>
               <input
@@ -2068,8 +2068,8 @@ export const VendorRegisterPage: React.FC = () => {
                 placeholder={isManualAddress ? 'Enter state (e.g. Karnataka)' : 'Auto-populated from Pincode'}
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   !isManualAddress
-                    ? 'bg-slate-50 text-slate-700 cursor-not-allowed border-slate-200'
-                    : 'bg-white border-[#E2E8F0] focus:ring-[#203D91]'
+                    ? 'bg-[#F8F7F5] text-[#292524] cursor-not-allowed border-[#E7E5E4]'
+                    : 'bg-white border-[#E7E5E4] focus:ring-[#943D24]'
                 } ${fieldErrors.state ? 'border-rose-500 bg-rose-50/30' : ''}`}
               />
               {fieldErrors.state && (
@@ -2079,7 +2079,7 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* 4. City / Region (Auto-filled or Manual) */}
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 4. City / Region {isManualAddress ? '*' : '(Auto-filled)'}
               </label>
               <input
@@ -2098,8 +2098,8 @@ export const VendorRegisterPage: React.FC = () => {
                 placeholder={isManualAddress ? 'Enter city (e.g. Bengaluru)' : 'Auto-populated from Pincode'}
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   !isManualAddress
-                    ? 'bg-slate-50 text-slate-700 cursor-not-allowed border-slate-200'
-                    : 'bg-white border-[#E2E8F0] focus:ring-[#203D91]'
+                    ? 'bg-[#F8F7F5] text-[#292524] cursor-not-allowed border-[#E7E5E4]'
+                    : 'bg-white border-[#E7E5E4] focus:ring-[#943D24]'
                 } ${fieldErrors.city ? 'border-rose-500 bg-rose-50/30' : ''}`}
               />
               {fieldErrors.city && (
@@ -2109,7 +2109,7 @@ export const VendorRegisterPage: React.FC = () => {
 
             {/* 5. Complete Registered Business Address (Required) */}
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 5. Complete Registered Business Address *
               </label>
               <textarea
@@ -2133,7 +2133,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
                   fieldErrors.completeAddress
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               />
               {fieldErrors.completeAddress && (
@@ -2141,27 +2141,27 @@ export const VendorRegisterPage: React.FC = () => {
                   {fieldErrors.completeAddress}
                 </p>
               )}
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className="text-[11px] text-[#78716C] mt-1">
                 Must match the official registered address on your GST REG-06 or Company PAN card.
               </p>
             </div>
           </div>
 
           {/* Dispatch Hubs / Warehouses */}
-          <div className="p-4 bg-[#F4F7FC] rounded-2xl border border-[#E2E8F0] space-y-3">
+          <div className="p-4 bg-[#FBF3F0] rounded-2xl border border-[#E7E5E4] space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-xs font-bold text-[#17233C]">
+                <h4 className="text-xs font-bold text-[#292524]">
                   Dispatch Warehouses &amp; Dark Store Hubs
                 </h4>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-[#78716C]">
                   Locations from where BUILDORA 60 mini-trucks pick up orders for 60-min delivery.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={handleAddWarehouse}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#203D91] border border-blue-200 hover:bg-blue-50 flex items-center gap-1 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-[#943D24] border border-[#943D24]/25 hover:bg-[#FBF3F0] flex items-center gap-1 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Warehouse
               </button>
@@ -2172,13 +2172,13 @@ export const VendorRegisterPage: React.FC = () => {
                 {warehouses.map((wh) => (
                   <div
                     key={wh.id}
-                    className="p-3 bg-white rounded-xl border border-[#E2E8F0] flex items-center justify-between gap-3 text-xs"
+                    className="p-3 bg-white rounded-xl border border-[#E7E5E4] flex items-center justify-between gap-3 text-xs"
                   >
                     <div className="flex items-center gap-2.5">
-                      <Building2 className="w-4 h-4 text-[#203D91]" />
+                      <Building2 className="w-4 h-4 text-[#943D24]" />
                       <div>
-                        <span className="font-bold text-[#17233C]">{wh.name}</span>
-                        <p className="text-[11px] text-slate-500">
+                        <span className="font-bold text-[#292524]">{wh.name}</span>
+                        <p className="text-[11px] text-[#78716C]">
                           {wh.address}, Pincode: {wh.pincode}
                         </p>
                       </div>
@@ -2186,7 +2186,7 @@ export const VendorRegisterPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleRemoveWarehouse(wh.id)}
-                      className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                      className="text-[#78716C] hover:text-rose-600 p-1 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -2194,24 +2194,24 @@ export const VendorRegisterPage: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="p-3 bg-white rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500">
+              <div className="p-3 bg-white rounded-xl border border-dashed border-[#E7E5E4] text-center text-xs text-[#78716C]">
                 Primary business address will be used as default dispatch hub. Click &quot;+ Add Warehouse&quot; to add additional depots.
               </div>
             )}
           </div>
 
-          <div className="pt-4 flex items-center justify-between border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-between border-t border-[#E7E5E4]">
             <button
               type="button"
               onClick={() => goToStep(2)}
-              className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
+              className="py-2.5 px-4 rounded-xl text-xs font-bold text-[#78716C] border border-[#E7E5E4] hover:bg-[#F8F7F5] flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Business
             </button>
             <button
               type="button"
               onClick={handleStep3Next}
-              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center gap-2 cursor-pointer"
+              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center gap-2 cursor-pointer"
             >
               Next: KYC &amp; Tax Documents
               <ArrowRight className="w-4 h-4" />
@@ -2227,7 +2227,7 @@ export const VendorRegisterPage: React.FC = () => {
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 GSTIN (15 Characters) *
               </label>
               <input
@@ -2250,7 +2250,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
                   fieldErrors.gstin
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               />
               {fieldErrors.gstin && (
@@ -2262,7 +2262,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#17233C] mb-1">
+              <label className="block text-xs font-bold text-[#292524] mb-1">
                 Company / Proprietor PAN *
               </label>
               <input
@@ -2285,7 +2285,7 @@ export const VendorRegisterPage: React.FC = () => {
                 className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
                   fieldErrors.pan
                     ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E2E8F0] focus:ring-[#203D91]'
+                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
                 }`}
               />
               {fieldErrors.pan && (
@@ -2297,7 +2297,7 @@ export const VendorRegisterPage: React.FC = () => {
           {/* Secure Document Vault Cards */}
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h4 className="text-xs font-bold text-[#17233C]">
+              <h4 className="text-xs font-bold text-[#292524]">
                 Verification Documents (Max 5 MB each) *
               </h4>
               {fieldErrors.documents && (
@@ -2323,34 +2323,34 @@ export const VendorRegisterPage: React.FC = () => {
                 return (
                   <div
                     key={docType.type}
-                    className="p-3.5 rounded-2xl border border-[#E2E8F0] bg-white hover:border-blue-300 transition-all space-y-2"
+                    className="p-3.5 rounded-2xl border border-[#E7E5E4] bg-white hover:border-blue-300 transition-all space-y-2"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-[#17233C]">{docType.title}</span>
-                        <p className="text-[11px] text-slate-500">PDF, JPG, JPEG, or PNG (Max 5 MB)</p>
+                        <span className="text-xs font-bold text-[#292524]">{docType.title}</span>
+                        <p className="text-[11px] text-[#78716C]">PDF, JPG, JPEG, or PNG (Max 5 MB)</p>
                       </div>
                       {uploaded ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                           Pending Review
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F8F7F5] text-[#78716C]">
                           Required
                         </span>
                       )}
                     </div>
 
                     {uploaded ? (
-                      <div className="p-2 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                      <div className="p-2 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex items-center justify-between text-xs">
                         <div className="flex items-center gap-1.5 truncate">
-                          <FileText className="w-3.5 h-3.5 text-[#203D91]" />
+                          <FileText className="w-3.5 h-3.5 text-[#943D24]" />
                           <span className="truncate font-medium">{uploaded.fileName}</span>
                         </div>
                         <button
                           type="button"
                           onClick={() => setDocuments(documents.filter((d) => d.id !== uploaded.id))}
-                          className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                          className="text-[#78716C] hover:text-rose-600 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -2360,7 +2360,7 @@ export const VendorRegisterPage: React.FC = () => {
                         type="button"
                         disabled={Boolean(isUploadingDocType)}
                         onClick={() => handleFileUpload(docType.type, docType.title)}
-                        className="w-full py-2 px-3 rounded-xl border border-dashed border-[#203D91]/40 text-[#203D91] text-xs font-bold bg-blue-50/50 hover:bg-blue-50 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                        className="w-full py-2 px-3 rounded-xl border border-dashed border-[#943D24]/40 text-[#943D24] text-xs font-bold bg-[#FBF3F0]/50 hover:bg-[#FBF3F0] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
                       >
                         {isUploadingThis ? (
                           <>
@@ -2369,7 +2369,7 @@ export const VendorRegisterPage: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <UploadCloud className="w-3.5 h-3.5 text-[#FF7417]" />
+                            <UploadCloud className="w-3.5 h-3.5 text-[#F6C453]" />
                             Upload Document
                           </>
                         )}
@@ -2381,18 +2381,18 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-4 flex items-center justify-between border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-between border-t border-[#E7E5E4]">
             <button
               type="button"
               onClick={() => goToStep(3)}
-              className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
+              className="py-2.5 px-4 rounded-xl text-xs font-bold text-[#78716C] border border-[#E7E5E4] hover:bg-[#F8F7F5] flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Address
             </button>
             <button
               type="button"
               onClick={handleStep4Next}
-              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center gap-2 cursor-pointer"
+              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center gap-2 cursor-pointer"
             >
               Next: Bank &amp; Product Details
               <ArrowRight className="w-4 h-4" />
@@ -2407,15 +2407,15 @@ export const VendorRegisterPage: React.FC = () => {
       {currentStep === 5 && (
         <form onSubmit={handleProceedToReview} noValidate className="space-y-6">
           {/* Bank Settlement Section */}
-          <div className="p-4 bg-[#F4F7FC] rounded-2xl border border-[#E2E8F0] space-y-3">
-            <h4 className="text-xs font-bold text-[#17233C] flex items-center gap-1.5">
-              <CreditCard className="w-4 h-4 text-[#203D91]" />
+          <div className="p-4 bg-[#FBF3F0] rounded-2xl border border-[#E7E5E4] space-y-3">
+            <h4 className="text-xs font-bold text-[#292524] flex items-center gap-1.5">
+              <CreditCard className="w-4 h-4 text-[#943D24]" />
               Settlement Bank Account Details (7-Day Direct Payouts)
             </h4>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-[#17233C] mb-1">
+                <label className="block text-xs font-bold text-[#292524] mb-1">
                   Account Beneficiary Name *
                 </label>
                 <input
@@ -2439,7 +2439,7 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full px-3.5 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 ${
                     fieldErrors.accountHolderName
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-white bg-white focus:ring-[#203D91]'
+                      : 'border-white bg-white focus:ring-[#943D24]'
                   }`}
                 />
                 {fieldErrors.accountHolderName && (
@@ -2450,7 +2450,7 @@ export const VendorRegisterPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#17233C] mb-1">Bank Name *</label>
+                <label className="block text-xs font-bold text-[#292524] mb-1">Bank Name *</label>
                 <input
                   type="text"
                   name="bankName"
@@ -2472,7 +2472,7 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full px-3.5 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 ${
                     fieldErrors.bankName
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-white bg-white focus:ring-[#203D91]'
+                      : 'border-white bg-white focus:ring-[#943D24]'
                   }`}
                 />
                 {fieldErrors.bankName && (
@@ -2481,7 +2481,7 @@ export const VendorRegisterPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#17233C] mb-1">
+                <label className="block text-xs font-bold text-[#292524] mb-1">
                   Bank Account Number *
                 </label>
                 <div className="relative">
@@ -2501,14 +2501,14 @@ export const VendorRegisterPage: React.FC = () => {
                     className={`w-full px-3.5 pr-9 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 ${
                       fieldErrors.accountNumber
                         ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                        : 'border-white bg-white focus:ring-[#203D91]'
+                        : 'border-white bg-white focus:ring-[#943D24]'
                     }`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowAccountNumber(!showAccountNumber)}
                     aria-label={showAccountNumber ? 'Hide account number' : 'Show account number'}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#78716C] hover:text-[#78716C] cursor-pointer"
                   >
                     {showAccountNumber ? (
                       <EyeOff className="w-3.5 h-3.5" />
@@ -2525,7 +2525,7 @@ export const VendorRegisterPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#17233C] mb-1">
+                <label className="block text-xs font-bold text-[#292524] mb-1">
                   Confirm Account Number *
                 </label>
                 <input
@@ -2547,7 +2547,7 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full px-3.5 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 ${
                     fieldErrors.confirmAccountNumber
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-white bg-white focus:ring-[#203D91]'
+                      : 'border-white bg-white focus:ring-[#943D24]'
                   }`}
                 />
                 {fieldErrors.confirmAccountNumber && (
@@ -2558,7 +2558,7 @@ export const VendorRegisterPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#17233C] mb-1">IFSC Code *</label>
+                <label className="block text-xs font-bold text-[#292524] mb-1">IFSC Code *</label>
                 <input
                   type="text"
                   name="ifsc"
@@ -2579,7 +2579,7 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full px-3.5 py-2 rounded-xl border font-mono text-xs focus:outline-none focus:ring-2 ${
                     fieldErrors.ifsc
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-white bg-white focus:ring-[#203D91]'
+                      : 'border-white bg-white focus:ring-[#943D24]'
                   }`}
                 />
                 {fieldErrors.ifsc && (
@@ -2588,7 +2588,7 @@ export const VendorRegisterPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#17233C] mb-1">Account Type *</label>
+                <label className="block text-xs font-bold text-[#292524] mb-1">Account Type *</label>
                 <select
                   name="accountType"
                   value={accountType}
@@ -2601,7 +2601,7 @@ export const VendorRegisterPage: React.FC = () => {
                   className={`w-full px-3.5 py-2 rounded-xl border bg-white text-xs focus:outline-none focus:ring-2 ${
                     fieldErrors.accountType
                       ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                      : 'border-white focus:ring-[#203D91]'
+                      : 'border-white focus:ring-[#943D24]'
                   }`}
                 >
                   <option value="CURRENT">Current Account (Recommended for B2B)</option>
@@ -2617,7 +2617,7 @@ export const VendorRegisterPage: React.FC = () => {
           </div>
 
           {/* Terms & Conditions Acceptance */}
-          <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+          <div className="p-3.5 bg-[#F8F7F5] rounded-2xl border border-[#E7E5E4] space-y-2 text-xs">
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
                 type="checkbox"
@@ -2631,9 +2631,9 @@ export const VendorRegisterPage: React.FC = () => {
                     checked ? undefined : 'You must accept the BUILDORA 60 Supplier Terms of Partnership.'
                   );
                 }}
-                className="w-4 h-4 mt-0.5 rounded text-[#203D91] focus:ring-[#203D91]"
+                className="w-4 h-4 mt-0.5 rounded text-[#943D24] focus:ring-[#943D24]"
               />
-              <span className="text-slate-700">
+              <span className="text-[#292524]">
                 I agree to the <strong>BUILDORA 60 Supplier Terms of Partnership</strong>, 60-minute
                 dispatch SLAs, and batch compressive testing standards. *
               </span>
@@ -2657,9 +2657,9 @@ export const VendorRegisterPage: React.FC = () => {
                     checked ? undefined : 'You must confirm the accuracy of submitted documents.'
                   );
                 }}
-                className="w-4 h-4 mt-0.5 rounded text-[#203D91] focus:ring-[#203D91]"
+                className="w-4 h-4 mt-0.5 rounded text-[#943D24] focus:ring-[#943D24]"
               />
-              <span className="text-slate-700">
+              <span className="text-[#292524]">
                 I confirm that all uploaded documents, GST credentials, and bank settlement details
                 belong to the authorized entity. *
               </span>
@@ -2671,18 +2671,18 @@ export const VendorRegisterPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+          <div className="pt-2 flex items-center justify-between border-t border-[#E7E5E4]">
             <button
               type="button"
               onClick={() => goToStep(4)}
-              className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
+              className="py-2.5 px-4 rounded-xl text-xs font-bold text-[#78716C] border border-[#E7E5E4] hover:bg-[#F8F7F5] flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Documents
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="py-3 px-8 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              className="py-3 px-8 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center gap-2 cursor-pointer disabled:opacity-60"
             >
               {isLoading ? (
                 <span className="inline-flex items-center gap-2">

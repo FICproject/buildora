@@ -6,6 +6,7 @@ services:
     plan: free
     buildCommand: pnpm install && pnpm --filter @buildora/backend-api build
     startCommand: node services/backend/api/dist/main.js
+    healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_ENV
         value: production

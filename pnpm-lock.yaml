@@ -178,13 +178,43 @@ importers:
 
   apps/company-admin-web:
     dependencies:
+      '@buildora/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@buildora/constants':
+        specifier: workspace:*
+        version: link:../../packages/constants
+      '@buildora/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@buildora/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^0.395.0
+        version: 0.395.0(react@18.3.1)
       react:
         specifier: ^18.3.1
         version: 18.3.1
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      react-router-dom:
+        specifier: ^6.23.1
+        version: 6.30.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      tailwind-merge:
+        specifier: ^2.3.0
+        version: 2.6.1
+      zustand:
+        specifier: ^4.5.2
+        version: 4.5.7(@types/react@18.3.31)(react@18.3.1)
     devDependencies:
+      '@types/node':
+        specifier: ^20.14.2
+        version: 20.19.43
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.31
@@ -194,6 +224,15 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.0
         version: 4.7.0(supports-color@8.1.1)(vite@5.4.21(@types/node@20.19.43)(terser@5.51.2))
+      autoprefixer:
+        specifier: ^10.4.19
+        version: 10.6.2(postcss@8.5.33)
+      postcss:
+        specifier: ^8.4.38
+        version: 8.5.33
+      tailwindcss:
+        specifier: ^3.4.4
+        version: 3.4.19(tsx@4.23.15)
       typescript:
         specifier: ^5.4.0
         version: 5.9.3

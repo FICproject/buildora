@@ -126,7 +126,7 @@ export const VendorQuotationsPage: React.FC = () => {
       {/* Filter & Search */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <div className="flex flex-wrap gap-1.5 border-b border-[#E5E9F0] pb-3">
+          <div className="flex flex-wrap gap-1.5 border-b border-[#E7E5E4] pb-3">
             {[
               { id: 'ALL', label: 'All Requests' },
               { id: 'PENDING_QUOTE', label: 'Incoming Requests' },
@@ -140,8 +140,8 @@ export const VendorQuotationsPage: React.FC = () => {
                 onClick={() => setStatusFilter(t.id)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
                   statusFilter === t.id
-                    ? 'bg-[#23438F] text-white'
-                    : 'text-[#718096] hover:text-[#263247] hover:bg-[#F7F8FA]'
+                    ? 'bg-[#943D24] text-white'
+                    : 'text-[#78716C] hover:text-[#292524] hover:bg-[#F8F7F5]'
                 }`}
               >
                 {t.label}
@@ -150,7 +150,7 @@ export const VendorQuotationsPage: React.FC = () => {
           </div>
 
           <div className="relative">
-            <Search className="w-4 h-4 text-[#718096] absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
@@ -166,7 +166,7 @@ export const VendorQuotationsPage: React.FC = () => {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+            <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
               <tr>
                 <th className="py-3 px-4">RFQ Number</th>
                 <th className="py-3 px-4">Customer & Site</th>
@@ -176,7 +176,7 @@ export const VendorQuotationsPage: React.FC = () => {
                 <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E9F0]">
+            <tbody className="divide-y divide-[#E7E5E4]">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={6}>
@@ -192,31 +192,31 @@ export const VendorQuotationsPage: React.FC = () => {
                   <tr
                     key={rfq.id}
                     onClick={() => openQuoteModal(rfq)}
-                    className="hover:bg-[#F7F8FA] cursor-pointer transition-colors"
+                    className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
                   >
                     <td className="py-3.5 px-4">
-                      <div className="font-mono font-semibold text-[#263247]">{rfq.rfqNumber}</div>
-                      <div className="text-[11px] text-[#718096]">
+                      <div className="font-mono font-semibold text-[#292524]">{rfq.rfqNumber}</div>
+                      <div className="text-[11px] text-[#78716C]">
                         Need by {new Date(rfq.requiredBy).toLocaleDateString('en-IN')}
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="font-medium text-[#263247]">{rfq.customerName}</div>
-                      <div className="text-[11px] text-[#718096] flex items-center gap-1">
+                      <div className="font-medium text-[#292524]">{rfq.customerName}</div>
+                      <div className="text-[11px] text-[#78716C] flex items-center gap-1">
                         <MapPin className="w-3 h-3 shrink-0" />
                         <span className="truncate max-w-[200px]">{rfq.siteLocation}</span>
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="font-medium text-[#263247]">
+                      <div className="font-medium text-[#292524]">
                         {rfq.items?.[0]?.name}
                         {rfq.items?.length > 1 ? ` +${rfq.items.length - 1} more` : ''}
                       </div>
-                      <div className="text-[11px] text-[#718096]">
+                      <div className="text-[11px] text-[#78716C]">
                         Total qty: {rfq.items?.reduce((s: number, i: any) => s + i.quantity, 0)} units
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-[#263247]">
+                    <td className="py-3.5 px-4 font-semibold text-[#292524]">
                       {rfq.quotedTotal > 0 ? `₹${rfq.quotedTotal.toLocaleString('en-IN')}` : 'Pending'}
                     </td>
                     <td className="py-3.5 px-4">
@@ -251,30 +251,30 @@ export const VendorQuotationsPage: React.FC = () => {
       >
         {selectedRfq && (
           <form onSubmit={handleSubmitQuote} className="space-y-5 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]">
               <div>
-                <span className="text-[#718096] block">Delivery Site</span>
-                <span className="font-medium text-[#263247]">{selectedRfq.siteLocation}</span>
+                <span className="text-[#78716C] block">Delivery Site</span>
+                <span className="font-medium text-[#292524]">{selectedRfq.siteLocation}</span>
               </div>
               <div>
-                <span className="text-[#718096] block">Negotiation Status</span>
-                <span className="font-semibold text-[#23438F]">
+                <span className="text-[#78716C] block">Negotiation Status</span>
+                <span className="font-semibold text-[#943D24]">
                   {(selectedRfq.negotiationStatus || selectedRfq.status).replace(/_/g, ' ')}
                 </span>
               </div>
               {selectedRfq.notes && (
                 <div className="sm:col-span-2">
-                  <span className="text-[#718096] block">Buyer Notes</span>
-                  <span className="text-[#263247]">{selectedRfq.notes}</span>
+                  <span className="text-[#78716C] block">Buyer Notes</span>
+                  <span className="text-[#292524]">{selectedRfq.notes}</span>
                 </div>
               )}
             </div>
 
             <div>
-              <h4 className="font-semibold text-[#263247] mb-2">Material Requirements & Pricing</h4>
-              <div className="border border-[#E5E9F0] rounded-xl overflow-x-auto">
+              <h4 className="font-semibold text-[#292524] mb-2">Material Requirements & Pricing</h4>
+              <div className="border border-[#E7E5E4] rounded-xl overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                  <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                     <tr>
                       <th className="py-2.5 px-3">Material</th>
                       <th className="py-2.5 px-3 text-right">Qty</th>
@@ -283,17 +283,17 @@ export const VendorQuotationsPage: React.FC = () => {
                       <th className="py-2.5 px-3 text-right">Line Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E5E9F0]">
+                  <tbody className="divide-y divide-[#E7E5E4]">
                     {quotedItems.map((item, idx) => (
                       <tr key={idx}>
                         <td className="py-2.5 px-3">
-                          <div className="font-medium text-[#263247]">{item.name}</div>
-                          <div className="text-[11px] font-mono text-[#718096]">{item.sku}</div>
+                          <div className="font-medium text-[#292524]">{item.name}</div>
+                          <div className="text-[11px] font-mono text-[#78716C]">{item.sku}</div>
                         </td>
                         <td className="py-2.5 px-3 text-right font-medium">
                           {item.quantity} {item.unit}
                         </td>
-                        <td className="py-2.5 px-3 text-right text-[#718096]">
+                        <td className="py-2.5 px-3 text-right text-[#78716C]">
                           ₹{(item.targetPrice || 0).toLocaleString('en-IN')}
                         </td>
                         <td className="py-2.5 px-3 text-right">
@@ -305,10 +305,10 @@ export const VendorQuotationsPage: React.FC = () => {
                             }
                             value={item.quotedPrice}
                             onChange={(e) => handleItemPriceChange(idx, Number(e.target.value))}
-                            className="w-24 px-2 py-1 text-right border border-[#E5E9F0] rounded-md font-semibold"
+                            className="w-24 px-2 py-1 text-right border border-[#E7E5E4] rounded-md font-semibold"
                           />
                         </td>
-                        <td className="py-2.5 px-3 text-right font-semibold text-[#263247]">
+                        <td className="py-2.5 px-3 text-right font-semibold text-[#292524]">
                           ₹
                           {(
                             (Number(item.quotedPrice) || 0) * (Number(item.quantity) || 0)
@@ -331,9 +331,9 @@ export const VendorQuotationsPage: React.FC = () => {
                   className="portal-input"
                 />
               </div>
-              <div className="flex flex-col justify-end p-3 rounded-lg bg-[#EEF3FA] border border-[#23438F]/15">
-                <span className="text-[11px] text-[#718096]">Total Quoted Amount</span>
-                <span className="text-lg font-bold text-[#23438F]">
+              <div className="flex flex-col justify-end p-3 rounded-lg bg-[#FBF3F0] border border-[#943D24]/15">
+                <span className="text-[11px] text-[#78716C]">Total Quoted Amount</span>
+                <span className="text-lg font-bold text-[#943D24]">
                   ₹{quotedTotal.toLocaleString('en-IN')}
                 </span>
               </div>
@@ -349,7 +349,7 @@ export const VendorQuotationsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#E5E9F0]">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#E7E5E4]">
               <div className="flex items-center gap-2">
                 {selectedRfq.status === 'QUOTED' && (
                   <>
@@ -377,7 +377,7 @@ export const VendorQuotationsPage: React.FC = () => {
               <div className="flex items-center gap-2.5">
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
                   onClick={() => setSelectedRfq(null)}
                 >

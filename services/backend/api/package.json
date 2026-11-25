@@ -5,8 +5,9 @@
   "description": "BUILDORA 60 - Core NestJS Modular Monolith API",
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/write-prod-entry.mjs",
     "start": "tsx src/main.ts",
+    "start:prod": "node dist/main.js",
     "test": "jest"
   },
   "dependencies": {

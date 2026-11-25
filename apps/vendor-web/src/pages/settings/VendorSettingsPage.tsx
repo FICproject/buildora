@@ -160,7 +160,7 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
       />
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E9F0] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E7E5E4] pb-2">
         {[
           { id: 'TEAM', label: 'Team & Access', icon: Users },
           { id: 'SECURITY', label: 'Security & 2FA', icon: ShieldCheck },
@@ -175,8 +175,8 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
               onClick={() => setActiveTab(tab.id as SettingsTab)}
               className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-[#23438F] text-white'
-                  : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+                  ? 'bg-[#943D24] text-white'
+                  : 'text-[#78716C] hover:text-[#292524] hover:bg-white'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -205,7 +205,7 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
           />
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Member</th>
                   <th className="py-3 px-4">Role</th>
@@ -214,7 +214,7 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {team.length === 0 ? (
                   <tr>
                     <td colSpan={5}>
@@ -227,17 +227,17 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
                   </tr>
                 ) : (
                   team.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-[#F7F8FA]">
+                    <tr key={emp.id} className="hover:bg-[#F8F7F5]">
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-[#263247]">{emp.name}</div>
-                        <div className="text-[11px] text-[#718096]">{emp.email}</div>
+                        <div className="font-semibold text-[#292524]">{emp.name}</div>
+                        <div className="text-[11px] text-[#78716C]">{emp.email}</div>
                       </td>
                       <td className="py-3.5 px-4">
                         <Badge variant="brand" size="sm">
                           {emp.role.replace(/_/g, ' ')}
                         </Badge>
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-[#718096]">
+                      <td className="py-3.5 px-4 font-mono text-[#78716C]">
                         {emp.phone || '—'}
                       </td>
                       <td className="py-3.5 px-4">
@@ -250,7 +250,7 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
                           <button
                             type="button"
                             onClick={() => setRemoveTarget(emp)}
-                            className="p-1.5 rounded-lg text-[#718096] hover:text-[#DC4545] hover:bg-[#DC4545]/10 cursor-pointer"
+                            className="p-1.5 rounded-lg text-[#78716C] hover:text-[#DC4545] hover:bg-[#DC4545]/10 cursor-pointer"
                             title="Revoke Access"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -275,12 +275,12 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
               subtitle="Protect your vendor account with 2FA and strong passwords."
             />
             <CardContent className="space-y-5">
-              <label className="flex items-center justify-between p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] cursor-pointer">
+              <label className="flex items-center justify-between p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] cursor-pointer">
                 <div>
-                  <p className="text-xs font-semibold text-[#263247]">
+                  <p className="text-xs font-semibold text-[#292524]">
                     Two-Factor Authentication (SMS OTP)
                   </p>
-                  <p className="text-[11px] text-[#718096] mt-0.5">
+                  <p className="text-[11px] text-[#78716C] mt-0.5">
                     Require an OTP verification code when signing in from new devices.
                   </p>
                 </div>
@@ -288,7 +288,7 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
                   type="checkbox"
                   checked={enable2FA}
                   onChange={(e) => setEnable2FA(e.target.checked)}
-                  className="w-4 h-4 rounded text-[#23438F]"
+                  className="w-4 h-4 rounded text-[#943D24]"
                 />
               </label>
 
@@ -348,16 +348,16 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
               ].map((item) => (
                 <label
                   key={item.key}
-                  className="flex items-center justify-between p-3.5 rounded-xl border border-[#E5E9F0] hover:bg-[#F7F8FA] cursor-pointer text-xs"
+                  className="flex items-center justify-between p-3.5 rounded-xl border border-[#E7E5E4] hover:bg-[#F8F7F5] cursor-pointer text-xs"
                 >
-                  <span className="font-medium text-[#263247]">{item.label}</span>
+                  <span className="font-medium text-[#292524]">{item.label}</span>
                   <input
                     type="checkbox"
                     checked={(notifPrefs as any)[item.key]}
                     onChange={(e) =>
                       setNotifPrefs((prev) => ({ ...prev, [item.key]: e.target.checked }))
                     }
-                    className="w-4 h-4 rounded text-[#23438F]"
+                    className="w-4 h-4 rounded text-[#943D24]"
                   />
                 </label>
               ))}
@@ -385,26 +385,26 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
             subtitle="Standard dispatch windows for order fulfillment."
           />
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
-              <span className="text-[#718096] block">Monday – Saturday</span>
-              <span className="text-sm font-semibold text-[#263247] mt-1 block">
+            <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]">
+              <span className="text-[#78716C] block">Monday – Saturday</span>
+              <span className="text-sm font-semibold text-[#292524] mt-1 block">
                 07:00 AM – 09:00 PM
               </span>
             </div>
-            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
-              <span className="text-[#718096] block">Sunday</span>
-              <span className="text-sm font-semibold text-[#263247] mt-1 block">
+            <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]">
+              <span className="text-[#78716C] block">Sunday</span>
+              <span className="text-sm font-semibold text-[#292524] mt-1 block">
                 08:00 AM – 06:00 PM
               </span>
             </div>
-            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
-              <span className="text-[#718096] block">Primary Hub</span>
-              <span className="text-sm font-semibold text-[#23438F] mt-1 block">
+            <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]">
+              <span className="text-[#78716C] block">Primary Hub</span>
+              <span className="text-sm font-semibold text-[#943D24] mt-1 block">
                 WH-BLR-04 Peenya
               </span>
             </div>
-            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
-              <span className="text-[#718096] block">Express SLA</span>
+            <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]">
+              <span className="text-[#78716C] block">Express SLA</span>
               <span className="text-sm font-semibold text-[#15966B] mt-1 block">
                 60 Minutes
               </span>
@@ -465,7 +465,7 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-[#718096] mt-1">
+              <p className="text-[11px] text-[#78716C] mt-1">
                 {rolesConfig.find((r) => r.role === empRole)?.desc}
               </p>
             </div>
@@ -473,17 +473,17 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
 
           <div>
             <label className="portal-label">Permissions</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]">
               {permissionsList.map((perm) => (
                 <label
                   key={perm.id}
-                  className="flex items-center gap-2 text-xs text-[#263247] cursor-pointer"
+                  className="flex items-center gap-2 text-xs text-[#292524] cursor-pointer"
                 >
                   <input
                     type="checkbox"
                     checked={selectedPermissions.includes(perm.id)}
                     onChange={() => handleTogglePerm(perm.id)}
-                    className="w-3.5 h-3.5 rounded text-[#23438F]"
+                    className="w-3.5 h-3.5 rounded text-[#943D24]"
                   />
                   <span>{perm.label}</span>
                 </label>
@@ -491,10 +491,10 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
             </div>
           </div>
 
-          <div className="pt-2 flex justify-end gap-2.5 border-t border-[#E5E9F0]">
+          <div className="pt-2 flex justify-end gap-2.5 border-t border-[#E7E5E4]">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setIsInviteOpen(false)}
             >

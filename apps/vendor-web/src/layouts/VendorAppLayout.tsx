@@ -57,7 +57,7 @@ export const VendorAppLayout: React.FC = () => {
     vendor?.status === 'DRAFT' || vendor?.status === 'PENDING_VERIFICATION';
 
   return (
-    <div className="flex h-screen bg-[#F7F8FA] text-[#263247] antialiased overflow-hidden">
+    <div className="flex h-screen bg-[#F8F7F5] text-[#292524] antialiased overflow-hidden">
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
         <VendorSidebar
@@ -70,7 +70,7 @@ export const VendorAppLayout: React.FC = () => {
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div
-            className="fixed inset-0 bg-[#263247]/40"
+            className="fixed inset-0 bg-[#292524]/40"
             onClick={() => setMobileMenuOpen(false)}
           />
           <div className="relative z-10">
@@ -86,11 +86,11 @@ export const VendorAppLayout: React.FC = () => {
           title={getPageTitle(location.pathname)}
         />
 
-        {/* KYC Incomplete Banner */}
+        {/* KYC Incomplete Promotional / Attention Banner */}
         {isKycIncomplete && showBanner && location.pathname !== '/onboarding' && (
-          <div className="bg-[#E6A23C]/15 border-b border-[#E6A23C]/30 text-[#263247] px-4 py-2.5 flex items-center justify-between text-xs">
+          <div className="bg-[#FEF9EB] border-b border-[#F6C453] text-[#292524] px-4 py-2.5 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-[#E6A23C]" />
+              <AlertCircle className="w-4 h-4 shrink-0 text-[#943D24]" />
               <span>
                 <strong>Action Required:</strong> Complete onboarding verification to enable live
                 order fulfillment.
@@ -99,15 +99,15 @@ export const VendorAppLayout: React.FC = () => {
             <div className="flex items-center gap-3 shrink-0">
               <Link
                 to="/onboarding"
-                className="inline-flex items-center gap-1 bg-[#23438F] text-white px-2.5 py-1 rounded-md text-xs font-medium hover:bg-[#1B3573] transition-colors"
+                className="font-semibold text-[#943D24] hover:underline flex items-center gap-1"
               >
-                Complete Onboarding
-                <ArrowRight className="w-3 h-3" />
+                Complete Setup <ArrowRight className="w-3.5 h-3.5" />
               </Link>
               <button
                 type="button"
                 onClick={() => setShowBanner(false)}
-                className="text-[#718096] hover:text-[#263247] cursor-pointer"
+                aria-label="Dismiss alert"
+                className="text-[#78716C] hover:text-[#292524] cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -115,8 +115,8 @@ export const VendorAppLayout: React.FC = () => {
           </div>
         )}
 
-        {/* Scrollable Page Body */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        {/* Main Scrollable Viewport */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>

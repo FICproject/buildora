@@ -106,21 +106,21 @@ export const CircularCollage: React.FC<CircularCollageProps> = ({
             </clipPath>
           ))}
 
-          {/* Center Orange Badge Gradient */}
+          {/* Center Terracotta Badge */}
           <linearGradient id="centerOrangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FFA52F" />
-            <stop offset="100%" stopColor="#FF7900" />
+            <stop offset="0%" stopColor="#A6482D" />
+            <stop offset="100%" stopColor="#943D24" />
           </linearGradient>
 
           {/* Center Drop Shadow */}
           <filter id="centerShadow" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="8" stdDeviation="10" floodColor="#FF7900" floodOpacity="0.38" />
-            <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#102B63" floodOpacity="0.12" />
+            <feDropShadow dx="0" dy="8" stdDeviation="10" floodColor="#943D24" floodOpacity="0.32" />
+            <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#292524" floodOpacity="0.12" />
           </filter>
 
           {/* Slices Outer Shadow */}
           <filter id="wheelShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="12" stdDeviation="16" floodColor="#102B63" floodOpacity="0.08" />
+            <feDropShadow dx="0" dy="12" stdDeviation="16" floodColor="#292524" floodOpacity="0.08" />
           </filter>
         </defs>
 
@@ -130,7 +130,7 @@ export const CircularCollage: React.FC<CircularCollageProps> = ({
           cy={cy}
           r={rOuter + 3}
           fill="none"
-          stroke="#F8FAFC"
+          stroke="#E7E5E4"
           strokeWidth="6"
         />
 
@@ -168,14 +168,14 @@ export const CircularCollage: React.FC<CircularCollageProps> = ({
         </g>
 
         {/* Center Storefront Icon Badge */}
-        {/* Outer white ring */}
+        {/* Outer golden-tinted white ring */}
         <circle
           cx={cx}
           cy={cy}
           r={rInner + 4}
           fill="#FFFFFF"
-          stroke="#F1F5F9"
-          strokeWidth="2"
+          stroke="#F6C453"
+          strokeWidth="3"
         />
 
         {/* Vibrant Orange Gradient Circle */}

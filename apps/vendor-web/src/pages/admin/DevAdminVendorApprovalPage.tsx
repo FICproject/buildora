@@ -157,27 +157,27 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
     const map: Record<string, string> = {
       APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      SUBMITTED: 'bg-blue-50 text-[#203D91] border-blue-200',
+      SUBMITTED: 'bg-[#FBF3F0] text-[#943D24] border-[#943D24]/25',
       UNDER_REVIEW: 'bg-indigo-50 text-indigo-700 border-indigo-200',
       RESUBMISSION_REQUIRED: 'bg-amber-50 text-amber-800 border-amber-200',
       REJECTED: 'bg-rose-50 text-rose-700 border-rose-200',
-      SUSPENDED: 'bg-slate-100 text-rose-800 border-rose-300'
+      SUSPENDED: 'bg-[#F8F7F5] text-rose-800 border-rose-300'
     };
-    return map[status] || 'bg-slate-100 text-slate-700 border-slate-200';
+    return map[status] || 'bg-[#F8F7F5] text-[#292524] border-[#E7E5E4]';
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F7FC] text-[#17233C]">
+    <div className="min-h-screen bg-[#FBF3F0] text-[#292524]">
       {/* Top Dev Admin Header */}
-      <header className="bg-[#203D91] text-white px-6 py-4 shadow-md flex flex-wrap items-center justify-between gap-4">
+      <header className="bg-[#943D24] text-white px-6 py-4 shadow-md flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-[#FF7417] flex items-center justify-center font-black text-lg">
+          <div className="w-9 h-9 rounded-xl bg-[#F6C453] flex items-center justify-center font-black text-lg">
             B
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-base font-black tracking-tight">BUILDORA 60 Admin Approval Console</h1>
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-400 text-slate-900">
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-400 text-[#292524]">
                 Development Only
               </span>
             </div>
@@ -197,7 +197,7 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
           <button
             type="button"
             onClick={fetchApplications}
-            className="text-xs font-bold px-3.5 py-2 rounded-xl bg-[#FF7417] hover:bg-[#e05e07] text-white inline-flex items-center gap-1.5 cursor-pointer"
+            className="text-xs font-bold px-3.5 py-2 rounded-xl bg-[#F6C453] hover:bg-[#F6C453] text-[#292524] inline-flex items-center gap-1.5 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Refresh Queue
@@ -207,21 +207,21 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
 
       <div className="max-w-7xl mx-auto p-6 space-y-5">
         {/* Search & Filter Bar */}
-        <div className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-2xs space-y-3">
+        <div className="bg-white rounded-2xl p-4 border border-[#E7E5E4] shadow-2xs space-y-3">
           <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by business name, store name, email, or application ID (e.g. APP-BLR-...)"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E2E8F0] text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91]"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E7E5E4] text-xs focus:outline-none focus:ring-2 focus:ring-[#943D24]"
               />
             </div>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#203D91] text-white hover:bg-[#162b66] cursor-pointer"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#943D24] text-white hover:bg-[#7D331E] cursor-pointer"
             >
               Search
             </button>
@@ -235,8 +235,8 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
                   statusFilter === st
-                    ? 'bg-[#203D91] text-white border-[#203D91]'
-                    : 'bg-[#F4F7FC] text-slate-600 border-slate-200 hover:bg-slate-100'
+                    ? 'bg-[#943D24] text-white border-[#943D24]'
+                    : 'bg-[#FBF3F0] text-[#78716C] border-[#E7E5E4] hover:bg-[#F8F7F5]'
                 }`}
               >
                 {st.replace(/_/g, ' ')}
@@ -262,17 +262,17 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
         {/* Two-Column Queue & Inspector */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Queue List */}
-          <div className="lg:col-span-5 bg-white rounded-2xl border border-[#E2E8F0] shadow-2xs overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-[#F4F7FC]">
-              <span className="text-xs font-bold text-[#17233C]">
+          <div className="lg:col-span-5 bg-white rounded-2xl border border-[#E7E5E4] shadow-2xs overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#E7E5E4] flex items-center justify-between bg-[#FBF3F0]">
+              <span className="text-xs font-bold text-[#292524]">
                 Applications ({applications.length})
               </span>
             </div>
 
             {loading ? (
-              <div className="p-8 text-center text-xs text-slate-500">Loading applications...</div>
+              <div className="p-8 text-center text-xs text-[#78716C]">Loading applications...</div>
             ) : applications.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-500">
+              <div className="p-8 text-center text-xs text-[#78716C]">
                 No vendor applications match your filter.
               </div>
             ) : (
@@ -285,27 +285,27 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
                       type="button"
                       onClick={() => handleSelectApplication(app)}
                       className={`w-full text-left p-4 transition-colors flex items-start gap-3 cursor-pointer ${
-                        isSelected ? 'bg-blue-50/70 border-l-4 border-[#203D91]' : 'hover:bg-slate-50'
+                        isSelected ? 'bg-[#FBF3F0]/70 border-l-4 border-[#943D24]' : 'hover:bg-[#F8F7F5]'
                       }`}
                     >
-                      <div className="w-10 h-10 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
+                      <div className="w-10 h-10 rounded-xl border border-[#E7E5E4] bg-white flex items-center justify-center overflow-hidden shrink-0">
                         {app.logoUrl ? (
                           <img src={app.logoUrl} alt="" className="w-full h-full object-cover" />
                         ) : (
-                          <Building2 className="w-5 h-5 text-slate-400" />
+                          <Building2 className="w-5 h-5 text-[#78716C]" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-[#17233C] truncate">
+                          <span className="text-xs font-bold text-[#292524] truncate">
                             {app.storeName}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded border shrink-0 ${getStatusBadge(app.status)}`}>
                             {app.status}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 truncate mt-0.5">{app.email}</p>
-                        <p className="text-[10px] font-mono text-[#203D91] mt-1">{app.applicationId}</p>
+                        <p className="text-[11px] text-[#78716C] truncate mt-0.5">{app.email}</p>
+                        <p className="text-[10px] font-mono text-[#943D24] mt-1">{app.applicationId}</p>
                       </div>
                     </button>
                   );
@@ -315,32 +315,32 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
           </div>
 
           {/* Right Application Detail Inspector */}
-          <div className="lg:col-span-7 bg-white rounded-2xl border border-[#E2E8F0] shadow-2xs p-6 space-y-5">
+          <div className="lg:col-span-7 bg-white rounded-2xl border border-[#E7E5E4] shadow-2xs p-6 space-y-5">
             {!selectedApp ? (
-              <div className="p-12 text-center text-xs text-slate-500">
+              <div className="p-12 text-center text-xs text-[#78716C]">
                 Select a vendor application from the queue to inspect details and take action.
               </div>
             ) : (
               <>
                 {/* Top Summary */}
-                <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-slate-100">
+                <div className="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-[#E7E5E4]">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-16 h-16 rounded-2xl border border-[#E2E8F0] bg-[#F4F7FC] flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="w-16 h-16 rounded-2xl border border-[#E7E5E4] bg-[#FBF3F0] flex items-center justify-center overflow-hidden shrink-0">
                       {selectedApp.logoUrl ? (
                         <img src={selectedApp.logoUrl} alt="Vendor Logo" className="w-full h-full object-cover" />
                       ) : (
-                        <Building2 className="w-7 h-7 text-[#203D91]/50" />
+                        <Building2 className="w-7 h-7 text-[#943D24]/50" />
                       )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-black text-[#17233C]">{selectedApp.storeName}</h2>
+                        <h2 className="text-lg font-black text-[#292524]">{selectedApp.storeName}</h2>
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${getStatusBadge(selectedApp.status)}`}>
                           {selectedApp.status}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">{selectedApp.legalBusinessName}</p>
-                      <p className="text-[11px] font-mono font-bold text-[#203D91] mt-0.5">
+                      <p className="text-xs text-[#78716C]">{selectedApp.legalBusinessName}</p>
+                      <p className="text-[11px] font-mono font-bold text-[#943D24] mt-0.5">
                         {selectedApp.applicationId}
                       </p>
                     </div>
@@ -418,8 +418,8 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
 
                 {/* Mandatory Reason Form for Reject / Resubmit / Suspend */}
                 {pendingAction && (
-                  <form onSubmit={handleReasonActionSubmit} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                    <h4 className="text-xs font-bold text-[#17233C]">
+                  <form onSubmit={handleReasonActionSubmit} className="p-4 rounded-2xl bg-[#F8F7F5] border border-[#E7E5E4] space-y-3">
+                    <h4 className="text-xs font-bold text-[#292524]">
                       {pendingAction === 'REJECT' && 'Mandatory Rejection Reason'}
                       {pendingAction === 'RESUBMIT' && 'Mandatory Resubmission Instructions'}
                       {pendingAction === 'SUSPEND' && 'Mandatory Suspension Reason'}
@@ -430,20 +430,20 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
                       onChange={(e) => setActionReason(e.target.value)}
                       required
                       placeholder="Provide a clear explanation for the vendor..."
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#203D91]"
+                      className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] text-xs focus:outline-none focus:ring-2 focus:ring-[#943D24]"
                     />
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setPendingAction(null)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-[#78716C] hover:bg-slate-200 cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={actionLoading}
-                        className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#203D91] text-white hover:bg-[#162b66] cursor-pointer"
+                        className="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#943D24] text-white hover:bg-[#7D331E] cursor-pointer"
                       >
                         Confirm Action
                       </button>
@@ -453,60 +453,60 @@ export const DevAdminVendorApprovalPage: React.FC = () => {
 
                 {/* Details Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="p-3.5 rounded-xl bg-[#F4F7FC] border border-[#E2E8F0] space-y-1.5">
-                    <h4 className="font-bold text-[#17233C] flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-[#203D91]" /> Contact & Owner
+                  <div className="p-3.5 rounded-xl bg-[#FBF3F0] border border-[#E7E5E4] space-y-1.5">
+                    <h4 className="font-bold text-[#292524] flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-[#943D24]" /> Contact & Owner
                     </h4>
-                    <p><span className="text-slate-500">Name:</span> <strong>{selectedApp.ownerName}</strong></p>
-                    <p><span className="text-slate-500">Email:</span> <strong>{selectedApp.email}</strong></p>
-                    <p><span className="text-slate-500">Phone:</span> <strong>+91 {selectedApp.phone}</strong></p>
+                    <p><span className="text-[#78716C]">Name:</span> <strong>{selectedApp.ownerName}</strong></p>
+                    <p><span className="text-[#78716C]">Email:</span> <strong>{selectedApp.email}</strong></p>
+                    <p><span className="text-[#78716C]">Phone:</span> <strong>+91 {selectedApp.phone}</strong></p>
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-[#F4F7FC] border border-[#E2E8F0] space-y-1.5">
-                    <h4 className="font-bold text-[#17233C] flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-[#203D91]" /> Business Address
+                  <div className="p-3.5 rounded-xl bg-[#FBF3F0] border border-[#E7E5E4] space-y-1.5">
+                    <h4 className="font-bold text-[#292524] flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-[#943D24]" /> Business Address
                     </h4>
-                    <p className="font-medium text-[#17233C]">{selectedApp.address?.completeAddress || '—'}</p>
-                    <p className="text-slate-600">
+                    <p className="font-medium text-[#292524]">{selectedApp.address?.completeAddress || '—'}</p>
+                    <p className="text-[#78716C]">
                       {selectedApp.address?.city}, {selectedApp.address?.state} - {selectedApp.address?.pincode}
                     </p>
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-[#F4F7FC] border border-[#E2E8F0] space-y-1.5">
-                    <h4 className="font-bold text-[#17233C] flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-[#203D91]" /> Tax & KYC ({selectedApp.kyc?.documents?.length || 0} Docs)
+                  <div className="p-3.5 rounded-xl bg-[#FBF3F0] border border-[#E7E5E4] space-y-1.5">
+                    <h4 className="font-bold text-[#292524] flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-[#943D24]" /> Tax & KYC ({selectedApp.kyc?.documents?.length || 0} Docs)
                     </h4>
-                    <p><span className="text-slate-500">GSTIN:</span> <strong className="font-mono">{selectedApp.kyc?.gstin}</strong></p>
-                    <p><span className="text-slate-500">PAN:</span> <strong className="font-mono">{selectedApp.kyc?.pan}</strong></p>
+                    <p><span className="text-[#78716C]">GSTIN:</span> <strong className="font-mono">{selectedApp.kyc?.gstin}</strong></p>
+                    <p><span className="text-[#78716C]">PAN:</span> <strong className="font-mono">{selectedApp.kyc?.pan}</strong></p>
                     {(selectedApp.kyc?.documents || []).map((d: any) => (
-                      <div key={d.id} className="text-[11px] text-slate-600 truncate">
+                      <div key={d.id} className="text-[11px] text-[#78716C] truncate">
                         • {d.title} ({d.fileName})
                       </div>
                     ))}
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-[#F4F7FC] border border-[#E2E8F0] space-y-1.5">
-                    <h4 className="font-bold text-[#17233C] flex items-center gap-1.5">
-                      <CreditCard className="w-3.5 h-3.5 text-[#203D91]" /> Bank Details (Masked)
+                  <div className="p-3.5 rounded-xl bg-[#FBF3F0] border border-[#E7E5E4] space-y-1.5">
+                    <h4 className="font-bold text-[#292524] flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5 text-[#943D24]" /> Bank Details (Masked)
                     </h4>
-                    <p><span className="text-slate-500">Holder:</span> <strong>{selectedApp.bankDetails?.accountHolderName}</strong></p>
-                    <p><span className="text-slate-500">Bank:</span> <strong>{selectedApp.bankDetails?.bankName}</strong></p>
-                    <p><span className="text-slate-500">Account:</span> <strong className="font-mono">{selectedApp.bankDetails?.accountNumber}</strong></p>
-                    <p><span className="text-slate-500">IFSC:</span> <strong className="font-mono">{selectedApp.bankDetails?.ifsc}</strong></p>
+                    <p><span className="text-[#78716C]">Holder:</span> <strong>{selectedApp.bankDetails?.accountHolderName}</strong></p>
+                    <p><span className="text-[#78716C]">Bank:</span> <strong>{selectedApp.bankDetails?.bankName}</strong></p>
+                    <p><span className="text-[#78716C]">Account:</span> <strong className="font-mono">{selectedApp.bankDetails?.accountNumber}</strong></p>
+                    <p><span className="text-[#78716C]">IFSC:</span> <strong className="font-mono">{selectedApp.bankDetails?.ifsc}</strong></p>
                   </div>
                 </div>
 
                 {/* Audit Log */}
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <h4 className="text-xs font-bold text-[#17233C]">Audit Trail</h4>
+                <div className="space-y-2 pt-2 border-t border-[#E7E5E4]">
+                  <h4 className="text-xs font-bold text-[#292524]">Audit Trail</h4>
                   <div className="max-h-40 overflow-y-auto space-y-1.5">
                     {(selectedApp.auditLogs || []).map((log: any) => (
-                      <div key={log.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] flex items-center justify-between gap-2">
+                      <div key={log.id} className="p-2.5 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] text-[11px] flex items-center justify-between gap-2">
                         <div>
-                          <span className="font-bold text-[#203D91]">{log.action}</span>
-                          <span className="text-slate-500"> — {log.details}</span>
+                          <span className="font-bold text-[#943D24]">{log.action}</span>
+                          <span className="text-[#78716C]"> — {log.details}</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 shrink-0">
+                        <span className="text-[10px] text-[#78716C] shrink-0">
                           {log.performedBy} • {new Date(log.performedAt).toLocaleTimeString()}
                         </span>
                       </div>

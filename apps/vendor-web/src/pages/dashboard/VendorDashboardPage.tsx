@@ -118,7 +118,7 @@ export const VendorDashboardPage: React.FC = () => {
         description="Track your daily orders, stock health, sales performance, and upcoming settlements."
         actions={
           <>
-            <div className="flex items-center bg-white p-1 rounded-lg border border-[#E5E9F0]">
+            <div className="flex items-center bg-white p-1 rounded-lg border border-[#E7E5E4]">
               {periods.map((p) => (
                 <button
                   key={p.id}
@@ -126,8 +126,8 @@ export const VendorDashboardPage: React.FC = () => {
                   onClick={() => setSelectedPeriod(p.id)}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                     selectedPeriod === p.id
-                      ? 'bg-[#23438F] text-white'
-                      : 'text-[#718096] hover:text-[#263247]'
+                      ? 'bg-[#943D24] text-white'
+                      : 'text-[#78716C] hover:text-[#292524]'
                   }`}
                 >
                   {p.label}
@@ -159,7 +159,7 @@ export const VendorDashboardPage: React.FC = () => {
           title="Pending Orders"
           value={loading ? '—' : actionOrders.length || metrics?.pendingOrders || 0}
           subtitle="Need action today"
-          icon={<Clock className="w-4 h-4 text-[#F58220]" />}
+          icon={<Clock className="w-4 h-4 text-[#943D24]" />}
           onClick={() => navigate('/orders?status=NEW')}
         />
         <StatCard
@@ -173,14 +173,14 @@ export const VendorDashboardPage: React.FC = () => {
           title="Low Stock Items"
           value={loading ? '—' : lowStockItems.length || metrics?.lowStockCount || 0}
           subtitle="Needs replenishment"
-          icon={<AlertTriangle className="w-4 h-4 text-[#E6A23C]" />}
+          icon={<AlertTriangle className="w-4 h-4 text-[#D99B16]" />}
           onClick={() => navigate('/inventory?status=LOW_STOCK')}
         />
         <StatCard
           title="Total Sales"
           value={loading ? '—' : `₹${(metrics?.grossRevenue || 0).toLocaleString('en-IN')}`}
           subtitle="Gross order value"
-          icon={<IndianRupee className="w-4 h-4 text-[#15966B]" />}
+          icon={<IndianRupee className="w-4 h-4 text-[#943D24]" />}
           onClick={() => navigate('/reports')}
         />
         <StatCard
@@ -202,7 +202,7 @@ export const VendorDashboardPage: React.FC = () => {
             action={
               <Link
                 to="/orders"
-                className="text-xs font-medium text-[#23438F] hover:underline inline-flex items-center gap-1"
+                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
               >
                 View All <ArrowRight className="w-3.5 h-3.5" />
               </Link>
@@ -215,22 +215,22 @@ export const VendorDashboardPage: React.FC = () => {
                 description="No orders require immediate action right now."
               />
             ) : (
-              <div className="divide-y divide-[#E5E9F0]">
+              <div className="divide-y divide-[#E7E5E4]">
                 {actionOrders.slice(0, 4).map((ord) => (
                   <div
                     key={ord.id}
-                    className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#F7F8FA] transition-colors"
+                    className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#F8F7F5] transition-colors"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[#263247]">
+                        <span className="text-sm font-semibold text-[#292524]">
                           {ord.orderNumber}
                         </span>
                         <Badge variant={getOrderBadgeVariant(ord.status)} size="sm">
                           {ord.status.replace(/_/g, ' ')}
                         </Badge>
                       </div>
-                      <p className="text-xs text-[#718096] truncate mt-0.5">
+                      <p className="text-xs text-[#78716C] truncate mt-0.5">
                         {ord.customerName} • ₹{(ord.totalAmount || ord.subtotal || 0).toLocaleString('en-IN')}
                       </p>
                     </div>
@@ -238,7 +238,7 @@ export const VendorDashboardPage: React.FC = () => {
                       {ord.status === 'NEW' ? (
                         <Button
                           size="sm"
-                          variant="accent"
+                          variant="primary"
                           onClick={() => handleQuickOrderAction(ord.id, 'ACCEPTED', 'Accepted')}
                         >
                           Accept
@@ -280,7 +280,7 @@ export const VendorDashboardPage: React.FC = () => {
             action={
               <Link
                 to="/inventory?status=LOW_STOCK"
-                className="text-xs font-medium text-[#23438F] hover:underline inline-flex items-center gap-1"
+                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
               >
                 View All <ArrowRight className="w-3.5 h-3.5" />
               </Link>
@@ -293,15 +293,15 @@ export const VendorDashboardPage: React.FC = () => {
                 description="All catalog products are above their low-stock threshold."
               />
             ) : (
-              <div className="divide-y divide-[#E5E9F0]">
+              <div className="divide-y divide-[#E7E5E4]">
                 {lowStockItems.slice(0, 4).map((item) => (
                   <div
                     key={item.id}
-                    className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#F7F8FA] transition-colors"
+                    className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#F8F7F5] transition-colors"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-[#263247] truncate">{item.name}</p>
-                      <p className="text-xs text-[#718096] mt-0.5">
+                      <p className="text-sm font-medium text-[#292524] truncate">{item.name}</p>
+                      <p className="text-xs text-[#78716C] mt-0.5">
                         SKU: {item.sku} • Threshold: {item.lowStockThreshold}
                       </p>
                     </div>
@@ -335,7 +335,7 @@ export const VendorDashboardPage: React.FC = () => {
             action={
               <Link
                 to="/reports"
-                className="text-xs font-medium text-[#23438F] hover:underline inline-flex items-center gap-1"
+                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
               >
                 Full Report <ArrowRight className="w-3.5 h-3.5" />
               </Link>
@@ -345,7 +345,7 @@ export const VendorDashboardPage: React.FC = () => {
             {salesPoints.length === 0 ? (
               <EmptyState title="No sales data yet" description="Sales trend will appear once orders arrive." />
             ) : (
-              <div className="h-52 flex items-end gap-3 pt-4 pb-1 border-b border-[#E5E9F0]">
+              <div className="h-52 flex items-end gap-3 pt-4 pb-1 border-b border-[#E7E5E4]">
                 {salesPoints.map((point, idx) => {
                   const pct = Math.max(12, Math.round(((point.revenue || 0) / maxRevenue) * 100));
                   return (
@@ -353,15 +353,19 @@ export const VendorDashboardPage: React.FC = () => {
                       key={idx}
                       className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group"
                     >
-                      <span className="text-[11px] font-medium text-[#718096] group-hover:text-[#23438F]">
+                      <span className="text-[11px] font-medium text-[#78716C] group-hover:text-[#943D24]">
                         ₹{Math.round((point.revenue || 0) / 1000)}k
                       </span>
                       <div
                         style={{ height: `${pct}%` }}
-                        className="w-full max-w-[44px] bg-[#23438F] group-hover:bg-[#F58220] rounded-t-md transition-colors"
+                        className={`w-full max-w-[44px] rounded-t-md transition-colors ${
+                          idx % 2 === 0
+                            ? 'bg-[#943D24] group-hover:bg-[#7D331E]'
+                            : 'bg-[#F6C453] group-hover:bg-[#E5B342]'
+                        }`}
                         title={`${point.date}: ₹${(point.revenue || 0).toLocaleString('en-IN')}`}
                       />
-                      <span className="text-[11px] text-[#718096] truncate w-full text-center">
+                      <span className="text-[11px] text-[#78716C] truncate w-full text-center">
                         {point.date}
                       </span>
                     </div>
@@ -379,7 +383,7 @@ export const VendorDashboardPage: React.FC = () => {
             action={
               <Link
                 to="/notifications"
-                className="text-xs font-medium text-[#23438F] hover:underline inline-flex items-center gap-1"
+                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
               >
                 View All <ArrowRight className="w-3.5 h-3.5" />
               </Link>
@@ -393,7 +397,7 @@ export const VendorDashboardPage: React.FC = () => {
                 description="You're up to date on all store alerts."
               />
             ) : (
-              <div className="divide-y divide-[#E5E9F0]">
+              <div className="divide-y divide-[#E7E5E4]">
                 {notifications.slice(0, 4).map((n) => (
                   <div
                     key={n.id}
@@ -401,17 +405,17 @@ export const VendorDashboardPage: React.FC = () => {
                       markAsRead(n.id);
                       if (n.actionUrl) navigate(n.actionUrl);
                     }}
-                    className={`px-5 py-3.5 cursor-pointer hover:bg-[#F7F8FA] transition-colors ${
-                      !n.read ? 'bg-[#EEF3FA]/50' : ''
+                    className={`px-5 py-3.5 cursor-pointer hover:bg-[#F8F7F5] transition-colors ${
+                      !n.read ? 'bg-[#FBF3F0]/50' : ''
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-semibold text-[#263247] line-clamp-1">{n.title}</p>
+                      <p className="text-xs font-semibold text-[#292524] line-clamp-1">{n.title}</p>
                       {!n.read && (
-                        <span className="w-2 h-2 rounded-full bg-[#F58220] shrink-0 mt-1" />
+                        <span className="w-2 h-2 rounded-full bg-[#F6C453] shrink-0 mt-1" />
                       )}
                     </div>
-                    <p className="text-xs text-[#718096] line-clamp-2 mt-0.5">{n.message}</p>
+                    <p className="text-xs text-[#78716C] line-clamp-2 mt-0.5">{n.message}</p>
                   </div>
                 ))}
               </div>
@@ -429,7 +433,7 @@ export const VendorDashboardPage: React.FC = () => {
             action={
               <Link
                 to="/orders"
-                className="text-xs font-medium text-[#23438F] hover:underline inline-flex items-center gap-1"
+                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
               >
                 View All <ArrowRight className="w-3.5 h-3.5" />
               </Link>
@@ -437,7 +441,7 @@ export const VendorDashboardPage: React.FC = () => {
           />
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-medium border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-medium border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Order ID</th>
                   <th className="py-3 px-4">Customer</th>
@@ -445,18 +449,18 @@ export const VendorDashboardPage: React.FC = () => {
                   <th className="py-3 px-4 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {orders.slice(0, 5).map((ord) => (
                   <tr
                     key={ord.id}
                     onClick={() => navigate('/orders')}
-                    className="hover:bg-[#F7F8FA] cursor-pointer transition-colors"
+                    className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
                   >
-                    <td className="py-3 px-4 font-semibold text-[#263247]">{ord.orderNumber}</td>
-                    <td className="py-3 px-4 text-[#718096] truncate max-w-[160px]">
+                    <td className="py-3 px-4 font-semibold text-[#292524]">{ord.orderNumber}</td>
+                    <td className="py-3 px-4 text-[#78716C] truncate max-w-[160px]">
                       {ord.customerName}
                     </td>
-                    <td className="py-3 px-4 text-right font-semibold text-[#263247]">
+                    <td className="py-3 px-4 text-right font-semibold text-[#292524]">
                       ₹{(ord.totalAmount || ord.subtotal || 0).toLocaleString('en-IN')}
                     </td>
                     <td className="py-3 px-4 text-right">
@@ -468,7 +472,7 @@ export const VendorDashboardPage: React.FC = () => {
                 ))}
                 {orders.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-[#718096]">
+                    <td colSpan={4} className="py-8 text-center text-[#78716C]">
                       No orders found.
                     </td>
                   </tr>
@@ -485,7 +489,7 @@ export const VendorDashboardPage: React.FC = () => {
             action={
               <Link
                 to="/earnings"
-                className="text-xs font-medium text-[#23438F] hover:underline inline-flex items-center gap-1"
+                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
               >
                 View All <ArrowRight className="w-3.5 h-3.5" />
               </Link>
@@ -493,7 +497,7 @@ export const VendorDashboardPage: React.FC = () => {
           />
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-medium border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-medium border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Settlement</th>
                   <th className="py-3 px-4">Period</th>
@@ -501,18 +505,18 @@ export const VendorDashboardPage: React.FC = () => {
                   <th className="py-3 px-4 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {settlements.slice(0, 5).map((stl) => (
                   <tr
                     key={stl.id}
                     onClick={() => navigate('/earnings')}
-                    className="hover:bg-[#F7F8FA] cursor-pointer transition-colors"
+                    className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
                   >
-                    <td className="py-3 px-4 font-semibold text-[#263247]">
+                    <td className="py-3 px-4 font-semibold text-[#292524]">
                       {stl.settlementNumber || stl.id}
                     </td>
-                    <td className="py-3 px-4 text-[#718096]">{stl.period}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-[#263247]">
+                    <td className="py-3 px-4 text-[#78716C]">{stl.period}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-[#292524]">
                       ₹{(stl.netPayable || stl.netAmount || 0).toLocaleString('en-IN')}
                     </td>
                     <td className="py-3 px-4 text-right">
@@ -527,7 +531,7 @@ export const VendorDashboardPage: React.FC = () => {
                 ))}
                 {settlements.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-[#718096]">
+                    <td colSpan={4} className="py-8 text-center text-[#78716C]">
                       No settlement records yet.
                     </td>
                   </tr>

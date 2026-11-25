@@ -32,16 +32,16 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <div className="flex items-start gap-3">
           <div
             className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-              variant === 'danger' ? 'bg-[#DC4545]/10 text-[#DC4545]' : 'bg-[#EEF3FA] text-[#23438F]'
+              variant === 'danger' ? 'bg-[#DC4545]/10 text-[#DC4545]' : 'bg-[#FBF3F0] text-[#943D24]'
             }`}
           >
             <AlertTriangle className="w-5 h-5" />
           </div>
-          <p className="text-sm text-[#718096] leading-relaxed">{message}</p>
+          <p className="text-sm text-[#78716C] leading-relaxed">{message}</p>
         </div>
 
         <div className="flex items-center justify-end gap-2.5 pt-2">
-          <Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={isLoading}>
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isLoading}>
             {cancelLabel}
           </Button>
           <Button

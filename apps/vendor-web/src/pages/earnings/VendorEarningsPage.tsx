@@ -103,7 +103,7 @@ export const VendorEarningsPage: React.FC = () => {
             .reduce((sum, s) => sum + (s.netPayable || s.netAmount || 0), 0)
             .toLocaleString('en-IN')}`}
           subtitle={summary?.nextPayoutDate ? `Next: ${summary.nextPayoutDate}` : 'Scheduled cycle'}
-          icon={<Clock className="w-4 h-4 text-[#E6A23C]" />}
+          icon={<Clock className="w-4 h-4 text-[#D99B16]" />}
         />
         <StatCard
           title="Completed Settlements"
@@ -117,19 +117,19 @@ export const VendorEarningsPage: React.FC = () => {
       <Card>
         <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-lg bg-[#EEF3FA] text-[#23438F] flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-[#FBF3F0] text-[#943D24] flex items-center justify-center shrink-0">
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-sm text-[#263247]">
+                <span className="font-semibold text-sm text-[#292524]">
                   {bank.bankName || 'HDFC Bank'} •••• {(bank.accountNumber || '2341').slice(-4)}
                 </span>
                 <Badge variant="success" size="sm">
                   Verified
                 </Badge>
               </div>
-              <p className="text-xs text-[#718096] mt-0.5">
+              <p className="text-xs text-[#78716C] mt-0.5">
                 Beneficiary: {bank.accountHolderName || bank.beneficiaryName || 'Supreme Materials BLR'} • IFSC:{' '}
                 <span className="font-mono">{bank.ifsc || bank.ifscCode || 'HDFC0000053'}</span>
               </p>
@@ -155,7 +155,7 @@ export const VendorEarningsPage: React.FC = () => {
         />
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+            <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
               <tr>
                 <th className="py-3 px-4">Settlement ID</th>
                 <th className="py-3 px-4">Period</th>
@@ -167,7 +167,7 @@ export const VendorEarningsPage: React.FC = () => {
                 <th className="py-3 px-4 text-right">Details</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E9F0]">
+            <tbody className="divide-y divide-[#E7E5E4]">
               {settlements.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
@@ -188,24 +188,24 @@ export const VendorEarningsPage: React.FC = () => {
                     <tr
                       key={s.id}
                       onClick={() => setSelectedSettlement(s)}
-                      className="hover:bg-[#F7F8FA] cursor-pointer transition-colors"
+                      className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
                     >
-                      <td className="py-3.5 px-4 font-mono font-semibold text-[#263247]">
+                      <td className="py-3.5 px-4 font-mono font-semibold text-[#292524]">
                         {s.settlementNumber || s.id}
                       </td>
-                      <td className="py-3.5 px-4 text-[#718096]">
+                      <td className="py-3.5 px-4 text-[#78716C]">
                         {s.period || `${s.periodStart} - ${s.periodEnd}`}
                       </td>
-                      <td className="py-3.5 px-4 text-right font-medium text-[#263247]">
+                      <td className="py-3.5 px-4 text-right font-medium text-[#292524]">
                         ₹{gross.toLocaleString('en-IN')}
                       </td>
                       <td className="py-3.5 px-4 text-right text-[#DC4545]">
                         - ₹{(comm + tax).toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4 text-right font-semibold text-[#263247]">
+                      <td className="py-3.5 px-4 text-right font-semibold text-[#292524]">
                         ₹{net.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-[#718096]">
+                      <td className="py-3.5 px-4 font-mono text-[#78716C]">
                         {s.utr || s.paymentReference || 'Pending'}
                       </td>
                       <td className="py-3.5 px-4">
@@ -244,16 +244,16 @@ export const VendorEarningsPage: React.FC = () => {
       >
         {selectedSettlement && (
           <div className="space-y-4 text-xs">
-            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] space-y-2">
+            <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] space-y-2">
               <div className="flex justify-between">
-                <span className="text-[#718096]">Orders Included</span>
-                <span className="font-semibold text-[#263247]">
+                <span className="text-[#78716C]">Orders Included</span>
+                <span className="font-semibold text-[#292524]">
                   {selectedSettlement.orderCount || 0}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#718096]">Gross Sales</span>
-                <span className="font-semibold text-[#263247]">
+                <span className="text-[#78716C]">Gross Sales</span>
+                <span className="font-semibold text-[#292524]">
                   ₹
                   {(
                     selectedSettlement.grossAmount ||
@@ -263,7 +263,7 @@ export const VendorEarningsPage: React.FC = () => {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#718096]">Platform Commission</span>
+                <span className="text-[#78716C]">Platform Commission</span>
                 <span className="text-[#DC4545]">
                   - ₹
                   {(
@@ -274,7 +274,7 @@ export const VendorEarningsPage: React.FC = () => {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#718096]">Tax / TDS Deductions</span>
+                <span className="text-[#78716C]">Tax / TDS Deductions</span>
                 <span className="text-[#DC4545]">
                   - ₹
                   {(
@@ -284,8 +284,8 @@ export const VendorEarningsPage: React.FC = () => {
                   ).toLocaleString('en-IN')}
                 </span>
               </div>
-              <div className="flex justify-between pt-2 border-t border-[#E5E9F0] text-sm font-bold">
-                <span className="text-[#263247]">Net Payout</span>
+              <div className="flex justify-between pt-2 border-t border-[#E7E5E4] text-sm font-bold">
+                <span className="text-[#292524]">Net Payout</span>
                 <span className="text-[#15966B]">
                   ₹
                   {(
@@ -297,16 +297,16 @@ export const VendorEarningsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-between text-[#718096]">
+            <div className="flex justify-between text-[#78716C]">
               <span>UTR Reference:</span>
-              <span className="font-mono text-[#263247]">
+              <span className="font-mono text-[#292524]">
                 {selectedSettlement.utr || selectedSettlement.paymentReference || 'Pending'}
               </span>
             </div>
 
             <div className="pt-2 flex justify-end gap-2">
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 onClick={() => setSelectedSettlement(null)}
               >

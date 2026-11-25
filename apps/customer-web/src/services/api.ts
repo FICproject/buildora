@@ -474,6 +474,10 @@ export const api = {
     );
   },
 
+  async getPublishedStorefrontContent(): Promise<any> {
+    return request<any>('/content/storefront', { method: 'GET' }, null);
+  },
+
   // ==========================================
   // Construction Calculator API Methods
   // ==========================================

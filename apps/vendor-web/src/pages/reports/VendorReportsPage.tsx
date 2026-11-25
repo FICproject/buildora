@@ -116,12 +116,12 @@ export const VendorReportsPage: React.FC = () => {
           title="Low / Out of Stock"
           value={inventory.filter((i) => i.status !== 'IN_STOCK').length}
           subtitle="Items needing attention"
-          icon={<Boxes className="w-4 h-4 text-[#E6A23C]" />}
+          icon={<Boxes className="w-4 h-4 text-[#D99B16]" />}
         />
       </div>
 
       {/* Report Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E9F0] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E7E5E4] pb-2">
         {[
           { id: 'SALES', label: 'Sales Reports' },
           { id: 'ORDERS', label: 'Order Reports' },
@@ -135,8 +135,8 @@ export const VendorReportsPage: React.FC = () => {
             onClick={() => setActiveTab(tab.id as ReportTab)}
             className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
               activeTab === tab.id
-                ? 'bg-[#23438F] text-white'
-                : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+                ? 'bg-[#943D24] text-white'
+                : 'text-[#78716C] hover:text-[#292524] hover:bg-white'
             }`}
           >
             {tab.label}
@@ -149,22 +149,24 @@ export const VendorReportsPage: React.FC = () => {
           <Card className="lg:col-span-2">
             <CardHeader title="Daily Sales Trend" subtitle="Gross revenue by day" />
             <CardContent>
-              <div className="h-56 flex items-end gap-4 pt-4 pb-2 border-b border-[#E5E9F0]">
-                {dailySummary.map((d) => {
+              <div className="h-56 flex items-end gap-4 pt-4 pb-2 border-b border-[#E7E5E4]">
+                {dailySummary.map((d, idx) => {
                   const pct = Math.max(12, Math.round((d.sales / maxSales) * 100));
                   return (
                     <div
                       key={d.date}
                       className="flex-1 flex flex-col items-center justify-end gap-1.5 h-full"
                     >
-                      <span className="text-[11px] font-medium text-[#718096]">
+                      <span className="text-[11px] font-medium text-[#78716C]">
                         ₹{Math.round(d.sales / 1000)}k
                       </span>
                       <div
                         style={{ height: `${pct}%` }}
-                        className="w-full max-w-[44px] bg-[#23438F] rounded-t-md"
+                        className={`w-full max-w-[44px] rounded-t-md ${
+                          idx % 2 === 0 ? 'bg-[#943D24]' : 'bg-[#F6C453]'
+                        }`}
                       />
-                      <span className="text-[11px] text-[#718096]">{d.date.slice(5)}</span>
+                      <span className="text-[11px] text-[#78716C]">{d.date.slice(5)}</span>
                     </div>
                   );
                 })}
@@ -175,15 +177,15 @@ export const VendorReportsPage: React.FC = () => {
           <Card>
             <CardHeader title="Category Breakdown" subtitle="Revenue share by category" />
             <CardContent className="space-y-4">
-              {topCategories.map((cat) => (
+              {topCategories.map((cat, idx) => (
                 <div key={cat.name} className="space-y-1.5 text-xs">
-                  <div className="flex justify-between font-medium text-[#263247]">
+                  <div className="flex justify-between font-medium text-[#292524]">
                     <span>{cat.name}</span>
                     <span>₹{cat.revenue.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="h-2 bg-[#F7F8FA] rounded-full overflow-hidden">
+                  <div className="h-2 bg-[#F8F7F5] rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#23438F] rounded-full"
+                      className={`h-full rounded-full ${idx % 2 === 0 ? 'bg-[#943D24]' : 'bg-[#F6C453]'}`}
                       style={{ width: `${cat.percentage}%` }}
                     />
                   </div>
@@ -199,7 +201,7 @@ export const VendorReportsPage: React.FC = () => {
           <CardHeader title="Order Summary" />
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Order ID</th>
                   <th className="py-3 px-4">Customer</th>
@@ -208,14 +210,14 @@ export const VendorReportsPage: React.FC = () => {
                   <th className="py-3 px-4 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {orders.map((o) => (
                   <tr key={o.id}>
-                    <td className="py-3 px-4 font-mono font-semibold text-[#263247]">
+                    <td className="py-3 px-4 font-mono font-semibold text-[#292524]">
                       {o.orderNumber}
                     </td>
-                    <td className="py-3 px-4 text-[#263247]">{o.customerName}</td>
-                    <td className="py-3 px-4 text-[#718096]">
+                    <td className="py-3 px-4 text-[#292524]">{o.customerName}</td>
+                    <td className="py-3 px-4 text-[#78716C]">
                       {new Date(o.createdAt).toLocaleDateString('en-IN')}
                     </td>
                     <td className="py-3 px-4 text-right font-semibold">
@@ -239,21 +241,21 @@ export const VendorReportsPage: React.FC = () => {
           <CardHeader title="Top Performing Categories" />
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4 text-right">Revenue</th>
                   <th className="py-3 px-4 text-right">Share</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {topCategories.map((c) => (
                   <tr key={c.name}>
-                    <td className="py-3 px-4 font-medium text-[#263247]">{c.name}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-[#263247]">
+                    <td className="py-3 px-4 font-medium text-[#292524]">{c.name}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-[#292524]">
                       ₹{c.revenue.toLocaleString('en-IN')}
                     </td>
-                    <td className="py-3 px-4 text-right text-[#718096]">{c.percentage}%</td>
+                    <td className="py-3 px-4 text-right text-[#78716C]">{c.percentage}%</td>
                   </tr>
                 ))}
               </tbody>
@@ -267,7 +269,7 @@ export const VendorReportsPage: React.FC = () => {
           <CardHeader title="Inventory Health Report" />
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Product</th>
                   <th className="py-3 px-4">SKU</th>
@@ -275,11 +277,11 @@ export const VendorReportsPage: React.FC = () => {
                   <th className="py-3 px-4 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {inventory.map((i) => (
                   <tr key={i.id}>
-                    <td className="py-3 px-4 font-medium text-[#263247]">{i.name}</td>
-                    <td className="py-3 px-4 font-mono text-[#718096]">{i.sku}</td>
+                    <td className="py-3 px-4 font-medium text-[#292524]">{i.name}</td>
+                    <td className="py-3 px-4 font-mono text-[#78716C]">{i.sku}</td>
                     <td className="py-3 px-4 text-right font-semibold">{i.stock}</td>
                     <td className="py-3 px-4 text-right">
                       <Badge
@@ -308,7 +310,7 @@ export const VendorReportsPage: React.FC = () => {
           <CardHeader title="Settlements Summary" />
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Settlement ID</th>
                   <th className="py-3 px-4">Period</th>
@@ -316,13 +318,13 @@ export const VendorReportsPage: React.FC = () => {
                   <th className="py-3 px-4 text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {settlements.map((s) => (
                   <tr key={s.id}>
-                    <td className="py-3 px-4 font-mono font-semibold text-[#263247]">
+                    <td className="py-3 px-4 font-mono font-semibold text-[#292524]">
                       {s.settlementNumber || s.id}
                     </td>
-                    <td className="py-3 px-4 text-[#718096]">{s.period}</td>
+                    <td className="py-3 px-4 text-[#78716C]">{s.period}</td>
                     <td className="py-3 px-4 text-right font-semibold">
                       ₹{(s.netPayable || s.netAmount || 0).toLocaleString('en-IN')}
                     </td>

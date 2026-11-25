@@ -1,6 +1,13 @@
 import React from 'react';
 
-export type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'brand' | 'accent';
+export type BadgeVariant =
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'neutral'
+  | 'brand'
+  | 'accent';
 
 interface BadgeProps {
   children: React.ReactNode;
@@ -19,22 +26,22 @@ export const Badge: React.FC<BadgeProps> = ({
 }) => {
   const variantStyles: Record<BadgeVariant, string> = {
     success: 'bg-[#15966B]/10 text-[#15966B] border-[#15966B]/20',
-    warning: 'bg-[#E6A23C]/12 text-[#B47818] border-[#E6A23C]/25',
+    warning: 'bg-[#F6C453]/30 text-[#292524] border-[#F6C453]/70',
     danger: 'bg-[#DC4545]/10 text-[#DC4545] border-[#DC4545]/20',
-    info: 'bg-[#EEF3FA] text-[#23438F] border-[#23438F]/15',
-    brand: 'bg-[#EEF3FA] text-[#23438F] border-[#23438F]/20',
-    accent: 'bg-[#F58220]/10 text-[#D96D12] border-[#F58220]/25',
-    neutral: 'bg-[#F7F8FA] text-[#718096] border-[#E5E9F0]',
+    info: 'bg-[#FBF3F0] text-[#943D24] border-[#943D24]/20',
+    brand: 'bg-[#943D24] text-white border-[#943D24]',
+    accent: 'bg-[#F6C453] text-[#292524] border-[#E5B342] font-semibold',
+    neutral: 'bg-[#F8F7F5] text-[#78716C] border-[#E7E5E4]',
   };
 
   const dotColors: Record<BadgeVariant, string> = {
     success: 'bg-[#15966B]',
-    warning: 'bg-[#E6A23C]',
+    warning: 'bg-[#D99B16]',
     danger: 'bg-[#DC4545]',
-    info: 'bg-[#23438F]',
-    brand: 'bg-[#23438F]',
-    accent: 'bg-[#F58220]',
-    neutral: 'bg-[#718096]',
+    info: 'bg-[#943D24]',
+    brand: 'bg-[#F6C453]',
+    accent: 'bg-[#943D24]',
+    neutral: 'bg-[#78716C]',
   };
 
   const sizeStyles = {

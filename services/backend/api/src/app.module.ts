@@ -17,9 +17,10 @@ import { VendorController } from './modules/vendors/controllers/vendor.controlle
 import { AdminVendorApprovalController } from './modules/vendors/controllers/admin-vendor-approval.controller';
 import { ConstructionCalculatorController } from './modules/construction-calculator/controllers/construction-calculator.controller';
 import { ConstructionCalculatorService } from './modules/construction-calculator/services/construction-calculator.service';
+import { CompanyAdminModule } from './modules/company-admin/company-admin.module';
 
 @Module({
-  imports: [],
+  imports: [CompanyAdminModule],
   controllers: [
     AppController,
     AuthController,

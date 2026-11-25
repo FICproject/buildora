@@ -21,19 +21,19 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseStyles =
-    'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap cursor-pointer';
+    'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:bg-[#E7E5E4] disabled:text-[#A8A29E] disabled:border-[#E7E5E4] disabled:cursor-not-allowed whitespace-nowrap cursor-pointer';
 
   const variantStyles = {
     primary:
-      'bg-[#23438F] text-white hover:bg-[#1B3573] focus:ring-[#23438F] border border-transparent',
+      'bg-[#943D24] text-white hover:bg-[#7D331E] active:bg-[#662918] focus:ring-[#943D24] border border-transparent',
     secondary:
-      'bg-white text-[#263247] hover:bg-[#F7F8FA] focus:ring-[#23438F]/30 border border-[#E5E9F0]',
+      'bg-[#F6C453] text-[#292524] hover:bg-[#E5B342] active:bg-[#D4A336] focus:ring-[#F6C453] border border-transparent font-semibold',
     accent:
-      'bg-[#F58220] text-white hover:bg-[#D96D12] focus:ring-[#F58220] border border-transparent',
+      'bg-[#F6C453] text-[#292524] hover:bg-[#E5B342] active:bg-[#D4A336] focus:ring-[#F6C453] border border-transparent font-semibold',
     outline:
-      'bg-white border border-[#23438F] text-[#23438F] hover:bg-[#EEF3FA] focus:ring-[#23438F]',
+      'bg-white border border-[#943D24] text-[#943D24] hover:bg-[#FBF3F0] focus:ring-[#943D24]',
     ghost:
-      'text-[#718096] hover:text-[#263247] hover:bg-[#EEF3FA]/70 focus:ring-[#23438F]/30',
+      'text-[#78716C] hover:text-[#943D24] hover:bg-[#F8F7F5] focus:ring-[#943D24]/30',
     danger:
       'bg-[#DC4545] text-white hover:bg-[#B83232] focus:ring-[#DC4545] border border-transparent',
   };

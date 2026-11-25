@@ -18,14 +18,14 @@ export const VendorNotificationsPage: React.FC = () => {
   const getIcon = (type: string) => {
     switch (type) {
       case 'ORDER':
-        return <ShoppingCart className="w-4 h-4 text-[#23438F]" />;
+        return <ShoppingCart className="w-4 h-4 text-[#943D24]" />;
       case 'STOCK':
       case 'INVENTORY':
-        return <Boxes className="w-4 h-4 text-[#E6A23C]" />;
+        return <Boxes className="w-4 h-4 text-[#D99B16]" />;
       case 'SETTLEMENT':
         return <IndianRupee className="w-4 h-4 text-[#15966B]" />;
       default:
-        return <Info className="w-4 h-4 text-[#718096]" />;
+        return <Info className="w-4 h-4 text-[#78716C]" />;
     }
   };
 
@@ -61,8 +61,8 @@ export const VendorNotificationsPage: React.FC = () => {
             onClick={() => setFilterType(t.id)}
             className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
               filterType === t.id
-                ? 'bg-[#23438F] text-white'
-                : 'bg-white border border-[#E5E9F0] text-[#718096] hover:text-[#263247]'
+                ? 'bg-[#943D24] text-white'
+                : 'bg-white border border-[#E7E5E4] text-[#78716C] hover:text-[#292524]'
             }`}
           >
             {t.label}
@@ -71,7 +71,7 @@ export const VendorNotificationsPage: React.FC = () => {
       </div>
 
       <Card>
-        <div className="divide-y divide-[#E5E9F0]">
+        <div className="divide-y divide-[#E7E5E4]">
           {filtered.length === 0 ? (
             <EmptyState
               icon={<Bell className="w-5 h-5" />}
@@ -84,24 +84,24 @@ export const VendorNotificationsPage: React.FC = () => {
                 key={item.id}
                 onClick={() => markAsRead(item.id)}
                 className={`p-4 flex items-start gap-3.5 cursor-pointer transition-colors ${
-                  !item.read ? 'bg-[#EEF3FA]/60 hover:bg-[#EEF3FA]' : 'hover:bg-[#F7F8FA]'
+                  !item.read ? 'bg-[#FBF3F0]/60 hover:bg-[#FBF3F0]' : 'hover:bg-[#F8F7F5]'
                 }`}
               >
-                <div className="w-9 h-9 rounded-lg bg-white border border-[#E5E9F0] flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-white border border-[#E7E5E4] flex items-center justify-center shrink-0">
                   {getIcon(item.type)}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-xs font-semibold text-[#263247]">{item.title}</h4>
-                    <span className="text-[11px] text-[#718096] whitespace-nowrap">
+                    <h4 className="text-xs font-semibold text-[#292524]">{item.title}</h4>
+                    <span className="text-[11px] text-[#78716C] whitespace-nowrap">
                       {new Date(item.createdAt).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
                     </span>
                   </div>
-                  <p className="text-xs text-[#718096] mt-0.5">{item.message}</p>
+                  <p className="text-xs text-[#78716C] mt-0.5">{item.message}</p>
                 </div>
 
                 {!item.read && (

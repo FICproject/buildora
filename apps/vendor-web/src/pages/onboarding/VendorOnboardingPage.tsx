@@ -173,26 +173,26 @@ export const VendorOnboardingPage: React.FC = () => {
               key={item.step}
               className={`p-3 rounded-xl border flex items-center gap-3 ${
                 isCurrent
-                  ? 'border-[#23438F] bg-[#EEF3FA]'
+                  ? 'border-[#943D24] bg-[#FBF3F0]'
                   : isDone
                   ? 'border-[#15966B]/40 bg-[#15966B]/5'
-                  : 'border-[#E5E9F0] bg-white'
+                  : 'border-[#E7E5E4] bg-white'
               }`}
             >
               <div
                 className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
                   isCurrent
-                    ? 'bg-[#23438F] text-white'
+                    ? 'bg-[#943D24] text-white'
                     : isDone
                     ? 'bg-[#15966B] text-white'
-                    : 'bg-[#F7F8FA] text-[#718096]'
+                    : 'bg-[#F8F7F5] text-[#78716C]'
                 }`}
               >
                 {isDone ? <CheckCircle2 className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] text-[#718096]">Step {item.step}</p>
-                <p className="text-xs font-semibold text-[#263247] truncate">{item.title}</p>
+                <p className="text-[11px] text-[#78716C]">Step {item.step}</p>
+                <p className="text-xs font-semibold text-[#292524] truncate">{item.title}</p>
               </div>
             </div>
           );
@@ -294,17 +294,17 @@ export const VendorOnboardingPage: React.FC = () => {
                       onClick={() => setSelectedHub(hub.id)}
                       className={`p-3.5 rounded-xl border cursor-pointer transition-colors ${
                         selectedHub === hub.id
-                          ? 'border-[#23438F] bg-[#EEF3FA]/60'
-                          : 'border-[#E5E9F0] bg-white'
+                          ? 'border-[#943D24] bg-[#FBF3F0]/60'
+                          : 'border-[#E7E5E4] bg-white'
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-[#263247]">{hub.id}</span>
+                        <span className="text-xs font-semibold text-[#292524]">{hub.id}</span>
                         <Badge variant={selectedHub === hub.id ? 'brand' : 'neutral'} size="sm">
                           {hub.zone}
                         </Badge>
                       </div>
-                      <p className="text-xs text-[#718096] mt-1">{hub.name}</p>
+                      <p className="text-xs text-[#78716C] mt-1">{hub.name}</p>
                     </div>
                   ))}
                 </div>
@@ -377,8 +377,8 @@ export const VendorOnboardingPage: React.FC = () => {
                       onClick={() => toggleCategory(cat)}
                       className={`p-3 rounded-xl border text-xs font-medium text-left flex items-center justify-between cursor-pointer ${
                         isSelected
-                          ? 'bg-[#23438F] text-white border-[#23438F]'
-                          : 'bg-white text-[#263247] border-[#E5E9F0] hover:border-[#23438F]/50'
+                          ? 'bg-[#943D24] text-white border-[#943D24]'
+                          : 'bg-white text-[#292524] border-[#E7E5E4] hover:border-[#943D24]/50'
                       }`}
                     >
                       <span className="truncate">{cat}</span>
@@ -388,18 +388,18 @@ export const VendorOnboardingPage: React.FC = () => {
                 })}
               </div>
 
-              <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] text-xs grid grid-cols-2 gap-2 text-[#718096]">
+              <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] text-xs grid grid-cols-2 gap-2 text-[#78716C]">
                 <div>
-                  <strong className="text-[#263247]">Legal Entity:</strong> {legalName || '—'}
+                  <strong className="text-[#292524]">Legal Entity:</strong> {legalName || '—'}
                 </div>
                 <div>
-                  <strong className="text-[#263247]">GSTIN:</strong> {gstin}
+                  <strong className="text-[#292524]">GSTIN:</strong> {gstin}
                 </div>
                 <div>
-                  <strong className="text-[#263247]">Primary Hub:</strong> {selectedHub}
+                  <strong className="text-[#292524]">Primary Hub:</strong> {selectedHub}
                 </div>
                 <div>
-                  <strong className="text-[#263247]">Account:</strong>{' '}
+                  <strong className="text-[#292524]">Account:</strong>{' '}
                   {accountNumber ? `•••• ${accountNumber.slice(-4)}` : '—'}
                 </div>
               </div>
@@ -411,7 +411,7 @@ export const VendorOnboardingPage: React.FC = () => {
           {currentStep > 1 ? (
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setCurrentStep((p) => Math.max(1, p - 1))}
               leftIcon={<ArrowLeft className="w-4 h-4" />}

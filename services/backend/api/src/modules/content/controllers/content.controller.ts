@@ -1,8 +1,20 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Headers } from '@nestjs/common';
 import { dbStore } from '../../../database/store';
+import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
+import { DEFAULT_TENANT_ID } from '../../vendors/controllers/vendor.controller';
 
 @Controller('api/v1')
 export class ContentController {
+  @Get('content/storefront')
+  getPublishedStorefront(@Headers('x-tenant-id') tenantId?: string) {
+    return {
+      success: true,
+      data: companyAdminDataService.getPublishedStorefrontContent(
+        tenantId || DEFAULT_TENANT_ID
+      ),
+    };
+  }
+
   @Get('knowledge-hub')
   getArticles() {
     return {

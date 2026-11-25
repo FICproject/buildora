@@ -130,10 +130,10 @@ export const VendorBulkPricingPage: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-[#292524]">
             Bulk Pricing & Contractor Discounts
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-[#78716C] mt-0.5">
             Configure quantity discount tiers displayed in the HomeRun-style bulk price popup on the Customer Website.
           </p>
         </div>
@@ -184,13 +184,13 @@ export const VendorBulkPricingPage: React.FC = () => {
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <div className="w-full sm:w-1/3">
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[#292524] mb-1">
                 Select Product to Configure:
               </label>
               <select
                 value={selectedProductId}
                 onChange={(e) => setSelectedProductId(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 text-xs rounded-lg border border-[#E7E5E4] bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -201,29 +201,29 @@ export const VendorBulkPricingPage: React.FC = () => {
             </div>
 
             {selectedProduct && (
-              <div className="flex-1 flex flex-wrap items-center gap-6 pt-2 sm:pt-0 border-t sm:border-t-0 sm:border-l border-slate-200 sm:pl-6 text-xs">
+              <div className="flex-1 flex flex-wrap items-center gap-6 pt-2 sm:pt-0 border-t sm:border-t-0 sm:border-l border-[#E7E5E4] sm:pl-6 text-xs">
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase">Base Selling Price</span>
-                  <span className="text-base font-bold text-slate-900">
+                  <span className="text-[#78716C] block text-[10px] uppercase">Base Selling Price</span>
+                  <span className="text-base font-bold text-[#292524]">
                     ₹{selectedProduct.price.toLocaleString('en-IN')}
                   </span>
-                  <span className="text-slate-400 text-[11px] ml-1">/ {selectedProduct.unit}</span>
+                  <span className="text-[#78716C] text-[11px] ml-1">/ {selectedProduct.unit}</span>
                 </div>
 
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase">Category</span>
-                  <span className="font-semibold text-slate-700">{selectedProduct.category}</span>
+                  <span className="text-[#78716C] block text-[10px] uppercase">Category</span>
+                  <span className="font-semibold text-[#292524]">{selectedProduct.category}</span>
                 </div>
 
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase">Active Stock</span>
-                  <span className="font-semibold text-slate-700">
+                  <span className="text-[#78716C] block text-[10px] uppercase">Active Stock</span>
+                  <span className="font-semibold text-[#292524]">
                     {selectedProduct.stockCount || selectedProduct.stock || 0} units
                   </span>
                 </div>
 
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase">Contractor Interest</span>
+                  <span className="text-[#78716C] block text-[10px] uppercase">Contractor Interest</span>
                   <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
                     <Sparkles className="w-3 h-3" /> High Volume
                   </span>
@@ -257,16 +257,16 @@ export const VendorBulkPricingPage: React.FC = () => {
               {tiers.map((tier, idx) => (
                 <div
                   key={idx}
-                  className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 relative space-y-3"
+                  className="p-4 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5]/60 relative space-y-3"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#292524] uppercase tracking-wider">
                       Tier #{idx + 1}
                     </span>
                     {tiers.length > 1 && (
                       <button
                         onClick={() => removeTier(idx)}
-                        className="text-slate-400 hover:text-rose-600 transition-colors p-1"
+                        className="text-[#78716C] hover:text-rose-600 transition-colors p-1"
                         title="Delete Tier"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -276,7 +276,7 @@ export const VendorBulkPricingPage: React.FC = () => {
 
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label className="block text-[11px] font-semibold text-[#78716C] mb-1">
                         Min Quantity (Units)
                       </label>
                       <input
@@ -286,12 +286,12 @@ export const VendorBulkPricingPage: React.FC = () => {
                         onChange={(e) =>
                           handleTierChange(idx, 'minQuantity', parseInt(e.target.value) || 0)
                         }
-                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-[#E7E5E4] bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label className="block text-[11px] font-semibold text-[#78716C] mb-1">
                         Discount (% OFF)
                       </label>
                       <input
@@ -302,24 +302,24 @@ export const VendorBulkPricingPage: React.FC = () => {
                         onChange={(e) =>
                           handleTierChange(idx, 'discountPercentage', parseFloat(e.target.value) || 0)
                         }
-                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-[#E7E5E4] bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label className="block text-[11px] font-semibold text-[#78716C] mb-1">
                         Bulk Unit Price (₹)
                       </label>
                       <input
                         type="number"
                         disabled
                         value={tier.unitPrice}
-                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-100 font-bold text-slate-800"
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-[#E7E5E4] bg-[#F8F7F5] font-bold text-[#292524]"
                       />
                     </div>
                   </div>
 
-                  <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-200/60">
+                  <div className="text-[11px] text-[#78716C] flex items-center justify-between pt-1 border-t border-[#E7E5E4]/60">
                     <span>
                       Orders of <strong>{tier.minQuantity}+ units</strong> get{' '}
                       <strong>{tier.discountPercentage}% OFF</strong>
@@ -335,7 +335,7 @@ export const VendorBulkPricingPage: React.FC = () => {
                 </div>
               ))}
 
-              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-start gap-2">
+              <div className="p-3 rounded-lg bg-[#FBF3F0] border border-[#943D24]/25 text-xs text-[#943D24] flex items-start gap-2">
                 <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <span>
                   On the BUILDORA 60 customer website, when a contractor adds quantity exceeding any
@@ -348,7 +348,7 @@ export const VendorBulkPricingPage: React.FC = () => {
 
         {/* Customer Modal Live Preview (5 Cols) */}
         <div className="lg:col-span-5">
-          <Card className="sticky top-20 border-blue-200 shadow-md">
+          <Card className="sticky top-20 border-[#943D24]/25 shadow-md">
             <CardHeader
               title="Customer Website Popup Preview"
               subtitle="Exact replica of the HomeRun reference modal seen by buyers"
@@ -356,13 +356,13 @@ export const VendorBulkPricingPage: React.FC = () => {
             />
             <CardContent>
               {/* Mock HomeRun Bulk Prices Modal */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="bg-white rounded-xl border border-[#E7E5E4] p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-[#E7E5E4]">
                   <div>
-                    <h3 className="text-base font-bold text-slate-900">Bulk Prices</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">{selectedProduct?.name}</p>
+                    <h3 className="text-base font-bold text-[#292524]">Bulk Prices</h3>
+                    <p className="text-xs text-[#78716C] mt-0.5">{selectedProduct?.name}</p>
                   </div>
-                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                  <div className="w-7 h-7 rounded-full bg-[#F8F7F5] flex items-center justify-center text-[#78716C]">
                     &times;
                   </div>
                 </div>
@@ -371,10 +371,10 @@ export const VendorBulkPricingPage: React.FC = () => {
                   {tiers.map((tier, idx) => (
                     <div
                       key={idx}
-                      className="p-3 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between"
+                      className="p-3 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] flex items-center justify-between"
                     >
                       <div>
-                        <div className="text-xs font-bold text-slate-900">
+                        <div className="text-xs font-bold text-[#292524]">
                           {tier.minQuantity}+ Units
                         </div>
                         <div className="text-[11px] font-semibold text-emerald-600">
@@ -382,16 +382,16 @@ export const VendorBulkPricingPage: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-extrabold text-slate-900">
+                        <div className="text-sm font-extrabold text-[#292524]">
                           ₹{tier.unitPrice.toLocaleString('en-IN')}
                         </div>
-                        <div className="text-[10px] text-slate-400">per unit</div>
+                        <div className="text-[10px] text-[#78716C]">per unit</div>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="pt-2 text-[11px] text-slate-400 text-center">
+                <div className="pt-2 text-[11px] text-[#78716C] text-center">
                   Applicable across all Bengaluru job site orders with 60-min delivery.
                 </div>
               </div>
@@ -403,15 +403,15 @@ export const VendorBulkPricingPage: React.FC = () => {
       {/* Customer Modal Full Dialog Preview */}
       {showCustomerPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E7E5E4] animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-[#E7E5E4]">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Bulk Prices</h3>
-                <p className="text-xs text-slate-500 mt-0.5">{selectedProduct?.name}</p>
+                <h3 className="text-lg font-bold text-[#292524]">Bulk Prices</h3>
+                <p className="text-xs text-[#78716C] mt-0.5">{selectedProduct?.name}</p>
               </div>
               <button
                 onClick={() => setShowCustomerPreview(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-lg text-[#78716C] hover:text-[#78716C] hover:bg-[#F8F7F5]"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -421,10 +421,10 @@ export const VendorBulkPricingPage: React.FC = () => {
               {tiers.map((tier, idx) => (
                 <div
                   key={idx}
-                  className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between"
+                  className="p-3.5 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] flex items-center justify-between"
                 >
                   <div>
-                    <div className="text-sm font-bold text-slate-900">
+                    <div className="text-sm font-bold text-[#292524]">
                       {tier.minQuantity}+ Units
                     </div>
                     <div className="text-xs font-semibold text-emerald-600 mt-0.5">
@@ -432,16 +432,16 @@ export const VendorBulkPricingPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-base font-extrabold text-slate-900">
+                    <div className="text-base font-extrabold text-[#292524]">
                       ₹{tier.unitPrice.toLocaleString('en-IN')}
                     </div>
-                    <div className="text-[11px] text-slate-400">per {selectedProduct?.unit}</div>
+                    <div className="text-[11px] text-[#78716C]">per {selectedProduct?.unit}</div>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex justify-end">
+            <div className="pt-3 border-t border-[#E7E5E4] flex justify-end">
               <Button
                 variant="primary"
                 size="sm"

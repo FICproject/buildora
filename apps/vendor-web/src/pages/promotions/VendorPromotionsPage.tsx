@@ -75,30 +75,30 @@ export const VendorPromotionsPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#E2E8F0] shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#E7E5E4] shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#203D91]/10 text-[#203D91] border border-[#203D91]/20">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#943D24]/10 text-[#943D24] border border-[#943D24]/20">
               GROWTH & MARKETING
             </span>
             <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-[#FF7417]" />
+              <Sparkles className="w-3 h-3 text-[#F6C453]" />
               Synced to Customer Deals Section
             </span>
           </div>
-          <h1 className="text-2xl font-black text-[#17233C] tracking-tight">
+          <h1 className="text-2xl font-black text-[#292524] tracking-tight">
             Promotions & Flash Deals
           </h1>
-          <p className="text-xs text-slate-500 font-medium">
+          <p className="text-xs text-[#78716C] font-medium">
             Create promotional discount campaigns that display in the customer website deals bar and homepage spotlight.
           </p>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#203D91] text-white rounded-xl text-xs font-bold hover:bg-[#17233C] transition-all shadow-xs shrink-0"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#943D24] text-white rounded-xl text-xs font-bold hover:bg-[#292524] transition-all shadow-xs shrink-0"
         >
-          <Plus className="w-4 h-4 text-[#FF7417]" />
+          <Plus className="w-4 h-4 text-[#F6C453]" />
           Create Promotion
         </button>
       </div>
@@ -109,7 +109,7 @@ export const VendorPromotionsPage: React.FC = () => {
           <div
             key={p.id}
             className={`p-5 rounded-2xl border bg-white shadow-xs flex flex-col justify-between transition-all ${
-              p.status === 'ACTIVE' ? 'border-[#203D91] ring-1 ring-[#203D91]/20' : 'border-[#E2E8F0]'
+              p.status === 'ACTIVE' ? 'border-[#943D24] ring-1 ring-[#943D24]/20' : 'border-[#E7E5E4]'
             }`}
           >
             <div>
@@ -119,44 +119,44 @@ export const VendorPromotionsPage: React.FC = () => {
                     p.status === 'ACTIVE'
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : p.status === 'SCHEDULED'
-                      ? 'bg-blue-50 text-[#203D91] border-blue-200'
-                      : 'bg-slate-100 text-slate-500 border-slate-200'
+                      ? 'bg-[#FBF3F0] text-[#943D24] border-[#943D24]/25'
+                      : 'bg-[#F8F7F5] text-[#78716C] border-[#E7E5E4]'
                   }`}
                 >
                   {p.status}
                 </span>
 
-                <span className="text-sm font-black text-[#FF7417] flex items-center gap-0.5">
+                <span className="text-sm font-black text-[#943D24] flex items-center gap-0.5">
                   {p.discountType === 'PERCENTAGE' ? `${p.discountValue}% OFF` : `₹${p.discountValue} FLAT OFF`}
                 </span>
               </div>
 
-              <h3 className="font-extrabold text-sm text-[#17233C] mt-2 line-clamp-1">{p.title}</h3>
-              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
+              <h3 className="font-extrabold text-sm text-[#292524] mt-2 line-clamp-1">{p.title}</h3>
+              <p className="text-xs text-[#78716C] mt-1 line-clamp-2">{p.description}</p>
 
               {p.bannerText && (
-                <div className="mt-3 px-2.5 py-1 rounded-lg bg-[#FF7417]/10 text-[#FF7417] text-[10px] font-black uppercase tracking-wider inline-block border border-[#FF7417]/20">
+                <div className="mt-3 px-2.5 py-1 rounded-lg bg-[#FEF9EB] text-[#943D24] text-[10px] font-black uppercase tracking-wider inline-block border border-[#F6C453]/20">
                   {p.bannerText}
                 </div>
               )}
 
-              <div className="mt-4 pt-3 border-t border-[#E2E8F0] text-xs text-slate-500 space-y-1">
+              <div className="mt-4 pt-3 border-t border-[#E7E5E4] text-xs text-[#78716C] space-y-1">
                 <div className="flex items-center justify-between">
                   <span>Sales Generated:</span>
-                  <strong className="text-[#17233C]">₹{(p.salesGenerated || 184500).toLocaleString('en-IN')}</strong>
+                  <strong className="text-[#292524]">₹{(p.salesGenerated || 184500).toLocaleString('en-IN')}</strong>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Usage Count:</span>
-                  <strong className="text-[#17233C]">{p.usageCount || 42} site orders</strong>
+                  <strong className="text-[#292524]">{p.usageCount || 42} site orders</strong>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                <div className="flex items-center justify-between text-[11px] text-[#78716C] pt-1">
                   <span>Valid Until:</span>
                   <span>{new Date(p.endDate).toLocaleDateString('en-IN')}</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-4 mt-4 border-t border-[#E2E8F0] text-xs">
+            <div className="flex items-center justify-between pt-4 mt-4 border-t border-[#E7E5E4] text-xs">
               <button
                 onClick={() => handleToggleStatus(p.id, p.status)}
                 className={`text-[11px] font-bold px-3 py-1 rounded-lg border transition-colors ${
@@ -168,7 +168,7 @@ export const VendorPromotionsPage: React.FC = () => {
                 {p.status === 'ACTIVE' ? 'Pause Offer' : 'Activate Deal'}
               </button>
 
-              <span className="text-[11px] font-bold text-[#203D91] flex items-center gap-1">
+              <span className="text-[11px] font-bold text-[#943D24] flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Live on Deals Tab
               </span>
             </div>
@@ -179,104 +179,104 @@ export const VendorPromotionsPage: React.FC = () => {
       {/* CREATE PROMOTION MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-[#E2E8F0] shadow-xl">
-            <h3 className="text-lg font-black text-[#17233C] mb-1">Create Customer Promotion Deal</h3>
-            <p className="text-xs text-slate-500 mb-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-[#E7E5E4] shadow-xl">
+            <h3 className="text-lg font-black text-[#292524] mb-1">Create Customer Promotion Deal</h3>
+            <p className="text-xs text-[#78716C] mb-4">
               Discounts are immediately synced to customer checkout calculation.
             </p>
 
             <form onSubmit={handleCreatePromo} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Promotion Title</label>
+                <label className="block font-bold text-[#292524] mb-1">Promotion Title</label>
                 <input
                   type="text"
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Monsoon Structural Cement Mega Discount"
-                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] focus:border-[#203D91] outline-hidden font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] focus:border-[#943D24] outline-hidden font-medium"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Campaign Description</label>
+                <label className="block font-bold text-[#292524] mb-1">Campaign Description</label>
                 <textarea
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Applies to all contractor orders above minimum quantity..."
-                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] focus:border-[#203D91] outline-hidden"
+                  className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] focus:border-[#943D24] outline-hidden"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Discount Type</label>
+                  <label className="block font-bold text-[#292524] mb-1">Discount Type</label>
                   <select
                     value={discountType}
                     onChange={(e: any) => setDiscountType(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white outline-hidden font-medium"
+                    className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] bg-white outline-hidden font-medium"
                   >
                     <option value="PERCENTAGE">Percentage (%) Off</option>
                     <option value="FLAT">Flat Rupee (₹) Off</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Discount Amount</label>
+                  <label className="block font-bold text-[#292524] mb-1">Discount Amount</label>
                   <input
                     type="number"
                     required
                     min={1}
                     value={discountValue}
                     onChange={(e) => setDiscountValue(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] outline-hidden font-bold"
+                    className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] outline-hidden font-bold"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Start Date</label>
+                  <label className="block font-bold text-[#292524] mb-1">Start Date</label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] outline-hidden"
+                    className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] outline-hidden"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">End Date</label>
+                  <label className="block font-bold text-[#292524] mb-1">End Date</label>
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] outline-hidden"
+                    className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] outline-hidden"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Badge / Banner Text</label>
+                <label className="block font-bold text-[#292524] mb-1">Badge / Banner Text</label>
                 <input
                   type="text"
                   value={bannerText}
                   onChange={(e) => setBannerText(e.target.value)}
                   placeholder="e.g. EXTRA 10% SITE SAVINGS"
-                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] outline-hidden uppercase font-bold text-[#FF7417]"
+                  className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] outline-hidden uppercase font-bold text-[#943D24]"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E2E8F0]">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E7E5E4]">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 font-bold text-slate-600 hover:bg-[#F4F7FC] rounded-xl"
+                  className="px-4 py-2 font-bold text-[#78716C] hover:bg-[#FBF3F0] rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 font-bold text-white bg-[#203D91] hover:bg-[#17233C] rounded-xl shadow-xs"
+                  className="px-5 py-2 font-bold text-white bg-[#943D24] hover:bg-[#292524] rounded-xl shadow-xs"
                 >
                   Publish Deal
                 </button>

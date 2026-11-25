@@ -128,11 +128,11 @@ export const VendorForgotPasswordPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-[#E2E8F0] space-y-6 animate-in fade-in-0 duration-200">
+    <div className="w-full bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-[#E7E5E4] space-y-6 animate-in fade-in-0 duration-200">
       {/* Back button */}
       <Link
         to="/login"
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-[#203D91] transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#78716C] hover:text-[#943D24] transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Login
@@ -140,10 +140,10 @@ export const VendorForgotPasswordPage: React.FC = () => {
 
       {/* Header */}
       <div>
-        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-[#17233C]">
+        <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-[#292524]">
           Reset Supplier Password
         </h2>
-        <p className="text-xs sm:text-sm text-slate-500 mt-1.5 leading-relaxed">
+        <p className="text-xs sm:text-sm text-[#78716C] mt-1.5 leading-relaxed">
           {step === 'REQUEST_OTP'
             ? 'Enter your registered email address or mobile number to receive a secure single-use recovery code.'
             : step === 'VERIFY_AND_RESET'
@@ -167,18 +167,18 @@ export const VendorForgotPasswordPage: React.FC = () => {
       {step === 'REQUEST_OTP' && (
         <form onSubmit={handleSendOtp} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-[#17233C] mb-1.5">
+            <label className="block text-xs font-bold text-[#292524] mb-1.5">
               Registered Email or Mobile Number
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Mail className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 required
                 placeholder="vendor@company.com or 9845012345"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-sm text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91] focus:border-transparent transition-all"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E7E5E4] text-sm text-[#292524] focus:outline-none focus:ring-2 focus:ring-[#943D24] focus:border-transparent transition-all"
               />
             </div>
           </div>
@@ -186,7 +186,7 @@ export const VendorForgotPasswordPage: React.FC = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+            className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
           >
             {isLoading ? (
               <span className="inline-flex items-center gap-2">
@@ -212,7 +212,7 @@ export const VendorForgotPasswordPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setOtpCode(devOtpHint)}
-                className="text-xs font-bold text-[#203D91] underline"
+                className="text-xs font-bold text-[#943D24] underline"
               >
                 Auto-fill
               </button>
@@ -221,20 +221,20 @@ export const VendorForgotPasswordPage: React.FC = () => {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold text-[#17233C]">
+              <label className="text-xs font-bold text-[#292524]">
                 6-Digit Verification Code
               </label>
               <button
                 type="button"
                 onClick={() => handleSendOtp()}
                 disabled={isLoading || cooldown > 0}
-                className="text-xs font-bold text-[#FF7417] hover:underline disabled:opacity-50"
+                className="text-xs font-bold text-[#943D24] hover:underline disabled:opacity-50"
               >
                 {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend Code'}
               </button>
             </div>
             <div className="relative">
-              <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <KeyRound className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 maxLength={6}
@@ -242,29 +242,29 @@ export const VendorForgotPasswordPage: React.FC = () => {
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                 required
                 placeholder="123456"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-sm font-mono tracking-widest text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91] focus:border-transparent transition-all"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E7E5E4] text-sm font-mono tracking-widest text-[#292524] focus:outline-none focus:ring-2 focus:ring-[#943D24] focus:border-transparent transition-all"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-[#17233C] mb-1.5">
+            <label className="block text-xs font-bold text-[#292524] mb-1.5">
               New Enterprise Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Lock className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
                 placeholder="••••••••••••"
-                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E2E8F0] text-sm text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91] focus:border-transparent transition-all"
+                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-[#E7E5E4] text-sm text-[#292524] focus:outline-none focus:ring-2 focus:ring-[#943D24] focus:border-transparent transition-all"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#78716C] hover:text-[#78716C] focus:outline-none"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -272,26 +272,26 @@ export const VendorForgotPasswordPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-[#17233C] mb-1.5">
+            <label className="block text-xs font-bold text-[#292524] mb-1.5">
               Confirm New Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Lock className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 placeholder="••••••••••••"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-sm text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91] focus:border-transparent transition-all"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-[#E7E5E4] text-sm text-[#292524] focus:outline-none focus:ring-2 focus:ring-[#943D24] focus:border-transparent transition-all"
               />
             </div>
           </div>
 
           {/* Password strength checklist */}
-          <div className="p-3 bg-[#F4F7FC] rounded-xl border border-[#E2E8F0] space-y-1 text-[11px]">
-            <p className="font-bold text-slate-700 mb-1">Password Strength Requirements:</p>
-            <div className="grid grid-cols-2 gap-1 text-slate-600">
+          <div className="p-3 bg-[#FBF3F0] rounded-xl border border-[#E7E5E4] space-y-1 text-[11px]">
+            <p className="font-bold text-[#292524] mb-1">Password Strength Requirements:</p>
+            <div className="grid grid-cols-2 gap-1 text-[#78716C]">
               <div className={passwordCriteria.length ? 'text-emerald-700 font-semibold' : ''}>
                 {passwordCriteria.length ? '✓' : '○'} Min 8 characters
               </div>
@@ -313,7 +313,7 @@ export const VendorForgotPasswordPage: React.FC = () => {
           <button
             type="submit"
             disabled={isLoading || !isPasswordValid}
-            className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+            className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
           >
             {isLoading ? (
               <span className="inline-flex items-center gap-2">
@@ -337,15 +337,15 @@ export const VendorForgotPasswordPage: React.FC = () => {
             <CheckCircle2 className="w-8 h-8" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-[#17233C]">Password Reset Complete</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+            <h3 className="text-lg font-bold text-[#292524]">Password Reset Complete</h3>
+            <p className="text-xs text-[#78716C] mt-1 max-w-sm mx-auto">
               Your vendor portal credentials have been successfully updated. You can now log in to access your supplier catalog and dispatch management.
             </p>
           </div>
           <button
             type="button"
             onClick={() => navigate('/login')}
-            className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] transition-all shadow-md shadow-[#203D91]/20 flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3 px-4 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center justify-center gap-2 cursor-pointer"
           >
             Go to Vendor Login
             <ArrowRight className="w-4 h-4" />

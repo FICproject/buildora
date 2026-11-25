@@ -19,9 +19,9 @@ export const VendorRestrictedPage: React.FC = () => {
     'Account suspended due to compliance review on material test certificates for dispatches to Bengaluru dark store hubs.';
 
   return (
-    <div className="w-full bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-[#E2E8F0] space-y-6 animate-in fade-in-0 duration-200">
+    <div className="w-full bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-[#E7E5E4] space-y-6 animate-in fade-in-0 duration-200">
       {/* Restricted Header */}
-      <div className="flex items-center gap-3.5 pb-4 border-b border-slate-100">
+      <div className="flex items-center gap-3.5 pb-4 border-b border-[#E7E5E4]">
         <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
           <AlertOctagon className="w-6 h-6" />
         </div>
@@ -29,7 +29,7 @@ export const VendorRestrictedPage: React.FC = () => {
           <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
             Account Restricted
           </span>
-          <h2 className="text-2xl font-black text-[#17233C] tracking-tight">
+          <h2 className="text-2xl font-black text-[#292524] tracking-tight">
             Supplier Access Suspended
           </h2>
         </div>
@@ -47,7 +47,7 @@ export const VendorRestrictedPage: React.FC = () => {
       </div>
 
       {/* Guidance */}
-      <div className="p-4 rounded-2xl bg-[#F4F7FC] border border-[#E2E8F0] text-xs text-slate-600 space-y-2 leading-relaxed">
+      <div className="p-4 rounded-2xl bg-[#FBF3F0] border border-[#E7E5E4] text-xs text-[#78716C] space-y-2 leading-relaxed">
         <p>
           While your account is in restricted status, live dark store dispatch notifications and catalog editing are temporarily frozen. Existing delivered order settlements will continue through regular audit reconciliation.
         </p>
@@ -60,34 +60,34 @@ export const VendorRestrictedPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
         <a
           href="tel:18006028453"
-          className="p-3.5 rounded-2xl border border-[#E2E8F0] bg-white hover:border-blue-300 transition-all flex items-center gap-3 text-xs"
+          className="p-3.5 rounded-2xl border border-[#E7E5E4] bg-white hover:border-blue-300 transition-all flex items-center gap-3 text-xs"
         >
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#203D91] flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[#FBF3F0] text-[#943D24] flex items-center justify-center shrink-0">
             <PhoneCall className="w-4 h-4" />
           </div>
           <div>
-            <span className="font-bold text-[#17233C]">Call Compliance Lead</span>
-            <p className="text-[11px] text-slate-500">1800-60-BUILD (Toll-Free)</p>
+            <span className="font-bold text-[#292524]">Call Compliance Lead</span>
+            <p className="text-[11px] text-[#78716C]">1800-60-BUILD (Toll-Free)</p>
           </div>
         </a>
 
         <a
           href="mailto:compliance@buildora.in"
-          className="p-3.5 rounded-2xl border border-[#E2E8F0] bg-white hover:border-blue-300 transition-all flex items-center gap-3 text-xs"
+          className="p-3.5 rounded-2xl border border-[#E7E5E4] bg-white hover:border-blue-300 transition-all flex items-center gap-3 text-xs"
         >
-          <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#FF7417] flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#943D24] flex items-center justify-center shrink-0">
             <Mail className="w-4 h-4" />
           </div>
           <div>
-            <span className="font-bold text-[#17233C]">Email Merchant Desk</span>
-            <p className="text-[11px] text-slate-500">compliance@buildora.in</p>
+            <span className="font-bold text-[#292524]">Email Merchant Desk</span>
+            <p className="text-[11px] text-[#78716C]">compliance@buildora.in</p>
           </div>
         </a>
       </div>
 
       {/* Footer */}
-      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-        <span className="text-[11px] text-slate-400">
+      <div className="pt-4 border-t border-[#E7E5E4] flex items-center justify-between">
+        <span className="text-[11px] text-[#78716C]">
           Store ID: {vendor?.id || 'VND-BLR-00'}
         </span>
         <button
@@ -96,7 +96,7 @@ export const VendorRestrictedPage: React.FC = () => {
             logout();
             navigate('/login');
           }}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-rose-600 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#78716C] hover:text-rose-600 transition-colors"
         >
           <LogOut className="w-3.5 h-3.5" />
           Sign Out

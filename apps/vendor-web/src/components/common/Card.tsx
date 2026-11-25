@@ -10,8 +10,8 @@ export const Card: React.FC<CardProps> = ({ children, className = '', onClick })
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-xl border border-[#E5E9F0] shadow-card ${
-        onClick ? 'cursor-pointer hover:border-[#23438F]/40 transition-colors' : ''
+      className={`bg-white rounded-xl border border-[#E7E5E4] shadow-card ${
+        onClick ? 'cursor-pointer hover:border-[#943D24]/45 transition-colors' : ''
       } ${className}`}
     >
       {children}
@@ -26,10 +26,12 @@ export const CardHeader: React.FC<{
   className?: string;
 }> = ({ title, subtitle, action, className = '' }) => {
   return (
-    <div className={`px-5 py-4 border-b border-[#E5E9F0] flex flex-wrap items-center justify-between gap-3 ${className}`}>
+    <div
+      className={`px-5 py-4 border-b border-[#E7E5E4] flex flex-wrap items-center justify-between gap-3 ${className}`}
+    >
       <div>
-        {title && <h3 className="font-semibold text-[#263247] text-base">{title}</h3>}
-        {subtitle && <p className="text-xs text-[#718096] mt-0.5">{subtitle}</p>}
+        {title && <h3 className="font-semibold text-[#943D24] text-base">{title}</h3>}
+        {subtitle && <p className="text-xs text-[#78716C] mt-0.5">{subtitle}</p>}
       </div>
       {action && <div className="flex items-center gap-2">{action}</div>}
     </div>
@@ -48,7 +50,9 @@ export const CardFooter: React.FC<{ children: React.ReactNode; className?: strin
   className = '',
 }) => {
   return (
-    <div className={`px-5 py-4 bg-[#F7F8FA] border-t border-[#E5E9F0] rounded-b-xl flex items-center justify-between gap-3 ${className}`}>
+    <div
+      className={`px-5 py-4 bg-[#F8F7F5] border-t border-[#E7E5E4] rounded-b-xl flex items-center justify-between gap-3 ${className}`}
+    >
       {children}
     </div>
   );

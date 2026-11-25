@@ -46,33 +46,33 @@ export const Drawer: React.FC<DrawerProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
       <div
-        className="fixed inset-0 bg-[#263247]/40 transition-opacity"
+        className="fixed inset-0 bg-[#292524]/45 transition-opacity"
         onClick={onClose}
       />
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-8">
         <div
-          className={`w-screen ${widthClasses[width]} bg-white border-l border-[#E5E9F0] shadow-xl flex flex-col`}
+          className={`w-screen ${widthClasses[width]} bg-white border-l border-[#E7E5E4] shadow-xl flex flex-col`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-6 py-4 border-b border-[#E5E9F0] bg-[#F7F8FA] flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-[#E7E5E4] bg-[#F8F7F5] flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-[#263247]">{title}</h2>
-              {subtitle && <p className="text-xs text-[#718096] mt-0.5">{subtitle}</p>}
+              <h2 className="text-base font-semibold text-[#943D24]">{title}</h2>
+              {subtitle && <p className="text-xs text-[#78716C] mt-0.5">{subtitle}</p>}
             </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close panel"
-              className="p-1.5 rounded-lg text-[#718096] hover:text-[#263247] hover:bg-[#E5E9F0]/60 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-[#78716C] hover:text-[#292524] hover:bg-[#E7E5E4]/60 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6">{children}</div>
+          <div className="flex-1 overflow-y-auto p-6 bg-white">{children}</div>
 
           {footer && (
-            <div className="px-6 py-4 bg-[#F7F8FA] border-t border-[#E5E9F0] flex items-center justify-end gap-3">
+            <div className="px-6 py-4 bg-[#F8F7F5] border-t border-[#E7E5E4] flex items-center justify-end gap-3">
               {footer}
             </div>
           )}

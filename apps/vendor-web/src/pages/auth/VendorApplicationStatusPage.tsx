@@ -87,9 +87,9 @@ export const VendorApplicationStatusPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="w-full bg-white rounded-3xl p-10 shadow-xl border border-[#E2E8F0] text-center space-y-3">
-        <RefreshCw className="w-8 h-8 text-[#203D91] animate-spin mx-auto" />
-        <p className="text-xs font-semibold text-slate-500">Loading application status...</p>
+      <div className="w-full bg-white rounded-3xl p-10 shadow-xl border border-[#E7E5E4] text-center space-y-3">
+        <RefreshCw className="w-8 h-8 text-[#943D24] animate-spin mx-auto" />
+        <p className="text-xs font-semibold text-[#78716C]">Loading application status...</p>
       </div>
     );
   }
@@ -109,8 +109,8 @@ export const VendorApplicationStatusPage: React.FC = () => {
       case 'UNDER_REVIEW':
         return {
           label: 'Under Review',
-          badgeClass: 'bg-blue-50 text-[#203D91] border-blue-200',
-          icon: <Clock className="w-5 h-5 text-[#203D91]" />,
+          badgeClass: 'bg-[#FBF3F0] text-[#943D24] border-[#943D24]/25',
+          icon: <Clock className="w-5 h-5 text-[#943D24]" />,
           message: 'Our team is reviewing your business and verification details.'
         };
       case 'REJECTED':
@@ -148,14 +148,14 @@ export const VendorApplicationStatusPage: React.FC = () => {
   const meta = getStatusMeta(currentStatus);
 
   return (
-    <div className="w-full bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-[#E2E8F0] space-y-6 animate-in fade-in-0 duration-200">
+    <div className="w-full bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-[#E7E5E4] space-y-6 animate-in fade-in-0 duration-200">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+      <div className="flex items-start justify-between gap-4 border-b border-[#E7E5E4] pb-4">
         <div>
-          <span className="inline-block px-2.5 py-0.5 rounded-md bg-blue-50 text-[#203D91] text-[10px] font-extrabold uppercase tracking-wider mb-1">
+          <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#FBF3F0] text-[#943D24] text-[10px] font-extrabold uppercase tracking-wider mb-1">
             Application Status
           </span>
-          <h2 className="text-2xl font-black text-[#17233C] tracking-tight">
+          <h2 className="text-2xl font-black text-[#292524] tracking-tight">
             Vendor Application Submitted
           </h2>
         </div>
@@ -164,7 +164,7 @@ export const VendorApplicationStatusPage: React.FC = () => {
           type="button"
           onClick={() => loadStatus(true)}
           disabled={refreshing}
-          className="px-3 py-1.5 rounded-xl text-xs font-bold text-[#203D91] bg-[#F4F7FC] border border-[#E2E8F0] hover:bg-blue-50 flex items-center gap-1.5 cursor-pointer shrink-0"
+          className="px-3 py-1.5 rounded-xl text-xs font-bold text-[#943D24] bg-[#FBF3F0] border border-[#E7E5E4] hover:bg-[#FBF3F0] flex items-center gap-1.5 cursor-pointer shrink-0"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
@@ -195,20 +195,20 @@ export const VendorApplicationStatusPage: React.FC = () => {
       )}
 
       {/* Application Summary Details */}
-      <div className="p-5 rounded-2xl bg-[#F4F7FC] border border-[#E2E8F0] space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+      <div className="p-5 rounded-2xl bg-[#FBF3F0] border border-[#E7E5E4] space-y-4">
+        <div className="flex items-center justify-between border-b border-[#E7E5E4]/80 pb-3">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#78716C] block">
               Application Reference ID
             </span>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="font-mono text-base font-black text-[#203D91]">
+              <span className="font-mono text-base font-black text-[#943D24]">
                 {statusData?.applicationId}
               </span>
               <button
                 type="button"
                 onClick={copyId}
-                className="p-1 rounded-md text-slate-400 hover:text-[#203D91] hover:bg-white cursor-pointer"
+                className="p-1 rounded-md text-[#78716C] hover:text-[#943D24] hover:bg-white cursor-pointer"
                 title="Copy Reference ID"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -220,10 +220,10 @@ export const VendorApplicationStatusPage: React.FC = () => {
             <img
               src={statusData.logoUrl}
               alt="Business Logo"
-              className="w-12 h-12 rounded-xl object-cover border border-slate-200 bg-white"
+              className="w-12 h-12 rounded-xl object-cover border border-[#E7E5E4] bg-white"
             />
           ) : (
-            <div className="w-12 h-12 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-[#203D91]/50">
+            <div className="w-12 h-12 rounded-xl border border-[#E7E5E4] bg-white flex items-center justify-center text-[#943D24]/50">
               <Building2 className="w-5 h-5" />
             </div>
           )}
@@ -231,12 +231,12 @@ export const VendorApplicationStatusPage: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div>
-            <span className="text-slate-400 block text-[11px]">Business / Store Name</span>
-            <span className="font-bold text-[#17233C]">{statusData?.storeName}</span>
+            <span className="text-[#78716C] block text-[11px]">Business / Store Name</span>
+            <span className="font-bold text-[#292524]">{statusData?.storeName}</span>
           </div>
           <div>
-            <span className="text-slate-400 block text-[11px]">Submission Date</span>
-            <span className="font-bold text-[#17233C]">
+            <span className="text-[#78716C] block text-[11px]">Submission Date</span>
+            <span className="font-bold text-[#292524]">
               {new Date(statusData?.submittedAt).toLocaleDateString('en-IN', {
                 day: '2-digit',
                 month: 'short',
@@ -245,23 +245,23 @@ export const VendorApplicationStatusPage: React.FC = () => {
             </span>
           </div>
           <div>
-            <span className="text-slate-400 block text-[11px]">Registered Email</span>
-            <span className="font-semibold text-[#17233C] break-all">{statusData?.email}</span>
+            <span className="text-[#78716C] block text-[11px]">Registered Email</span>
+            <span className="font-semibold text-[#292524] break-all">{statusData?.email}</span>
           </div>
           <div>
-            <span className="text-slate-400 block text-[11px]">Registered Mobile</span>
-            <span className="font-semibold text-[#17233C]">{maskPhone(statusData?.phone)}</span>
+            <span className="text-[#78716C] block text-[11px]">Registered Mobile</span>
+            <span className="font-semibold text-[#292524]">{maskPhone(statusData?.phone)}</span>
           </div>
         </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-100">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-[#E7E5E4]">
         {(currentStatus === 'APPROVED' || currentStatus === 'ACTIVE') && (
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
-            className="w-full sm:w-auto py-3 px-6 rounded-xl text-sm font-bold bg-[#203D91] text-white hover:bg-[#162b66] flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#203D91]/20"
+            className="w-full sm:w-auto py-3 px-6 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#943D24]/20"
           >
             <span>Go to Vendor Dashboard</span>
             <ArrowRight className="w-4 h-4" />
@@ -272,7 +272,7 @@ export const VendorApplicationStatusPage: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/register?step=1')}
-            className="w-full sm:w-auto py-3 px-6 rounded-xl text-xs font-bold bg-[#FF7417] text-white hover:bg-[#e05e07] flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto py-3 px-6 rounded-xl text-xs font-bold bg-[#F6C453] text-[#292524] hover:bg-[#F6C453] flex items-center justify-center gap-2 cursor-pointer"
           >
             <FileEdit className="w-4 h-4" />
             <span>Edit & Resubmit Application</span>
@@ -285,7 +285,7 @@ export const VendorApplicationStatusPage: React.FC = () => {
             logout();
             navigate('/login');
           }}
-          className="w-full sm:w-auto py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center justify-center gap-1.5 cursor-pointer ml-auto"
+          className="w-full sm:w-auto py-2.5 px-4 rounded-xl text-xs font-bold text-[#78716C] border border-[#E7E5E4] hover:bg-[#F8F7F5] flex items-center justify-center gap-1.5 cursor-pointer ml-auto"
         >
           <LogOut className="w-3.5 h-3.5" />
           <span>Sign Out</span>

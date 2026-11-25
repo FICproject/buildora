@@ -48,7 +48,7 @@ export const VendorInvoicesPage: React.FC = () => {
       <Card>
         <CardContent className="p-4">
           <div className="relative">
-            <Search className="w-4 h-4 text-[#718096] absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
@@ -63,7 +63,7 @@ export const VendorInvoicesPage: React.FC = () => {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+            <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
               <tr>
                 <th className="py-3 px-4">Invoice #</th>
                 <th className="py-3 px-4">Order Ref</th>
@@ -75,7 +75,7 @@ export const VendorInvoicesPage: React.FC = () => {
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E9F0]">
+            <tbody className="divide-y divide-[#E7E5E4]">
               {filteredInvoices.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
@@ -88,19 +88,19 @@ export const VendorInvoicesPage: React.FC = () => {
                 </tr>
               ) : (
                 filteredInvoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-[#F7F8FA]">
-                    <td className="py-3.5 px-4 font-mono font-semibold text-[#23438F]">
+                  <tr key={inv.id} className="hover:bg-[#F8F7F5]">
+                    <td className="py-3.5 px-4 font-mono font-semibold text-[#943D24]">
                       {inv.invoiceNumber}
                     </td>
-                    <td className="py-3.5 px-4 font-medium text-[#263247]">#{inv.orderNumber}</td>
-                    <td className="py-3.5 px-4 text-[#263247]">{inv.customerName}</td>
-                    <td className="py-3.5 px-4 font-mono text-[#718096]">
+                    <td className="py-3.5 px-4 font-medium text-[#292524]">#{inv.orderNumber}</td>
+                    <td className="py-3.5 px-4 text-[#292524]">{inv.customerName}</td>
+                    <td className="py-3.5 px-4 font-mono text-[#78716C]">
                       {inv.customerGstin || 'Unregistered'}
                     </td>
-                    <td className="py-3.5 px-4 text-[#718096]">
+                    <td className="py-3.5 px-4 text-[#78716C]">
                       {new Date(inv.invoiceDate).toLocaleDateString('en-IN')}
                     </td>
-                    <td className="py-3.5 px-4 text-right font-semibold text-[#263247]">
+                    <td className="py-3.5 px-4 text-right font-semibold text-[#292524]">
                       ₹{inv.totalAmount.toLocaleString('en-IN')}
                     </td>
                     <td className="py-3.5 px-4">
@@ -113,7 +113,7 @@ export const VendorInvoicesPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setViewingInvoice(inv)}
-                          className="p-1.5 rounded-lg text-[#718096] hover:text-[#23438F] hover:bg-[#EEF3FA] cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#78716C] hover:text-[#943D24] hover:bg-[#FBF3F0] cursor-pointer"
                           title="View Invoice"
                         >
                           <Eye className="w-4 h-4" />
@@ -121,7 +121,7 @@ export const VendorInvoicesPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setViewingInvoice(inv)}
-                          className="p-1.5 rounded-lg text-[#718096] hover:text-[#23438F] hover:bg-[#EEF3FA] cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#78716C] hover:text-[#943D24] hover:bg-[#FBF3F0] cursor-pointer"
                           title="Print Invoice"
                         >
                           <Printer className="w-4 h-4" />
@@ -145,57 +145,57 @@ export const VendorInvoicesPage: React.FC = () => {
       >
         {viewingInvoice && (
           <div className="space-y-5 text-xs">
-            <div className="p-5 rounded-xl border border-[#E5E9F0] bg-white space-y-4">
-              <div className="flex justify-between items-start border-b border-[#E5E9F0] pb-4">
+            <div className="p-5 rounded-xl border border-[#E7E5E4] bg-white space-y-4">
+              <div className="flex justify-between items-start border-b border-[#E7E5E4] pb-4">
                 <div>
-                  <h3 className="text-base font-bold text-[#23438F]">BUILDORA 60</h3>
-                  <p className="font-medium text-[#263247]">Supreme Building Materials Pvt Ltd</p>
-                  <p className="text-[#718096]">GSTIN: 29AABCB9876F1Z2</p>
+                  <h3 className="text-base font-bold text-[#943D24]">BUILDORA 60</h3>
+                  <p className="font-medium text-[#292524]">Supreme Building Materials Pvt Ltd</p>
+                  <p className="text-[#78716C]">GSTIN: 29AABCB9876F1Z2</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-[#263247]">{viewingInvoice.invoiceNumber}</p>
-                  <p className="text-[#718096]">
+                  <p className="font-semibold text-[#292524]">{viewingInvoice.invoiceNumber}</p>
+                  <p className="text-[#78716C]">
                     Date: {new Date(viewingInvoice.invoiceDate).toLocaleDateString('en-IN')}
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border-b border-[#E5E9F0] pb-3">
+              <div className="grid grid-cols-2 gap-4 border-b border-[#E7E5E4] pb-3">
                 <div>
-                  <span className="text-[#718096] block">Billed To</span>
-                  <p className="font-semibold text-[#263247]">{viewingInvoice.customerName}</p>
-                  <p className="font-mono text-[#718096]">
+                  <span className="text-[#78716C] block">Billed To</span>
+                  <p className="font-semibold text-[#292524]">{viewingInvoice.customerName}</p>
+                  <p className="font-mono text-[#78716C]">
                     {viewingInvoice.customerGstin || 'Unregistered'}
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[#718096] block">Order Reference</span>
-                  <p className="font-semibold text-[#263247]">#{viewingInvoice.orderNumber}</p>
+                  <span className="text-[#78716C] block">Order Reference</span>
+                  <p className="font-semibold text-[#292524]">#{viewingInvoice.orderNumber}</p>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <div className="flex justify-between text-[#718096]">
+                <div className="flex justify-between text-[#78716C]">
                   <span>Taxable Value:</span>
-                  <span className="font-medium text-[#263247]">
+                  <span className="font-medium text-[#292524]">
                     ₹{viewingInvoice.taxableAmount.toLocaleString('en-IN')}
                   </span>
                 </div>
-                <div className="flex justify-between text-[#718096]">
+                <div className="flex justify-between text-[#78716C]">
                   <span>CGST:</span>
-                  <span className="font-medium text-[#263247]">
+                  <span className="font-medium text-[#292524]">
                     ₹{viewingInvoice.cgstAmount.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between text-[#718096]">
+                <div className="flex justify-between text-[#78716C]">
                   <span>SGST:</span>
-                  <span className="font-medium text-[#263247]">
+                  <span className="font-medium text-[#292524]">
                     ₹{viewingInvoice.sgstAmount.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm font-bold text-[#263247] border-t border-[#E5E9F0] pt-2">
+                <div className="flex justify-between text-sm font-bold text-[#292524] border-t border-[#E7E5E4] pt-2">
                   <span>Total Invoice Amount:</span>
-                  <span className="text-[#23438F]">
+                  <span className="text-[#943D24]">
                     ₹{viewingInvoice.totalAmount.toLocaleString('en-IN')}
                   </span>
                 </div>
@@ -203,7 +203,7 @@ export const VendorInvoicesPage: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-2.5">
-              <Button variant="secondary" size="sm" onClick={() => setViewingInvoice(null)}>
+              <Button variant="outline" size="sm" onClick={() => setViewingInvoice(null)}>
                 Close
               </Button>
               <Button

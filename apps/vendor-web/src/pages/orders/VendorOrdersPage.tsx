@@ -174,7 +174,7 @@ export const VendorOrdersPage: React.FC = () => {
           <button
             type="button"
             onClick={() => openDetails(order)}
-            className="text-xs font-medium text-[#23438F] hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+            className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-0.5 cursor-pointer"
           >
             View <ChevronRight className="w-3.5 h-3.5" />
           </button>
@@ -202,7 +202,7 @@ export const VendorOrdersPage: React.FC = () => {
       {/* Tabs & Search */}
       <Card>
         <CardContent className="p-4 space-y-4">
-          <div className="flex flex-wrap gap-1.5 border-b border-[#E5E9F0] pb-3">
+          <div className="flex flex-wrap gap-1.5 border-b border-[#E7E5E4] pb-3">
             {tabs.map((tab) => {
               const count =
                 tab.id === 'ALL'
@@ -219,8 +219,8 @@ export const VendorOrdersPage: React.FC = () => {
                   }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
                     activeTab === tab.id
-                      ? 'bg-[#23438F] text-white'
-                      : 'text-[#718096] hover:text-[#263247] hover:bg-[#F7F8FA]'
+                      ? 'bg-[#943D24] text-white'
+                      : 'text-[#78716C] hover:text-[#292524] hover:bg-[#F8F7F5]'
                   }`}
                 >
                   <span>{tab.label}</span>
@@ -229,7 +229,7 @@ export const VendorOrdersPage: React.FC = () => {
                       className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
                         activeTab === tab.id
                           ? 'bg-white/20 text-white'
-                          : 'bg-[#EEF3FA] text-[#23438F]'
+                          : 'bg-[#FBF3F0] text-[#943D24]'
                       }`}
                     >
                       {count}
@@ -241,7 +241,7 @@ export const VendorOrdersPage: React.FC = () => {
           </div>
 
           <div className="relative">
-            <Search className="w-4 h-4 text-[#718096] absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
@@ -260,7 +260,7 @@ export const VendorOrdersPage: React.FC = () => {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+            <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
               <tr>
                 <th className="py-3 px-4">Order ID</th>
                 <th className="py-3 px-4">Customer</th>
@@ -270,7 +270,7 @@ export const VendorOrdersPage: React.FC = () => {
                 <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E9F0]">
+            <tbody className="divide-y divide-[#E7E5E4]">
               {paginatedOrders.length === 0 ? (
                 <tr>
                   <td colSpan={6}>
@@ -286,20 +286,20 @@ export const VendorOrdersPage: React.FC = () => {
                   <tr
                     key={order.id}
                     onClick={() => openDetails(order)}
-                    className="hover:bg-[#F7F8FA] cursor-pointer transition-colors"
+                    className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
                   >
                     <td className="py-3.5 px-4">
-                      <div className="font-mono font-semibold text-[#263247]">
+                      <div className="font-mono font-semibold text-[#292524]">
                         {order.orderNumber}
                       </div>
-                      <div className="text-[11px] text-[#718096]">
+                      <div className="text-[11px] text-[#78716C]">
                         {new Date(order.createdAt).toLocaleDateString('en-IN')}
                       </div>
                     </td>
 
                     <td className="py-3.5 px-4">
-                      <div className="font-medium text-[#263247]">{order.customerName}</div>
-                      <div className="text-[11px] text-[#718096] flex items-center gap-1">
+                      <div className="font-medium text-[#292524]">{order.customerName}</div>
+                      <div className="text-[11px] text-[#78716C] flex items-center gap-1">
                         <MapPin className="w-3 h-3 shrink-0" />
                         <span>
                           {order.deliveryAddress?.city} - {order.deliveryAddress?.pincode}
@@ -308,16 +308,16 @@ export const VendorOrdersPage: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4">
-                      <div className="text-[#263247] font-medium line-clamp-1">
+                      <div className="text-[#292524] font-medium line-clamp-1">
                         {order.items[0]?.name}
                         {order.items.length > 1 ? ` +${order.items.length - 1} more` : ''}
                       </div>
-                      <div className="text-[11px] text-[#718096]">
+                      <div className="text-[11px] text-[#78716C]">
                         {order.items.reduce((sum, item) => sum + item.quantity, 0)} units
                       </div>
                     </td>
 
-                    <td className="py-3.5 px-4 font-semibold text-[#263247]">
+                    <td className="py-3.5 px-4 font-semibold text-[#292524]">
                       ₹{(order.totalAmount || order.subtotal || 0).toLocaleString('en-IN')}
                     </td>
 
@@ -355,10 +355,10 @@ export const VendorOrdersPage: React.FC = () => {
         width="xl"
       >
         {selectedOrder && (
-          <div className="space-y-6 text-xs text-[#263247]">
-            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-6 text-xs text-[#292524]">
+            <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex flex-wrap items-center justify-between gap-3">
               <div>
-                <span className="text-[#718096] block text-[11px]">Status</span>
+                <span className="text-[#78716C] block text-[11px]">Status</span>
                 <div className="mt-1">
                   <Badge variant={getBadgeVariant(selectedOrder.status)}>
                     {selectedOrder.status.replace(/_/g, ' ')}
@@ -380,18 +380,18 @@ export const VendorOrdersPage: React.FC = () => {
             </div>
 
             <div>
-              <h4 className="font-semibold text-sm text-[#263247] mb-2">Delivery Address</h4>
-              <div className="p-4 rounded-xl border border-[#E5E9F0] bg-white space-y-1.5">
+              <h4 className="font-semibold text-sm text-[#292524] mb-2">Delivery Address</h4>
+              <div className="p-4 rounded-xl border border-[#E7E5E4] bg-white space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold">{selectedOrder.customerName || 'Customer'}</span>
-                  <span className="text-[#718096] font-mono">
+                  <span className="text-[#78716C] font-mono">
                     {selectedOrder.customerPhone || '—'}
                   </span>
                 </div>
-                <p className="text-[#718096]">
+                <p className="text-[#78716C]">
                   {selectedOrder.deliveryAddress?.building}, {selectedOrder.deliveryAddress?.street},{' '}
                   {selectedOrder.deliveryAddress?.city}, {selectedOrder.deliveryAddress?.state} -{' '}
-                  <strong className="text-[#263247]">
+                  <strong className="text-[#292524]">
                     {selectedOrder.deliveryAddress?.pincode}
                   </strong>
                 </p>
@@ -399,10 +399,10 @@ export const VendorOrdersPage: React.FC = () => {
             </div>
 
             <div>
-              <h4 className="font-semibold text-sm text-[#263247] mb-2">Order Items</h4>
-              <div className="border border-[#E5E9F0] rounded-xl overflow-hidden">
+              <h4 className="font-semibold text-sm text-[#292524] mb-2">Order Items</h4>
+              <div className="border border-[#E7E5E4] rounded-xl overflow-hidden">
                 <table className="w-full text-left">
-                  <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                  <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                     <tr>
                       <th className="py-2.5 px-3">Item</th>
                       <th className="py-2.5 px-3">SKU</th>
@@ -410,11 +410,11 @@ export const VendorOrdersPage: React.FC = () => {
                       <th className="py-2.5 px-3 text-right">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E5E9F0]">
+                  <tbody className="divide-y divide-[#E7E5E4]">
                     {selectedOrder.items.map((item, idx) => (
                       <tr key={idx}>
                         <td className="py-2.5 px-3 font-medium">{item.name}</td>
-                        <td className="py-2.5 px-3 font-mono text-[#718096]">{item.sku}</td>
+                        <td className="py-2.5 px-3 font-mono text-[#78716C]">{item.sku}</td>
                         <td className="py-2.5 px-3 text-right font-semibold">{item.quantity}</td>
                         <td className="py-2.5 px-3 text-right font-semibold">
                           ₹
@@ -432,16 +432,16 @@ export const VendorOrdersPage: React.FC = () => {
             </div>
 
             <div>
-              <h4 className="font-semibold text-sm text-[#263247] mb-2">Payout Breakdown</h4>
-              <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] space-y-2">
+              <h4 className="font-semibold text-sm text-[#292524] mb-2">Payout Breakdown</h4>
+              <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-[#718096]">Order Subtotal:</span>
+                  <span className="text-[#78716C]">Order Subtotal:</span>
                   <span className="font-semibold">
                     ₹{(selectedOrder.subtotal || selectedOrder.totalAmount || 0).toLocaleString('en-IN')}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#718096]">Platform Commission:</span>
+                  <span className="text-[#78716C]">Platform Commission:</span>
                   <span className="text-[#DC4545]">
                     - ₹
                     {(
@@ -450,7 +450,7 @@ export const VendorOrdersPage: React.FC = () => {
                     ).toLocaleString('en-IN')}
                   </span>
                 </div>
-                <div className="flex justify-between pt-2 border-t border-[#E5E9F0] text-sm font-bold">
+                <div className="flex justify-between pt-2 border-t border-[#E7E5E4] text-sm font-bold">
                   <span>Net Vendor Payout:</span>
                   <span className="text-[#15966B]">
                     ₹

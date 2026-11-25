@@ -111,41 +111,41 @@ export const VendorTeamPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#E2E8F0] shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#E7E5E4] shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#203D91]/10 text-[#203D91] border border-[#203D91]/20">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#943D24]/10 text-[#943D24] border border-[#943D24]/20">
               ROLE-BASED ACCESS CONTROL (RBAC)
             </span>
             <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
               7 Enterprise Roles
             </span>
           </div>
-          <h1 className="text-2xl font-black text-[#17233C] tracking-tight">
+          <h1 className="text-2xl font-black text-[#292524] tracking-tight">
             Team & Employee Permissions
           </h1>
-          <p className="text-xs text-slate-500 font-medium">
+          <p className="text-xs text-[#78716C] font-medium">
             Grant granular permissions to yard managers, order packers, catalog specialists, and finance accountants.
           </p>
         </div>
 
         <button
           onClick={() => setIsInviteModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#203D91] text-white rounded-xl text-xs font-bold hover:bg-[#17233C] transition-all shadow-xs shrink-0"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#943D24] text-white rounded-xl text-xs font-bold hover:bg-[#292524] transition-all shadow-xs shrink-0"
         >
-          <Plus className="w-4 h-4 text-[#FF7417]" />
+          <Plus className="w-4 h-4 text-[#F6C453]" />
           Invite Team Member
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-2 text-xs">
+      <div className="flex items-center gap-2 border-b border-[#E7E5E4] pb-2 text-xs">
         <button
           onClick={() => setActiveTab('MEMBERS')}
           className={`px-4 py-2 rounded-xl font-bold transition-all ${
             activeTab === 'MEMBERS'
-              ? 'bg-[#203D91] text-white shadow-xs'
-              : 'text-slate-600 hover:text-[#203D91] hover:bg-white'
+              ? 'bg-[#943D24] text-white shadow-xs'
+              : 'text-[#78716C] hover:text-[#943D24] hover:bg-white'
           }`}
         >
           Active Team Members ({team.length})
@@ -154,8 +154,8 @@ export const VendorTeamPage: React.FC = () => {
           onClick={() => setActiveTab('AUDIT_LOGS')}
           className={`px-4 py-2 rounded-xl font-bold transition-all ${
             activeTab === 'AUDIT_LOGS'
-              ? 'bg-[#203D91] text-white shadow-xs'
-              : 'text-slate-600 hover:text-[#203D91] hover:bg-white'
+              ? 'bg-[#943D24] text-white shadow-xs'
+              : 'text-[#78716C] hover:text-[#943D24] hover:bg-white'
           }`}
         >
           Security Audit Trail ({auditLogs.length})
@@ -163,9 +163,9 @@ export const VendorTeamPage: React.FC = () => {
       </div>
 
       {activeTab === 'MEMBERS' ? (
-        <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-xs overflow-hidden">
+        <div className="bg-white rounded-2xl border border-[#E7E5E4] shadow-xs overflow-hidden">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#F4F7FC] border-b border-[#E2E8F0] text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+            <thead className="bg-[#FBF3F0] border-b border-[#E7E5E4] text-[#78716C] font-bold uppercase tracking-wider text-[10px]">
               <tr>
                 <th className="py-3 px-4">Employee</th>
                 <th className="py-3 px-4">Role & Designation</th>
@@ -175,29 +175,29 @@ export const VendorTeamPage: React.FC = () => {
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E2E8F0]">
+            <tbody className="divide-y divide-[#E7E5E4]">
               {team.map((emp) => (
-                <tr key={emp.id} className="hover:bg-[#F4F7FC]/60 transition-colors">
+                <tr key={emp.id} className="hover:bg-[#FBF3F0]/60 transition-colors">
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-[#203D91]/10 text-[#203D91] font-black text-xs flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-[#943D24]/10 text-[#943D24] font-black text-xs flex items-center justify-center">
                         {emp.name.charAt(0)}
                       </div>
                       <div>
-                        <p className="font-extrabold text-[#17233C]">{emp.name}</p>
-                        <p className="text-[10px] text-slate-400">{emp.email}</p>
+                        <p className="font-extrabold text-[#292524]">{emp.name}</p>
+                        <p className="text-[10px] text-[#78716C]">{emp.email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="py-3.5 px-4">
-                    <span className="font-black text-[11px] px-2.5 py-0.5 rounded-full bg-blue-50 text-[#203D91] border border-blue-200">
+                    <span className="font-black text-[11px] px-2.5 py-0.5 rounded-full bg-[#FBF3F0] text-[#943D24] border border-[#943D24]/25">
                       {emp.role.replace(/_/g, ' ')}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4 font-mono text-slate-600">
+                  <td className="py-3.5 px-4 font-mono text-[#78716C]">
                     {emp.phone || '—'}
                   </td>
-                  <td className="py-3.5 px-4 text-slate-500">
+                  <td className="py-3.5 px-4 text-[#78716C]">
                     {new Date(emp.invitedAt).toLocaleDateString('en-IN')}
                   </td>
                   <td className="py-3.5 px-4">
@@ -215,7 +215,7 @@ export const VendorTeamPage: React.FC = () => {
                     {emp.role !== 'VENDOR_OWNER' && (
                       <button
                         onClick={() => handleRemove(emp.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                        className="p-1.5 rounded-lg text-[#78716C] hover:text-rose-600 hover:bg-rose-50"
                         title="Revoke Access"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -228,8 +228,8 @@ export const VendorTeamPage: React.FC = () => {
           </table>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-xs p-5 space-y-3">
-          <h3 className="font-extrabold text-sm text-[#17233C]">Administrative Security Logs</h3>
+        <div className="bg-white rounded-2xl border border-[#E7E5E4] shadow-xs p-5 space-y-3">
+          <h3 className="font-extrabold text-sm text-[#292524]">Administrative Security Logs</h3>
           <div className="space-y-2">
             {(auditLogs.length > 0 ? auditLogs : [
               {
@@ -249,14 +249,14 @@ export const VendorTeamPage: React.FC = () => {
             ]).map((log: any, idx: number) => (
               <div
                 key={idx}
-                className="p-3 rounded-xl bg-[#F4F7FC] border border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs"
+                className="p-3 rounded-xl bg-[#FBF3F0] border border-[#E7E5E4] flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs"
               >
                 <div>
-                  <span className="font-extrabold text-[#203D91]">{log.action}: </span>
-                  <span className="text-slate-700 font-medium">{log.details}</span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">By: {log.performedBy}</p>
+                  <span className="font-extrabold text-[#943D24]">{log.action}: </span>
+                  <span className="text-[#292524] font-medium">{log.details}</span>
+                  <p className="text-[10px] text-[#78716C] mt-0.5">By: {log.performedBy}</p>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                <span className="text-[10px] font-mono text-[#78716C] shrink-0">
                   {new Date(log.performedAt).toLocaleString('en-IN')}
                 </span>
               </div>
@@ -268,10 +268,10 @@ export const VendorTeamPage: React.FC = () => {
       {/* INVITE MODAL */}
       {isInviteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-[#E2E8F0] shadow-xl space-y-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-[#E7E5E4] shadow-xl space-y-4">
             <div>
-              <h3 className="text-lg font-black text-[#17233C]">Invite Employee & Assign Role</h3>
-              <p className="text-xs text-slate-500">
+              <h3 className="text-lg font-black text-[#292524]">Invite Employee & Assign Role</h3>
+              <p className="text-xs text-[#78716C]">
                 The member will receive an activation email with login instructions.
               </p>
             </div>
@@ -279,46 +279,46 @@ export const VendorTeamPage: React.FC = () => {
             <form onSubmit={handleInvite} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Full Name</label>
+                  <label className="block font-bold text-[#292524] mb-1">Full Name</label>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Ramesh Gowda"
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] outline-hidden font-medium"
+                    className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] outline-hidden font-medium"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Mobile Phone</label>
+                  <label className="block font-bold text-[#292524] mb-1">Mobile Phone</label>
                   <input
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="9845012348"
-                    className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] outline-hidden font-medium"
+                    className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] outline-hidden font-medium"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Corporate Email Address</label>
+                <label className="block font-bold text-[#292524] mb-1">Corporate Email Address</label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="ramesh.gowda@supremebuild.com"
-                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] outline-hidden font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] outline-hidden font-medium"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Select Enterprise Role (1 of 7)</label>
+                <label className="block font-bold text-[#292524] mb-1">Select Enterprise Role (1 of 7)</label>
                 <select
                   value={role}
                   onChange={(e: any) => setRole(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#E2E8F0] bg-white outline-hidden font-bold text-[#203D91]"
+                  className="w-full px-3 py-2 rounded-xl border border-[#E7E5E4] bg-white outline-hidden font-bold text-[#943D24]"
                 >
                   {rolesConfig.map((r) => (
                     <option key={r.role} value={r.role}>
@@ -326,40 +326,40 @@ export const VendorTeamPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">
+                <p className="text-[10px] text-[#78716C] mt-1">
                   {rolesConfig.find((r) => r.role === role)?.desc}
                 </p>
               </div>
 
               {/* Permissions Checklist */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1.5">Custom Granted Permissions</label>
-                <div className="grid grid-cols-2 gap-2 bg-[#F4F7FC] p-3 rounded-xl border border-[#E2E8F0]">
+                <label className="block font-bold text-[#292524] mb-1.5">Custom Granted Permissions</label>
+                <div className="grid grid-cols-2 gap-2 bg-[#FBF3F0] p-3 rounded-xl border border-[#E7E5E4]">
                   {permissionsList.map((perm) => (
                     <label key={perm.id} className="flex items-center gap-2 cursor-pointer text-[11px]">
                       <input
                         type="checkbox"
                         checked={selectedPermissions.includes(perm.id)}
                         onChange={() => handleTogglePerm(perm.id)}
-                        className="w-3.5 h-3.5 rounded text-[#203D91]"
+                        className="w-3.5 h-3.5 rounded text-[#943D24]"
                       />
-                      <span className="text-slate-700">{perm.label}</span>
+                      <span className="text-[#292524]">{perm.label}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E2E8F0]">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#E7E5E4]">
                 <button
                   type="button"
                   onClick={() => setIsInviteModalOpen(false)}
-                  className="px-4 py-2 font-bold text-slate-600 hover:bg-[#F4F7FC] rounded-xl"
+                  className="px-4 py-2 font-bold text-[#78716C] hover:bg-[#FBF3F0] rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 font-bold text-white bg-[#203D91] hover:bg-[#17233C] rounded-xl shadow-xs"
+                  className="px-5 py-2 font-bold text-white bg-[#943D24] hover:bg-[#292524] rounded-xl shadow-xs"
                 >
                   Send Invitation
                 </button>

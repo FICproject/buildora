@@ -135,7 +135,7 @@ export const VendorWarehousesPage: React.FC = () => {
 
       {loading ? (
         <Card>
-          <CardContent className="py-12 text-center text-xs text-[#718096]">
+          <CardContent className="py-12 text-center text-xs text-[#78716C]">
             Loading warehouses...
           </CardContent>
         </Card>
@@ -160,19 +160,19 @@ export const VendorWarehousesPage: React.FC = () => {
                 ? totalUnits
                 : Math.round(totalUnits * (wh.isPrimary ? 0.65 : 0.35 / Math.max(1, warehouses.length - 1)));
             return (
-              <Card key={wh.id} className={wh.isPrimary ? 'border-[#23438F]/50' : ''}>
+              <Card key={wh.id} className={wh.isPrimary ? 'border-[#943D24]/50' : ''}>
                 <CardContent className="p-5 flex flex-col justify-between h-full space-y-4">
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-[#EEF3FA] text-[#23438F] flex items-center justify-center shrink-0">
+                        <div className="w-9 h-9 rounded-lg bg-[#FBF3F0] text-[#943D24] flex items-center justify-center shrink-0">
                           <Warehouse className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="text-sm font-semibold text-[#263247] truncate">
+                          <h3 className="text-sm font-semibold text-[#292524] truncate">
                             {wh.name}
                           </h3>
-                          <p className="text-xs text-[#718096]">Pincode: {wh.pincode}</p>
+                          <p className="text-xs text-[#78716C]">Pincode: {wh.pincode}</p>
                         </div>
                       </div>
                       <Badge variant="success" size="sm">
@@ -180,7 +180,7 @@ export const VendorWarehousesPage: React.FC = () => {
                       </Badge>
                     </div>
 
-                    <div className="space-y-2 mt-4 text-xs text-[#718096]">
+                    <div className="space-y-2 mt-4 text-xs text-[#78716C]">
                       <div className="flex items-start gap-2">
                         <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                         <span>
@@ -202,10 +202,10 @@ export const VendorWarehousesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-[#E5E9F0] flex items-center justify-between text-xs">
+                  <div className="pt-3 border-t border-[#E7E5E4] flex items-center justify-between text-xs">
                     <div>
-                      <span className="text-[#718096]">Stock: </span>
-                      <strong className="text-[#263247]">{whUnits} units</strong>
+                      <span className="text-[#78716C]">Stock: </span>
+                      <strong className="text-[#292524]">{whUnits} units</strong>
                       {wh.isPrimary && (
                         <Badge variant="brand" size="sm" className="ml-2">
                           Primary
@@ -216,7 +216,7 @@ export const VendorWarehousesPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => openEditModal(wh)}
-                        className="p-1.5 rounded-lg text-[#718096] hover:text-[#23438F] hover:bg-[#EEF3FA] cursor-pointer"
+                        className="p-1.5 rounded-lg text-[#78716C] hover:text-[#943D24] hover:bg-[#FBF3F0] cursor-pointer"
                         title="Edit Warehouse"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -225,7 +225,7 @@ export const VendorWarehousesPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setDeleteTarget(wh)}
-                          className="p-1.5 rounded-lg text-[#718096] hover:text-[#DC4545] hover:bg-[#DC4545]/10 cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#78716C] hover:text-[#DC4545] hover:bg-[#DC4545]/10 cursor-pointer"
                           title="Delete Warehouse"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -323,22 +323,22 @@ export const VendorWarehousesPage: React.FC = () => {
               />
             </div>
             <div className="flex items-end pb-2">
-              <label className="flex items-center gap-2 text-xs font-medium text-[#263247] cursor-pointer">
+              <label className="flex items-center gap-2 text-xs font-medium text-[#292524] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isPrimary}
                   onChange={(e) => setIsPrimary(e.target.checked)}
-                  className="w-4 h-4 rounded text-[#23438F]"
+                  className="w-4 h-4 rounded text-[#943D24]"
                 />
                 <span>Set as Primary Warehouse</span>
               </label>
             </div>
           </div>
 
-          <div className="pt-2 flex justify-end gap-2.5 border-t border-[#E5E9F0]">
+          <div className="pt-2 flex justify-end gap-2.5 border-t border-[#E7E5E4]">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setIsAddModalOpen(false)}
             >

@@ -153,7 +153,7 @@ export const VendorInventoryPage: React.FC = () => {
           title="Low Stock Items"
           value={lowStockCount}
           subtitle="At or below threshold"
-          icon={<AlertTriangle className="w-4 h-4 text-[#E6A23C]" />}
+          icon={<AlertTriangle className="w-4 h-4 text-[#D99B16]" />}
           onClick={() => {
             setActiveTab('STOCK');
             setStatusFilter('LOW_STOCK');
@@ -172,7 +172,7 @@ export const VendorInventoryPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E9F0] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E7E5E4] pb-2">
         {[
           { id: 'STOCK', label: 'Stock Levels', icon: Boxes },
           { id: 'WAREHOUSES', label: 'Warehouse-wise Stock', icon: Warehouse },
@@ -186,8 +186,8 @@ export const VendorInventoryPage: React.FC = () => {
               onClick={() => setActiveTab(tab.id as InventoryTab)}
               className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-[#23438F] text-white'
-                  : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+                  ? 'bg-[#943D24] text-white'
+                  : 'text-[#78716C] hover:text-[#292524] hover:bg-white'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -203,7 +203,7 @@ export const VendorInventoryPage: React.FC = () => {
             <CardContent className="p-4">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="relative flex-1">
-                  <Search className="w-4 h-4 text-[#718096] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={search}
@@ -235,7 +235,7 @@ export const VendorInventoryPage: React.FC = () => {
           <Card>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+                <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                   <tr>
                     <th className="py-3 px-4">Product</th>
                     <th className="py-3 px-4">SKU</th>
@@ -246,7 +246,7 @@ export const VendorInventoryPage: React.FC = () => {
                     <th className="py-3 px-4 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E5E9F0]">
+                <tbody className="divide-y divide-[#E7E5E4]">
                   {paginatedInventory.length === 0 ? (
                     <tr>
                       <td colSpan={7}>
@@ -259,19 +259,19 @@ export const VendorInventoryPage: React.FC = () => {
                     </tr>
                   ) : (
                     paginatedInventory.map((item) => (
-                      <tr key={item.id} className="hover:bg-[#F7F8FA] transition-colors">
+                      <tr key={item.id} className="hover:bg-[#F8F7F5] transition-colors">
                         <td className="py-3.5 px-4">
-                          <div className="font-semibold text-[#263247]">{item.name}</div>
-                          <div className="text-[11px] text-[#718096]">{item.category}</div>
+                          <div className="font-semibold text-[#292524]">{item.name}</div>
+                          <div className="text-[11px] text-[#78716C]">{item.category}</div>
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-[#263247]">{item.sku}</td>
-                        <td className="py-3.5 px-4 font-semibold text-[#263247]">
+                        <td className="py-3.5 px-4 font-mono text-[#292524]">{item.sku}</td>
+                        <td className="py-3.5 px-4 font-semibold text-[#292524]">
                           {item.stock} units
                         </td>
-                        <td className="py-3.5 px-4 text-[#718096]">
+                        <td className="py-3.5 px-4 text-[#78716C]">
                           {item.reservedStock ?? 0} units
                         </td>
-                        <td className="py-3.5 px-4 text-[#718096]">
+                        <td className="py-3.5 px-4 text-[#78716C]">
                           {item.lowStockThreshold} units
                         </td>
                         <td className="py-3.5 px-4">
@@ -334,8 +334,8 @@ export const VendorInventoryPage: React.FC = () => {
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className="text-sm font-semibold text-[#263247]">{wh.name}</h3>
-                      <p className="text-xs text-[#718096]">
+                      <h3 className="text-sm font-semibold text-[#292524]">{wh.name}</h3>
+                      <p className="text-xs text-[#78716C]">
                         {wh.city} - {wh.pincode}
                       </p>
                     </div>
@@ -343,18 +343,18 @@ export const VendorInventoryPage: React.FC = () => {
                       {wh.isPrimary ? 'Primary' : 'Secondary'}
                     </Badge>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 pt-3 border-t border-[#E5E9F0] text-xs">
+                  <div className="grid grid-cols-3 gap-3 pt-3 border-t border-[#E7E5E4] text-xs">
                     <div>
-                      <span className="text-[#718096] block">SKUs</span>
-                      <span className="text-base font-bold text-[#263247]">{whItems.length}</span>
+                      <span className="text-[#78716C] block">SKUs</span>
+                      <span className="text-base font-bold text-[#292524]">{whItems.length}</span>
                     </div>
                     <div>
-                      <span className="text-[#718096] block">Available Units</span>
-                      <span className="text-base font-bold text-[#263247]">{whStock}</span>
+                      <span className="text-[#78716C] block">Available Units</span>
+                      <span className="text-base font-bold text-[#292524]">{whStock}</span>
                     </div>
                     <div>
-                      <span className="text-[#718096] block">Alerts</span>
-                      <span className="text-base font-bold text-[#E6A23C]">{whLow}</span>
+                      <span className="text-[#78716C] block">Alerts</span>
+                      <span className="text-base font-bold text-[#D99B16]">{whLow}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -368,7 +368,7 @@ export const VendorInventoryPage: React.FC = () => {
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Date</th>
                   <th className="py-3 px-4">Product</th>
@@ -378,7 +378,7 @@ export const VendorInventoryPage: React.FC = () => {
                   <th className="py-3 px-4">Reason</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {movements.length === 0 ? (
                   <tr>
                     <td colSpan={6}>
@@ -391,13 +391,13 @@ export const VendorInventoryPage: React.FC = () => {
                   </tr>
                 ) : (
                   movements.map((m) => (
-                    <tr key={m.id} className="hover:bg-[#F7F8FA]">
-                      <td className="py-3 px-4 text-[#718096] whitespace-nowrap">
+                    <tr key={m.id} className="hover:bg-[#F8F7F5]">
+                      <td className="py-3 px-4 text-[#78716C] whitespace-nowrap">
                         {new Date(m.createdAt).toLocaleDateString('en-IN')}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="font-semibold text-[#263247]">{m.productName}</div>
-                        <div className="text-[11px] font-mono text-[#718096]">{m.sku}</div>
+                        <div className="font-semibold text-[#292524]">{m.productName}</div>
+                        <div className="text-[11px] font-mono text-[#78716C]">{m.sku}</div>
                       </td>
                       <td className="py-3 px-4">
                         <Badge
@@ -420,10 +420,10 @@ export const VendorInventoryPage: React.FC = () => {
                       >
                         {m.quantityDelta >= 0 ? `+${m.quantityDelta}` : m.quantityDelta}
                       </td>
-                      <td className="py-3 px-4 text-[#263247] font-medium">
+                      <td className="py-3 px-4 text-[#292524] font-medium">
                         {m.quantityAfter} units
                       </td>
-                      <td className="py-3 px-4 text-[#718096]">{m.reason}</td>
+                      <td className="py-3 px-4 text-[#78716C]">{m.reason}</td>
                     </tr>
                   ))
                 )}
@@ -456,8 +456,8 @@ export const VendorInventoryPage: React.FC = () => {
                   onClick={() => setAdjustmentType(opt.type as any)}
                   className={`py-2 px-3 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
                     adjustmentType === opt.type
-                      ? 'border-[#23438F] bg-[#EEF3FA] text-[#23438F]'
-                      : 'border-[#E5E9F0] text-[#718096] hover:text-[#263247]'
+                      ? 'border-[#943D24] bg-[#FBF3F0] text-[#943D24]'
+                      : 'border-[#E7E5E4] text-[#78716C] hover:text-[#292524]'
                   }`}
                 >
                   {opt.label}
@@ -492,14 +492,14 @@ export const VendorInventoryPage: React.FC = () => {
             />
           </div>
 
-          <div className="p-3 bg-[#F7F8FA] rounded-lg border border-[#E5E9F0] text-xs space-y-1">
+          <div className="p-3 bg-[#F8F7F5] rounded-lg border border-[#E7E5E4] text-xs space-y-1">
             <div className="flex justify-between">
-              <span className="text-[#718096]">Current Stock:</span>
-              <span className="font-semibold text-[#263247]">{selectedItem?.stock} units</span>
+              <span className="text-[#78716C]">Current Stock:</span>
+              <span className="font-semibold text-[#292524]">{selectedItem?.stock} units</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#718096]">Updated Stock:</span>
-              <span className="font-semibold text-[#23438F]">
+              <span className="text-[#78716C]">Updated Stock:</span>
+              <span className="font-semibold text-[#943D24]">
                 {adjustmentType === 'ADD'
                   ? (selectedItem?.stock || 0) + (parseInt(adjustmentQty, 10) || 0)
                   : adjustmentType === 'SUBTRACT'
@@ -513,7 +513,7 @@ export const VendorInventoryPage: React.FC = () => {
           <div className="pt-2 flex justify-end gap-2.5">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setIsModalOpen(false)}
             >

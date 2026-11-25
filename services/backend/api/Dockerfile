@@ -37,6 +37,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
 COPY packages/ ./packages/
 COPY services/backend/api/ ./services/backend/api/
+COPY --from=builder /app/services/backend/api/dist ./services/backend/api/dist
 
 # Install production dependencies only
 RUN pnpm install --prod --frozen-lockfile

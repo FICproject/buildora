@@ -173,21 +173,21 @@ export const VendorBusinessProfilePage: React.FC = () => {
             }
           />
           <CardContent className="space-y-5">
-            <div className="p-4 rounded-xl bg-[#F7F8FA] border border-[#E5E9F0] flex flex-wrap items-center gap-4">
-              <div className="w-16 h-16 rounded-xl border border-[#E5E9F0] bg-white flex items-center justify-center overflow-hidden shrink-0">
+            <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex flex-wrap items-center gap-4">
+              <div className="w-16 h-16 rounded-xl border border-[#E7E5E4] bg-white flex items-center justify-center overflow-hidden shrink-0">
                 {isUploadingLogo ? (
-                  <Loader2 className="w-5 h-5 text-[#23438F] animate-spin" />
+                  <Loader2 className="w-5 h-5 text-[#943D24] animate-spin" />
                 ) : logoPreview ? (
                   <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
-                  <ImageIcon className="w-6 h-6 text-[#718096]" />
+                  <ImageIcon className="w-6 h-6 text-[#78716C]" />
                 )}
               </div>
               <div className="flex-1 min-w-[200px] space-y-1.5">
-                <p className="text-xs font-semibold text-[#263247]">Business Logo</p>
-                <p className="text-[11px] text-[#718096]">JPG, PNG, or WEBP up to 5 MB</p>
+                <p className="text-xs font-semibold text-[#292524]">Business Logo</p>
+                <p className="text-[11px] text-[#78716C]">JPG, PNG, or WEBP up to 5 MB</p>
                 <div className="flex items-center gap-2 pt-1">
-                  <label className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#23438F] text-white hover:bg-[#1B3573] cursor-pointer inline-flex items-center gap-1.5">
+                  <label className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#943D24] text-white hover:bg-[#7D331E] cursor-pointer inline-flex items-center gap-1.5">
                     <UploadCloud className="w-3.5 h-3.5" />
                     <span>{logoPreview ? 'Change Logo' : 'Upload Logo'}</span>
                     <input
@@ -202,7 +202,7 @@ export const VendorBusinessProfilePage: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleRemoveLogo}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#DC4545] bg-white border border-[#E5E9F0] hover:bg-[#DC4545]/10 inline-flex items-center gap-1 cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#DC4545] bg-white border border-[#E7E5E4] hover:bg-[#DC4545]/10 inline-flex items-center gap-1 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Remove
                     </button>
@@ -305,19 +305,19 @@ export const VendorBusinessProfilePage: React.FC = () => {
             </div>
 
             {docs.length > 0 && (
-              <div className="divide-y divide-[#E5E9F0] border border-[#E5E9F0] rounded-xl">
+              <div className="divide-y divide-[#E7E5E4] border border-[#E7E5E4] rounded-xl">
                 {docs.map((doc: any, idx: number) => (
                   <div
                     key={doc.id || idx}
                     className="px-4 py-3 flex items-center justify-between gap-3 text-xs"
                   >
                     <div className="flex items-center gap-2.5">
-                      <FileText className="w-4 h-4 text-[#23438F]" />
+                      <FileText className="w-4 h-4 text-[#943D24]" />
                       <div>
-                        <p className="font-medium text-[#263247]">
+                        <p className="font-medium text-[#292524]">
                           {doc.title || doc.name || doc.type}
                         </p>
-                        <p className="text-[11px] text-[#718096]">{doc.fileName || doc.type}</p>
+                        <p className="text-[11px] text-[#78716C]">{doc.fileName || doc.type}</p>
                       </div>
                     </div>
                     <Badge variant="success" size="sm">
@@ -335,7 +335,7 @@ export const VendorBusinessProfilePage: React.FC = () => {
           <CardHeader
             title="Bank Account Details"
             subtitle="Account used for settlements and payouts"
-            action={<CreditCard className="w-4 h-4 text-[#718096]" />}
+            action={<CreditCard className="w-4 h-4 text-[#78716C]" />}
           />
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -384,13 +384,13 @@ export const VendorBusinessProfilePage: React.FC = () => {
           <CardHeader
             title="Primary Warehouse"
             action={
-              <Link to="/warehouses" className="text-xs font-medium text-[#23438F] hover:underline">
+              <Link to="/warehouses" className="text-xs font-medium text-[#943D24] hover:underline">
                 Manage Warehouses
               </Link>
             }
           />
-          <CardContent className="flex items-center gap-3 text-xs text-[#718096]">
-            <Warehouse className="w-4 h-4 text-[#23438F] shrink-0" />
+          <CardContent className="flex items-center gap-3 text-xs text-[#78716C]">
+            <Warehouse className="w-4 h-4 text-[#943D24] shrink-0" />
             <span>
               {vendor?.businessInfo?.warehouseAddress ||
                 'Plot 88, Peenya 2nd Stage, Bengaluru, Karnataka 560058'}

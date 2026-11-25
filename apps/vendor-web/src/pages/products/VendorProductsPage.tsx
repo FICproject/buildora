@@ -516,7 +516,7 @@ export const VendorProductsPage: React.FC = () => {
               variant="secondary"
               size="sm"
               onClick={() => navigate('/new-launches')}
-              leftIcon={<Sparkles className="w-4 h-4 text-[#F58220]" />}
+              leftIcon={<Sparkles className="w-4 h-4 text-[#943D24]" />}
             >
               New Launches
             </Button>
@@ -545,7 +545,7 @@ export const VendorProductsPage: React.FC = () => {
         <CardContent className="p-4">
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-[#718096] absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
@@ -598,7 +598,7 @@ export const VendorProductsPage: React.FC = () => {
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+            <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
               <tr>
                 <th className="py-3 px-4">Product</th>
                 <th className="py-3 px-4">SKU & Brand</th>
@@ -610,7 +610,7 @@ export const VendorProductsPage: React.FC = () => {
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E9F0]">
+            <tbody className="divide-y divide-[#E7E5E4]">
               {paginatedProducts.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
@@ -633,23 +633,23 @@ export const VendorProductsPage: React.FC = () => {
                   const statusLabel = p.status || (stockNum > 0 ? 'ACTIVE' : 'OUT_OF_STOCK');
 
                   return (
-                    <tr key={p.id} className="hover:bg-[#F7F8FA] transition-colors">
+                    <tr key={p.id} className="hover:bg-[#F8F7F5] transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
                           {p.images?.[0] ? (
                             <img
                               src={p.images[0]}
                               alt={p.name}
-                              className="w-10 h-10 rounded-lg object-cover border border-[#E5E9F0] shrink-0 bg-[#F7F8FA]"
+                              className="w-10 h-10 rounded-lg object-cover border border-[#E7E5E4] shrink-0 bg-[#F8F7F5]"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-lg bg-[#EEF3FA] flex items-center justify-center text-[#23438F] shrink-0">
+                            <div className="w-10 h-10 rounded-lg bg-[#FBF3F0] flex items-center justify-center text-[#943D24] shrink-0">
                               <Package className="w-4 h-4" />
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="font-semibold text-[#263247] line-clamp-1">{p.name}</p>
-                            <p className="text-[11px] text-[#718096]">
+                            <p className="font-semibold text-[#292524] line-clamp-1">{p.name}</p>
+                            <p className="text-[11px] text-[#78716C]">
                               {p.unit}
                               {p.variants && p.variants.length > 0
                                 ? ` • ${p.variants.length} variants`
@@ -660,24 +660,24 @@ export const VendorProductsPage: React.FC = () => {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-mono text-[#263247]">{p.sku}</div>
-                        <div className="text-[11px] text-[#718096]">{p.brand}</div>
+                        <div className="font-mono text-[#292524]">{p.sku}</div>
+                        <div className="text-[11px] text-[#78716C]">{p.brand}</div>
                       </td>
 
-                      <td className="py-3.5 px-4 text-[#263247]">{p.category}</td>
+                      <td className="py-3.5 px-4 text-[#292524]">{p.category}</td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-[#263247]">
+                        <div className="font-semibold text-[#292524]">
                           ₹{(p.price || 0).toLocaleString('en-IN')}
                         </div>
                         {p.mrp > p.price && (
-                          <div className="text-[11px] text-[#718096] line-through">
+                          <div className="text-[11px] text-[#78716C] line-through">
                             ₹{p.mrp.toLocaleString('en-IN')}
                           </div>
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4 text-[#718096]">{p.gstRate ?? 18}%</td>
+                      <td className="py-3.5 px-4 text-[#78716C]">{p.gstRate ?? 18}%</td>
 
                       <td className="py-3.5 px-4">
                         <span
@@ -685,8 +685,8 @@ export const VendorProductsPage: React.FC = () => {
                             stockNum === 0
                               ? 'text-[#DC4545]'
                               : isLow
-                              ? 'text-[#E6A23C]'
-                              : 'text-[#263247]'
+                              ? 'text-[#D99B16]'
+                              : 'text-[#292524]'
                           }`}
                         >
                           {stockNum}
@@ -713,7 +713,7 @@ export const VendorProductsPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => openEditModal(p)}
-                            className="p-1.5 rounded-lg text-[#718096] hover:text-[#23438F] hover:bg-[#EEF3FA] transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-[#78716C] hover:text-[#943D24] hover:bg-[#FBF3F0] transition-colors cursor-pointer"
                             title="Edit Product"
                             aria-label={`Edit ${p.name}`}
                           >
@@ -722,7 +722,7 @@ export const VendorProductsPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setDeleteTarget(p)}
-                            className="p-1.5 rounded-lg text-[#718096] hover:text-[#DC4545] hover:bg-[#DC4545]/10 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-[#78716C] hover:text-[#DC4545] hover:bg-[#DC4545]/10 transition-colors cursor-pointer"
                             title="Delete Product"
                             aria-label={`Delete ${p.name}`}
                           >
@@ -762,7 +762,7 @@ export const VendorProductsPage: React.FC = () => {
 
           {/* Section 1: Basic Information */}
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
               Basic Information
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -826,8 +826,8 @@ export const VendorProductsPage: React.FC = () => {
           </div>
 
           {/* Section 2: Pricing, GST & Availability */}
-          <div className="space-y-3 pt-4 border-t border-[#E5E9F0]">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+          <div className="space-y-3 pt-4 border-t border-[#E7E5E4]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
               Pricing, GST & Availability
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -891,12 +891,12 @@ export const VendorProductsPage: React.FC = () => {
                 </select>
               </div>
               <div className="flex items-end pb-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-[#263247] cursor-pointer">
+                <label className="flex items-center gap-2 text-xs font-medium text-[#292524] cursor-pointer">
                   <input
                     type="checkbox"
                     checked={inStock}
                     onChange={(e) => setInStock(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#23438F]"
+                    className="w-4 h-4 rounded text-[#943D24]"
                   />
                   <span>Available for ordering (In Stock)</span>
                 </label>
@@ -905,8 +905,8 @@ export const VendorProductsPage: React.FC = () => {
           </div>
 
           {/* Section 3: Stock & Specifications */}
-          <div className="space-y-3 pt-4 border-t border-[#E5E9F0]">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+          <div className="space-y-3 pt-4 border-t border-[#E7E5E4]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
               Stock & Specifications
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -955,8 +955,8 @@ export const VendorProductsPage: React.FC = () => {
           </div>
 
           {/* Section 4: Images & Description */}
-          <div className="space-y-3 pt-4 border-t border-[#E5E9F0]">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+          <div className="space-y-3 pt-4 border-t border-[#E7E5E4]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
               Images & Description
             </h3>
             <div className="grid grid-cols-1 gap-4">
@@ -979,7 +979,7 @@ export const VendorProductsPage: React.FC = () => {
                       .map((url, idx) => (
                         <div
                           key={idx}
-                          className="w-14 h-14 rounded-lg border border-[#E5E9F0] overflow-hidden bg-[#F7F8FA] flex items-center justify-center"
+                          className="w-14 h-14 rounded-lg border border-[#E7E5E4] overflow-hidden bg-[#F8F7F5] flex items-center justify-center"
                         >
                           <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
                         </div>
@@ -997,12 +997,12 @@ export const VendorProductsPage: React.FC = () => {
                   className="portal-input"
                 />
               </div>
-              <label className="flex items-center gap-2 text-xs font-medium text-[#263247] cursor-pointer">
+              <label className="flex items-center gap-2 text-xs font-medium text-[#292524] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isNewLaunch}
                   onChange={(e) => setIsNewLaunch(e.target.checked)}
-                  className="w-4 h-4 rounded text-[#23438F]"
+                  className="w-4 h-4 rounded text-[#943D24]"
                 />
                 <span>Feature this product in New Launches</span>
               </label>
@@ -1010,36 +1010,36 @@ export const VendorProductsPage: React.FC = () => {
           </div>
 
           {/* Section 5: Variants & Configurable Options */}
-          <div className="p-4 rounded-xl border border-[#E5E9F0] bg-[#F7F8FA] space-y-4">
+          <div className="p-4 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <div className="text-xs font-semibold text-[#263247] flex items-center gap-1.5">
-                  <Sliders className="w-4 h-4 text-[#23438F]" />
+                <div className="text-xs font-semibold text-[#292524] flex items-center gap-1.5">
+                  <Sliders className="w-4 h-4 text-[#943D24]" />
                   <span>Product Variants</span>
                 </div>
-                <p className="text-[11px] text-[#718096]">
+                <p className="text-[11px] text-[#78716C]">
                   Optional size, thickness, or colour options with separate SKUs and pricing.
                 </p>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-[#263247] bg-white px-3 py-1.5 rounded-lg border border-[#E5E9F0]">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-[#292524] bg-white px-3 py-1.5 rounded-lg border border-[#E7E5E4]">
                 <input
                   type="checkbox"
                   checked={hasVariants}
                   onChange={(e) => setHasVariants(e.target.checked)}
-                  className="w-4 h-4 text-[#23438F] rounded"
+                  className="w-4 h-4 text-[#943D24] rounded"
                 />
                 <span>Enable Variants</span>
               </label>
             </div>
 
             {hasVariants && (
-              <div className="space-y-4 pt-3 border-t border-[#E5E9F0]">
+              <div className="space-y-4 pt-3 border-t border-[#E7E5E4]">
                 {(() => {
                   const templates = getAttributeTemplatesForCategory(category);
                   if (templates.length === 0) return null;
                   return (
-                    <div className="p-3 bg-[#EEF3FA] rounded-lg border border-[#23438F]/15 space-y-1.5">
-                      <div className="text-[11px] font-semibold text-[#23438F]">
+                    <div className="p-3 bg-[#FBF3F0] rounded-lg border border-[#943D24]/15 space-y-1.5">
+                      <div className="text-[11px] font-semibold text-[#943D24]">
                         Suggested Option Templates for {category}:
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -1055,8 +1055,8 @@ export const VendorProductsPage: React.FC = () => {
                               onClick={() => handleAddTemplateOption(tpl)}
                               className={`text-[11px] font-medium px-2.5 py-1 rounded-md border ${
                                 isAdded
-                                  ? 'bg-[#F7F8FA] text-[#718096] border-[#E5E9F0] cursor-not-allowed'
-                                  : 'bg-white text-[#23438F] border-[#E5E9F0] hover:border-[#23438F] cursor-pointer'
+                                  ? 'bg-[#F8F7F5] text-[#78716C] border-[#E7E5E4] cursor-not-allowed'
+                                  : 'bg-white text-[#943D24] border-[#E7E5E4] hover:border-[#943D24] cursor-pointer'
                               }`}
                             >
                               + {tpl.name}
@@ -1070,7 +1070,7 @@ export const VendorProductsPage: React.FC = () => {
 
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-[#263247]">
+                    <span className="text-xs font-semibold text-[#292524]">
                       Option Groups ({formAttributes.length})
                     </span>
                     <Button
@@ -1087,10 +1087,10 @@ export const VendorProductsPage: React.FC = () => {
                   {formAttributes.map((attr, idx) => (
                     <div
                       key={attr.id}
-                      className="p-3 bg-white rounded-lg border border-[#E5E9F0] space-y-2"
+                      className="p-3 bg-white rounded-lg border border-[#E7E5E4] space-y-2"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-[#263247]">
+                        <span className="text-xs font-medium text-[#292524]">
                           Group {idx + 1}
                         </span>
                         {formAttributes.length > 1 && (
@@ -1105,7 +1105,7 @@ export const VendorProductsPage: React.FC = () => {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                         <div>
-                          <label className="block text-[11px] font-medium text-[#718096] mb-1">
+                          <label className="block text-[11px] font-medium text-[#78716C] mb-1">
                             Option Name
                           </label>
                           <input
@@ -1116,7 +1116,7 @@ export const VendorProductsPage: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-medium text-[#718096] mb-1">
+                          <label className="block text-[11px] font-medium text-[#78716C] mb-1">
                             Display Type
                           </label>
                           <select
@@ -1138,7 +1138,7 @@ export const VendorProductsPage: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[11px] font-medium text-[#718096] mb-1">
+                          <label className="block text-[11px] font-medium text-[#78716C] mb-1">
                             Values (comma separated)
                           </label>
                           <input
@@ -1167,7 +1167,7 @@ export const VendorProductsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleAddVariantRow}
-                      className="text-xs font-medium text-[#23438F] hover:underline cursor-pointer"
+                      className="text-xs font-medium text-[#943D24] hover:underline cursor-pointer"
                     >
                       + Add Custom Row
                     </button>
@@ -1175,9 +1175,9 @@ export const VendorProductsPage: React.FC = () => {
                 </div>
 
                 {formVariants.length > 0 && (
-                  <div className="overflow-x-auto max-h-64 rounded-lg border border-[#E5E9F0] bg-white">
+                  <div className="overflow-x-auto max-h-64 rounded-lg border border-[#E7E5E4] bg-white">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0] sticky top-0">
+                      <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4] sticky top-0">
                         <tr>
                           <th className="p-2.5">Variant</th>
                           <th className="p-2.5">SKU</th>
@@ -1189,7 +1189,7 @@ export const VendorProductsPage: React.FC = () => {
                           <th className="p-2.5 text-center">Remove</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#E5E9F0]">
+                      <tbody className="divide-y divide-[#E7E5E4]">
                         {formVariants.map((v, vIdx) => (
                           <tr key={v.id || vIdx}>
                             <td className="p-2">
@@ -1197,7 +1197,7 @@ export const VendorProductsPage: React.FC = () => {
                                 type="text"
                                 value={v.name}
                                 onChange={(e) => handleVariantChange(vIdx, 'name', e.target.value)}
-                                className="w-32 px-2 py-1 border border-[#E5E9F0] rounded text-xs"
+                                className="w-32 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
                               />
                             </td>
                             <td className="p-2">
@@ -1205,7 +1205,7 @@ export const VendorProductsPage: React.FC = () => {
                                 type="text"
                                 value={v.sku}
                                 onChange={(e) => handleVariantChange(vIdx, 'sku', e.target.value)}
-                                className="w-28 px-2 py-1 border border-[#E5E9F0] rounded text-xs font-mono"
+                                className="w-28 px-2 py-1 border border-[#E7E5E4] rounded text-xs font-mono"
                               />
                             </td>
                             <td className="p-2">
@@ -1215,7 +1215,7 @@ export const VendorProductsPage: React.FC = () => {
                                 onChange={(e) =>
                                   handleVariantChange(vIdx, 'price', Number(e.target.value))
                                 }
-                                className="w-20 px-2 py-1 border border-[#E5E9F0] rounded text-xs"
+                                className="w-20 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
                               />
                             </td>
                             <td className="p-2">
@@ -1225,7 +1225,7 @@ export const VendorProductsPage: React.FC = () => {
                                 onChange={(e) =>
                                   handleVariantChange(vIdx, 'mrp', Number(e.target.value))
                                 }
-                                className="w-20 px-2 py-1 border border-[#E5E9F0] rounded text-xs"
+                                className="w-20 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
                               />
                             </td>
                             <td className="p-2">
@@ -1235,7 +1235,7 @@ export const VendorProductsPage: React.FC = () => {
                                 onChange={(e) =>
                                   handleVariantChange(vIdx, 'stock', Number(e.target.value))
                                 }
-                                className="w-16 px-2 py-1 border border-[#E5E9F0] rounded text-xs"
+                                className="w-16 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
                               />
                             </td>
                             <td className="p-2 text-center">
@@ -1275,10 +1275,10 @@ export const VendorProductsPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#E5E9F0]">
+          <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#E7E5E4]">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setIsModalOpen(false)}
             >

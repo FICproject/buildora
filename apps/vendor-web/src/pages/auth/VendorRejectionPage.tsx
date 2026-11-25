@@ -46,9 +46,9 @@ export const VendorRejectionPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-[#E2E8F0] space-y-6 animate-in fade-in-0 duration-200">
+    <div className="w-full bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-[#E7E5E4] space-y-6 animate-in fade-in-0 duration-200">
       {/* Rejection Alert Header */}
-      <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+      <div className="flex items-center gap-3 pb-4 border-b border-[#E7E5E4]">
         <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
           <AlertTriangle className="w-6 h-6" />
         </div>
@@ -56,7 +56,7 @@ export const VendorRejectionPage: React.FC = () => {
           <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600">
             Action Required
           </span>
-          <h2 className="text-2xl font-black text-[#17233C] tracking-tight">
+          <h2 className="text-2xl font-black text-[#292524] tracking-tight">
             Application Needs Revision
           </h2>
         </div>
@@ -89,9 +89,9 @@ export const VendorRejectionPage: React.FC = () => {
       </div>
 
       {/* Guidance */}
-      <div className="p-4 rounded-2xl bg-[#F4F7FC] border border-[#E2E8F0] text-xs text-slate-600 space-y-2">
-        <h4 className="font-bold text-[#17233C]">How to Resolve This:</h4>
-        <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-600">
+      <div className="p-4 rounded-2xl bg-[#FBF3F0] border border-[#E7E5E4] text-xs text-[#78716C] space-y-2">
+        <h4 className="font-bold text-[#292524]">How to Resolve This:</h4>
+        <ol className="list-decimal list-inside space-y-1 text-[11px] text-[#78716C]">
           <li>Ensure your GSTIN matches Karnataka tax jurisdiction code 29.</li>
           <li>Upload high-resolution original PDF scans (photocopies or camera screenshots may be rejected).</li>
           <li>Provide a clarification note below explaining the updates made to your submission.</li>
@@ -101,7 +101,7 @@ export const VendorRejectionPage: React.FC = () => {
       {/* Resubmission Form */}
       <form onSubmit={handleResubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-bold text-[#17233C] mb-1.5">
+          <label className="block text-xs font-bold text-[#292524] mb-1.5">
             Clarification Notes / Document Updates *
           </label>
           <textarea
@@ -110,7 +110,7 @@ export const VendorRejectionPage: React.FC = () => {
             onChange={(e) => setResubmitNotes(e.target.value)}
             required
             placeholder="Explain the changes made (e.g. Uploaded revised high-resolution Form GST REG-06 PDF certificate with clear address verification)..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-xs text-[#17233C] focus:outline-none focus:ring-2 focus:ring-[#203D91]"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-[#E7E5E4] text-xs text-[#292524] focus:outline-none focus:ring-2 focus:ring-[#943D24]"
           />
         </div>
 
@@ -118,7 +118,7 @@ export const VendorRejectionPage: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/register')}
-            className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-[#F4F7FC] text-[#203D91] border border-blue-200 hover:bg-blue-50 flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-[#FBF3F0] text-[#943D24] border border-[#943D24]/25 hover:bg-[#FBF3F0] flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <FileEdit className="w-4 h-4" />
             Edit Registration Wizard (Steps 1–5)
@@ -126,7 +126,7 @@ export const VendorRejectionPage: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-[#203D91] text-white hover:bg-[#162b66] shadow-md shadow-[#203D91]/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+            className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-[#943D24] text-white hover:bg-[#7D331E] shadow-md shadow-[#943D24]/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
           >
             {isSubmitting ? (
               <span className="inline-flex items-center gap-2">
@@ -144,9 +144,9 @@ export const VendorRejectionPage: React.FC = () => {
       </form>
 
       {/* Footer */}
-      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+      <div className="pt-3 border-t border-[#E7E5E4] flex items-center justify-between text-xs text-[#78716C]">
         <div className="flex items-center gap-1.5">
-          <HelpCircle className="w-4 h-4 text-slate-400" />
+          <HelpCircle className="w-4 h-4 text-[#78716C]" />
           <span>Questions? Contact compliance: 1800-60-BUILD</span>
         </div>
         <button
@@ -155,7 +155,7 @@ export const VendorRejectionPage: React.FC = () => {
             logout();
             navigate('/login');
           }}
-          className="font-bold text-slate-500 hover:text-rose-600 flex items-center gap-1"
+          className="font-bold text-[#78716C] hover:text-rose-600 flex items-center gap-1"
         >
           <LogOut className="w-3.5 h-3.5" /> Sign Out
         </button>

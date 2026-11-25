@@ -115,12 +115,12 @@ export const VendorSupportPage: React.FC = () => {
                       onClick={() => setActiveTicket(tkt)}
                       className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-colors ${
                         isSelected
-                          ? 'border-[#23438F] bg-[#EEF3FA]/70'
-                          : 'border-[#E5E9F0] hover:bg-[#F7F8FA]'
+                          ? 'border-[#943D24] bg-[#FBF3F0]/70'
+                          : 'border-[#E7E5E4] hover:bg-[#F8F7F5]'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="font-mono font-semibold text-[#263247]">
+                        <span className="font-mono font-semibold text-[#292524]">
                           {tkt.ticketNumber}
                         </span>
                         <div className="flex items-center gap-1.5">
@@ -142,8 +142,8 @@ export const VendorSupportPage: React.FC = () => {
                           </Badge>
                         </div>
                       </div>
-                      <p className="font-medium text-[#263247] line-clamp-1">{tkt.subject}</p>
-                      <p className="text-[11px] text-[#718096] mt-1">
+                      <p className="font-medium text-[#292524] line-clamp-1">{tkt.subject}</p>
+                      <p className="text-[11px] text-[#78716C] mt-1">
                         {tkt.category.replace(/_/g, ' ')} •{' '}
                         {new Date(tkt.createdAt).toLocaleDateString('en-IN')}
                       </p>
@@ -154,7 +154,7 @@ export const VendorSupportPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-4 py-3 border-t border-[#E5E9F0] text-xs text-[#718096] flex items-center justify-between">
+          <div className="px-4 py-3 border-t border-[#E7E5E4] text-xs text-[#78716C] flex items-center justify-between">
             <span>Partner Helpline: 1800-419-6060</span>
             <span>Mon–Sat, 8 AM–8 PM</span>
           </div>
@@ -164,17 +164,17 @@ export const VendorSupportPage: React.FC = () => {
         <Card className="lg:col-span-7 flex flex-col justify-between overflow-hidden">
           {activeTicket ? (
             <>
-              <div className="p-5 border-b border-[#E5E9F0] bg-[#F7F8FA]">
+              <div className="p-5 border-b border-[#E7E5E4] bg-[#F8F7F5]">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="font-mono text-xs font-semibold text-[#23438F]">
+                  <span className="font-mono text-xs font-semibold text-[#943D24]">
                     {activeTicket.ticketNumber}
                   </span>
                   <Badge variant="brand" size="sm">
                     {activeTicket.category.replace(/_/g, ' ')}
                   </Badge>
                 </div>
-                <h3 className="font-semibold text-sm text-[#263247]">{activeTicket.subject}</h3>
-                <p className="text-xs text-[#718096] mt-1">
+                <h3 className="font-semibold text-sm text-[#292524]">{activeTicket.subject}</h3>
+                <p className="text-xs text-[#78716C] mt-1">
                   Priority: {activeTicket.priority} • Created{' '}
                   {new Date(activeTicket.createdAt).toLocaleDateString('en-IN')}
                 </p>
@@ -188,7 +188,7 @@ export const VendorSupportPage: React.FC = () => {
                       key={msg.id}
                       className={`flex flex-col ${isVendor ? 'items-end' : 'items-start'}`}
                     >
-                      <div className="text-[11px] text-[#718096] mb-1">
+                      <div className="text-[11px] text-[#78716C] mb-1">
                         {msg.sender} •{' '}
                         {new Date(msg.timestamp).toLocaleTimeString('en-IN', {
                           hour: '2-digit',
@@ -198,8 +198,8 @@ export const VendorSupportPage: React.FC = () => {
                       <div
                         className={`max-w-[85%] px-4 py-2.5 rounded-xl text-xs leading-relaxed ${
                           isVendor
-                            ? 'bg-[#23438F] text-white'
-                            : 'bg-[#F7F8FA] text-[#263247] border border-[#E5E9F0]'
+                            ? 'bg-[#943D24] text-white'
+                            : 'bg-[#F8F7F5] text-[#292524] border border-[#E7E5E4]'
                         }`}
                       >
                         {msg.text}
@@ -209,7 +209,7 @@ export const VendorSupportPage: React.FC = () => {
                 })}
               </div>
 
-              <div className="p-4 border-t border-[#E5E9F0] bg-white flex items-center gap-2.5">
+              <div className="p-4 border-t border-[#E7E5E4] bg-white flex items-center gap-2.5">
                 <input
                   type="text"
                   value={replyText}
@@ -302,10 +302,10 @@ export const VendorSupportPage: React.FC = () => {
               className="portal-input"
             />
           </div>
-          <div className="pt-2 flex justify-end gap-2.5 border-t border-[#E5E9F0]">
+          <div className="pt-2 flex justify-end gap-2.5 border-t border-[#E7E5E4]">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setIsNewModalOpen(false)}
             >

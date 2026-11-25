@@ -211,7 +211,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
       />
 
       {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#E5E9F0] pb-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E7E5E4] pb-2">
         {[
           { id: 'BULK_TIERS', label: 'Bulk Pricing Tiers', icon: Layers },
           { id: 'PROMOTIONS', label: 'Discounts & Promotional Offers', icon: Tag },
@@ -225,8 +225,8 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
               onClick={() => setActiveTab(tab.id as PricingTab)}
               className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-[#23438F] text-white'
-                  : 'text-[#718096] hover:text-[#263247] hover:bg-white'
+                  ? 'bg-[#943D24] text-white'
+                  : 'text-[#78716C] hover:text-[#292524] hover:bg-white'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -264,22 +264,22 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
                   </select>
                 </div>
                 {selectedProduct && (
-                  <div className="flex flex-wrap gap-6 text-xs md:pl-4 md:border-l border-[#E5E9F0]">
+                  <div className="flex flex-wrap gap-6 text-xs md:pl-4 md:border-l border-[#E7E5E4]">
                     <div>
-                      <span className="text-[#718096] block">Base Price</span>
-                      <span className="text-base font-bold text-[#263247]">
+                      <span className="text-[#78716C] block">Base Price</span>
+                      <span className="text-base font-bold text-[#292524]">
                         ₹{selectedProduct.price.toLocaleString('en-IN')}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[#718096] block">MRP</span>
-                      <span className="text-base font-semibold text-[#718096]">
+                      <span className="text-[#78716C] block">MRP</span>
+                      <span className="text-base font-semibold text-[#78716C]">
                         ₹{selectedProduct.mrp.toLocaleString('en-IN')}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[#718096] block">Unit</span>
-                      <span className="text-sm font-medium text-[#263247]">
+                      <span className="text-[#78716C] block">Unit</span>
+                      <span className="text-sm font-medium text-[#292524]">
                         {selectedProduct.unit}
                       </span>
                     </div>
@@ -308,7 +308,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
               {tiers.map((tier, idx) => (
                 <div
                   key={idx}
-                  className="p-4 rounded-xl border border-[#E5E9F0] bg-[#F7F8FA] grid grid-cols-1 sm:grid-cols-4 gap-3 items-end"
+                  className="p-4 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] grid grid-cols-1 sm:grid-cols-4 gap-3 items-end"
                 >
                   <div>
                     <label className="portal-label">Min Quantity</label>
@@ -372,7 +372,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
       {activeTab === 'PROMOTIONS' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {promotions.length === 0 ? (
-            <div className="col-span-full bg-white rounded-xl border border-[#E5E9F0]">
+            <div className="col-span-full bg-white rounded-xl border border-[#E7E5E4]">
               <EmptyState
                 icon={<Tag className="w-5 h-5" />}
                 title="No active offers"
@@ -393,29 +393,29 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
                       <Badge variant={p.status === 'ACTIVE' ? 'success' : 'brand'} size="sm">
                         {p.status}
                       </Badge>
-                      <span className="text-sm font-bold text-[#F58220]">
+                      <span className="text-sm font-bold text-[#943D24]">
                         {p.discountType === 'PERCENTAGE'
                           ? `${p.discountValue}% OFF`
                           : `₹${p.discountValue} OFF`}
                       </span>
                     </div>
-                    <h3 className="text-sm font-semibold text-[#263247] mt-3">{p.title}</h3>
-                    <p className="text-xs text-[#718096] mt-1 line-clamp-2">{p.description}</p>
-                    <div className="mt-3 pt-3 border-t border-[#E5E9F0] text-xs text-[#718096] space-y-1">
+                    <h3 className="text-sm font-semibold text-[#292524] mt-3">{p.title}</h3>
+                    <p className="text-xs text-[#78716C] mt-1 line-clamp-2">{p.description}</p>
+                    <div className="mt-3 pt-3 border-t border-[#E7E5E4] text-xs text-[#78716C] space-y-1">
                       <div className="flex justify-between">
                         <span>Effective Dates:</span>
-                        <span className="text-[#263247] font-medium">
+                        <span className="text-[#292524] font-medium">
                           {new Date(p.startDate).toLocaleDateString('en-IN')} –{' '}
                           {new Date(p.endDate).toLocaleDateString('en-IN')}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Orders Used:</span>
-                        <span className="text-[#263247] font-medium">{p.usageCount || 0}</span>
+                        <span className="text-[#292524] font-medium">{p.usageCount || 0}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="pt-2 border-t border-[#E5E9F0] flex justify-end">
+                  <div className="pt-2 border-t border-[#E7E5E4] flex justify-end">
                     <Button
                       size="sm"
                       variant="secondary"
@@ -436,7 +436,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#F7F8FA] text-[#718096] font-semibold border-b border-[#E5E9F0]">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Product</th>
                   <th className="py-3 px-4">SKU</th>
@@ -447,21 +447,21 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5E9F0]">
+              <tbody className="divide-y divide-[#E7E5E4]">
                 {products.map((p) => (
-                  <tr key={p.id} className="hover:bg-[#F7F8FA]">
-                    <td className="py-3.5 px-4 font-medium text-[#263247]">{p.name}</td>
-                    <td className="py-3.5 px-4 font-mono text-[#718096]">{p.sku}</td>
-                    <td className="py-3.5 px-4 text-right text-[#718096]">
+                  <tr key={p.id} className="hover:bg-[#F8F7F5]">
+                    <td className="py-3.5 px-4 font-medium text-[#292524]">{p.name}</td>
+                    <td className="py-3.5 px-4 font-mono text-[#78716C]">{p.sku}</td>
+                    <td className="py-3.5 px-4 text-right text-[#78716C]">
                       ₹{(p.mrp || 0).toLocaleString('en-IN')}
                     </td>
-                    <td className="py-3.5 px-4 text-right font-semibold text-[#263247]">
+                    <td className="py-3.5 px-4 text-right font-semibold text-[#292524]">
                       ₹{(p.price || 0).toLocaleString('en-IN')}
                     </td>
-                    <td className="py-3.5 px-4 text-right text-[#718096]">
+                    <td className="py-3.5 px-4 text-right text-[#78716C]">
                       {p.variants?.length || 0}
                     </td>
-                    <td className="py-3.5 px-4 text-right text-[#718096]">
+                    <td className="py-3.5 px-4 text-right text-[#78716C]">
                       {p.bulkPricing?.length || 0}
                     </td>
                     <td className="py-3.5 px-4 text-right">
@@ -566,7 +566,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
           <div className="pt-2 flex justify-end gap-2.5">
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="sm"
               onClick={() => setIsPromoModalOpen(false)}
             >

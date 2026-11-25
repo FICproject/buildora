@@ -44,6 +44,7 @@ export const HomePage: React.FC = () => {
   // Dynamic live backend state initialized with defaults
   const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
   const [categories, setCategories] = useState<Category[]>(MASTER_CATEGORIES);
+  const [storefrontContent, setStorefrontContent] = useState<any>(null);
 
   // Fetch real data from Backend API on mount
   useEffect(() => {
@@ -53,6 +54,9 @@ export const HomePage: React.FC = () => {
     });
     api.getCategories().then((c) => {
       if (isMounted && c && c.length > 0) setCategories(c);
+    });
+    api.getPublishedStorefrontContent().then((sf) => {
+      if (isMounted && sf) setStorefrontContent(sf);
     });
     return () => {
       isMounted = false;
@@ -81,8 +85,33 @@ export const HomePage: React.FC = () => {
   const civilSpotlight = products.filter((p) => p.categorySlug === 'cement-concrete');
   const electricalSpotlight = products.filter((p) => p.categorySlug === 'wires-mcb-distribution-boards');
 
+  const activeAnnouncement = storefrontContent?.announcements?.[0];
+
   return (
     <div className="space-y-8 sm:space-y-12 pb-16">
+      {activeAnnouncement && (
+        <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 pt-2">
+          <div className="bg-[#EEF3FA] border border-[#23438F]/20 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm text-[#263247]">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-full bg-[#F58220] text-white text-[10px] font-bold uppercase">
+                {activeAnnouncement.badge || 'LIVE'}
+              </span>
+              <span className="font-semibold">{activeAnnouncement.title}</span>
+              {activeAnnouncement.subtitle && (
+                <span className="text-[#718096] hidden md:inline">— {activeAnnouncement.subtitle}</span>
+              )}
+            </div>
+            {activeAnnouncement.ctaLabel && (
+              <Link
+                to={activeAnnouncement.ctaUrl || '/deals'}
+                className="font-semibold text-[#23438F] hover:underline whitespace-nowrap"
+              >
+                {activeAnnouncement.ctaLabel} →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
       {/* 1. HERO BANNER SECTION - BALANCED SPACING & 4-CORNER ROUNDED CARD */}
       <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
         <section className="relative bg-gradient-to-br from-brand-blue-950 via-brand-blue-900 to-slate-900 text-white rounded-3xl sm:rounded-[2rem] overflow-hidden shadow-xl border border-brand-blue-800/40 py-6 sm:py-8 lg:py-10 xl:py-12 px-6 sm:px-10 lg:px-12 xl:px-16">
