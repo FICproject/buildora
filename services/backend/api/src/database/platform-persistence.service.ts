@@ -50,6 +50,22 @@ const PlatformWalletTxnSchema = new Schema(
   { id: { type: String, required: true, unique: true, index: true }, customerId: { type: String, index: true } },
   { collection: 'platform_wallet_txns', strict: false }
 );
+const MainCategorySchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, slug: { type: String, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'main_categories', strict: false }
+);
+const ChildCategorySchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, mainCategoryId: { type: String, index: true }, slug: { type: String, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'child_categories', strict: false }
+);
+const ProductTypeSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, mainCategoryId: { type: String, index: true }, childCategoryId: { type: String, index: true }, slug: { type: String, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'product_types', strict: false }
+);
+const NewLaunchCollectionSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, slug: { type: String, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'new_launch_collections', strict: false }
+);
 
 export const PlatformProductModel: Model<any> =
   mongoose.models.PlatformProduct || mongoose.model('PlatformProduct', PlatformProductSchema);
@@ -78,6 +94,14 @@ export const PlatformWarehouseModel: Model<any> =
   mongoose.models.PlatformWarehouse || mongoose.model('PlatformWarehouse', PlatformWarehouseSchema);
 export const PlatformWalletTxnModel: Model<any> =
   mongoose.models.PlatformWalletTxn || mongoose.model('PlatformWalletTxn', PlatformWalletTxnSchema);
+export const MainCategoryModel: Model<any> =
+  mongoose.models.MainCategory || mongoose.model('MainCategory', MainCategorySchema);
+export const ChildCategoryModel: Model<any> =
+  mongoose.models.ChildCategory || mongoose.model('ChildCategory', ChildCategorySchema);
+export const ProductTypeModel: Model<any> =
+  mongoose.models.ProductType || mongoose.model('ProductType', ProductTypeSchema);
+export const NewLaunchCollectionModel: Model<any> =
+  mongoose.models.NewLaunchCollection || mongoose.model('NewLaunchCollection', NewLaunchCollectionSchema);
 
 class PlatformPersistenceService {
   private readonly logger = new Logger(PlatformPersistenceService.name);

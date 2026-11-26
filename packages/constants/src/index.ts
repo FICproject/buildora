@@ -564,56 +564,187 @@ export const getNewLaunchCategoryBySlug = (slug?: string): NewLaunchCategory | u
   return NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug || c.masterCategorySlug === slug);
 };
 
-export function resolveCanonicalCategoryHierarchy(
-  categoryInput?: string,
-  subcategoryInput?: string
+// Shared 4-level BUILDORA Taxonomy Seeds (Main Category -> Child Category -> Product Type)
+const DEPT_TO_MAIN_ID: Record<string, string> = {
+  'dept-1': 'mc-1',
+  'dept-2': 'mc-2',
+  'dept-3': 'mc-3',
+  'dept-4': 'mc-4',
+  'dept-5': 'mc-5',
+};
+
+export const MAIN_CATEGORIES_SEED = CONSTRUCTION_DEPARTMENTS.map((dept, idx) => ({
+  id: DEPT_TO_MAIN_ID[dept.id] || `mc-${idx + 1}`,
+  name: dept.name,
+  slug: dept.slug,
+  icon: dept.icon,
+  description: dept.description,
+  image:
+    MASTER_CATEGORIES.find((c) => dept.categorySlugs.includes(c.slug))?.image ||
+    'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80',
+  sortOrder: idx + 1,
+  isActive: true,
+  showInNavigation: true,
+}));
+
+export const CHILD_CATEGORIES_SEED = MASTER_CATEGORIES.map((cat, idx) => {
+  const dept = CONSTRUCTION_DEPARTMENTS.find((d) => d.categorySlugs.includes(cat.slug));
+  const mainId = dept ? DEPT_TO_MAIN_ID[dept.id] || dept.id : 'mc-1';
+  return {
+    id: cat.id,
+    mainCategoryId: mainId,
+    mainCategorySlug: dept?.slug || 'civil-interiors',
+    name: cat.name,
+    slug: cat.slug,
+    icon: cat.icon,
+    description: cat.description,
+    image: cat.image,
+    sortOrder: idx + 1,
+    isActive: true,
+  };
+});
+
+export const PRODUCT_TYPES_SEED = MASTER_CATEGORIES.flatMap((cat) => {
+  const dept = CONSTRUCTION_DEPARTMENTS.find((d) => d.categorySlugs.includes(cat.slug));
+  const mainId = dept ? DEPT_TO_MAIN_ID[dept.id] || dept.id : 'mc-1';
+  return (cat.subcategories || []).map((sub, idx) => ({
+    id: sub.id,
+    mainCategoryId: mainId,
+    childCategoryId: cat.id,
+    childCategorySlug: cat.slug,
+    name: sub.name,
+    slug: sub.slug,
+    sortOrder: idx + 1,
+    isActive: true,
+  }));
+});
+
+export interface TaxonomyPool {
+  mainCategories: Array<{ id: string; name: string; slug: string; sortOrder?: number; isActive?: boolean; showInNavigation?: boolean }>;
+  childCategories: Array<{ id: string; mainCategoryId: string; name: string; slug: string; isActive?: boolean }>;
+  productTypes: Array<{ id: string; mainCategoryId: string; childCategoryId: string; name: string; slug: string; isActive?: boolean }>;
+}
+
+const DEFAULT_TAXONOMY_POOL: TaxonomyPool = {
+  mainCategories: MAIN_CATEGORIES_SEED,
+  childCategories: CHILD_CATEGORIES_SEED,
+  productTypes: PRODUCT_TYPES_SEED,
+};
+
+export function resolveFullTaxonomy(
+  inputs: { mainInput?: string; childInput?: string; typeInput?: string },
+  pool: TaxonomyPool = DEFAULT_TAXONOMY_POOL
 ) {
-  const cleanCat = (categoryInput || '').trim().toLowerCase();
-  const cleanSub = (subcategoryInput || '').trim().toLowerCase();
+  const cleanMain = (inputs.mainInput || '').trim().toLowerCase();
+  const cleanChild = (inputs.childInput || '').trim().toLowerCase();
+  const cleanType = (inputs.typeInput || '').trim().toLowerCase();
 
-  let matchedMain = cleanCat
-    ? MASTER_CATEGORIES.find(
+  let mainCategory = cleanMain
+    ? pool.mainCategories.find(
+        (m) =>
+          m.id.toLowerCase() === cleanMain ||
+          m.slug.toLowerCase() === cleanMain ||
+          m.name.toLowerCase() === cleanMain
+      ) || null
+    : null;
+
+  let childCategory = cleanChild
+    ? pool.childCategories.find(
         (c) =>
-          c.id.toLowerCase() === cleanCat ||
-          c.slug.toLowerCase() === cleanCat ||
-          c.name.toLowerCase() === cleanCat
-      )
-    : undefined;
+          (!mainCategory || c.mainCategoryId === mainCategory.id) &&
+          (c.id.toLowerCase() === cleanChild ||
+            c.slug.toLowerCase() === cleanChild ||
+            c.name.toLowerCase() === cleanChild)
+      ) || null
+    : null;
 
-  let matchedChild = matchedMain?.subcategories.find(
-    (s) =>
-      cleanSub &&
-      (s.id.toLowerCase() === cleanSub ||
-        s.slug.toLowerCase() === cleanSub ||
-        s.name.toLowerCase() === cleanSub)
-  );
+  // Backwards compatibility: if child was passed alone or main didn't match, resolve main from unique child
+  if (!childCategory && cleanChild && !mainCategory) {
+    childCategory =
+      pool.childCategories.find(
+        (c) =>
+          c.id.toLowerCase() === cleanChild ||
+          c.slug.toLowerCase() === cleanChild ||
+          c.name.toLowerCase() === cleanChild
+      ) || null;
+  }
 
-  // If only child category was supplied or main category wasn't matched cleanly, look up globally by unique child
-  if (!matchedMain && cleanSub) {
-    for (const c of MASTER_CATEGORIES) {
-      const hit = c.subcategories.find(
-        (s) =>
-          s.id.toLowerCase() === cleanSub ||
-          s.slug.toLowerCase() === cleanSub ||
-          s.name.toLowerCase() === cleanSub
-      );
-      if (hit) {
-        matchedMain = c;
-        matchedChild = hit;
-        break;
-      }
+  if (childCategory && !mainCategory) {
+    mainCategory = pool.mainCategories.find((m) => m.id === childCategory!.mainCategoryId) || null;
+  }
+
+  let productType = cleanType
+    ? pool.productTypes.find(
+        (pt) =>
+          (!childCategory || pt.childCategoryId === childCategory.id) &&
+          (!mainCategory || pt.mainCategoryId === mainCategory.id) &&
+          (pt.id.toLowerCase() === cleanType ||
+            pt.slug.toLowerCase() === cleanType ||
+            pt.name.toLowerCase() === cleanType)
+      ) || null
+    : null;
+
+  if (!productType && cleanType && !childCategory && !mainCategory) {
+    productType =
+      pool.productTypes.find(
+        (pt) =>
+          pt.id.toLowerCase() === cleanType ||
+          pt.slug.toLowerCase() === cleanType ||
+          pt.name.toLowerCase() === cleanType
+      ) || null;
+    if (productType) {
+      childCategory = pool.childCategories.find((c) => c.id === productType!.childCategoryId) || null;
+      mainCategory = pool.mainCategories.find((m) => m.id === productType!.mainCategoryId) || null;
     }
   }
 
   return {
-    matchedMain: matchedMain || null,
-    matchedChild: matchedChild || null,
-    categoryId: matchedMain?.id || '',
-    categoryName: matchedMain?.name || '',
-    categorySlug: matchedMain?.slug || '',
-    subcategoryId: matchedChild?.id || '',
-    subcategoryName: matchedChild?.name || '',
-    subcategorySlug: matchedChild?.slug || '',
+    mainCategory,
+    childCategory,
+    productType,
+    mainCategoryId: mainCategory?.id || '',
+    mainCategorySlug: mainCategory?.slug || '',
+    mainCategoryName: mainCategory?.name || '',
+    childCategoryId: childCategory?.id || '',
+    childCategorySlug: childCategory?.slug || '',
+    childCategoryName: childCategory?.name || '',
+    productTypeId: productType?.id || '',
+    productTypeSlug: productType?.slug || '',
+    productTypeName: productType?.name || '',
+  };
+}
+
+export function resolveCanonicalCategoryHierarchy(
+  categoryInput?: string,
+  subcategoryInput?: string,
+  mainInput?: string
+) {
+  const full = resolveFullTaxonomy({
+    mainInput,
+    childInput: categoryInput,
+    typeInput: subcategoryInput,
+  });
+
+  const matchedMain = full.childCategory
+    ? MASTER_CATEGORIES.find((c) => c.id === full.childCategory!.id || c.slug === full.childCategory!.slug) || null
+    : null;
+  const matchedChild =
+    matchedMain && full.productType
+      ? matchedMain.subcategories.find(
+          (s) => s.id === full.productType!.id || s.slug === full.productType!.slug
+        ) || null
+      : null;
+
+  return {
+    ...full,
+    matchedMain,
+    matchedChild,
+    categoryId: full.childCategoryId,
+    categoryName: full.childCategoryName,
+    categorySlug: full.childCategorySlug,
+    subcategoryId: full.productTypeId,
+    subcategoryName: full.productTypeName,
+    subcategorySlug: full.productTypeSlug,
   };
 }
 

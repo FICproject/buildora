@@ -85,6 +85,18 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     });
   };
 
+  const handleChildCategoryToggle = (childValue: string) => {
+    const current = activeFilters.childCategories || [];
+    const updated = current.includes(childValue)
+      ? current.filter((c) => c !== childValue)
+      : [...current, childValue];
+
+    onChangeFilters({
+      ...activeFilters,
+      childCategories: updated
+    });
+  };
+
   const handleBrandToggle = (brandValue: string) => {
     const current = activeFilters.brands || [];
     const updated = current.includes(brandValue)
@@ -157,6 +169,9 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     if (filter.id === 'category') {
       return activeFilters.categories?.length || 0;
     }
+    if (filter.id === 'childCategory') {
+      return activeFilters.childCategories?.length || 0;
+    }
     if (filter.id === 'brand') {
       return activeFilters.brands?.length || 0;
     }
@@ -173,6 +188,8 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
   const handleClearDimension = (filter: AvailableCategoryFilter) => {
     if (filter.id === 'category') {
       onChangeFilters({ ...activeFilters, categories: [] });
+    } else if (filter.id === 'childCategory') {
+      onChangeFilters({ ...activeFilters, childCategories: [] });
     } else if (filter.id === 'brand') {
       onChangeFilters({ ...activeFilters, brands: [] });
     } else if (filter.id === 'subcategory') {
@@ -190,6 +207,7 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
 
   const hasAnyActiveFilters =
     (activeFilters.categories?.length || 0) > 0 ||
+    (activeFilters.childCategories?.length || 0) > 0 ||
     (activeFilters.subcategories?.length || 0) > 0 ||
     (activeFilters.brands?.length || 0) > 0 ||
     !!activeFilters.inStockOnly ||
@@ -308,6 +326,8 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                               let isChecked = false;
                               if (filter.id === 'category') {
                                 isChecked = (activeFilters.categories || []).includes(opt.value);
+                              } else if (filter.id === 'childCategory') {
+                                isChecked = (activeFilters.childCategories || []).includes(opt.value);
                               } else if (filter.id === 'brand') {
                                 isChecked = (activeFilters.brands || []).includes(opt.value);
                               } else if (filter.id === 'subcategory') {
@@ -321,6 +341,8 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                               const onToggle = () => {
                                 if (filter.id === 'category') {
                                   handleCategoryToggle(opt.value);
+                                } else if (filter.id === 'childCategory') {
+                                  handleChildCategoryToggle(opt.value);
                                 } else if (filter.id === 'brand') {
                                   handleBrandToggle(opt.value);
                                 } else if (filter.id === 'subcategory') {

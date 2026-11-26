@@ -77,6 +77,18 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
     });
   };
 
+  const handleChildCategoryToggle = (childValue: string) => {
+    const current = activeFilters.childCategories || [];
+    const updated = current.includes(childValue)
+      ? current.filter((c) => c !== childValue)
+      : [...current, childValue];
+
+    onChangeFilters({
+      ...activeFilters,
+      childCategories: updated
+    });
+  };
+
   const handleSubcategoryToggle = (subValue: string) => {
     const current = activeFilters.subcategories || [];
     const updated = current.includes(subValue)
@@ -118,6 +130,7 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
   };
 
   const countActiveForDimension = (filterId: string): number => {
+    if (filterId === 'childCategory') return activeFilters.childCategories?.length || 0;
     if (filterId === 'brand') return activeFilters.brands?.length || 0;
     if (filterId === 'subcategory') return activeFilters.subcategories?.length || 0;
     if (filterId === 'price') return activeFilters.minPrice || activeFilters.maxPrice ? 1 : 0;
@@ -125,6 +138,7 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
   };
 
   const totalActiveFilters =
+    (activeFilters.childCategories?.length || 0) +
     (activeFilters.brands?.length || 0) +
     (activeFilters.subcategories?.length || 0) +
     (activeFilters.inStockOnly ? 1 : 0) +
@@ -359,7 +373,9 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
                     ) : (
                       filteredOptions.map((opt) => {
                         let isSelected = false;
-                        if (filter.id === 'brand') {
+                        if (filter.id === 'childCategory') {
+                          isSelected = activeFilters.childCategories?.includes(opt.value) || false;
+                        } else if (filter.id === 'brand') {
                           isSelected = activeFilters.brands?.includes(opt.value) || false;
                         } else if (filter.id === 'subcategory') {
                           isSelected = activeFilters.subcategories?.includes(opt.value) || false;
@@ -380,7 +396,9 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => {
-                                  if (filter.id === 'brand') {
+                                  if (filter.id === 'childCategory') {
+                                    handleChildCategoryToggle(opt.value);
+                                  } else if (filter.id === 'brand') {
                                     handleBrandToggle(opt.value);
                                   } else if (filter.id === 'subcategory') {
                                     handleSubcategoryToggle(opt.value);

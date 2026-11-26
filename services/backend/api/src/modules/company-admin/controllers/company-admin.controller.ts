@@ -14,6 +14,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { dbStore } from '../../../database/store';
+import { taxonomyService } from '../../catalogue/services/taxonomy.service';
 import {
   DEFAULT_TENANT_ID,
   DEFAULT_VENDOR_ID,
@@ -1106,8 +1107,21 @@ export class CompanyAdminController {
     const allowed = [
       'name',
       'description',
+      'mainCategoryId',
+      'mainCategorySlug',
+      'mainCategoryName',
+      'childCategoryId',
+      'childCategorySlug',
+      'childCategoryName',
+      'productTypeId',
+      'productTypeSlug',
+      'productTypeName',
       'categoryId',
       'categoryName',
+      'categorySlug',
+      'subcategoryId',
+      'subcategorySlug',
+      'subcategory',
       'brand',
       'mrp',
       'sellingPrice',
@@ -1118,6 +1132,7 @@ export class CompanyAdminController {
       'packSize',
       'lowStockThreshold',
       'isActive',
+      'isNewLaunch',
       'specifications',
       'bulkPricing',
       'variants',
@@ -1125,6 +1140,36 @@ export class CompanyAdminController {
     for (const key of allowed) {
       if (body && body[key] !== undefined) {
         product[key] = body[key];
+      }
+    }
+    const taxChanged =
+      body?.mainCategoryId !== undefined ||
+      body?.childCategoryId !== undefined ||
+      body?.productTypeId !== undefined ||
+      body?.categoryId !== undefined ||
+      body?.categorySlug !== undefined ||
+      body?.categoryName !== undefined;
+    if (taxChanged) {
+      const resolved = taxonomyService.resolveAndValidateProductTaxonomy(
+        {
+          mainCategoryId: body?.mainCategoryId ?? product.mainCategoryId,
+          childCategoryId: body?.childCategoryId ?? body?.categoryId ?? body?.categorySlug ?? body?.categoryName ?? product.childCategoryId,
+          productTypeId: body?.productTypeId ?? body?.subcategoryId ?? body?.subcategorySlug ?? product.productTypeId,
+          brand: body?.brand ?? product.brand,
+        },
+        { strictChildMatch: Boolean(body?.mainCategoryId && (body?.childCategoryId || body?.categoryId)), tenantId }
+      );
+      if (resolved.mainCategoryId && resolved.childCategoryId) {
+        Object.assign(product, {
+          ...resolved,
+          categoryId: resolved.childCategoryId,
+          categorySlug: resolved.childCategorySlug,
+          category: resolved.childCategoryName,
+          categoryName: resolved.childCategoryName,
+          subcategoryId: resolved.productTypeId,
+          subcategorySlug: resolved.productTypeSlug,
+          subcategory: resolved.productTypeName,
+        });
       }
     }
     if (body?.sellingPrice !== undefined) product.price = body.sellingPrice;
@@ -1204,40 +1249,171 @@ export class CompanyAdminController {
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string
   ) {
-    this.requireAdmin(authHeader, 'products:read', headerTenantId);
+    const { tenantId } = this.requireAdmin(authHeader, 'products:read', headerTenantId);
+    const pool = taxonomyService.getTenantPool(tenantId);
+    const report = taxonomyService.migrationRecords;
     return {
       success: true,
       data: {
         categories: dbStore.categories,
+        mainCategories: pool.mainCategories,
+        childCategories: pool.childCategories,
+        productTypes: pool.productTypes,
         brands: dbStore.brands,
         attributes: companyAdminDataService.attributes,
+        newLaunchCollections: taxonomyService.getNewLaunchCollections(tenantId, false),
+        migrationSummary: {
+          totalRecords: report.length,
+          migrated: report.filter((r) => r.status === 'MIGRATED').length,
+          unmapped: report.filter((r) => r.status === 'UNMAPPED').length,
+          sampleMappings: report.slice(0, 20),
+        },
       },
     };
   }
 
-  @Post('catalog/categories')
-  createCategory(
+  @Post('catalog/main-categories')
+  async createMainCategory(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
-    @Body() body?: { name?: string; slug?: string; description?: string; parentId?: string },
+    @Body() body?: any,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const created = await taxonomyService.createMainCategory(tenantId, body || {});
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'MAIN_CATEGORY_CREATED',
+      module: 'Catalog',
+      entityType: 'MainCategory',
+      entityId: created.id,
+      details: `Created main category ${created.name}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: created };
+  }
+
+  @Patch('catalog/main-categories/:id')
+  async updateMainCategory(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const updated = await taxonomyService.updateMainCategory(tenantId, id, body || {});
+    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: updated };
+  }
+
+  @Post('catalog/child-categories')
+  async createChildCategory(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const created = await taxonomyService.createChildCategory(tenantId, body || {});
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'CHILD_CATEGORY_CREATED',
+      module: 'Catalog',
+      entityType: 'ChildCategory',
+      entityId: created.id,
+      details: `Created child category ${created.name} under ${created.mainCategoryId}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: created };
+  }
+
+  @Patch('catalog/child-categories/:id')
+  async updateChildCategory(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const updated = await taxonomyService.updateChildCategory(tenantId, id, body || {});
+    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: updated };
+  }
+
+  @Post('catalog/product-types')
+  async createProductType(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const created = await taxonomyService.createProductType(tenantId, body || {});
+    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: created };
+  }
+
+  @Patch('catalog/product-types/:id')
+  async updateProductType(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const updated = await taxonomyService.updateProductType(tenantId, id, body || {});
+    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: updated };
+  }
+
+  @Post('catalog/new-launches')
+  async createNewLaunchCollection(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const created = await taxonomyService.createNewLaunchCollection(tenantId, body || {});
+    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    return { success: true, data: created };
+  }
+
+  @Patch('catalog/new-launches/:id')
+  async updateNewLaunchCollection(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const updated = await taxonomyService.updateNewLaunchCollection(tenantId, id, body || {});
+    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    return { success: true, data: updated };
+  }
+
+  @Post('catalog/categories')
+  async createCategory(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { name?: string; slug?: string; description?: string; parentId?: string; mainCategoryId?: string },
     @Req() req?: any
   ) {
     const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     if (!body?.name?.trim()) throw new BadRequestException('Category name is required.');
-    const cat = {
-      id: `cat-${Date.now()}`,
-      name: body.name.trim(),
-      slug:
-        body.slug?.trim() ||
-        body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      icon: 'Layers',
-      image: '',
-      description: body.description || '',
-      subcategories: [],
-      itemCount: 0,
-      featured: false,
-    };
-    dbStore.categories.push(cat);
+    const mainId = body.mainCategoryId || body.parentId || 'mc-1';
+    const cat = await taxonomyService.createChildCategory(tenantId, {
+      mainCategoryId: mainId,
+      name: body.name,
+      slug: body.slug,
+      description: body.description,
+    });
     companyAdminDataService.recordAuditLog({
       tenantId,
       actorId: admin.sub,
@@ -1245,9 +1421,9 @@ export class CompanyAdminController {
       actorRole: admin.role,
       action: 'CATEGORY_CREATED',
       module: 'Catalog',
-      entityType: 'Category',
+      entityType: 'ChildCategory',
       entityId: cat.id,
-      details: `Created category ${cat.name}.`,
+      details: `Created child category ${cat.name}.`,
       ipAddress: req?.ip || '127.0.0.1',
     });
     return { success: true, data: cat };

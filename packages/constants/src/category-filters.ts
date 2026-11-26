@@ -28,8 +28,9 @@ export interface AvailableCategoryFilter {
 
 export interface ActiveCategoryFilters {
   categories?: string[]; // Category slugs or names (for catalogue pages)
+  childCategories?: string[]; // Child Category slugs/names (when browsing Main Category PLP)
   brands: string[];
-  subcategories: string[];
+  subcategories: string[]; // Product Type slugs/names (OR within selected Product Types)
   inStockOnly: boolean;
   asapOnly: boolean;
   minPrice?: number;
@@ -158,10 +159,12 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 11. Wires, MCB & Distribution Boards
   'wires-mcb-distribution-boards': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'conductorSize', name: 'Size', type: 'checkbox', specKeys: ['Conductor Size'] },
-    { id: 'currentCapacity', name: 'Rating', type: 'checkbox', specKeys: ['Current Carrying Capacity', 'Current Rating'] },
+    { id: 'wireSize', name: 'Wire Size', type: 'checkbox', specKeys: ['Conductor Size', 'Wire Size', 'Size'] },
+    { id: 'voltage', name: 'Voltage', type: 'checkbox', specKeys: ['Voltage', 'Voltage Rating', 'Current Carrying Capacity', 'Current Rating'] },
+    { id: 'cableType', name: 'Cable Type', type: 'checkbox', specKeys: ['Cable Type', 'Insulation', 'Certification'] },
     { id: 'length', name: 'Length', type: 'checkbox', specKeys: ['Length'] },
-    { id: 'insulation', name: 'Insulation', type: 'checkbox', specKeys: ['Insulation', 'Certification'] },
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging'] },
+    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
@@ -211,9 +214,10 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 16. CPVC Pipes & Overhead Tanks
   'cpvc-pipes-overhead-tanks': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'nominalDiameter', name: 'Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Size'] },
-    { id: 'pressureClass', name: 'Grade', type: 'checkbox', specKeys: ['Pressure Class'] },
-    { id: 'temperature', name: 'Features', type: 'checkbox', specKeys: ['Max Operating Temp', 'Certification'] },
+    { id: 'pipeSize', name: 'Pipe Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Pipe Size', 'Size'] },
+    { id: 'pressureRating', name: 'Pressure Rating', type: 'checkbox', specKeys: ['Pressure Class', 'Pressure Rating'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Max Operating Temp', 'Certification'] },
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -344,7 +348,48 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
-  // 29. New Launches (HomeRun Reference Parity: Brand, Type, Price, Size)
+  // Main Categories (Top-level Landing Page Filter Sets)
+  'civil-interiors': [
+    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
+    { id: 'grade', name: 'Grade', type: 'checkbox', specKeys: ['Grade', 'Cement Type', 'Adhesive Type', 'Finish'] },
+    { id: 'thickness', name: 'Thickness / Finish', type: 'checkbox', specKeys: ['Thickness', 'Finish', 'Surface Finish'] },
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging', 'Coverage'] },
+    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
+  ],
+  'furniture-hardware': [
+    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
+    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'] },
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize' },
+    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
+  ],
+  'electrical': [
+    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
+    { id: 'wireSize', name: 'Wire Size', type: 'checkbox', specKeys: ['Conductor Size', 'Wire Size', 'Nominal Diameter', 'Wattage'] },
+    { id: 'voltage', name: 'Voltage', type: 'checkbox', specKeys: ['Voltage', 'Current Carrying Capacity', 'Amp Rating'] },
+    { id: 'cableType', name: 'Cable Type', type: 'checkbox', specKeys: ['Cable Type', 'Insulation', 'Product Type'] },
+    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
+  ],
+  'plumbing-sanitary': [
+    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
+    { id: 'pipeSize', name: 'Pipe Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Pipe Size', 'Capacity', 'Size'] },
+    { id: 'pressureRating', name: 'Pressure Rating', type: 'checkbox', specKeys: ['Pressure Class', 'Pressure Rating'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Finish'] },
+    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
+  ],
+  'hardware-appliances': [
+    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
+    { id: 'capacity', name: 'Power / Capacity', type: 'checkbox', specKeys: ['Rated Power', 'Wattage', 'Capacity', 'Safety Category'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
+    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
+  ],
+
+  // 29. New Launches (Promotional Collection Filter Set)
   // Strictly omit Category filter as customers navigate directly via Desktop Category Navigation
   'new-launches': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
@@ -377,13 +422,63 @@ export interface ChildCategoryMeta {
   categorySlug?: string;
 }
 
+export function buildMainChildCategoryFilter(
+  mainProducts: Product[],
+  childList: Array<{ id: string; name: string; slug: string }> = []
+): AvailableCategoryFilter | null {
+  const countsMap = new Map<string, { value: string; label: string; count: number }>();
+
+  for (const child of childList) {
+    countsMap.set(child.slug.toLowerCase(), {
+      value: child.slug,
+      label: child.name,
+      count: 0,
+    });
+  }
+
+  for (const p of mainProducts) {
+    const slug = (p.childCategorySlug || p.categorySlug || '').trim();
+    const name = (p.childCategoryName || p.category || '').trim();
+    const key = slug.toLowerCase() || name.toLowerCase();
+    if (!key) continue;
+
+    const existing =
+      countsMap.get(slug.toLowerCase()) ||
+      Array.from(countsMap.values()).find(
+        (v) => v.label.toLowerCase() === name.toLowerCase() || v.value.toLowerCase() === slug.toLowerCase()
+      );
+    if (existing) {
+      existing.count += 1;
+    } else if (childList.length === 0) {
+      const val = slug || name;
+      const cur = countsMap.get(val.toLowerCase()) || {
+        value: val,
+        label: name || slug,
+        count: 0,
+      };
+      cur.count += 1;
+      countsMap.set(val.toLowerCase(), cur);
+    }
+  }
+
+  const options = Array.from(countsMap.values());
+  if (options.length === 0) return null;
+  return {
+    id: 'childCategory',
+    name: 'Child Category',
+    type: 'checkbox',
+    options,
+  };
+}
+
 /**
- * Computes the Child Category ("Category") filter dimension for an active Main Category,
- * showing ONLY child categories belonging to that Main Category with accurate product counts.
+ * Computes the Product Type filter dimension for an active Child Category (or Main Category),
+ * showing ONLY product types belonging to that category with accurate product counts.
  */
 export function buildChildCategoryFilter(
   categoryProducts: Product[],
-  childCategories: ChildCategoryMeta[] = []
+  childCategories: ChildCategoryMeta[] = [],
+  dimensionLabel = 'Product Type'
 ): AvailableCategoryFilter | null {
   const countsMap = new Map<string, { label: string; value: string; count: number }>();
 
@@ -396,12 +491,12 @@ export function buildChildCategoryFilter(
   }
 
   for (const p of categoryProducts) {
-    const subSlug = (p.subcategorySlug || '').trim();
-    const subName = (p.subcategory || '').trim();
+    const subSlug = (p.productTypeSlug || p.subcategorySlug || '').trim();
+    const subName = (p.productTypeName || p.subcategory || '').trim();
     const key = subSlug.toLowerCase() || subName.toLowerCase();
     if (!key) continue;
 
-    // Match existing taxonomy child category first
+    // Match existing taxonomy child category / product type first
     const existing =
       countsMap.get(subSlug.toLowerCase()) ||
       Array.from(countsMap.values()).find(
@@ -411,7 +506,7 @@ export function buildChildCategoryFilter(
     if (existing) {
       existing.count += 1;
     } else if (childCategories.length === 0) {
-      // Fallback only if caller didn't pass canonical childCategories
+      // Fallback only if caller didn't pass canonical options
       const val = subSlug || subName;
       const cur = countsMap.get(val.toLowerCase()) || {
         value: val,
@@ -428,7 +523,7 @@ export function buildChildCategoryFilter(
 
   return {
     id: 'subcategory',
-    name: 'Category',
+    name: dimensionLabel,
     type: 'checkbox',
     options,
   };
@@ -436,16 +531,20 @@ export function buildChildCategoryFilter(
 
 /**
  * Extracts all valid, available filter options for a category based on the actual products in that category.
- * Prepends the active Main Category's Child Categories ("Category") filter when child categories exist.
+ * Supports both Main Category landing pages (Child Categories + Product Types) and Child Category PLPs (Product Types + category specs).
  */
 export function getAvailableFiltersForCategory(
   categorySlug: string,
   categoryProducts: Product[],
-  childCategories?: ChildCategoryMeta[]
+  childCategories?: ChildCategoryMeta[],
+  mainChildCategories?: Array<{ id: string; name: string; slug: string }>
 ): AvailableCategoryFilter[] {
+  const isMainLanding = Array.isArray(mainChildCategories) && mainChildCategories.length > 0;
   const rawDimensions = CATEGORY_FILTER_CONFIGS[categorySlug] || [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
+    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging'] },
+    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ];
 
   const dimensions = rawDimensions.filter(
@@ -453,7 +552,15 @@ export function getAvailableFiltersForCategory(
   );
 
   const availableFilters: AvailableCategoryFilter[] = [];
-  const childCatFilter = buildChildCategoryFilter(categoryProducts, childCategories || []);
+  if (isMainLanding) {
+    const mainChildFilter = buildMainChildCategoryFilter(categoryProducts, mainChildCategories);
+    if (mainChildFilter) availableFilters.push(mainChildFilter);
+  }
+  const childCatFilter = buildChildCategoryFilter(
+    categoryProducts,
+    childCategories || [],
+    'Product Type'
+  );
   if (childCatFilter) {
     availableFilters.push(childCatFilter);
   }
@@ -718,15 +825,31 @@ export function applyCategoryFilters(
   const dimMap = new Map(dimensions.map((d) => [d.id, d]));
 
   return products.filter((p) => {
-    // 0. Category filter (OR within selected categories, case-insensitive across name/slug/id)
+    // 0. Category filter (OR within selected categories, case-insensitive across name/slug/id/mainCategory)
     if (activeFilters.categories && activeFilters.categories.length > 0) {
       const catTargets = activeFilters.categories.map((c) => c.toLowerCase());
       const pCatId = String((p as any).categoryId || '').toLowerCase();
+      const pMainSlug = String(p.mainCategorySlug || '').toLowerCase();
+      const pMainId = String(p.mainCategoryId || '').toLowerCase();
       const matchCat =
         catTargets.includes((p.category || '').toLowerCase()) ||
         catTargets.includes((p.categorySlug || '').toLowerCase()) ||
-        (pCatId && catTargets.includes(pCatId));
+        (pCatId && catTargets.includes(pCatId)) ||
+        (pMainSlug && catTargets.includes(pMainSlug)) ||
+        (pMainId && catTargets.includes(pMainId));
       if (!matchCat) {
+        return false;
+      }
+    }
+
+    // 0b. Child Category filter (OR within selected Child Categories on Main Category PLP)
+    if (activeFilters.childCategories && activeFilters.childCategories.length > 0) {
+      const ccTargets = activeFilters.childCategories.map((c) => c.toLowerCase());
+      const matchCC =
+        ccTargets.includes((p.childCategorySlug || p.categorySlug || '').toLowerCase()) ||
+        ccTargets.includes((p.childCategoryName || p.category || '').toLowerCase()) ||
+        ccTargets.includes(String(p.childCategoryId || (p as any).categoryId || '').toLowerCase());
+      if (!matchCC) {
         return false;
       }
     }
@@ -742,13 +865,13 @@ export function applyCategoryFilters(
       }
     }
 
-    // 2. Subcategory / Child Category filter (OR within subcategories, case-insensitive across name/slug/id)
+    // 2. Product Type / Subcategory filter (OR within selected product types, case-insensitive across name/slug/id)
     if (activeFilters.subcategories && activeFilters.subcategories.length > 0) {
       const subTargets = activeFilters.subcategories.map((s) => s.toLowerCase());
-      const pSubId = String((p as any).subcategoryId || '').toLowerCase();
+      const pSubId = String(p.productTypeId || (p as any).subcategoryId || '').toLowerCase();
       const matchSub =
-        subTargets.includes((p.subcategory || '').toLowerCase()) ||
-        subTargets.includes((p.subcategorySlug || '').toLowerCase()) ||
+        subTargets.includes((p.productTypeName || p.subcategory || '').toLowerCase()) ||
+        subTargets.includes((p.productTypeSlug || p.subcategorySlug || '').toLowerCase()) ||
         (pSubId && subTargets.includes(pSubId));
       if (!matchSub) {
         return false;

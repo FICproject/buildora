@@ -22,7 +22,11 @@ import {
   MASTER_BRANDS,
   SEED_PRODUCTS,
   SEED_KNOWLEDGE_ARTICLES,
-  SEED_FAQS
+  SEED_FAQS,
+  MAIN_CATEGORIES_SEED,
+  CHILD_CATEGORIES_SEED,
+  PRODUCT_TYPES_SEED,
+  resolveFullTaxonomy
 } from '@buildora/constants';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
@@ -127,14 +131,79 @@ export const api = {
     return request<any>('/health', {}, { status: 'DEGRADED', mode: 'CLIENT_FALLBACK' });
   },
 
+  // Taxonomy (4-level: Main Category -> Child Category -> Product Type -> Product)
+  async getTaxonomy(): Promise<{
+    mainCategories: any[];
+    childCategories: any[];
+    productTypes: any[];
+    tree: any[];
+    newLaunchCollections: any[];
+  }> {
+    const fallbackTree = MAIN_CATEGORIES_SEED.map((mc) => {
+      const children = CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === mc.id);
+      return {
+        ...mc,
+        children: children.map((child) => ({
+          ...child,
+          productTypes: PRODUCT_TYPES_SEED.filter((pt) => pt.childCategoryId === child.id),
+        })),
+      };
+    });
+    return request<any>('/taxonomy', {}, {
+      mainCategories: MAIN_CATEGORIES_SEED,
+      childCategories: CHILD_CATEGORIES_SEED,
+      productTypes: PRODUCT_TYPES_SEED,
+      tree: fallbackTree,
+      newLaunchCollections: [],
+    });
+  },
+
+  async getNewLaunches(): Promise<{
+    collections: any[];
+    activeCollection: any | null;
+    products: Product[];
+  }> {
+    const fallbackProducts = SEED_PRODUCTS.filter((p) => p.isNewLaunch);
+    const data = await request<any>('/new-launches', {}, {
+      collections: [],
+      activeCollection: null,
+      products: fallbackProducts,
+    });
+    if (Array.isArray(data?.products)) {
+      return {
+        ...data,
+        products: applyLocalOverrides(data.products),
+      };
+    }
+    return {
+      collections: [],
+      activeCollection: null,
+      products: fallbackProducts,
+    };
+  },
+
   // Categories
   async getCategories(): Promise<Category[]> {
     return request<Category[]>('/categories', {}, MASTER_CATEGORIES);
   },
 
-  async getCategoryBySlug(slug: string): Promise<Category | undefined> {
+  async getCategoryBySlug(slug: string): Promise<any | undefined> {
+    const direct = await request<any | null>(`/categories/${encodeURIComponent(slug)}`, {}, null);
+    if (direct && (direct.slug || direct.id)) {
+      return direct;
+    }
     const categories = await api.getCategories();
-    return categories.find((c) => c.slug === slug);
+    const child = categories.find((c) => c.slug === slug);
+    if (child) return { ...child, level: 'CHILD' };
+    const main = MAIN_CATEGORIES_SEED.find((m) => m.slug === slug);
+    if (main) {
+      return {
+        ...main,
+        level: 'MAIN',
+        childCategories: CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === main.id),
+      };
+    }
+    return undefined;
   },
 
   // Brands
@@ -149,7 +218,10 @@ export const api = {
 
   // Products
   async getProducts(params?: {
+    mainCategory?: string;
+    childCategory?: string;
     category?: string;
+    productType?: string;
     subcategory?: string;
     brand?: string;
     search?: string;
@@ -160,7 +232,10 @@ export const api = {
     newLaunch?: boolean;
   }): Promise<Product[]> {
     const queryParts: string[] = [];
+    if (params?.mainCategory) queryParts.push(`mainCategory=${encodeURIComponent(params.mainCategory)}`);
+    if (params?.childCategory) queryParts.push(`childCategory=${encodeURIComponent(params.childCategory)}`);
     if (params?.category) queryParts.push(`category=${encodeURIComponent(params.category)}`);
+    if (params?.productType) queryParts.push(`productType=${encodeURIComponent(params.productType)}`);
     if (params?.subcategory) queryParts.push(`subcategory=${encodeURIComponent(params.subcategory)}`);
     if (params?.brand) queryParts.push(`brand=${encodeURIComponent(params.brand)}`);
     if (params?.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
@@ -168,25 +243,64 @@ export const api = {
 
     const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
     let products = await request<Product[]>(`/products${queryStr}`, {}, SEED_PRODUCTS);
+    products = applyLocalOverrides(products).map((p) => {
+      const resolved = resolveFullTaxonomy({
+        mainInput: p.mainCategoryId || p.mainCategorySlug || p.mainCategoryName,
+        childInput: p.childCategoryId || p.childCategorySlug || p.categorySlug || p.category,
+        typeInput: p.productTypeId || p.productTypeSlug || p.subcategorySlug || p.subcategory,
+      });
+      return resolved.childCategory
+        ? {
+            ...p,
+            mainCategoryId: p.mainCategoryId || resolved.mainCategory?.id,
+            mainCategorySlug: p.mainCategorySlug || resolved.mainCategory?.slug,
+            mainCategoryName: p.mainCategoryName || resolved.mainCategory?.name,
+            department: (p as any).department || resolved.mainCategory?.name,
+            childCategoryId: p.childCategoryId || resolved.childCategory.id,
+            childCategorySlug: p.childCategorySlug || resolved.childCategory.slug,
+            childCategoryName: p.childCategoryName || resolved.childCategory.name,
+            categoryId: p.categoryId || resolved.childCategory.id,
+            categorySlug: p.categorySlug || resolved.childCategory.slug,
+            category: p.category || resolved.childCategory.name,
+            productTypeId: p.productTypeId || resolved.productType?.id || p.subcategoryId,
+            productTypeSlug: p.productTypeSlug || resolved.productType?.slug || p.subcategorySlug,
+            productTypeName: p.productTypeName || resolved.productType?.name || p.subcategory,
+            subcategoryId: p.subcategoryId || resolved.productType?.id,
+            subcategorySlug: p.subcategorySlug || resolved.productType?.slug,
+            subcategory: p.subcategory || resolved.productType?.name || '',
+          }
+        : p;
+    });
 
     if (!params) return products;
 
-    if (params.category) {
-      const catNeedle = params.category.toLowerCase();
+    if (params.mainCategory) {
+      const mcNeedle = params.mainCategory.toLowerCase();
       products = products.filter(
         (p) =>
-          p.categorySlug.toLowerCase() === catNeedle ||
-          p.category.toLowerCase() === catNeedle ||
-          String((p as any).categoryId || '').toLowerCase() === catNeedle
+          String(p.mainCategorySlug || '').toLowerCase() === mcNeedle ||
+          String(p.mainCategoryId || '').toLowerCase() === mcNeedle ||
+          String(p.mainCategoryName || (p as any).department || '').toLowerCase() === mcNeedle
       );
     }
-    if (params.subcategory) {
-      const subNeedle = params.subcategory.toLowerCase();
+    const childNeedleRaw = params.childCategory || params.category;
+    if (childNeedleRaw) {
+      const catNeedle = childNeedleRaw.toLowerCase();
       products = products.filter(
         (p) =>
-          p.subcategorySlug.toLowerCase() === subNeedle ||
-          p.subcategory.toLowerCase() === subNeedle ||
-          String((p as any).subcategoryId || '').toLowerCase() === subNeedle
+          String(p.childCategorySlug || p.categorySlug || '').toLowerCase() === catNeedle ||
+          String(p.childCategoryName || p.category || '').toLowerCase() === catNeedle ||
+          String(p.childCategoryId || p.categoryId || '').toLowerCase() === catNeedle
+      );
+    }
+    const typeNeedleRaw = params.productType || params.subcategory;
+    if (typeNeedleRaw) {
+      const subNeedle = typeNeedleRaw.toLowerCase();
+      products = products.filter(
+        (p) =>
+          String(p.productTypeSlug || p.subcategorySlug || '').toLowerCase() === subNeedle ||
+          String(p.productTypeName || p.subcategory || '').toLowerCase() === subNeedle ||
+          String(p.productTypeId || p.subcategoryId || '').toLowerCase() === subNeedle
       );
     }
     if (params.brand) {

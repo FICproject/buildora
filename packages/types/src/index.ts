@@ -57,9 +57,80 @@ export interface Subcategory {
   name: string;
   slug: string;
   categorySlug: string;
+  mainCategoryId?: string;
+  childCategoryId?: string;
   description?: string;
   image?: string;
   itemCount?: number;
+  productCount?: number;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface MainCategory {
+  id: string;
+  tenantId?: string;
+  name: string;
+  slug: string;
+  icon?: string;
+  description: string;
+  image: string;
+  sortOrder: number;
+  isActive: boolean;
+  showInNavigation: boolean;
+  childCount?: number;
+  productCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ChildCategory {
+  id: string;
+  tenantId?: string;
+  mainCategoryId: string;
+  mainCategorySlug?: string;
+  name: string;
+  slug: string;
+  icon?: string;
+  description: string;
+  image: string;
+  sortOrder: number;
+  isActive: boolean;
+  productCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProductTypeNode {
+  id: string;
+  tenantId?: string;
+  mainCategoryId: string;
+  childCategoryId: string;
+  childCategorySlug?: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+  isActive: boolean;
+  productCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface NewLaunchCollection {
+  id: string;
+  tenantId: string;
+  title: string;
+  slug: string;
+  description?: string;
+  bannerImage?: string;
+  badge?: string;
+  productIds: string[];
+  displayOrder: number;
+  startDate?: string;
+  endDate?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Brand {
@@ -143,8 +214,20 @@ export interface Product {
   sku: string;
   brand: string;
   brandSlug: string;
+  brandId?: string;
+  mainCategoryId?: string;
+  mainCategorySlug?: string;
+  mainCategoryName?: string;
+  childCategoryId?: string;
+  childCategorySlug?: string;
+  childCategoryName?: string;
+  productTypeId?: string;
+  productTypeSlug?: string;
+  productTypeName?: string;
+  categoryId?: string;
   category: string;
   categorySlug: string;
+  subcategoryId?: string;
   subcategory: string;
   subcategorySlug: string;
   description: string;
@@ -803,8 +886,20 @@ export interface VendorProduct {
   sku: string;
   brand: string;
   brandSlug: string;
+  brandId?: string;
+  mainCategoryId?: string;
+  mainCategorySlug?: string;
+  mainCategoryName?: string;
+  childCategoryId?: string;
+  childCategorySlug?: string;
+  childCategoryName?: string;
+  productTypeId?: string;
+  productTypeSlug?: string;
+  productTypeName?: string;
+  categoryId?: string;
   category: string;
   categorySlug: string;
+  subcategoryId?: string;
   subcategory: string;
   subcategorySlug: string;
   subCategory?: string;

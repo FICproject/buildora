@@ -199,6 +199,46 @@ export const adminApi = {
       method: 'PATCH',
     }),
   getCatalogTaxonomy: () => rawRequest<any>('/company-admin/catalog/categories'),
+  createMainCategory: (payload: any) =>
+    rawRequest<any>('/company-admin/catalog/main-categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateMainCategory: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/main-categories/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  createChildCategory: (payload: any) =>
+    rawRequest<any>('/company-admin/catalog/child-categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateChildCategory: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/child-categories/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  createProductType: (payload: any) =>
+    rawRequest<any>('/company-admin/catalog/product-types', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateProductType: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/product-types/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  createNewLaunchCollection: (payload: any) =>
+    rawRequest<any>('/company-admin/catalog/new-launches', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateNewLaunchCollection: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/new-launches/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
   createCategory: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/categories', {
       method: 'POST',

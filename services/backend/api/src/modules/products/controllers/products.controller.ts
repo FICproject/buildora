@@ -12,9 +12,9 @@ import { dbStore } from '../../../database/store';
 import {
   CATEGORY_ATTRIBUTE_TEMPLATES,
   getAttributeTemplatesForCategory,
-  resolveCanonicalCategoryHierarchy,
 } from '@buildora/constants';
 import { vendorRecords, vendorProducts } from '../../vendors/controllers/vendor.controller';
+import { taxonomyService } from '../../catalogue/services/taxonomy.service';
 
 export function isProductCustomerVisible(p: any): boolean {
   if (!p) return false;
@@ -45,19 +45,28 @@ function enrichStorefrontProduct(p: any) {
   const totalStock = Number(p.stockCount ?? vp?.stockCount ?? 0);
   const reserved = Number(p.reservedStock ?? vp?.reservedStock ?? 0);
   const availableStock = Math.max(0, totalStock - reserved);
-  const hierarchy = resolveCanonicalCategoryHierarchy(
-    p.categorySlug || p.categoryId || p.category,
-    p.subcategorySlug || p.subcategoryId || p.subcategory
-  );
+  const hierarchy = taxonomyService.resolveAndValidateProductTaxonomy(p, {
+    strictChildMatch: false,
+  });
 
   return {
     ...p,
-    categoryId: p.categoryId || hierarchy.categoryId,
-    categorySlug: p.categorySlug || hierarchy.categorySlug,
-    category: p.category || hierarchy.categoryName,
-    subcategoryId: p.subcategoryId || hierarchy.subcategoryId,
-    subcategorySlug: p.subcategorySlug || hierarchy.subcategorySlug,
-    subcategory: p.subcategory || hierarchy.subcategoryName,
+    mainCategoryId: p.mainCategoryId || hierarchy.mainCategoryId,
+    mainCategorySlug: p.mainCategorySlug || hierarchy.mainCategorySlug,
+    mainCategoryName: p.mainCategoryName || hierarchy.mainCategoryName,
+    childCategoryId: p.childCategoryId || hierarchy.childCategoryId,
+    childCategorySlug: p.childCategorySlug || hierarchy.childCategorySlug,
+    childCategoryName: p.childCategoryName || hierarchy.childCategoryName,
+    productTypeId: p.productTypeId || hierarchy.productTypeId,
+    productTypeSlug: p.productTypeSlug || hierarchy.productTypeSlug,
+    productTypeName: p.productTypeName || hierarchy.productTypeName,
+    brandId: p.brandId || hierarchy.brandId,
+    categoryId: p.categoryId || hierarchy.childCategoryId,
+    categorySlug: p.categorySlug || hierarchy.childCategorySlug,
+    category: p.category || hierarchy.childCategoryName,
+    subcategoryId: p.subcategoryId || hierarchy.productTypeId,
+    subcategorySlug: p.subcategorySlug || hierarchy.productTypeSlug,
+    subcategory: p.subcategory || hierarchy.productTypeName,
     vendorId,
     vendorName: p.vendorName || vendor?.storeName || vendor?.businessInfo?.businessName || 'Buildora Verified Supplier',
     vendorCity: vendor?.businessInfo?.address?.city || 'Bengaluru',
@@ -95,7 +104,10 @@ export class ProductsController {
   }
   @Get('products')
   getProducts(
+    @Query('mainCategory') mainCategory?: string,
+    @Query('childCategory') childCategory?: string,
     @Query('category') category?: string,
+    @Query('productType') productType?: string,
     @Query('subcategory') subcategory?: string,
     @Query('brand') brand?: string,
     @Query('search') search?: string,
@@ -114,22 +126,46 @@ export class ProductsController {
   ) {
     let result = dbStore.products.filter(isProductCustomerVisible).map(enrichStorefrontProduct);
 
+    if (mainCategory) {
+      const mains = mainCategory.split(',').map((m) => m.trim().toLowerCase()).filter(Boolean);
+      result = result.filter(
+        (p) =>
+          mains.includes(String(p.mainCategorySlug || '').toLowerCase()) ||
+          mains.includes(String(p.mainCategoryName || '').toLowerCase()) ||
+          mains.includes(String(p.mainCategoryId || '').toLowerCase())
+      );
+    }
+
+    if (childCategory) {
+      const children = childCategory.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+      result = result.filter(
+        (p) =>
+          children.includes(String(p.childCategorySlug || p.categorySlug || '').toLowerCase()) ||
+          children.includes(String(p.childCategoryName || p.category || '').toLowerCase()) ||
+          children.includes(String(p.childCategoryId || (p as any).categoryId || '').toLowerCase())
+      );
+    }
+
     if (category) {
       const cats = category.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
       result = result.filter(
         (p) =>
           cats.includes((p.categorySlug || '').toLowerCase()) ||
           cats.includes((p.category || '').toLowerCase()) ||
-          cats.includes(String((p as any).categoryId || '').toLowerCase())
+          cats.includes(String((p as any).categoryId || '').toLowerCase()) ||
+          cats.includes(String(p.mainCategorySlug || '').toLowerCase()) ||
+          cats.includes(String(p.mainCategoryName || '').toLowerCase()) ||
+          cats.includes(String(p.mainCategoryId || '').toLowerCase())
       );
     }
-    if (subcategory) {
-      const subs = subcategory.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const effectiveSubOrType = productType || subcategory;
+    if (effectiveSubOrType) {
+      const subs = effectiveSubOrType.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
       result = result.filter(
         (p) =>
-          subs.includes((p.subcategorySlug || '').toLowerCase()) ||
-          subs.includes((p.subcategory || '').toLowerCase()) ||
-          subs.includes(String((p as any).subcategoryId || '').toLowerCase())
+          subs.includes((p.productTypeSlug || p.subcategorySlug || '').toLowerCase()) ||
+          subs.includes((p.productTypeName || p.subcategory || '').toLowerCase()) ||
+          subs.includes(String(p.productTypeId || (p as any).subcategoryId || '').toLowerCase())
       );
     }
     if (brand) {

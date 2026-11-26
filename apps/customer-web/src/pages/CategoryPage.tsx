@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import {
   MASTER_CATEGORIES,
+  MAIN_CATEGORIES_SEED,
+  CHILD_CATEGORIES_SEED,
   NEW_LAUNCHES_CATEGORIES,
   getAvailableFiltersForCategory,
   applyCategoryFilters,
@@ -25,6 +27,11 @@ function parseCategoryPageUrlFilters(
   subcategoryParam?: string,
   category?: Category
 ): ActiveCategoryFilters {
+  const urlChildCats = (searchParams.get('child') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const urlSubs = (searchParams.get('sub') || '')
     .split(',')
     .map((s) => s.trim())
@@ -66,6 +73,7 @@ function parseCategoryPageUrlFilters(
   }
 
   return {
+    childCategories: urlChildCats,
     brands,
     subcategories,
     inStockOnly,
@@ -82,15 +90,27 @@ export const CategoryPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Resolve master category slug if a new launch category slug was passed
+  // Resolve canonical slug if a legacy new-launch alias slug was passed
   const effectiveCategorySlug = useMemo(() => {
     if (!slug) return '';
     const nlCat = NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug);
     return nlCat ? nlCat.masterCategorySlug : slug;
   }, [slug]);
 
-  const [category, setCategory] = useState<Category>(() => {
+  const initialMainMatch = useMemo(
+    () => MAIN_CATEGORIES_SEED.find((m) => m.slug === (effectiveCategorySlug || slug)),
+    [effectiveCategorySlug, slug]
+  );
+
+  const [category, setCategory] = useState<any>(() => {
     const targetSlug = effectiveCategorySlug || slug;
+    if (initialMainMatch) {
+      return {
+        ...initialMainMatch,
+        level: 'MAIN',
+        childCategories: CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === initialMainMatch.id),
+      };
+    }
     return (
       MASTER_CATEGORIES.find((c) => c.slug === targetSlug) ||
       MASTER_CATEGORIES[0]
@@ -99,26 +119,41 @@ export const CategoryPage: React.FC = () => {
   const [productList, setProductList] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
+  const isMainCategoryPage = Boolean(
+    category?.level === 'MAIN' ||
+      MAIN_CATEGORIES_SEED.some((m) => m.slug === (effectiveCategorySlug || slug))
+  );
+
   const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() =>
     parseCategoryPageUrlFilters(searchParams, subcategorySlug)
   );
 
-  // Load category details and live products (re-fetches on admin approvals/updates)
+  // Load category details and live products (supports both Main Category and Child Category pages)
   useEffect(() => {
     let active = true;
     const targetSlug = effectiveCategorySlug || slug;
     if (!targetSlug) return;
 
+    const fallbackMain = MAIN_CATEGORIES_SEED.find((m) => m.slug === targetSlug);
     const fallbackCat = MASTER_CATEGORIES.find((c) => c.slug === targetSlug);
-    if (fallbackCat) setCategory(fallbackCat);
+    if (fallbackMain) {
+      setCategory({
+        ...fallbackMain,
+        level: 'MAIN',
+        childCategories: CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === fallbackMain.id),
+      });
+    } else if (fallbackCat) {
+      setCategory(fallbackCat);
+    }
 
     const loadCategoryData = async () => {
       setLoadingProducts(true);
       try {
-        const [cat, prods] = await Promise.all([
-          api.getCategoryBySlug(targetSlug),
-          api.getProducts({ category: targetSlug }),
-        ]);
+        const cat = await api.getCategoryBySlug(targetSlug);
+        const isMain = Boolean(cat?.level === 'MAIN' || fallbackMain);
+        const prods = await api.getProducts(
+          isMain ? { mainCategory: targetSlug } : { category: targetSlug }
+        );
         if (!active) return;
         if (cat) setCategory(cat);
         setProductList(Array.isArray(prods) ? prods : []);
@@ -150,6 +185,9 @@ export const CategoryPage: React.FC = () => {
       setActiveFilters(next);
 
       const params = new URLSearchParams();
+      if (next.childCategories && next.childCategories.length > 0) {
+        params.set('child', next.childCategories.join(','));
+      }
       if (next.subcategories && next.subcategories.length > 0) {
         params.set('sub', next.subcategories.join(','));
       }
@@ -176,7 +214,6 @@ export const CategoryPage: React.FC = () => {
       }
 
       if (subcategorySlug) {
-        // Move to main category base path with explicit URL filter state when filters are adjusted
         const basePath = `/categories/${slug}`;
         const nextUrl = params.toString() ? `${basePath}?${params.toString()}` : basePath;
         navigate(nextUrl);
@@ -190,33 +227,63 @@ export const CategoryPage: React.FC = () => {
   const activeSubcategory =
     activeFilters.subcategories?.length === 1
       ? category.subcategories?.find(
-          (s) =>
+          (s: any) =>
             s.slug.toLowerCase() === activeFilters.subcategories[0].toLowerCase() ||
             s.name.toLowerCase() === activeFilters.subcategories[0].toLowerCase()
         )
       : subcategorySlug
       ? category.subcategories?.find(
-          (s) =>
+          (s: any) =>
             s.slug.toLowerCase() === subcategorySlug.toLowerCase() ||
             s.name.toLowerCase() === subcategorySlug.toLowerCase()
         )
       : null;
 
-  // All products belonging to this Main Category
-  const allCategoryProducts = useMemo(() => {
-    return productList.filter(
-      (p) => p.categorySlug === category.slug || (p as any).categoryId === category.id
-    );
-  }, [productList, category.slug, category.id]);
+  const mainChildCategories: Category[] = useMemo(() => {
+    if (!isMainCategoryPage) return [];
+    if (Array.isArray(category?.childCategories) && category.childCategories.length > 0) {
+      return category.childCategories;
+    }
+    return CHILD_CATEGORIES_SEED.filter(
+      (c) => c.mainCategorySlug === category.slug || c.mainCategoryId === category.id
+    ) as unknown as Category[];
+  }, [isMainCategoryPage, category]);
 
-  // Compute Child Category ("Category") + specification filters strictly scoped to active Main Category
+  const parentMainCategory = useMemo(() => {
+    if (isMainCategoryPage) return null;
+    const mcSlug = category?.mainCategorySlug || category?.departmentSlug;
+    return MAIN_CATEGORIES_SEED.find(
+      (m) => m.slug === mcSlug || m.id === category?.mainCategoryId
+    ) || null;
+  }, [isMainCategoryPage, category]);
+
+  // All products belonging to this Main Category or Child Category
+  const allCategoryProducts = useMemo(() => {
+    if (isMainCategoryPage) {
+      const childSlugs = mainChildCategories.map((c) => c.slug.toLowerCase());
+      return productList.filter(
+        (p) =>
+          p.mainCategorySlug?.toLowerCase() === category.slug?.toLowerCase() ||
+          p.mainCategoryId === category.id ||
+          childSlugs.includes((p.childCategorySlug || p.categorySlug || '').toLowerCase())
+      );
+    }
+    return productList.filter(
+      (p) =>
+        (p.childCategorySlug || p.categorySlug) === category.slug ||
+        (p.childCategoryId || p.categoryId) === category.id
+    );
+  }, [isMainCategoryPage, mainChildCategories, productList, category.slug, category.id]);
+
+  // Compute Child Category / Product Type + specification filters strictly scoped to current view
   const availableFilters = useMemo(() => {
     return getAvailableFiltersForCategory(
       category.slug,
       allCategoryProducts,
-      category.subcategories || []
+      category.subcategories || [],
+      mainChildCategories
     );
-  }, [category.slug, category.subcategories, allCategoryProducts]);
+  }, [category.slug, category.subcategories, mainChildCategories, allCategoryProducts]);
 
   // Apply active filters and sorting
   const filteredProducts = useMemo(() => {
@@ -245,12 +312,20 @@ export const CategoryPage: React.FC = () => {
   // Filter change handlers
   const handleResetFilters = () => {
     commitFiltersToUrl({
+      childCategories: [],
       brands: [],
       subcategories: [],
       inStockOnly: false,
       asapOnly: false,
       specifications: {},
       sortBy: activeFilters.sortBy
+    });
+  };
+
+  const handleRemoveChildCategory = (childCat: string) => {
+    commitFiltersToUrl({
+      ...activeFilters,
+      childCategories: (activeFilters.childCategories || []).filter((c) => c !== childCat)
     });
   };
 
@@ -307,11 +382,22 @@ export const CategoryPage: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-5">
-      {/* 1. Breadcrumb Navigation */}
+      {/* 1. Breadcrumb Navigation (Main Category -> Child Category -> Product Type; No "Categories") */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500 overflow-x-auto no-scrollbar whitespace-nowrap">
         <Link to="/" className="hover:text-brand-blue-900 flex-shrink-0">
           Home
         </Link>
+        {parentMainCategory && (
+          <>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <Link
+              to={`/categories/${parentMainCategory.slug}`}
+              className="hover:text-brand-blue-900 flex-shrink-0"
+            >
+              {parentMainCategory.name}
+            </Link>
+          </>
+        )}
         <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
         <Link
           to={`/categories/${category.slug}`}
@@ -341,6 +427,21 @@ export const CategoryPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Child Category Quick Navigation Pills (on Main Category landing page) */}
+      {isMainCategoryPage && mainChildCategories.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          {mainChildCategories.map((child: any) => (
+            <Link
+              key={child.id}
+              to={`/categories/${child.slug}`}
+              className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-white border border-slate-200 text-slate-700 hover:border-brand-blue-900 hover:text-brand-blue-900 hover:bg-brand-blue-50/40 whitespace-nowrap transition-colors shadow-2xs"
+            >
+              {child.name}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {/* 3. Horizontal Filter Bar */}
       <CategoryHorizontalFilterBar
         availableFilters={availableFilters}
@@ -354,6 +455,7 @@ export const CategoryPage: React.FC = () => {
       <ActiveFilterChips
         activeFilters={activeFilters}
         availableFilters={availableFilters}
+        onRemoveChildCategory={handleRemoveChildCategory}
         onRemoveBrand={handleRemoveBrand}
         onRemoveSubcategory={handleRemoveSubcategory}
         onRemoveSpec={handleRemoveSpec}

@@ -9,6 +9,7 @@ import {
   Edit3,
   Plus,
   Layers,
+  Sparkles,
 } from 'lucide-react';
 import { adminApi, formatINR } from '../services/adminApi';
 import {
@@ -24,15 +25,28 @@ import {
 
 export const CatalogProductsPage: React.FC = () => {
   const pushToast = useToastStore((s) => s.push);
-  const [sectionTab, setSectionTab] = useState<'PRODUCTS' | 'TAXONOMY'>('PRODUCTS');
+  const [sectionTab, setSectionTab] = useState<'PRODUCTS' | 'TAXONOMY' | 'NEW_LAUNCHES'>('PRODUCTS');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [taxonomy, setTaxonomy] = useState<{ categories: any[]; brands: any[]; attributes: any[] }>({
+  const [taxonomy, setTaxonomy] = useState<{
+    categories: any[];
+    mainCategories: any[];
+    childCategories: any[];
+    productTypes: any[];
+    newLaunchCollections: any[];
+    migrationSummary?: { totalRecords: number; migrated: number; unmapped: number };
+    brands: any[];
+    attributes: any[];
+  }>({
     categories: [],
+    mainCategories: [],
+    childCategories: [],
+    productTypes: [],
+    newLaunchCollections: [],
     brands: [],
     attributes: [],
   });
@@ -41,7 +55,17 @@ export const CatalogProductsPage: React.FC = () => {
   const [rejectModal, setRejectModal] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  const [catForm, setCatForm] = useState({ name: '', description: '' });
+  const [mainForm, setMainForm] = useState({ name: '', sortOrder: '6', description: '' });
+  const [childForm, setChildForm] = useState({ mainCategoryId: 'mc-1', name: '', sortOrder: '1', description: '' });
+  const [typeForm, setTypeForm] = useState({ childCategoryId: 'cat-1', name: '', sortOrder: '1' });
+  const [newLaunchForm, setNewLaunchForm] = useState({
+    name: '',
+    description: '',
+    startDate: '',
+    endDate: '',
+    displayOrder: '1',
+    productIds: [] as string[],
+  });
   const [brandForm, setBrandForm] = useState({ name: '', description: '' });
   const [attrForm, setAttrForm] = useState({ name: '', categoryName: 'Cement & Concrete', valuesCsv: '' });
 
@@ -57,12 +81,21 @@ export const CatalogProductsPage: React.FC = () => {
 
   const loadTaxonomy = async () => {
     const res = await adminApi.getCatalogTaxonomy();
-    setTaxonomy(res);
+    setTaxonomy({
+      categories: res?.categories || [],
+      mainCategories: res?.mainCategories || [],
+      childCategories: res?.childCategories || [],
+      productTypes: res?.productTypes || [],
+      newLaunchCollections: res?.newLaunchCollections || [],
+      migrationSummary: res?.migrationSummary,
+      brands: res?.brands || [],
+      attributes: res?.attributes || [],
+    });
   };
 
   useEffect(() => {
-    if (sectionTab === 'PRODUCTS') loadProducts();
-    else loadTaxonomy();
+    loadTaxonomy();
+    if (sectionTab === 'PRODUCTS' || sectionTab === 'NEW_LAUNCHES') loadProducts();
 
     const onRealtime = () => {
       if (sectionTab === 'PRODUCTS') loadProducts();
@@ -134,6 +167,9 @@ export const CatalogProductsPage: React.FC = () => {
         mrp: Number(editModal.mrp),
         sellingPrice: Number(editModal.sellingPrice),
         gstRate: Number(editModal.gstRate),
+        mainCategoryId: editModal.mainCategoryId,
+        childCategoryId: editModal.childCategoryId,
+        productTypeId: editModal.productTypeId,
         categoryName: editModal.categoryName,
         brand: editModal.brand,
         description: editModal.description,
@@ -166,7 +202,7 @@ export const CatalogProductsPage: React.FC = () => {
         title="Product & Catalog Management"
         description="Approve vendor product submissions, control Customer Website visibility, pricing & catalog taxonomy."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant={sectionTab === 'PRODUCTS' ? 'primary' : 'outline'}
               size="sm"
@@ -179,7 +215,14 @@ export const CatalogProductsPage: React.FC = () => {
               size="sm"
               onClick={() => setSectionTab('TAXONOMY')}
             >
-              <Layers className="w-4 h-4" /> Categories, Brands & Attributes
+              <Layers className="w-4 h-4" /> 4-Level Taxonomy
+            </Button>
+            <Button
+              variant={sectionTab === 'NEW_LAUNCHES' ? 'primary' : 'outline'}
+              size="sm"
+              onClick={() => setSectionTab('NEW_LAUNCHES')}
+            >
+              <Sparkles className="w-4 h-4" /> New Launches
             </Button>
           </div>
         }
@@ -281,7 +324,11 @@ export const CatalogProductsPage: React.FC = () => {
                         </td>
                         <td className="py-3 px-3">
                           <p className="text-[#5E5946] font-medium">{p.vendorName}</p>
-                          <p className="text-[#6E6859]">{p.categoryName}</p>
+                          <p className="text-[#6E6859] text-[11px]">
+                            {p.mainCategoryName ? `${p.mainCategoryName} → ` : ''}
+                            {p.childCategoryName || p.categoryName}
+                            {p.productTypeName ? ` • ${p.productTypeName}` : ''}
+                          </p>
                         </td>
                         <td className="py-3 px-3">
                           <p className="font-semibold text-[#5E5946]">
@@ -353,117 +400,456 @@ export const CatalogProductsPage: React.FC = () => {
             )}
           </Card>
         </>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Categories */}
-          <Card title="Product Categories" subtitle={`${taxonomy.categories.length} active`}>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await adminApi.createCategory(catForm);
-                setCatForm({ name: '', description: '' });
-                pushToast({ title: 'Category Added' });
-                loadTaxonomy();
-              }}
-              className="flex gap-2 mb-4"
-            >
-              <input
-                required
-                placeholder="New category name"
-                value={catForm.name}
-                onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
-                className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
-              />
-              <Button size="sm" type="submit">
-                <Plus className="w-3.5 h-3.5" /> Add
-              </Button>
-            </form>
-            <div className="divide-y divide-[#E5DCD3] max-h-80 overflow-y-auto text-xs">
-              {taxonomy.categories.map((c) => (
-                <div key={c.id} className="py-2 flex justify-between">
-                  <span className="font-medium text-[#5E5946]">{c.name}</span>
-                  <span className="text-[#6E6859]">{c.subcategories?.length || 0} sub</span>
-                </div>
-              ))}
+      ) : sectionTab === 'TAXONOMY' ? (
+        <div className="space-y-5">
+          {taxonomy.migrationSummary && (
+            <div className="p-3 rounded-xl bg-[#FAF7F4] border border-[#E5DCD3] text-xs flex flex-wrap items-center justify-between gap-2">
+              <span className="font-semibold text-[#5E5946]">
+                Catalog Hierarchy Sync: {taxonomy.mainCategories.length} Main Categories •{' '}
+                {taxonomy.childCategories.length} Child Categories • {taxonomy.productTypes.length} Product Types
+              </span>
+              <span className="text-[#6E6859]">
+                Migrated Records: <strong>{taxonomy.migrationSummary.migrated}</strong> /{' '}
+                {taxonomy.migrationSummary.totalRecords} (Unmapped: {taxonomy.migrationSummary.unmapped})
+              </span>
             </div>
-          </Card>
+          )}
 
-          {/* Brands */}
-          <Card title="Approved Brands" subtitle={`${taxonomy.brands.length} listed`}>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await adminApi.createBrand(brandForm);
-                setBrandForm({ name: '', description: '' });
-                pushToast({ title: 'Brand Added' });
-                loadTaxonomy();
-              }}
-              className="flex gap-2 mb-4"
-            >
-              <input
-                required
-                placeholder="Brand name (e.g. ACC, Finolex)"
-                value={brandForm.name}
-                onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })}
-                className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
-              />
-              <Button size="sm" type="submit">
-                <Plus className="w-3.5 h-3.5" /> Add
-              </Button>
-            </form>
-            <div className="divide-y divide-[#E5DCD3] max-h-80 overflow-y-auto text-xs">
-              {taxonomy.brands.map((b) => (
-                <div key={b.id} className="py-2 flex justify-between">
-                  <span className="font-medium text-[#5E5946]">{b.name}</span>
-                  <Badge variant="info">{b.slug}</Badge>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Attributes */}
-          <Card title="Specification Attributes" subtitle={`${taxonomy.attributes.length} schemas`}>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                await adminApi.createAttribute({
-                  name: attrForm.name,
-                  categoryName: attrForm.categoryName,
-                  values: attrForm.valuesCsv.split(',').map((s) => s.trim()).filter(Boolean),
-                  isRequired: true,
-                });
-                setAttrForm({ name: '', categoryName: 'Cement & Concrete', valuesCsv: '' });
-                pushToast({ title: 'Attribute Added' });
-                loadTaxonomy();
-              }}
-              className="space-y-2 mb-4"
-            >
-              <input
-                required
-                placeholder="Attribute name (e.g. Fineness)"
-                value={attrForm.name}
-                onChange={(e) => setAttrForm({ ...attrForm, name: e.target.value })}
-                className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
-              />
-              <div className="flex gap-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {/* Level 1: Main Categories */}
+            <Card title="1. Main Categories" subtitle={`${taxonomy.mainCategories.length} top-level sections`}>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await adminApi.createMainCategory({
+                      name: mainForm.name,
+                      sortOrder: Number(mainForm.sortOrder) || 99,
+                      description: mainForm.description,
+                    });
+                    setMainForm({ name: '', sortOrder: String(taxonomy.mainCategories.length + 2), description: '' });
+                    pushToast({ title: 'Main Category Added' });
+                    loadTaxonomy();
+                  } catch (err: any) {
+                    pushToast({ title: 'Error', message: err.message, variant: 'error' });
+                  }
+                }}
+                className="flex gap-2 mb-4"
+              >
                 <input
-                  placeholder="Values (comma separated)"
-                  value={attrForm.valuesCsv}
-                  onChange={(e) => setAttrForm({ ...attrForm, valuesCsv: e.target.value })}
+                  required
+                  placeholder="New main category"
+                  value={mainForm.name}
+                  onChange={(e) => setMainForm({ ...mainForm, name: e.target.value })}
+                  className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="Order"
+                  value={mainForm.sortOrder}
+                  onChange={(e) => setMainForm({ ...mainForm, sortOrder: e.target.value })}
+                  className="w-16 px-2 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                />
+                <Button size="sm" type="submit">
+                  <Plus className="w-3.5 h-3.5" /> Add
+                </Button>
+              </form>
+              <div className="divide-y divide-[#E5DCD3] max-h-80 overflow-y-auto text-xs">
+                {taxonomy.mainCategories.map((mc) => (
+                  <div key={mc.id} className="py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[#5E5946] truncate">
+                        #{mc.sortOrder} {mc.name}
+                      </p>
+                      <p className="text-[11px] text-[#6E6859] font-mono truncate">{mc.slug}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant={mc.showInNavigation !== false ? 'success' : 'outline'}
+                        onClick={async () => {
+                          await adminApi.updateMainCategory(mc.id, { showInNavigation: !(mc.showInNavigation !== false) });
+                          loadTaxonomy();
+                        }}
+                      >
+                        {mc.showInNavigation !== false ? 'In Nav' : 'Hidden'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={mc.isActive !== false ? 'success' : 'danger'}
+                        onClick={async () => {
+                          await adminApi.updateMainCategory(mc.id, { isActive: !(mc.isActive !== false) });
+                          loadTaxonomy();
+                        }}
+                      >
+                        {mc.isActive !== false ? 'Active' : 'Off'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Level 2: Child Categories */}
+            <Card title="2. Child Categories" subtitle={`${taxonomy.childCategories.length} categories`}>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await adminApi.createChildCategory({
+                      mainCategoryId: childForm.mainCategoryId,
+                      name: childForm.name,
+                      sortOrder: Number(childForm.sortOrder) || 99,
+                      description: childForm.description,
+                    });
+                    setChildForm({ ...childForm, name: '', description: '' });
+                    pushToast({ title: 'Child Category Added' });
+                    loadTaxonomy();
+                  } catch (err: any) {
+                    pushToast({ title: 'Error', message: err.message, variant: 'error' });
+                  }
+                }}
+                className="space-y-2 mb-4"
+              >
+                <select
+                  value={childForm.mainCategoryId}
+                  onChange={(e) => setChildForm({ ...childForm, mainCategoryId: e.target.value })}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                >
+                  {taxonomy.mainCategories.map((mc) => (
+                    <option key={mc.id} value={mc.id}>
+                      Parent: {mc.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <input
+                    required
+                    placeholder="New child category name"
+                    value={childForm.name}
+                    onChange={(e) => setChildForm({ ...childForm, name: e.target.value })}
+                    className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                  />
+                  <Button size="sm" type="submit">
+                    <Plus className="w-3.5 h-3.5" /> Add
+                  </Button>
+                </div>
+              </form>
+              <div className="divide-y divide-[#E5DCD3] max-h-80 overflow-y-auto text-xs">
+                {taxonomy.childCategories.map((cc) => (
+                  <div key={cc.id} className="py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[#5E5946] truncate">{cc.name}</p>
+                      <p className="text-[11px] text-[#6E6859] truncate">{cc.mainCategoryName || cc.mainCategorySlug}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={cc.isActive !== false ? 'success' : 'outline'}
+                      onClick={async () => {
+                        await adminApi.updateChildCategory(cc.id, { isActive: !(cc.isActive !== false) });
+                        loadTaxonomy();
+                      }}
+                    >
+                      {cc.isActive !== false ? 'Active' : 'Off'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Level 3: Product Types */}
+            <Card title="3. Product Types" subtitle={`${taxonomy.productTypes.length} product types`}>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await adminApi.createProductType({
+                      childCategoryId: typeForm.childCategoryId,
+                      name: typeForm.name,
+                      sortOrder: Number(typeForm.sortOrder) || 99,
+                    });
+                    setTypeForm({ ...typeForm, name: '' });
+                    pushToast({ title: 'Product Type Added' });
+                    loadTaxonomy();
+                  } catch (err: any) {
+                    pushToast({ title: 'Error', message: err.message, variant: 'error' });
+                  }
+                }}
+                className="space-y-2 mb-4"
+              >
+                <select
+                  value={typeForm.childCategoryId}
+                  onChange={(e) => setTypeForm({ ...typeForm, childCategoryId: e.target.value })}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                >
+                  {taxonomy.childCategories.map((cc) => (
+                    <option key={cc.id} value={cc.id}>
+                      Child: {cc.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <input
+                    required
+                    placeholder="New product type (e.g. PPC Cement)"
+                    value={typeForm.name}
+                    onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
+                    className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                  />
+                  <Button size="sm" type="submit">
+                    <Plus className="w-3.5 h-3.5" /> Add
+                  </Button>
+                </div>
+              </form>
+              <div className="divide-y divide-[#E5DCD3] max-h-80 overflow-y-auto text-xs">
+                {taxonomy.productTypes.map((pt) => (
+                  <div key={pt.id} className="py-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[#5E5946] truncate">{pt.name}</p>
+                      <p className="text-[11px] text-[#6E6859] truncate">{pt.childCategoryName || pt.childCategorySlug}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={pt.isActive !== false ? 'success' : 'outline'}
+                      onClick={async () => {
+                        await adminApi.updateProductType(pt.id, { isActive: !(pt.isActive !== false) });
+                        loadTaxonomy();
+                      }}
+                    >
+                      {pt.isActive !== false ? 'Active' : 'Off'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Brands */}
+            <Card title="Approved Brands" subtitle={`${taxonomy.brands.length} listed`}>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  await adminApi.createBrand(brandForm);
+                  setBrandForm({ name: '', description: '' });
+                  pushToast({ title: 'Brand Added' });
+                  loadTaxonomy();
+                }}
+                className="flex gap-2 mb-4"
+              >
+                <input
+                  required
+                  placeholder="Brand name (e.g. ACC, Finolex)"
+                  value={brandForm.name}
+                  onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })}
                   className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
                 />
                 <Button size="sm" type="submit">
-                  Add
+                  <Plus className="w-3.5 h-3.5" /> Add
                 </Button>
+              </form>
+              <div className="divide-y divide-[#E5DCD3] max-h-80 overflow-y-auto text-xs">
+                {taxonomy.brands.map((b) => (
+                  <div key={b.id} className="py-2 flex justify-between">
+                    <span className="font-medium text-[#5E5946]">{b.name}</span>
+                    <Badge variant="info">{b.slug}</Badge>
+                  </div>
+                ))}
               </div>
-            </form>
-            <div className="space-y-2 max-h-72 overflow-y-auto text-xs">
-              {taxonomy.attributes.map((a) => (
-                <div key={a.id} className="p-2.5 border border-[#E5DCD3] bg-[#FAF7F4] rounded-lg">
-                  <p className="font-semibold text-[#5E5946]">{a.name}</p>
-                  <p className="text-[#6E6859]">{a.categoryName} • {(a.values || []).join(', ')}</p>
+            </Card>
+
+            {/* Attributes */}
+            <Card title="Specification Attributes" subtitle={`${taxonomy.attributes.length} schemas`}>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  await adminApi.createAttribute({
+                    name: attrForm.name,
+                    categoryName: attrForm.categoryName,
+                    values: attrForm.valuesCsv.split(',').map((s) => s.trim()).filter(Boolean),
+                    isRequired: true,
+                  });
+                  setAttrForm({ name: '', categoryName: 'Cement & Concrete', valuesCsv: '' });
+                  pushToast({ title: 'Attribute Added' });
+                  loadTaxonomy();
+                }}
+                className="space-y-2 mb-4"
+              >
+                <input
+                  required
+                  placeholder="Attribute name (e.g. Fineness)"
+                  value={attrForm.name}
+                  onChange={(e) => setAttrForm({ ...attrForm, name: e.target.value })}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                />
+                <div className="flex gap-2">
+                  <input
+                    placeholder="Values (comma separated)"
+                    value={attrForm.valuesCsv}
+                    onChange={(e) => setAttrForm({ ...attrForm, valuesCsv: e.target.value })}
+                    className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                  />
+                  <Button size="sm" type="submit">
+                    Add
+                  </Button>
                 </div>
-              ))}
+              </form>
+              <div className="space-y-2 max-h-72 overflow-y-auto text-xs">
+                {taxonomy.attributes.map((a) => (
+                  <div key={a.id} className="p-2.5 border border-[#E5DCD3] bg-[#FAF7F4] rounded-lg">
+                    <p className="font-semibold text-[#5E5946]">{a.name}</p>
+                    <p className="text-[#6E6859]">{a.categoryName} • {(a.values || []).join(', ')}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Create New Launches Promotional Collection */}
+          <Card title="Create New Launches Collection" subtitle="Promotional showcase without altering product taxonomy">
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  await adminApi.createNewLaunchCollection({
+                    title: newLaunchForm.name,
+                    description: newLaunchForm.description,
+                    startDate: newLaunchForm.startDate || undefined,
+                    endDate: newLaunchForm.endDate || undefined,
+                    displayOrder: Number(newLaunchForm.displayOrder) || 1,
+                    productIds: newLaunchForm.productIds,
+                    isActive: true,
+                  });
+                  setNewLaunchForm({ name: '', description: '', startDate: '', endDate: '', displayOrder: '1', productIds: [] });
+                  pushToast({ title: 'Collection Created', message: 'Promotional New Launches synced to Customer Web.' });
+                  loadTaxonomy();
+                } catch (err: any) {
+                  pushToast({ title: 'Failed', message: err.message, variant: 'error' });
+                }
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Collection Title *</label>
+                <input
+                  required
+                  placeholder="e.g. Monsoon Waterproofing & Smart Electrical Launches"
+                  value={newLaunchForm.name}
+                  onChange={(e) => setNewLaunchForm({ ...newLaunchForm, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={newLaunchForm.description}
+                  onChange={(e) => setNewLaunchForm({ ...newLaunchForm, description: e.target.value })}
+                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block font-semibold text-[#5E5946] mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={newLaunchForm.startDate}
+                    onChange={(e) => setNewLaunchForm({ ...newLaunchForm, startDate: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#5E5946] mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={newLaunchForm.endDate}
+                    onChange={(e) => setNewLaunchForm({ ...newLaunchForm, endDate: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#5E5946] mb-1">Display Order</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newLaunchForm.displayOrder}
+                    onChange={(e) => setNewLaunchForm({ ...newLaunchForm, displayOrder: e.target.value })}
+                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">
+                  Select Featured Products ({newLaunchForm.productIds.length} selected)
+                </label>
+                <div className="max-h-44 overflow-y-auto border border-[#E5DCD3] rounded-lg p-2 space-y-1 bg-[#FAF7F4]">
+                  {products.map((p) => {
+                    const checked = newLaunchForm.productIds.includes(p.id);
+                    return (
+                      <label key={p.id} className="flex items-center gap-2 py-1 px-1.5 rounded hover:bg-white cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setNewLaunchForm((prev) => ({
+                              ...prev,
+                              productIds: checked
+                                ? prev.productIds.filter((id) => id !== p.id)
+                                : [...prev.productIds, p.id],
+                            }))
+                          }
+                        />
+                        <span className="truncate font-medium text-[#5E5946]">{p.name}</span>
+                        <span className="text-[10px] text-[#6E6859] ml-auto shrink-0">{p.childCategoryName || p.categoryName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <Button type="submit" size="sm">
+                <Plus className="w-3.5 h-3.5" /> Create Promotional Collection
+              </Button>
+            </form>
+          </Card>
+
+          {/* Existing Collections */}
+          <Card title="Active & Scheduled Collections" subtitle={`${taxonomy.newLaunchCollections.length} collections`}>
+            <div className="space-y-3 text-xs">
+              {taxonomy.newLaunchCollections.length === 0 ? (
+                <p className="text-[#6E6859] py-6 text-center">No promotional collections configured yet.</p>
+              ) : (
+                taxonomy.newLaunchCollections.map((col) => (
+                  <div key={col.id} className="p-3 rounded-xl border border-[#E5DCD3] bg-[#FAF7F4] space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-bold text-[#5E5946]">
+                          #{col.displayOrder || 1} {col.title || col.name}
+                        </p>
+                        <p className="text-[#6E6859]">{col.description || col.slug}</p>
+                        <p className="text-[11px] text-[#6E6859] mt-1">
+                          Products linked: <strong>{(col.productIds || []).length}</strong>
+                          {col.startDate || col.endDate ? ` • Window: ${col.startDate || 'Now'} to ${col.endDate || 'Open'}` : ''}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={col.isActive !== false ? 'success' : 'outline'}
+                        onClick={async () => {
+                          await adminApi.updateNewLaunchCollection(col.id, {
+                            isActive: !(col.isActive !== false),
+                          });
+                          loadTaxonomy();
+                        }}
+                      >
+                        {col.isActive !== false ? 'Visible' : 'Hidden'}
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
         </div>
@@ -485,6 +871,80 @@ export const CatalogProductsPage: React.FC = () => {
                 onChange={(e) => setEditModal({ ...editModal, name: e.target.value })}
                 className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
               />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Main Category</label>
+                <select
+                  value={editModal.mainCategoryId || ''}
+                  onChange={(e) => {
+                    const nextMain = e.target.value;
+                    const nextChild = taxonomy.childCategories.find((c) => c.mainCategoryId === nextMain);
+                    const nextType = nextChild
+                      ? taxonomy.productTypes.find((pt) => pt.childCategoryId === nextChild.id)
+                      : undefined;
+                    setEditModal({
+                      ...editModal,
+                      mainCategoryId: nextMain,
+                      childCategoryId: nextChild?.id || '',
+                      productTypeId: nextType?.id || '',
+                      categoryName: nextChild?.name || '',
+                    });
+                  }}
+                  className="w-full px-2.5 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                >
+                  <option value="">Select Main</option>
+                  {taxonomy.mainCategories.map((mc) => (
+                    <option key={mc.id} value={mc.id}>
+                      {mc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Child Category</label>
+                <select
+                  value={editModal.childCategoryId || ''}
+                  onChange={(e) => {
+                    const nextChildId = e.target.value;
+                    const nextChild = taxonomy.childCategories.find((c) => c.id === nextChildId);
+                    const nextType = taxonomy.productTypes.find((pt) => pt.childCategoryId === nextChildId);
+                    setEditModal({
+                      ...editModal,
+                      childCategoryId: nextChildId,
+                      productTypeId: nextType?.id || '',
+                      categoryName: nextChild?.name || editModal.categoryName,
+                    });
+                  }}
+                  className="w-full px-2.5 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                >
+                  <option value="">Select Child</option>
+                  {taxonomy.childCategories
+                    .filter((c) => !editModal.mainCategoryId || c.mainCategoryId === editModal.mainCategoryId)
+                    .map((cc) => (
+                      <option key={cc.id} value={cc.id}>
+                        {cc.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Product Type</label>
+                <select
+                  value={editModal.productTypeId || ''}
+                  onChange={(e) => setEditModal({ ...editModal, productTypeId: e.target.value })}
+                  className="w-full px-2.5 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                >
+                  <option value="">Select Type</option>
+                  {taxonomy.productTypes
+                    .filter((pt) => !editModal.childCategoryId || pt.childCategoryId === editModal.childCategoryId)
+                    .map((pt) => (
+                      <option key={pt.id} value={pt.id}>
+                        {pt.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>

@@ -27,7 +27,15 @@ import {
   TablePagination,
 } from '../../components/common';
 import { VendorProduct, AttributeSelectorType } from '@buildora/types';
-import { MASTER_CATEGORIES, getAttributeTemplatesForCategory, resolveCanonicalCategoryHierarchy } from '@buildora/constants';
+import {
+  MASTER_CATEGORIES,
+  MAIN_CATEGORIES_SEED,
+  CHILD_CATEGORIES_SEED,
+  PRODUCT_TYPES_SEED,
+  getAttributeTemplatesForCategory,
+  resolveCanonicalCategoryHierarchy,
+  resolveFullTaxonomy,
+} from '@buildora/constants';
 import { vendorApi } from '../../services/vendorApi';
 import { toast } from '../../store/useToastStore';
 
@@ -82,8 +90,20 @@ export const VendorProductsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Form states
+  const [taxonomyState, setTaxonomyState] = useState<{
+    mainCategories: any[];
+    childCategories: any[];
+    productTypes: any[];
+  }>({
+    mainCategories: MAIN_CATEGORIES_SEED,
+    childCategories: CHILD_CATEGORIES_SEED,
+    productTypes: PRODUCT_TYPES_SEED,
+  });
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
+  const [mainCategoryId, setMainCategoryId] = useState(MAIN_CATEGORIES_SEED[0]?.id || 'mc-1');
+  const [childCategoryId, setChildCategoryId] = useState(CHILD_CATEGORIES_SEED[0]?.id || 'cat-1');
+  const [productTypeId, setProductTypeId] = useState(PRODUCT_TYPES_SEED[0]?.id || 'sub-1-1');
   const [category, setCategory] = useState('Cement & Concrete');
   const [subCategory, setSubCategory] = useState('OPC 53 Grade Cement');
   const [brand, setBrand] = useState('UltraTech Cement');
@@ -111,6 +131,21 @@ export const VendorProductsPage: React.FC = () => {
 
   useEffect(() => {
     fetchProducts();
+    vendorApi.getTaxonomy().then((res) => {
+      if (
+        res &&
+        Array.isArray(res.mainCategories) &&
+        res.mainCategories.length > 0 &&
+        Array.isArray(res.childCategories) &&
+        res.childCategories.length > 0
+      ) {
+        setTaxonomyState({
+          mainCategories: res.mainCategories.filter((m: any) => m.isActive !== false),
+          childCategories: res.childCategories.filter((c: any) => c.isActive !== false),
+          productTypes: (res.productTypes || PRODUCT_TYPES_SEED).filter((pt: any) => pt.isActive !== false),
+        });
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -128,24 +163,69 @@ export const VendorProductsPage: React.FC = () => {
     return Array.from(set);
   }, [products]);
 
+  const availableMainCategories = useMemo(
+    () => taxonomyState.mainCategories.length > 0 ? taxonomyState.mainCategories : MAIN_CATEGORIES_SEED,
+    [taxonomyState.mainCategories]
+  );
+
+  const selectedMainCatNode = useMemo(
+    () =>
+      availableMainCategories.find((m) => m.id === mainCategoryId) ||
+      availableMainCategories[0],
+    [availableMainCategories, mainCategoryId]
+  );
+
+  const availableChildCategories = useMemo(() => {
+    const source = taxonomyState.childCategories.length > 0 ? taxonomyState.childCategories : CHILD_CATEGORIES_SEED;
+    return source.filter((c) => c.mainCategoryId === selectedMainCatNode?.id);
+  }, [taxonomyState.childCategories, selectedMainCatNode]);
+
+  const selectedChildCatNode = useMemo(
+    () =>
+      availableChildCategories.find((c) => c.id === childCategoryId) ||
+      availableChildCategories[0],
+    [availableChildCategories, childCategoryId]
+  );
+
+  const availableProductTypes = useMemo(() => {
+    const source = taxonomyState.productTypes.length > 0 ? taxonomyState.productTypes : PRODUCT_TYPES_SEED;
+    return source.filter((pt) => pt.childCategoryId === selectedChildCatNode?.id);
+  }, [taxonomyState.productTypes, selectedChildCatNode]);
+
+  const selectedProductTypeNode = useMemo(
+    () =>
+      availableProductTypes.find((pt) => pt.id === productTypeId) ||
+      availableProductTypes[0],
+    [availableProductTypes, productTypeId]
+  );
+
   const selectedMainCategoryObj = useMemo(() => {
     const found = MASTER_CATEGORIES.find(
-      (c) => c.slug === category || c.name.toLowerCase() === category.toLowerCase()
+      (c) =>
+        c.id === selectedChildCatNode?.id ||
+        c.slug === selectedChildCatNode?.slug ||
+        c.name.toLowerCase() === category.toLowerCase()
     );
     return found || MASTER_CATEGORIES[0];
-  }, [category]);
-
-  const subcategoryOptions = useMemo(() => {
-    return selectedMainCategoryObj?.subcategories || [];
-  }, [selectedMainCategoryObj]);
+  }, [selectedChildCatNode, category]);
 
   const openAddModal = () => {
     setEditingProduct(null);
     setFormError(null);
     setName('');
     setSku(`SKU-BLR-${Math.floor(1000 + Math.random() * 9000)}`);
-    setCategory('Cement & Concrete');
-    setSubCategory('OPC 53 Grade Cement');
+    const defaultMain = availableMainCategories[0] || MAIN_CATEGORIES_SEED[0];
+    const defaultChild =
+      taxonomyState.childCategories.find((c) => c.mainCategoryId === defaultMain?.id) ||
+      CHILD_CATEGORIES_SEED[0];
+    const defaultType =
+      taxonomyState.productTypes.find((pt) => pt.childCategoryId === defaultChild?.id) ||
+      PRODUCT_TYPES_SEED[0];
+    setMainCategoryId(defaultMain?.id || 'mc-1');
+    setChildCategoryId(defaultChild?.id || 'cat-1');
+    setProductTypeId(defaultType?.id || 'sub-1-1');
+    setCategory(defaultChild?.name || 'Cement & Concrete');
+    setSubCategory(defaultType?.name || 'OPC 53 Grade Cement');
     setBrand('');
     setUnit('50 Kg Bag');
     setGstRate('18');
@@ -172,10 +252,26 @@ export const VendorProductsPage: React.FC = () => {
     setEditingProduct(p);
     setFormError(null);
     const resolvedStock = p.stockCount ?? p.stock ?? 0;
+    const resolvedTax = resolveFullTaxonomy(p as any, {
+      mainCategories: availableMainCategories,
+      childCategories: taxonomyState.childCategories,
+      productTypes: taxonomyState.productTypes,
+    });
+    const mId = (p as any).mainCategoryId || resolvedTax.mainCategory?.id || 'mc-1';
+    const cId = (p as any).childCategoryId || resolvedTax.childCategory?.id || 'cat-1';
+    const ptId =
+      (p as any).productTypeId ||
+      resolvedTax.productType?.id ||
+      taxonomyState.productTypes.find((pt) => pt.childCategoryId === cId)?.id ||
+      '';
+
     setName(p.name);
     setSku(p.sku);
-    setCategory(p.category);
-    setSubCategory(p.subCategory || p.subcategory || '');
+    setMainCategoryId(mId);
+    setChildCategoryId(cId);
+    setProductTypeId(ptId);
+    setCategory(resolvedTax.childCategory?.name || p.category);
+    setSubCategory(resolvedTax.productType?.name || p.subCategory || p.subcategory || '');
     setBrand(p.brand);
     setUnit(p.unit);
     setGstRate(String(p.gstRate ?? 18));
@@ -424,20 +520,35 @@ export const VendorProductsPage: React.FC = () => {
 
       const resolvedStatus =
         stockNum === 0 ? 'OUT_OF_STOCK' : productStatus;
-      const hierarchy = resolveCanonicalCategoryHierarchy(category, subCategory);
-      const resolvedMain = hierarchy.matchedMain || MASTER_CATEGORIES[0];
-      const resolvedChild = hierarchy.matchedChild || resolvedMain.subcategories[0];
+      const resolvedMain = selectedMainCatNode;
+      const resolvedChild = selectedChildCatNode;
+      const resolvedType = selectedProductTypeNode;
+      const fallbackHierarchy = resolveCanonicalCategoryHierarchy(
+        resolvedChild?.name || category,
+        resolvedType?.name || subCategory
+      );
+      const canonicalChild = resolvedChild || fallbackHierarchy.matchedMain || MASTER_CATEGORIES[0];
+      const canonicalType = resolvedType || fallbackHierarchy.matchedChild || MASTER_CATEGORIES[0].subcategories[0];
 
       const productData = {
         name: name.trim(),
         sku: sku.trim(),
-        categoryId: resolvedMain.id,
-        category: resolvedMain.name,
-        categorySlug: resolvedMain.slug,
-        subcategoryId: resolvedChild?.id || '',
-        subCategory: resolvedChild?.name || '',
-        subcategory: resolvedChild?.name || '',
-        subcategorySlug: resolvedChild?.slug || '',
+        mainCategoryId: resolvedMain?.id || canonicalChild.mainCategoryId || 'mc-1',
+        mainCategoryName: resolvedMain?.name || 'Civil & Interiors',
+        mainCategorySlug: resolvedMain?.slug || 'civil-interiors',
+        childCategoryId: canonicalChild.id,
+        childCategoryName: canonicalChild.name,
+        childCategorySlug: canonicalChild.slug,
+        productTypeId: canonicalType?.id || '',
+        productTypeName: canonicalType?.name || '',
+        productTypeSlug: canonicalType?.slug || '',
+        categoryId: canonicalChild.id,
+        category: canonicalChild.name,
+        categorySlug: canonicalChild.slug,
+        subcategoryId: canonicalType?.id || '',
+        subCategory: canonicalType?.name || '',
+        subcategory: canonicalType?.name || '',
+        subcategorySlug: canonicalType?.slug || '',
         brand: brand.trim(),
         unit: unit.trim(),
         gstRate: Number(gstRate),
@@ -677,7 +788,17 @@ export const VendorProductsPage: React.FC = () => {
                         <div className="text-[11px] text-[#78716C]">{p.brand}</div>
                       </td>
 
-                      <td className="py-3.5 px-4 text-[#292524]">{p.category}</td>
+                      <td className="py-3.5 px-4">
+                        <div className="text-[#292524] font-medium">
+                          {(p as any).childCategoryName || p.category}
+                        </div>
+                        <div className="text-[11px] text-[#78716C]">
+                          {((p as any).mainCategoryName || (p as any).department || '')}
+                          {(p as any).productTypeName || p.subCategory || p.subcategory
+                            ? ` • ${(p as any).productTypeName || p.subCategory || p.subcategory}`
+                            : ''}
+                        </div>
+                      </td>
 
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-[#292524]">
@@ -814,17 +935,28 @@ export const VendorProductsPage: React.FC = () => {
               <div>
                 <label className="portal-label">Main Category *</label>
                 <select
-                  value={selectedMainCategoryObj?.name || category}
+                  value={selectedMainCatNode?.id || mainCategoryId}
                   onChange={(e) => {
-                    const nextMain = MASTER_CATEGORIES.find((c) => c.name === e.target.value);
-                    setCategory(nextMain?.name || e.target.value);
-                    setSubCategory(nextMain?.subcategories?.[0]?.name || '');
+                    const nextMainId = e.target.value;
+                    setMainCategoryId(nextMainId);
+                    const nextChild =
+                      taxonomyState.childCategories.find((c) => c.mainCategoryId === nextMainId) ||
+                      CHILD_CATEGORIES_SEED.find((c) => c.mainCategoryId === nextMainId);
+                    const nextType = nextChild
+                      ? taxonomyState.productTypes.find((pt) => pt.childCategoryId === nextChild.id) ||
+                        PRODUCT_TYPES_SEED.find((pt) => pt.childCategoryId === nextChild.id)
+                      : undefined;
+                    setChildCategoryId(nextChild?.id || '');
+                    setProductTypeId(nextType?.id || '');
+                    setCategory(nextChild?.name || '');
+                    setSubCategory(nextType?.name || '');
                   }}
                   className="portal-input"
+                  required
                 >
-                  {MASTER_CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
+                  {availableMainCategories.map((mc) => (
+                    <option key={mc.id} value={mc.id}>
+                      {mc.name}
                     </option>
                   ))}
                 </select>
@@ -832,14 +964,44 @@ export const VendorProductsPage: React.FC = () => {
               <div>
                 <label className="portal-label">Child Category *</label>
                 <select
-                  value={subCategory}
-                  onChange={(e) => setSubCategory(e.target.value)}
+                  value={selectedChildCatNode?.id || childCategoryId}
+                  onChange={(e) => {
+                    const nextChildId = e.target.value;
+                    const nextChild = availableChildCategories.find((c) => c.id === nextChildId);
+                    const nextType = taxonomyState.productTypes.find(
+                      (pt) => pt.childCategoryId === nextChildId
+                    );
+                    setChildCategoryId(nextChildId);
+                    setProductTypeId(nextType?.id || '');
+                    setCategory(nextChild?.name || '');
+                    setSubCategory(nextType?.name || '');
+                  }}
                   className="portal-input"
                   required
                 >
-                  {subcategoryOptions.map((sub) => (
-                    <option key={sub.id} value={sub.name}>
-                      {sub.name}
+                  {availableChildCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="portal-label">Product Type / Subcategory *</label>
+                <select
+                  value={selectedProductTypeNode?.id || productTypeId}
+                  onChange={(e) => {
+                    const nextTypeId = e.target.value;
+                    const nextType = availableProductTypes.find((pt) => pt.id === nextTypeId);
+                    setProductTypeId(nextTypeId);
+                    setSubCategory(nextType?.name || '');
+                  }}
+                  className="portal-input"
+                  required
+                >
+                  {availableProductTypes.map((pt) => (
+                    <option key={pt.id} value={pt.id}>
+                      {pt.name}
                     </option>
                   ))}
                 </select>

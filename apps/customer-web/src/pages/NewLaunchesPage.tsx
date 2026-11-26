@@ -28,7 +28,13 @@ export const NewLaunchesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // State
-  const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(() => SEED_PRODUCTS.filter((p) => p.isNewLaunch));
+  const [collectionMeta, setCollectionMeta] = useState<{
+    title?: string;
+    name?: string;
+    description?: string;
+    bannerImage?: string;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Active filter state initialized from URL parameters
@@ -58,19 +64,28 @@ export const NewLaunchesPage: React.FC = () => {
     };
   });
 
-  // Load products from API / fallback
+  // Load promotional New Launches collection + fallback products
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
 
-    api.getProducts().then((allProducts) => {
-      if (isMounted) {
-        if (allProducts && allProducts.length > 0) {
-          setProducts(allProducts);
-        }
-        setIsLoading(false);
+    api.getNewLaunches().then((res) => {
+      if (!isMounted) return;
+      if (res?.activeCollection) {
+        setCollectionMeta(res.activeCollection);
+      }
+      if (Array.isArray(res?.products) && res.products.length > 0) {
+        setProducts(res.products);
+      } else {
+        return api.getProducts({ newLaunch: true }).then((fallback) => {
+          if (isMounted && Array.isArray(fallback) && fallback.length > 0) {
+            setProducts(fallback);
+          }
+        });
       }
     }).catch(() => {
+      // Fallback already populated
+    }).finally(() => {
       if (isMounted) setIsLoading(false);
     });
 
@@ -110,10 +125,10 @@ export const NewLaunchesPage: React.FC = () => {
     setSearchParams(params, { replace: true });
   }, [activeFilters, setSearchParams]);
 
-  // Pool of products for New Launches: products where isNewLaunch is true
+  // Pool of products for New Launches: active promotional collection items or isNewLaunch products
   const newLaunchProducts = useMemo(() => {
-    return products.filter((p) => p.isNewLaunch);
-  }, [products]);
+    return products.filter((p) => p.isNewLaunch || collectionMeta !== null);
+  }, [products, collectionMeta]);
 
   // Dynamically compute available filters for new-launches (Brand, Type, Price, Size)
   const availableFilters = useMemo(() => {
@@ -231,14 +246,20 @@ export const NewLaunchesPage: React.FC = () => {
         </span>
       </nav>
 
-      {/* 2. Category Title Header (HomeRun-Style Parity) */}
+      {/* 2. Collection Title Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            New Launches
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              {collectionMeta?.title || collectionMeta?.name || 'New Launches'}
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+              Featured Collection
+            </span>
+          </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl">
-            Recently introduced construction materials, direct-from-mill architectural hardware, smart electrical supplies, and modern building fixtures.
+            {collectionMeta?.description ||
+              'Recently introduced construction materials, direct-from-mill architectural hardware, smart electrical supplies, and modern building fixtures.'}
           </p>
         </div>
       </div>

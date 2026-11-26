@@ -34,9 +34,11 @@ import { useAuthStore } from '../../store/useAuthStore';
 import {
   MASTER_CATEGORIES,
   CONSTRUCTION_DEPARTMENTS,
-  NEW_LAUNCHES_CATEGORIES
+  NEW_LAUNCHES_CATEGORIES,
+  MAIN_CATEGORIES_SEED,
+  PRODUCT_TYPES_SEED
 } from '@buildora/constants';
-import { Category, Product } from '@buildora/types';
+import { Category, Product, MainCategory } from '@buildora/types';
 import { api } from '../../services/api';
 import { formatCurrency } from '@buildora/utils';
 import { formatLocationDisplay } from '../../utils';
@@ -76,10 +78,13 @@ export const Header: React.FC = () => {
   const [hoveredChildMasterSlug, setHoveredChildMasterSlug] = useState<string | null>(null);
   const [isAllCategoriesOpen, setIsAllCategoriesOpen] = useState(false);
 
-  // Live catalog categories & customer-visible products for hover product panel
+  // Live 4-level taxonomy & customer-visible products for hover panels
+  const [mainCategories, setMainCategories] = useState<MainCategory[]>(MAIN_CATEGORIES_SEED);
   const [catalogCategories, setCatalogCategories] = useState<Category[]>(MASTER_CATEGORIES);
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  const [newLaunchProducts, setNewLaunchProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
 
   // Mobile navigation accordion state
   const [mobileExpandedDept, setMobileExpandedDept] = useState<string | null>(null);
@@ -89,16 +94,56 @@ export const Header: React.FC = () => {
   const megaMenuRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load live backend categories and customer-visible products (updates automatically on admin approvals)
+  // Load live 4-level backend taxonomy and customer-visible products
   useEffect(() => {
     let active = true;
     const fetchHeaderCatalog = async () => {
       setIsLoadingProducts(true);
       try {
-        const [cats, prods] = await Promise.all([api.getCategories(), api.getProducts()]);
+        const [taxonomy, cats, prods, newLaunchesRes] = await Promise.all([
+          api.getTaxonomy(),
+          api.getCategories(),
+          api.getProducts(),
+          api.getNewLaunches()
+        ]);
         if (!active) return;
-        if (cats && cats.length > 0) setCatalogCategories(cats);
+
+        if (Array.isArray(taxonomy?.mainCategories) && taxonomy.mainCategories.length > 0) {
+          setMainCategories(taxonomy.mainCategories);
+        }
+
+        if (Array.isArray(taxonomy?.childCategories) && taxonomy.childCategories.length > 0) {
+          const typePool = Array.isArray(taxonomy.productTypes) ? taxonomy.productTypes : PRODUCT_TYPES_SEED;
+          const hydratedChildren: Category[] = taxonomy.childCategories
+            .filter((child: any) => child.isActive !== false)
+            .sort((a: any, b: any) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
+            .map((child: any) => {
+              const masterMatch = (cats || MASTER_CATEGORIES).find((m) => m.slug === child.slug || m.id === child.id) as any;
+              const pts = typePool
+                .filter((pt: any) => (pt.childCategoryId === child.id || pt.childCategorySlug === child.slug) && pt.isActive !== false)
+                .sort((a: any, b: any) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+              return {
+                ...(masterMatch || {}),
+                id: child.id,
+                name: child.name,
+                slug: child.slug,
+                description: child.description || masterMatch?.description || '',
+                image: child.image || masterMatch?.image || '',
+                department: child.mainCategoryName || masterMatch?.department,
+                departmentSlug: child.mainCategorySlug || masterMatch?.departmentSlug,
+                mainCategoryId: child.mainCategoryId,
+                mainCategorySlug: child.mainCategorySlug,
+                productCount: child.productCount ?? masterMatch?.productCount,
+                subcategories: pts.length > 0 ? pts : masterMatch?.subcategories || [],
+              } as any;
+            });
+          setCatalogCategories(hydratedChildren);
+        } else if (cats && cats.length > 0) {
+          setCatalogCategories(cats);
+        }
+
         if (Array.isArray(prods)) setCatalogProducts(prods);
+        if (Array.isArray(newLaunchesRes?.products)) setNewLaunchProducts(newLaunchesRes.products);
       } finally {
         if (active) setIsLoadingProducts(false);
       }
@@ -115,8 +160,27 @@ export const Header: React.FC = () => {
     };
   }, []);
 
+  const visibleMainCategories = React.useMemo(() => {
+    const source = mainCategories.length > 0 ? mainCategories : MAIN_CATEGORIES_SEED;
+    return [...source]
+      .filter((m) => m.isActive !== false && m.showInNavigation !== false)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }, [mainCategories]);
+
+  // Helper to get Child Categories belonging to a Main Category
+  const getMainChildCategories = (mainSlug: string) => {
+    const deptFallback = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === mainSlug);
+    const source = catalogCategories.length > 0 ? catalogCategories : MASTER_CATEGORIES;
+    return source.filter((c: any) => {
+      const mSlug = c.mainCategorySlug || c.departmentSlug;
+      if (mSlug) return mSlug === mainSlug;
+      return deptFallback ? deptFallback.categorySlugs.includes(c.slug) : false;
+    });
+  };
+
   // Debounced hover handlers for smooth, flicker-free mega menu opening/closing
   const handleDeptMouseEnter = (deptSlug: string) => {
+    setIsToolsOpen(false);
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
@@ -124,7 +188,7 @@ export const Header: React.FC = () => {
     if (activeDepartment !== deptSlug) {
       setActiveDepartment(deptSlug);
       const isNL = deptSlug === 'new-launches';
-      const cats = isNL ? NEW_LAUNCHES_CATEGORIES : getDepartmentCategories(deptSlug);
+      const cats = isNL ? NEW_LAUNCHES_CATEGORIES : getMainChildCategories(deptSlug);
       setSelectedParentCategorySlug(cats[0]?.slug || 'all');
       setHoveredChildCategorySlug(null);
       setHoveredChildMasterSlug(null);
@@ -139,6 +203,7 @@ export const Header: React.FC = () => {
       setActiveDepartment(null);
       setHoveredChildCategorySlug(null);
       setHoveredChildMasterSlug(null);
+      setIsToolsOpen(false);
     }, 180);
   };
 
@@ -147,6 +212,7 @@ export const Header: React.FC = () => {
     setActiveDepartment(null);
     setHoveredChildCategorySlug(null);
     setHoveredChildMasterSlug(null);
+    setIsToolsOpen(false);
     setIsMobileMenuOpen(false);
     setMobileExpandedDept(null);
     setMobileExpandedCat(null);
@@ -195,12 +261,7 @@ export const Header: React.FC = () => {
     }
   };
 
-  const getDepartmentCategories = (deptSlug: string) => {
-    const dept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === deptSlug);
-    if (!dept) return [];
-    const source = catalogCategories.length > 0 ? catalogCategories : MASTER_CATEGORIES;
-    return source.filter((c) => dept.categorySlugs.includes(c.slug));
-  };
+  const getDepartmentCategories = (deptSlug: string) => getMainChildCategories(deptSlug);
 
   const getLocationDisplaySubtitle = () => {
     if (selectedAddressLabel && pincode) {
@@ -233,11 +294,16 @@ export const Header: React.FC = () => {
   const isBrandsActive = location.pathname.startsWith('/brands');
   const isDealsActive = location.pathname.startsWith('/deals') || location.pathname.startsWith('/offers');
 
-  const isDeptActive = (dept: (typeof CONSTRUCTION_DEPARTMENTS)[0]) => {
+  const isDeptActive = (dept: { slug: string; categorySlugs?: string[] }) => {
     if (location.pathname === `/categories/${dept.slug}`) return true;
     if (location.pathname.startsWith('/categories/')) {
       const catSlug = location.pathname.split('/')[2];
-      return dept.categorySlugs.includes(catSlug) || dept.slug === catSlug;
+      const children = getMainChildCategories(dept.slug);
+      return (
+        dept.slug === catSlug ||
+        children.some((c) => c.slug === catSlug) ||
+        Boolean(dept.categorySlugs?.includes(catSlug))
+      );
     }
     return false;
   };
@@ -563,11 +629,12 @@ export const Header: React.FC = () => {
                 <span>Home</span>
               </Link>
 
-              {/* 5 Main Construction Departments */}
-              {CONSTRUCTION_DEPARTMENTS.map((dept) => {
+              {/* 5 Main Categories */}
+              {visibleMainCategories.map((dept) => {
                 const Icon = DEPARTMENT_ICONS[dept.slug] || Building2;
                 const isOpen = activeDepartment === dept.slug;
-                const isActive = isDeptActive(dept);
+                const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === dept.slug);
+                const isActive = isDeptActive({ slug: dept.slug, categorySlugs: fallbackDept?.categorySlugs });
 
                 return (
                   <div
@@ -575,21 +642,14 @@ export const Header: React.FC = () => {
                     onMouseEnter={() => handleDeptMouseEnter(dept.slug)}
                     onMouseLeave={handleDeptMouseLeave}
                   >
-                    <button
-                      type="button"
+                    <Link
+                      to={`/categories/${dept.slug}`}
                       aria-expanded={isOpen}
                       aria-haspopup="true"
                       onFocus={() => handleDeptMouseEnter(dept.slug)}
                       onClick={() => {
-                        if (activeDepartment === dept.slug) {
-                          setActiveDepartment(null);
-                        } else {
-                          setActiveDepartment(dept.slug);
-                          const cats = getDepartmentCategories(dept.slug);
-                          setSelectedParentCategorySlug(cats[0]?.slug || 'all');
-                          setHoveredChildCategorySlug(null);
-                          setHoveredChildMasterSlug(null);
-                        }
+                        setActiveDepartment(null);
+                        setHoveredChildCategorySlug(null);
                       }}
                       className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs ${
                         isActive
@@ -606,31 +666,22 @@ export const Header: React.FC = () => {
                           isActive || isOpen ? 'text-white/80' : 'text-slate-400'
                         } ${isOpen ? 'rotate-180' : ''}`}
                       />
-                    </button>
+                    </Link>
                   </div>
                 );
               })}
 
-              {/* New Launches with Mega Menu trigger */}
+              {/* New Launches (Promotional Collection) */}
               <div
                 onMouseEnter={() => handleDeptMouseEnter('new-launches')}
                 onMouseLeave={handleDeptMouseLeave}
               >
-                <button
-                  type="button"
+                <Link
+                  to="/new-launches"
                   aria-expanded={activeDepartment === 'new-launches'}
                   aria-haspopup="true"
                   onFocus={() => handleDeptMouseEnter('new-launches')}
-                  onClick={() => {
-                    if (activeDepartment === 'new-launches') {
-                      setActiveDepartment(null);
-                    } else {
-                      setActiveDepartment('new-launches');
-                      setSelectedParentCategorySlug(NEW_LAUNCHES_CATEGORIES[0]?.slug || 'all');
-                      setHoveredChildCategorySlug(null);
-                      setHoveredChildMasterSlug(null);
-                    }
-                  }}
+                  onClick={() => setActiveDepartment(null)}
                   className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
                     isNewLaunchesActive
                       ? 'bg-brand-blue-900 text-white shadow-sm'
@@ -638,7 +689,7 @@ export const Header: React.FC = () => {
                       ? 'bg-slate-900 text-white shadow-xs'
                       : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
                   }`}
-                  title="Explore New Launches"
+                  title="Explore New Launches Collection"
                 >
                   <Rocket
                     className={`w-3.5 h-3.5 ${
@@ -655,8 +706,9 @@ export const Header: React.FC = () => {
                         : 'text-slate-400'
                     } ${activeDepartment === 'new-launches' ? 'rotate-180' : ''}`}
                   />
-                </button>
+                </Link>
               </div>
+
               <Link
                 to="/deals"
                 className={`py-2 px-3 rounded-xl font-black text-xs flex items-center gap-1 transition-all ${
@@ -668,30 +720,86 @@ export const Header: React.FC = () => {
                 <Sparkles className={`w-3.5 h-3.5 fill-current ${isDealsActive ? 'text-white' : 'text-brand-orange-600'}`} />
                 <span>Deals</span>
               </Link>
+
+              {/* Separated Utility Navigation: Tools */}
+              <div className="h-5 w-px bg-slate-300/80 mx-1" aria-hidden="true" />
+              <div
+                className="relative"
+                onMouseEnter={() => {
+                  setActiveDepartment(null);
+                  setIsToolsOpen(true);
+                }}
+                onMouseLeave={() => setIsToolsOpen(false)}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsToolsOpen((v) => !v)}
+                  className={`flex items-center gap-1.5 py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer ${
+                    location.pathname.startsWith('/tools') || isToolsOpen
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
+                  }`}
+                >
+                  <Calculator className={`w-3.5 h-3.5 ${location.pathname.startsWith('/tools') || isToolsOpen ? 'text-white' : 'text-brand-blue-900'}`} />
+                  <span>Tools</span>
+                  <ChevronDown className={`w-3 h-3 transition-transform ${isToolsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isToolsOpen && (
+                  <div className="absolute right-0 top-full pt-1.5 w-64 z-50">
+                    <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-2 space-y-1">
+                      <Link
+                        to="/tools/material-estimator"
+                        onClick={() => setIsToolsOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-50 hover:text-brand-blue-900"
+                      >
+                        <Calculator className="w-4 h-4 text-brand-blue-900" />
+                        <span>Material Quantity Estimator</span>
+                      </Link>
+                      <Link
+                        to="/tools/home-construction-calculator"
+                        onClick={() => setIsToolsOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-50 hover:text-brand-orange-600"
+                      >
+                        <Compass className="w-4 h-4 text-brand-orange-500" />
+                        <span>Home Construction Calculator</span>
+                      </Link>
+                      <Link
+                        to="/knowledge-hub"
+                        onClick={() => setIsToolsOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-50 hover:text-brand-blue-900"
+                      >
+                        <FolderKanban className="w-4 h-4 text-emerald-600" />
+                        <span>Knowledge Hub &amp; Guides</span>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* FULL-SIZE SPACIOUS MEGA MENU CONTAINER */}
+          {/* FULL-SIZE SPACIOUS 4-LEVEL HOVER MEGA MENU */}
           {activeDepartment && (() => {
             const isNewLaunches = activeDepartment === 'new-launches';
             const activeDept = !isNewLaunches
-              ? CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === activeDepartment)
+              ? visibleMainCategories.find((d) => d.slug === activeDepartment) ||
+                CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === activeDepartment)
               : null;
 
             if (!isNewLaunches && !activeDept) return null;
 
-            // Categories list for left panel: New Launches or Department categories
+            // Categories list for Panel 1: Child Categories under active Main Category (or New Launch featured groups)
             const menuCategories = isNewLaunches
               ? NEW_LAUNCHES_CATEGORIES
-              : getDepartmentCategories(activeDept!.slug);
+              : getMainChildCategories(activeDept!.slug);
 
             const categorySource = catalogCategories.length > 0 ? catalogCategories : MASTER_CATEGORIES;
 
-            // Currently active category in mega menu
+            // Currently hovered Child Category in Panel 1
             const currentCat = menuCategories.find((c) => c.slug === selectedParentCategorySlug);
 
-            // Child Categories for middle panel
-            type MenuChildCat = {
+            // Product Types for Panel 2
+            type MenuProductType = {
               id: string;
               name: string;
               slug: string;
@@ -700,7 +808,7 @@ export const Header: React.FC = () => {
               productCount?: number;
             };
 
-            let subcategories: MenuChildCat[] = [];
+            let subcategories: MenuProductType[] = [];
             if (currentCat) {
               if (isNewLaunches) {
                 const nlCat = currentCat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
@@ -726,8 +834,8 @@ export const Header: React.FC = () => {
               }
             }
 
-            // All child categories when 'all' is hovered
-            const allSubcategories: MenuChildCat[] = menuCategories.flatMap((cat) => {
+            // All Product Types when 'all' is hovered
+            const allSubcategories: MenuProductType[] = menuCategories.flatMap((cat) => {
               if (isNewLaunches) {
                 const nlCat = cat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
                 const masterCat = categorySource.find((m) => m.slug === nlCat.masterCategorySlug);
@@ -769,22 +877,40 @@ export const Header: React.FC = () => {
                   : currentCat?.slug
                 : undefined;
 
-            const matchingPanelProducts = catalogProducts.filter((p) => {
+            const productSource =
+              isNewLaunches && newLaunchProducts.length > 0 ? newLaunchProducts : catalogProducts;
+
+            const matchingPanelProducts = productSource.filter((p) => {
               if (activeChildCat) {
-                const matchMain =
-                  p.categorySlug === activeChildCat.targetMasterSlug ||
-                  (p as any).categoryId === activeChildCat.targetMasterSlug;
+                const pChildSlug = (p.childCategorySlug || p.categorySlug || '').toLowerCase();
+                const matchChild =
+                  pChildSlug === activeChildCat.slug.toLowerCase() ||
+                  pChildSlug === activeChildCat.targetMasterSlug.toLowerCase() ||
+                  (p as any).childCategoryId === activeChildCat.targetMasterSlug;
+                const pTypeSlug = (p.productTypeSlug || p.subcategorySlug || '').toLowerCase();
+                const pTypeName = (p.productTypeName || p.subcategory || '').toLowerCase();
                 const matchSub =
-                  p.subcategorySlug === activeChildCat.slug ||
-                  p.subcategory?.toLowerCase() === activeChildCat.name.toLowerCase() ||
+                  pTypeSlug === activeChildCat.slug.toLowerCase() ||
+                  pTypeName === activeChildCat.name.toLowerCase() ||
+                  (p as any).productTypeId === activeChildCat.id ||
                   (p as any).subcategoryId === activeChildCat.id;
-                return matchMain && matchSub;
+                return matchChild && matchSub;
               }
               if (currentMainSlug) {
-                return p.categorySlug === currentMainSlug;
+                return (
+                  (p.childCategorySlug || p.categorySlug) === currentMainSlug ||
+                  (p as any).childCategoryId === currentMainSlug
+                );
               }
-              const deptSlugs = activeDept?.categorySlugs || [];
-              return deptSlugs.length > 0 ? deptSlugs.includes(p.categorySlug) : true;
+              if (isNewLaunches) {
+                return Boolean(p.isNewLaunch);
+              }
+              const activeChildSlugs = menuCategories.map((c) => c.slug);
+              return (
+                p.mainCategorySlug === activeDept?.slug ||
+                p.mainCategoryId === activeDept?.id ||
+                activeChildSlugs.includes(p.childCategorySlug || p.categorySlug)
+              );
             });
 
             const previewProducts = matchingPanelProducts.slice(0, 6);
@@ -793,7 +919,7 @@ export const Header: React.FC = () => {
               : currentCat
               ? `Featured in ${currentCat.name}`
               : isNewLaunches
-              ? 'Featured New Launches'
+              ? 'Featured New Launches Collection'
               : `Top in ${activeDept?.name}`;
             const panelViewAllUrl = activeChildCat
               ? `/categories/${activeChildCat.targetMasterSlug}/${activeChildCat.slug}`
@@ -801,7 +927,7 @@ export const Header: React.FC = () => {
               ? `/categories/${currentMainSlug}`
               : isNewLaunches
               ? '/new-launches'
-              : '/products';
+              : `/categories/${activeDept?.slug || ''}`;
 
             return (
               <div
@@ -816,10 +942,10 @@ export const Header: React.FC = () => {
               >
                 <div className="w-full max-w-[1320px] xl:max-w-[1440px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden transition-all duration-150 animate-in fade-in-0 slide-in-from-top-1">
                   <div className="flex min-h-[420px] max-h-[540px]">
-                    {/* PANEL 1: MAIN CATEGORIES */}
+                    {/* PANEL 1: CHILD CATEGORIES UNDER ACTIVE MAIN CATEGORY */}
                     <div className="w-[240px] sm:w-[270px] flex-shrink-0 border-r border-slate-100 bg-white p-4 sm:p-5 overflow-y-auto no-scrollbar">
                       <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3 px-3">
-                        MAIN CATEGORIES
+                        {isNewLaunches ? 'FEATURED COLLECTIONS' : 'CHILD CATEGORIES'}
                       </div>
                       <div className="space-y-1">
                         {/* ALL Category Item */}
@@ -837,7 +963,7 @@ export const Header: React.FC = () => {
                           }}
                           onClick={() => {
                             setActiveDepartment(null);
-                            navigate(isNewLaunches ? '/new-launches' : '/products');
+                            navigate(isNewLaunches ? '/new-launches' : `/categories/${activeDept?.slug}`);
                           }}
                           className={`w-full group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
                             selectedParentCategorySlug === 'all'
@@ -845,7 +971,9 @@ export const Header: React.FC = () => {
                               : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
                           }`}
                         >
-                          <span className="uppercase">ALL</span>
+                          <span className="truncate">
+                            {isNewLaunches ? 'ALL NEW LAUNCHES' : `All in ${activeDept?.name}`}
+                          </span>
                           <ChevronRight
                             className={`w-4 h-4 flex-shrink-0 transition-transform ${
                               selectedParentCategorySlug === 'all'
@@ -855,7 +983,7 @@ export const Header: React.FC = () => {
                           />
                         </button>
 
-                        {/* Main Category Items */}
+                        {/* Child Category Items */}
                         {menuCategories.map((cat) => {
                           const isSelected = selectedParentCategorySlug === cat.slug;
                           const targetUrl = isNewLaunches
@@ -901,11 +1029,11 @@ export const Header: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* PANEL 2: CHILD CATEGORIES FOR ACTIVE MAIN CATEGORY */}
+                    {/* PANEL 2: PRODUCT TYPES FOR HOVERED CHILD CATEGORY */}
                     <div className="w-[270px] sm:w-[300px] flex-shrink-0 border-r border-slate-100 bg-slate-50/40 p-4 sm:p-5 overflow-y-auto no-scrollbar flex flex-col">
                       <div className="flex items-center justify-between gap-2 mb-3 px-1">
                         <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">
-                          {currentCat ? `${currentCat.name} → Subcategories` : 'CHILD CATEGORIES'}
+                          {currentCat ? `${currentCat.name} → Product Types` : 'PRODUCT TYPES'}
                         </span>
                       </div>
 
@@ -977,7 +1105,7 @@ export const Header: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex-1 flex items-center justify-center text-xs font-medium text-slate-400 text-center px-3">
-                          No child categories configured.
+                          No product types configured.
                         </div>
                       )}
                     </div>
@@ -1159,21 +1287,22 @@ export const Header: React.FC = () => {
               <span>Home</span>
             </Link>
 
-            {/* Construction Departments Accordion */}
+            {/* Main Categories Mobile Accordion */}
             <div className="space-y-1.5">
               <div className="text-[11px] uppercase tracking-wider text-slate-400 font-extrabold px-1">
-                Construction Departments
+                Main Categories
               </div>
               <div className="space-y-1">
-                {CONSTRUCTION_DEPARTMENTS.map((dept) => {
+                {visibleMainCategories.map((dept) => {
                   const Icon = DEPARTMENT_ICONS[dept.slug] || Building2;
-                  const isActive = isDeptActive(dept);
+                  const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === dept.slug);
+                  const isActive = isDeptActive({ slug: dept.slug, categorySlugs: fallbackDept?.categorySlugs });
                   const isDeptExpanded = mobileExpandedDept === dept.slug;
-                  const deptCats = getDepartmentCategories(dept.slug);
+                  const deptCats = getMainChildCategories(dept.slug);
 
                   return (
                     <div key={dept.id} className="rounded-xl border border-slate-100 overflow-hidden bg-white">
-                      {/* Department Trigger Button */}
+                      {/* Main Category Trigger Button */}
                       <button
                         type="button"
                         onClick={() => {
@@ -1201,9 +1330,16 @@ export const Header: React.FC = () => {
                         />
                       </button>
 
-                      {/* Expanded Parent Categories on Mobile */}
+                      {/* Expanded Child Categories on Mobile */}
                       {isDeptExpanded && (
                         <div className="p-2 bg-slate-50 border-t border-slate-100 space-y-1.5 animate-in fade-in-0 duration-150">
+                          <Link
+                            to={`/categories/${dept.slug}`}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="block px-2.5 py-1.5 rounded-lg bg-brand-blue-50 text-[11px] font-black text-brand-blue-900 hover:bg-brand-blue-100"
+                          >
+                            View all in {dept.name} →
+                          </Link>
                           {deptCats.map((cat) => {
                             const isCatExpanded = mobileExpandedCat === cat.slug;
                             return (
@@ -1222,14 +1358,14 @@ export const Header: React.FC = () => {
                                       type="button"
                                       onClick={() => setMobileExpandedCat(isCatExpanded ? null : cat.slug)}
                                       className="p-1 text-slate-400 hover:text-slate-600 flex-shrink-0"
-                                      aria-label={`Toggle subcategories for ${cat.name}`}
+                                      aria-label={`Toggle product types for ${cat.name}`}
                                     >
                                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCatExpanded ? 'rotate-180' : ''}`} />
                                     </button>
                                   )}
                                 </div>
 
-                                {/* Child subcategories list */}
+                                {/* Product Types list */}
                                 {isCatExpanded && cat.subcategories && cat.subcategories.length > 0 && (
                                   <div className="pl-6 pr-2 py-1.5 bg-slate-50/80 border-t border-slate-100 space-y-1 text-[11px]">
                                     {cat.subcategories.map((sub) => (

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { dbStore } from '../../../database/store';
+import { taxonomyService } from '../../catalogue/services/taxonomy.service';
 import {
   DEFAULT_TENANT_ID,
   DEFAULT_VENDOR_ID,
@@ -1537,6 +1538,10 @@ export class CompanyAdminDataService implements OnModuleInit {
     const stockCount = vp.stock ?? vp.stockCount ?? 0;
     const reservedStock = vp.reservedStock ?? 0;
     const mrp = vp.mrp || sellingPrice;
+    const tax = taxonomyService.resolveAndValidateProductTaxonomy(vp, {
+      strictChildMatch: false,
+      tenantId: vp.tenantId,
+    });
 
     const mapped: any = {
       id: idx >= 0 ? dbStore.products[idx].id : cleanId || vp.id,
@@ -1544,11 +1549,23 @@ export class CompanyAdminDataService implements OnModuleInit {
       slug: vp.slug || vp.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       sku: vp.sku,
       brand: vp.brand || 'Buildora Verified',
+      brandId: tax.brandId || vp.brandId,
       brandSlug: (vp.brand || 'buildora').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      category: vp.category || vp.categoryName || 'Building Materials',
-      categorySlug: vp.categorySlug || vp.categoryId || 'cement-concrete',
-      subcategory: vp.subcategory || vp.categoryName || 'General',
-      subcategorySlug: vp.subcategorySlug || vp.categoryId || 'general',
+      mainCategoryId: tax.mainCategoryId || vp.mainCategoryId,
+      mainCategorySlug: tax.mainCategorySlug || vp.mainCategorySlug,
+      mainCategoryName: tax.mainCategoryName || vp.mainCategoryName,
+      childCategoryId: tax.childCategoryId || vp.childCategoryId,
+      childCategorySlug: tax.childCategorySlug || vp.childCategorySlug,
+      childCategoryName: tax.childCategoryName || vp.childCategoryName,
+      productTypeId: tax.productTypeId || vp.productTypeId,
+      productTypeSlug: tax.productTypeSlug || vp.productTypeSlug,
+      productTypeName: tax.productTypeName || vp.productTypeName,
+      categoryId: tax.childCategoryId || vp.categoryId,
+      category: tax.childCategoryName || vp.category || vp.categoryName || 'Cement & Concrete',
+      categorySlug: tax.childCategorySlug || vp.categorySlug || vp.categoryId || 'cement-concrete',
+      subcategoryId: tax.productTypeId || vp.subcategoryId,
+      subcategory: tax.productTypeName || vp.subcategory || vp.categoryName || 'General',
+      subcategorySlug: tax.productTypeSlug || vp.subcategorySlug || vp.categoryId || 'general',
       description: vp.description || '',
       unit: vp.unit || 'Unit',
       packSize: vp.packSize || 'Standard',

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { DatabaseService, databaseService } from './database/database.service';
+import { TaxonomyService, taxonomyService } from './modules/catalogue/services/taxonomy.service';
 import { AuthController } from './modules/auth/controllers/auth.controller';
 import { CatalogueController } from './modules/catalogue/controllers/catalogue.controller';
 import { ProductsController } from './modules/products/controllers/products.controller';
@@ -44,8 +45,9 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
   ],
   providers: [
     { provide: DatabaseService, useValue: databaseService },
+    { provide: TaxonomyService, useValue: taxonomyService },
     ConstructionCalculatorService
   ],
-  exports: [DatabaseService, ConstructionCalculatorService],
+  exports: [DatabaseService, TaxonomyService, ConstructionCalculatorService],
 })
 export class AppModule {}

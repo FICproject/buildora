@@ -6,6 +6,7 @@ interface ActiveFilterChipsProps {
   activeFilters: ActiveCategoryFilters;
   availableFilters?: AvailableCategoryFilter[];
   onRemoveCategory?: (category: string) => void;
+  onRemoveChildCategory?: (childCategory: string) => void;
   onRemoveBrand: (brand: string) => void;
   onRemoveSubcategory: (sub: string) => void;
   onRemoveSpec: (dimId: string, val: string) => void;
@@ -20,6 +21,7 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
   activeFilters,
   availableFilters = [],
   onRemoveCategory,
+  onRemoveChildCategory,
   onRemoveBrand,
   onRemoveSubcategory,
   onRemoveSpec,
@@ -37,6 +39,7 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
   }, [availableFilters]);
 
   const hasCategories = (activeFilters.categories || []).length > 0;
+  const hasChildCategories = (activeFilters.childCategories || []).length > 0;
   const hasBrands = (activeFilters.brands || []).length > 0;
   const hasSubcategories = (activeFilters.subcategories || []).length > 0;
   const hasPrice = activeFilters.minPrice !== undefined || activeFilters.maxPrice !== undefined;
@@ -50,6 +53,7 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
 
   const hasAnyFilter =
     hasCategories ||
+    hasChildCategories ||
     hasBrands ||
     hasSubcategories ||
     hasPrice ||
@@ -117,7 +121,26 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
         </button>
       )}
 
-      {/* Subcategory / Child Category chips */}
+      {/* Child Category chips */}
+      {activeFilters.childCategories?.map((childCat) => {
+        const opt = availableFilters
+          .find((f) => f.id === 'childCategory')
+          ?.options.find((o) => o.value === childCat);
+        const displayLabel = opt?.label || childCat;
+        return (
+          <button
+            key={`childcat-${childCat}`}
+            onClick={() => onRemoveChildCategory && onRemoveChildCategory(childCat)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue-50 text-brand-blue-900 border border-brand-blue-200 hover:bg-brand-blue-100 transition-colors cursor-pointer"
+            title={`Remove child category ${displayLabel}`}
+          >
+            <span>Category: {displayLabel}</span>
+            <X className="w-3.5 h-3.5 text-brand-blue-700" />
+          </button>
+        );
+      })}
+
+      {/* Subcategory / Product Type chips */}
       {activeFilters.subcategories?.map((sub) => {
         const subOpt = availableFilters
           .find((f) => f.id === 'subcategory')
@@ -128,9 +151,9 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
             key={`sub-${sub}`}
             onClick={() => onRemoveSubcategory(sub)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue-50 text-brand-blue-900 border border-brand-blue-200 hover:bg-brand-blue-100 transition-colors cursor-pointer"
-            title={`Remove category ${displayLabel}`}
+            title={`Remove product type ${displayLabel}`}
           >
-            <span>Category: {displayLabel}</span>
+            <span>Type: {displayLabel}</span>
             <X className="w-3.5 h-3.5 text-brand-blue-700" />
           </button>
         );

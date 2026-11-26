@@ -79,6 +79,7 @@ import {
   AnalyticsGranularity,
   vendorAnalyticsService,
 } from '../services/vendor-analytics.service';
+import { taxonomyService } from '../../catalogue/services/taxonomy.service';
 import {
   validateName,
   validateBusinessName,
@@ -1453,16 +1454,26 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
   }
 
   const effectiveAvailable = Math.max(0, Number(vp.stockCount || 0) - Number(anyVp.reservedStock || 0));
-  const hierarchy = resolveCanonicalCategoryHierarchy(
-    vp.categorySlug || anyVp.categoryId || vp.category,
-    vp.subcategorySlug || anyVp.subcategoryId || vp.subcategory || anyVp.subCategory
+  const hierarchy = taxonomyService.resolveAndValidateProductTaxonomy(
+    {
+      mainCategoryId: anyVp.mainCategoryId || anyVp.mainCategorySlug,
+      childCategoryId: anyVp.childCategoryId || anyVp.categoryId || vp.categorySlug || vp.category,
+      productTypeId: anyVp.productTypeId || anyVp.subcategoryId || vp.subcategorySlug || vp.subcategory || anyVp.subCategory,
+      brand: vp.brand,
+      brandId: anyVp.brandId,
+    },
+    { strictChildMatch: false, tenantId: vp.tenantId }
   );
-  const resolvedCategoryId = hierarchy.categoryId || anyVp.categoryId || '';
-  const resolvedCategoryName = hierarchy.categoryName || vp.category;
-  const resolvedCategorySlug = hierarchy.categorySlug || vp.categorySlug;
-  const resolvedSubcategoryId = hierarchy.subcategoryId || anyVp.subcategoryId || '';
-  const resolvedSubcategoryName = hierarchy.subcategoryName || vp.subcategory;
-  const resolvedSubcategorySlug = hierarchy.subcategorySlug || vp.subcategorySlug;
+  const resolvedMainCategoryId = hierarchy.mainCategoryId || anyVp.mainCategoryId || '';
+  const resolvedMainCategorySlug = hierarchy.mainCategorySlug || anyVp.mainCategorySlug || '';
+  const resolvedMainCategoryName = hierarchy.mainCategoryName || anyVp.mainCategoryName || '';
+  const resolvedCategoryId = hierarchy.childCategoryId || anyVp.childCategoryId || anyVp.categoryId || '';
+  const resolvedCategoryName = hierarchy.childCategoryName || vp.category;
+  const resolvedCategorySlug = hierarchy.childCategorySlug || vp.categorySlug;
+  const resolvedSubcategoryId = hierarchy.productTypeId || anyVp.productTypeId || anyVp.subcategoryId || '';
+  const resolvedSubcategoryName = hierarchy.productTypeName || vp.subcategory;
+  const resolvedSubcategorySlug = hierarchy.productTypeSlug || vp.subcategorySlug;
+  const resolvedBrandId = hierarchy.brandId || anyVp.brandId || '';
 
   if (custProd) {
     custProd.name = vp.name;
@@ -1471,6 +1482,16 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
     custProd.price = vp.price;
     custProd.mrp = vp.mrp;
     custProd.discount = vp.discount;
+    custProd.mainCategoryId = resolvedMainCategoryId;
+    custProd.mainCategorySlug = resolvedMainCategorySlug;
+    custProd.mainCategoryName = resolvedMainCategoryName;
+    custProd.childCategoryId = resolvedCategoryId;
+    custProd.childCategorySlug = resolvedCategorySlug;
+    custProd.childCategoryName = resolvedCategoryName;
+    custProd.productTypeId = resolvedSubcategoryId;
+    custProd.productTypeSlug = resolvedSubcategorySlug;
+    custProd.productTypeName = resolvedSubcategoryName;
+    custProd.brandId = resolvedBrandId;
     custProd.categoryId = resolvedCategoryId;
     custProd.category = resolvedCategoryName;
     custProd.categorySlug = resolvedCategorySlug;
@@ -1548,7 +1569,17 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
       slug: vp.slug,
       sku: vp.sku,
       brand: vp.brand,
+      brandId: resolvedBrandId,
       brandSlug: vp.brandSlug,
+      mainCategoryId: resolvedMainCategoryId,
+      mainCategorySlug: resolvedMainCategorySlug,
+      mainCategoryName: resolvedMainCategoryName,
+      childCategoryId: resolvedCategoryId,
+      childCategorySlug: resolvedCategorySlug,
+      childCategoryName: resolvedCategoryName,
+      productTypeId: resolvedSubcategoryId,
+      productTypeSlug: resolvedSubcategorySlug,
+      productTypeName: resolvedSubcategoryName,
       categoryId: resolvedCategoryId,
       category: resolvedCategoryName,
       categorySlug: resolvedCategorySlug,
@@ -1621,6 +1652,8 @@ export class VendorController implements OnModuleInit {
     mergeById(vendorReturns, pReturns);
     mergeById(vendorSettlements, pSettlements);
     mergeById(vendorSupportTickets, pTickets);
+
+    taxonomyService.migrateLegacyCatalogRecords(vendorProducts);
 
     for (const vp of vendorProducts) {
       syncVendorProductToCustomerCatalog(vp);
@@ -3519,6 +3552,21 @@ export class VendorController implements OnModuleInit {
   // ==========================================
   // 5. PRODUCTS MANAGEMENT (VENDOR-SCOPED + VERSIONING + APPROVAL SYNC)
   // ==========================================
+  @Get('taxonomy')
+  async getVendorTaxonomy(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const pool = taxonomyService.getTenantPool(vendor.tenantId || DEFAULT_TENANT_ID);
+    return {
+      success: true,
+      data: {
+        mainCategories: pool.mainCategories.filter((m) => m.isActive !== false),
+        childCategories: pool.childCategories.filter((c) => c.isActive !== false),
+        productTypes: pool.productTypes.filter((pt) => pt.isActive !== false),
+        brands: dbStore.brands,
+      },
+    };
+  }
+
   @Get('products')
   async getProducts(
     @Headers('authorization') authHeader?: string,
@@ -3595,27 +3643,51 @@ export class VendorController implements OnModuleInit {
       );
     }
 
-    if (!body.name || !body.sku || (!body.categorySlug && !body.category && !body.categoryId) || !body.price || !body.mrp) {
+    if (
+      !body.name ||
+      !body.sku ||
+      (!body.childCategoryId &&
+        !body.childCategorySlug &&
+        !body.childCategoryName &&
+        !body.categorySlug &&
+        !body.category &&
+        !body.categoryId) ||
+      !body.price ||
+      !body.mrp
+    ) {
       throw new BadRequestException('Product name, SKU, category, price, and MRP are required.');
     }
     if (Number(body.price) > Number(body.mrp)) {
       throw new BadRequestException('Selling price cannot exceed MRP.');
     }
 
-    const rawCatInput = body.categorySlug || body.categoryId || body.category;
-    const rawSubInput = body.subcategorySlug || body.subcategoryId || body.subcategory || body.subCategory;
-    const hierarchy = resolveCanonicalCategoryHierarchy(rawCatInput, rawSubInput);
-    if (!hierarchy.matchedMain) {
-      throw new BadRequestException(`Unknown main category "${rawCatInput}". Please choose a valid catalog category.`);
+    const rawMainInput = body.mainCategoryId || body.mainCategorySlug || body.mainCategoryName;
+    const rawCatInput = body.childCategoryId || body.categorySlug || body.categoryId || body.category;
+    const rawSubInput = body.productTypeId || body.productTypeSlug || body.productTypeName || body.subcategorySlug || body.subcategoryId || body.subcategory || body.subCategory;
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+
+    const hierarchy = taxonomyService.resolveAndValidateProductTaxonomy(
+      {
+        mainCategoryId: rawMainInput,
+        childCategoryId: rawCatInput,
+        productTypeId: rawSubInput,
+        brand: body.brand,
+        brandId: body.brandId,
+      },
+      { strictChildMatch: Boolean(rawMainInput), tenantId }
+    );
+
+    if (!hierarchy.mainCategoryId || !hierarchy.childCategoryId) {
+      throw new BadRequestException(`Unknown category "${rawCatInput}". Vendors must choose from Admin-approved categories.`);
     }
-    if (rawSubInput && !hierarchy.matchedChild) {
+    if (rawSubInput && !hierarchy.productTypeId) {
       throw new BadRequestException(
-        `Child category "${rawSubInput}" does not belong to "${hierarchy.matchedMain.name}".`
+        `Product Type "${rawSubInput}" does not belong to "${hierarchy.childCategoryName}".`
       );
     }
-    const defaultChild = hierarchy.matchedChild || hierarchy.matchedMain.subcategories[0];
+    const resolvedFull = resolveCanonicalCategoryHierarchy(hierarchy.childCategorySlug, hierarchy.productTypeSlug);
+    const defaultChild = resolvedFull.matchedChild || resolvedFull.matchedMain?.subcategories[0];
 
-    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
     const id = `vp-prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const slugBase = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const slug = `${slugBase}-${id.slice(-4)}`;
@@ -3630,14 +3702,24 @@ export class VendorController implements OnModuleInit {
       slug,
       sku: body.sku,
       brand: body.brand || vendor.storeName || 'Buildora Verified',
+      brandId: hierarchy.brandId,
       brandSlug: (body.brand || vendor.storeName || 'buildora').toLowerCase().replace(/\s+/g, '-'),
-      category: hierarchy.matchedMain.name,
-      categorySlug: hierarchy.matchedMain.slug,
-      categoryId: hierarchy.matchedMain.id,
-      categoryName: hierarchy.matchedMain.name,
-      subcategory: defaultChild?.name || hierarchy.matchedMain.name,
-      subcategorySlug: defaultChild?.slug || hierarchy.matchedMain.slug,
-      subcategoryId: defaultChild?.id || '',
+      mainCategoryId: hierarchy.mainCategoryId,
+      mainCategorySlug: hierarchy.mainCategorySlug,
+      mainCategoryName: hierarchy.mainCategoryName,
+      childCategoryId: hierarchy.childCategoryId,
+      childCategorySlug: hierarchy.childCategorySlug,
+      childCategoryName: hierarchy.childCategoryName,
+      productTypeId: hierarchy.productTypeId || defaultChild?.id || '',
+      productTypeSlug: hierarchy.productTypeSlug || defaultChild?.slug || '',
+      productTypeName: hierarchy.productTypeName || defaultChild?.name || '',
+      category: hierarchy.childCategoryName,
+      categorySlug: hierarchy.childCategorySlug,
+      categoryId: hierarchy.childCategoryId,
+      categoryName: hierarchy.childCategoryName,
+      subcategory: hierarchy.productTypeName || defaultChild?.name || hierarchy.childCategoryName,
+      subcategorySlug: hierarchy.productTypeSlug || defaultChild?.slug || hierarchy.childCategorySlug,
+      subcategoryId: hierarchy.productTypeId || defaultChild?.id || '',
       description: body.description || '',
       shortDescription: body.shortDescription || '',
       images:
@@ -3866,19 +3948,34 @@ export class VendorController implements OnModuleInit {
     // Apply direct update (e.g., DRAFT/REJECTED resubmission or stock-only update)
     const { vendorId: _ignoreVendor, approvalStatus: requestedStatus, isDraft, ...safeBody } = body;
     Object.assign(existing, safeBody);
-    const updatedHierarchy = resolveCanonicalCategoryHierarchy(
-      body.categorySlug || body.categoryId || body.category || existing.categorySlug || existing.category,
-      body.subcategorySlug || body.subcategoryId || body.subcategory || (body as any).subCategory || existing.subcategorySlug || existing.subcategory
+    const updatedHierarchy = taxonomyService.resolveAndValidateProductTaxonomy(
+      {
+        mainCategoryId: body.mainCategoryId || body.mainCategorySlug || existing.mainCategoryId,
+        childCategoryId: body.childCategoryId || body.categorySlug || body.categoryId || body.category || existing.childCategoryId || existing.categorySlug,
+        productTypeId: body.productTypeId || body.productTypeSlug || body.subcategorySlug || body.subcategoryId || body.subcategory || (body as any).subCategory || existing.productTypeId || existing.subcategorySlug,
+        brand: body.brand || existing.brand,
+        brandId: body.brandId || existing.brandId,
+      },
+      { strictChildMatch: Boolean(body.mainCategoryId), tenantId }
     );
-    if (updatedHierarchy.matchedMain) {
-      existing.categoryId = updatedHierarchy.matchedMain.id;
-      existing.category = updatedHierarchy.matchedMain.name;
-      existing.categorySlug = updatedHierarchy.matchedMain.slug;
-      const child = updatedHierarchy.matchedChild || updatedHierarchy.matchedMain.subcategories[0];
-      if (child) {
-        existing.subcategoryId = child.id;
-        existing.subcategory = child.name;
-        existing.subcategorySlug = child.slug;
+    if (updatedHierarchy.mainCategoryId && updatedHierarchy.childCategoryId) {
+      existing.mainCategoryId = updatedHierarchy.mainCategoryId;
+      existing.mainCategorySlug = updatedHierarchy.mainCategorySlug;
+      existing.mainCategoryName = updatedHierarchy.mainCategoryName;
+      existing.childCategoryId = updatedHierarchy.childCategoryId;
+      existing.childCategorySlug = updatedHierarchy.childCategorySlug;
+      existing.childCategoryName = updatedHierarchy.childCategoryName;
+      existing.productTypeId = updatedHierarchy.productTypeId;
+      existing.productTypeSlug = updatedHierarchy.productTypeSlug;
+      existing.productTypeName = updatedHierarchy.productTypeName;
+      existing.brandId = updatedHierarchy.brandId;
+      existing.categoryId = updatedHierarchy.childCategoryId;
+      existing.category = updatedHierarchy.childCategoryName;
+      existing.categorySlug = updatedHierarchy.childCategorySlug;
+      if (updatedHierarchy.productTypeId) {
+        existing.subcategoryId = updatedHierarchy.productTypeId;
+        existing.subcategory = updatedHierarchy.productTypeName;
+        existing.subcategorySlug = updatedHierarchy.productTypeSlug;
       }
     }
     existing.vendorId = vendor.id;

@@ -922,6 +922,21 @@ export const vendorApi = {
     return request<any>(`/vendor/analytics/brands${qs}`, {});
   },
 
+  // Taxonomy (4-level hierarchy from Company Admin master catalog)
+  async getTaxonomy(): Promise<{
+    mainCategories: any[];
+    childCategories: any[];
+    productTypes: any[];
+    brands: any[];
+  }> {
+    return request<any>('/vendor/taxonomy', {}, {
+      mainCategories: [],
+      childCategories: [],
+      productTypes: [],
+      brands: [],
+    });
+  },
+
   // Products
   async getProducts(params?: { category?: string; status?: string; search?: string }): Promise<VendorProduct[]> {
     const q = new URLSearchParams();
