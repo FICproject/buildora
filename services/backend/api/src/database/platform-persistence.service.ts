@@ -66,6 +66,31 @@ const NewLaunchCollectionSchema = new Schema(
   { id: { type: String, required: true, unique: true, index: true }, slug: { type: String, index: true }, tenantId: { type: String, index: true } },
   { collection: 'new_launch_collections', strict: false }
 );
+const CategoryFieldSchemaDef = new Schema(
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    childCategoryId: { type: String, index: true },
+    childCategorySlug: { type: String, index: true },
+    fieldKey: { type: String, index: true },
+    tenantId: { type: String, index: true },
+  },
+  { collection: 'category_field_schemas', strict: false }
+);
+const DesktopNavItemSchema = new Schema(
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    slug: { type: String, index: true },
+    tenantId: { type: String, index: true },
+  },
+  { collection: 'desktop_navigation_items', strict: false }
+);
+const CatalogPublishSnapshotSchema = new Schema(
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    tenantId: { type: String, index: true },
+  },
+  { collection: 'catalog_publish_snapshots', strict: false }
+);
 
 export const PlatformProductModel: Model<any> =
   mongoose.models.PlatformProduct || mongoose.model('PlatformProduct', PlatformProductSchema);
@@ -102,6 +127,12 @@ export const ProductTypeModel: Model<any> =
   mongoose.models.ProductType || mongoose.model('ProductType', ProductTypeSchema);
 export const NewLaunchCollectionModel: Model<any> =
   mongoose.models.NewLaunchCollection || mongoose.model('NewLaunchCollection', NewLaunchCollectionSchema);
+export const CategoryFieldSchemaModel: Model<any> =
+  mongoose.models.CategoryFieldSchema || mongoose.model('CategoryFieldSchema', CategoryFieldSchemaDef);
+export const DesktopNavItemModel: Model<any> =
+  mongoose.models.DesktopNavItem || mongoose.model('DesktopNavItem', DesktopNavItemSchema);
+export const CatalogPublishSnapshotModel: Model<any> =
+  mongoose.models.CatalogPublishSnapshot || mongoose.model('CatalogPublishSnapshot', CatalogPublishSnapshotSchema);
 
 class PlatformPersistenceService {
   private readonly logger = new Logger(PlatformPersistenceService.name);

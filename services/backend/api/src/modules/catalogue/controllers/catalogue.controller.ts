@@ -74,9 +74,37 @@ function buildTaxonomyData(tenantId?: string, includeHidden = false) {
 export class CatalogueController {
   @Get('taxonomy')
   getTaxonomyTree(@Headers('x-tenant-id') tenantId?: string) {
-    const { mainCategories, allChildren } = buildTaxonomyData(tenantId, false);
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const { mainCategories, allChildren } = buildTaxonomyData(cleanTenant, false);
     const navMainCategories = mainCategories.filter((m) => m.showInNavigation !== false);
+    const desktopNavigation = taxonomyService.getPublishedDesktopNavigation(cleanTenant, false);
+    const publishMetadata = taxonomyService.getPublishMetadata(cleanTenant);
     const allProductTypes = allChildren.flatMap((c) => c.productTypes || []);
+    const navigationSections = navMainCategories.map((section) => ({
+      id: section.id,
+      name: section.name,
+      slug: section.slug,
+      sortOrder: section.sortOrder,
+      mainCategories: (section.childCategories || []).map((mainCat) => ({
+        id: mainCat.id,
+        name: mainCat.name,
+        slug: mainCat.slug,
+        sortOrder: mainCat.sortOrder,
+        departmentId: section.id,
+        departmentSlug: section.slug,
+        departmentName: section.name,
+        productCount: mainCat.productCount,
+        childCategories: (mainCat.productTypes || mainCat.subcategories || []).map((childCat) => ({
+          id: childCat.id,
+          name: childCat.name,
+          slug: childCat.slug,
+          sortOrder: childCat.sortOrder,
+          parentMainSlug: mainCat.slug,
+          parentMainName: mainCat.name,
+          productCount: childCat.productCount,
+        })),
+      })),
+    }));
     return {
       success: true,
       data: {
@@ -84,10 +112,23 @@ export class CatalogueController {
         allMainCategories: mainCategories,
         childCategories: allChildren,
         productTypes: allProductTypes,
+        navigationSections,
+        desktopNavigation,
+        publishMetadata,
         tree: navMainCategories,
-        newLaunchCollections: taxonomyService.getNewLaunchCollections(tenantId, true),
+        newLaunchCollections: taxonomyService.getNewLaunchCollections(cleanTenant, true),
         brands: dbStore.brands,
       },
+    };
+  }
+
+  @Get('navigation')
+  getDesktopNavigation(@Headers('x-tenant-id') tenantId?: string) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    return {
+      success: true,
+      data: taxonomyService.getPublishedDesktopNavigation(cleanTenant, false),
+      metadata: taxonomyService.getPublishMetadata(cleanTenant),
     };
   }
 

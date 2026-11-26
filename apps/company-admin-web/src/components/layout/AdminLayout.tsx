@@ -21,11 +21,13 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Search,
   LogOut,
   ShieldCheck,
   KeyRound,
   Building2,
+  FolderTree,
 } from 'lucide-react';
 import { useAdminAuthStore } from '../../store/useAdminAuthStore';
 import { ToastContainer, Modal, Button, useToastStore, inputClassName } from '../ui';
@@ -37,12 +39,26 @@ export interface NavItem {
   icon: React.ReactNode;
   permission: string;
   group: 'Command' | 'Supply & Orders' | 'Customers & Finance' | 'Administration';
+  children?: Array<{ path: string; label: string }>;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" />, permission: 'dashboard:read', group: 'Command' },
   { path: '/vendors', label: 'Vendors', icon: <Store className="w-4 h-4" />, permission: 'vendors:read', group: 'Supply & Orders' },
   { path: '/products', label: 'Products & Catalog', icon: <Package className="w-4 h-4" />, permission: 'products:read', group: 'Supply & Orders' },
+  {
+    path: '/catalog/navigation',
+    label: 'Catalog Management',
+    icon: <FolderTree className="w-4 h-4" />,
+    permission: 'products:read',
+    group: 'Supply & Orders',
+    children: [
+      { path: '/catalog/navigation', label: 'Desktop Navigation' },
+      { path: '/catalog/main-categories', label: 'Main Categories' },
+      { path: '/catalog/child-categories', label: 'Child Categories' },
+      { path: '/catalog/product-types', label: 'Product Type Management' },
+    ],
+  },
   { path: '/inventory', label: 'Inventory', icon: <Boxes className="w-4 h-4" />, permission: 'inventory:read', group: 'Supply & Orders' },
   { path: '/warehouses', label: 'Warehouses', icon: <Warehouse className="w-4 h-4" />, permission: 'warehouses:read', group: 'Supply & Orders' },
   { path: '/orders', label: 'Orders & Returns', icon: <ShoppingCart className="w-4 h-4" />, permission: 'orders:read', group: 'Supply & Orders' },
@@ -81,6 +97,7 @@ export const AdminLayout: React.FC = () => {
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [expandedMenu, setExpandedMenu] = useState<string | null>('/catalog/navigation');
   const [globalSearch, setGlobalSearch] = useState('');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [pwdModalOpen, setPwdModalOpen] = useState(false);
@@ -88,7 +105,9 @@ export const AdminLayout: React.FC = () => {
 
   const allowedNav = NAV_ITEMS.filter((item) => hasPermission(item.permission));
   const currentNav = NAV_ITEMS.find((n) =>
-    n.path === '/' ? location.pathname === '/' : location.pathname.startsWith(n.path)
+    n.path === '/'
+      ? location.pathname === '/'
+      : location.pathname.startsWith(n.path) || Boolean(n.children?.some((c) => location.pathname.startsWith(c.path)))
   );
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -181,34 +200,96 @@ export const AdminLayout: React.FC = () => {
                   {group}
                 </p>
               )}
-              {items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === '/'}
-                  onClick={() => isMobile && setMobileOpen(false)}
-                  className={({ isActive }) =>
-                    `relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-                      isActive
-                        ? 'bg-[#F0DED0]/18 text-white shadow-sm'
-                        : 'text-white/80 hover:bg-[#F0DED0]/10 hover:text-white'
-                    }`
-                  }
-                  title={collapsed && !isMobile ? item.label : undefined}
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && (
-                        <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-[#AE887B]" />
+              {items.map((item) => {
+                if (item.children && item.children.length > 0) {
+                  const childActive = item.children.some((c) => location.pathname.startsWith(c.path));
+                  const isOpen = expandedMenu === item.path || childActive;
+                  return (
+                    <div key={item.path} className="space-y-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (collapsed && !isMobile) {
+                            navigate(item.children![0].path);
+                          } else {
+                            setExpandedMenu(isOpen && !childActive ? null : item.path);
+                          }
+                        }}
+                        className={`w-full relative flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                          childActive
+                            ? 'bg-[#F0DED0]/18 text-white shadow-sm'
+                            : 'text-white/80 hover:bg-[#F0DED0]/10 hover:text-white'
+                        }`}
+                        title={collapsed && !isMobile ? item.label : undefined}
+                      >
+                        <span className="flex items-center gap-3 min-w-0">
+                          {childActive && (
+                            <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-[#AE887B]" />
+                          )}
+                          <span className={`shrink-0 ${childActive ? 'text-[#F0DED0]' : 'text-white/75'}`}>
+                            {item.icon}
+                          </span>
+                          {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
+                        </span>
+                        {(!collapsed || isMobile) && (
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                          />
+                        )}
+                      </button>
+                      {(!collapsed || isMobile) && isOpen && (
+                        <div className="pl-7 pr-1 space-y-0.5">
+                          {item.children.map((sub) => (
+                            <NavLink
+                              key={sub.path}
+                              to={sub.path}
+                              onClick={() => isMobile && setMobileOpen(false)}
+                              className={({ isActive }) =>
+                                `block px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                  isActive
+                                    ? 'bg-[#AE887B] text-white shadow-xs'
+                                    : 'text-[#F0DED0]/80 hover:bg-[#F0DED0]/10 hover:text-white'
+                                }`
+                              }
+                            >
+                              {sub.label}
+                            </NavLink>
+                          ))}
+                        </div>
                       )}
-                      <span className={`shrink-0 ${isActive ? 'text-[#F0DED0]' : 'text-white/75'}`}>
-                        {item.icon}
-                      </span>
-                      {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
-                    </>
-                  )}
-                </NavLink>
-              ))}
+                    </div>
+                  );
+                }
+
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === '/'}
+                    onClick={() => isMobile && setMobileOpen(false)}
+                    className={({ isActive }) =>
+                      `relative flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                        isActive
+                          ? 'bg-[#F0DED0]/18 text-white shadow-sm'
+                          : 'text-white/80 hover:bg-[#F0DED0]/10 hover:text-white'
+                      }`
+                    }
+                    title={collapsed && !isMobile ? item.label : undefined}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        {isActive && (
+                          <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-[#AE887B]" />
+                        )}
+                        <span className={`shrink-0 ${isActive ? 'text-[#F0DED0]' : 'text-white/75'}`}>
+                          {item.icon}
+                        </span>
+                        {(!collapsed || isMobile) && <span className="truncate">{item.label}</span>}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
           );
         })}

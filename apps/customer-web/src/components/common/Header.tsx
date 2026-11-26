@@ -10,7 +10,6 @@ import {
   Zap,
   ChevronDown,
   ChevronRight,
-  Calculator,
   Truck,
   PhoneCall,
   Clock,
@@ -22,7 +21,6 @@ import {
   Layers,
   Wallet,
   ShieldCheck,
-  FolderKanban,
   Award,
   Home,
   Rocket
@@ -38,7 +36,7 @@ import {
   MAIN_CATEGORIES_SEED,
   PRODUCT_TYPES_SEED
 } from '@buildora/constants';
-import { Category, Product, MainCategory } from '@buildora/types';
+import { Category, MainCategory, DesktopNavItem } from '@buildora/types';
 import { api } from '../../services/api';
 import { formatCurrency } from '@buildora/utils';
 import { formatLocationDisplay } from '../../utils';
@@ -78,13 +76,11 @@ export const Header: React.FC = () => {
   const [hoveredChildMasterSlug, setHoveredChildMasterSlug] = useState<string | null>(null);
   const [isAllCategoriesOpen, setIsAllCategoriesOpen] = useState(false);
 
-  // Live 4-level taxonomy & customer-visible products for hover panels
+  // Live navigation sections & Desktop Navigation items (100% backend-driven)
   const [mainCategories, setMainCategories] = useState<MainCategory[]>(MAIN_CATEGORIES_SEED);
+  const [desktopNavigation, setDesktopNavigation] = useState<DesktopNavItem[]>([]);
+  const [navigationSections, setNavigationSections] = useState<any[]>([]);
   const [catalogCategories, setCatalogCategories] = useState<Category[]>(MASTER_CATEGORIES);
-  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
-  const [newLaunchProducts, setNewLaunchProducts] = useState<Product[]>([]);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
-  const [isToolsOpen, setIsToolsOpen] = useState(false);
 
   // Mobile navigation accordion state
   const [mobileExpandedDept, setMobileExpandedDept] = useState<string | null>(null);
@@ -94,27 +90,32 @@ export const Header: React.FC = () => {
   const megaMenuRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load live 4-level backend taxonomy and customer-visible products
+  // Load live backend taxonomy + desktop navigation (syncs automatically on Admin publish or focus)
   useEffect(() => {
     let active = true;
     const fetchHeaderCatalog = async () => {
-      setIsLoadingProducts(true);
       try {
-        const [taxonomy, cats, prods, newLaunchesRes] = await Promise.all([
+        const [taxonomy, cats] = await Promise.all([
           api.getTaxonomy(),
-          api.getCategories(),
-          api.getProducts(),
-          api.getNewLaunches()
+          api.getCategories()
         ]);
         if (!active) return;
 
-        if (Array.isArray(taxonomy?.mainCategories) && taxonomy.mainCategories.length > 0) {
+        if (Array.isArray(taxonomy?.mainCategories)) {
           setMainCategories(taxonomy.mainCategories);
         }
 
-        if (Array.isArray(taxonomy?.childCategories) && taxonomy.childCategories.length > 0) {
+        if (Array.isArray(taxonomy?.desktopNavigation)) {
+          setDesktopNavigation(taxonomy.desktopNavigation);
+        }
+
+        if (Array.isArray(taxonomy?.navigationSections)) {
+          setNavigationSections(taxonomy.navigationSections);
+        }
+
+        if (Array.isArray(taxonomy?.childCategories)) {
           const typePool = Array.isArray(taxonomy.productTypes) ? taxonomy.productTypes : PRODUCT_TYPES_SEED;
-          const hydratedChildren: Category[] = taxonomy.childCategories
+          const hydratedMainCategories: Category[] = taxonomy.childCategories
             .filter((child: any) => child.isActive !== false)
             .sort((a: any, b: any) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0))
             .map((child: any) => {
@@ -137,15 +138,12 @@ export const Header: React.FC = () => {
                 subcategories: pts.length > 0 ? pts : masterMatch?.subcategories || [],
               } as any;
             });
-          setCatalogCategories(hydratedChildren);
+          setCatalogCategories(hydratedMainCategories);
         } else if (cats && cats.length > 0) {
           setCatalogCategories(cats);
         }
-
-        if (Array.isArray(prods)) setCatalogProducts(prods);
-        if (Array.isArray(newLaunchesRes?.products)) setNewLaunchProducts(newLaunchesRes.products);
-      } finally {
-        if (active) setIsLoadingProducts(false);
+      } catch {
+        // Fallback to seed taxonomy cleanly
       }
     };
     void fetchHeaderCatalog();
@@ -153,10 +151,17 @@ export const Header: React.FC = () => {
     const onRealtimeCatalog = () => {
       void fetchHeaderCatalog();
     };
+    const onFocusRefresh = () => {
+      if (document.visibilityState === 'visible') void fetchHeaderCatalog();
+    };
     window.addEventListener('buildora:realtime:catalog', onRealtimeCatalog);
+    window.addEventListener('focus', onRealtimeCatalog);
+    document.addEventListener('visibilitychange', onFocusRefresh);
     return () => {
       active = false;
       window.removeEventListener('buildora:realtime:catalog', onRealtimeCatalog);
+      window.removeEventListener('focus', onRealtimeCatalog);
+      document.removeEventListener('visibilitychange', onFocusRefresh);
     };
   }, []);
 
@@ -167,20 +172,52 @@ export const Header: React.FC = () => {
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }, [mainCategories]);
 
-  // Helper to get Child Categories belonging to a Main Category
-  const getMainChildCategories = (mainSlug: string) => {
-    const deptFallback = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === mainSlug);
+  const visibleDesktopNavigation = React.useMemo(() => {
+    if (desktopNavigation.length > 0) {
+      return [...desktopNavigation]
+        .filter((nav) => nav.isActive !== false && nav.isVisible !== false)
+        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    }
+    return [
+      { id: 'nav-home', label: 'Home', slug: 'home', itemType: 'HOME', route: '/', hasDropdown: false, displayOrder: 1, isVisible: true, isActive: true },
+      ...visibleMainCategories.map((mc, idx) => ({
+        id: `nav-${mc.id}`,
+        label: mc.name,
+        slug: mc.slug,
+        itemType: 'MAIN_CATEGORY',
+        mainCategoryId: mc.id,
+        mainCategorySlug: mc.slug,
+        route: `/categories/${mc.slug}`,
+        hasDropdown: true,
+        displayOrder: idx + 2,
+        isVisible: true,
+        isActive: true,
+      })),
+      { id: 'nav-new-launches', label: 'New Launches', slug: 'new-launches', itemType: 'NEW_LAUNCHES', route: '/new-launches', hasDropdown: true, displayOrder: 98, isVisible: true, isActive: true },
+      { id: 'nav-deals', label: 'Deals', slug: 'deals', itemType: 'DEALS', route: '/deals', hasDropdown: false, highlight: true, displayOrder: 99, isVisible: true, isActive: true },
+    ] as DesktopNavItem[];
+  }, [desktopNavigation, visibleMainCategories]);
+
+  // Helper to get Main Categories (previously Child Categories) under a top-bar section
+  const getMainChildCategories = (deptSlug: string) => {
+    const navSec = navigationSections.find((s) => s.slug === deptSlug);
+    if (navSec && Array.isArray(navSec.mainCategories) && navSec.mainCategories.length > 0) {
+      return navSec.mainCategories.map((mc: any) => ({
+        ...mc,
+        subcategories: mc.childCategories || mc.subcategories || [],
+      }));
+    }
+    const deptFallback = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === deptSlug);
     const source = catalogCategories.length > 0 ? catalogCategories : MASTER_CATEGORIES;
     return source.filter((c: any) => {
       const mSlug = c.mainCategorySlug || c.departmentSlug;
-      if (mSlug) return mSlug === mainSlug;
+      if (mSlug) return mSlug === deptSlug;
       return deptFallback ? deptFallback.categorySlugs.includes(c.slug) : false;
     });
   };
 
   // Debounced hover handlers for smooth, flicker-free mega menu opening/closing
   const handleDeptMouseEnter = (deptSlug: string) => {
-    setIsToolsOpen(false);
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
@@ -203,7 +240,6 @@ export const Header: React.FC = () => {
       setActiveDepartment(null);
       setHoveredChildCategorySlug(null);
       setHoveredChildMasterSlug(null);
-      setIsToolsOpen(false);
     }, 180);
   };
 
@@ -212,7 +248,6 @@ export const Header: React.FC = () => {
     setActiveDepartment(null);
     setHoveredChildCategorySlug(null);
     setHoveredChildMasterSlug(null);
-    setIsToolsOpen(false);
     setIsMobileMenuOpen(false);
     setMobileExpandedDept(null);
     setMobileExpandedCat(null);
@@ -611,42 +646,123 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* 3. DESKTOP ROW 2: HOME + 5 CONSTRUCTION DEPARTMENTS */}
+        {/* 3. DESKTOP ROW 2: API-DRIVEN CENTRALIZED NAVIGATION */}
         <div ref={megaMenuRef} className="bg-slate-50 border-t border-slate-200/80 px-4 sm:px-6 lg:px-8 hidden lg:block relative">
           <div className="w-full max-w-[1680px] mx-auto flex items-center justify-center">
             <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-700 py-1.5 flex-wrap">
-              {/* Home Navigation Item */}
-              <Link
-                to="/"
-                className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl font-black text-xs transition-all mr-1 shadow-sm ${
-                  isHomeActive
-                    ? 'bg-brand-blue-900 text-white'
-                    : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70 bg-white border border-slate-200/80'
-                }`}
-                title="BUILDORA 60 Homepage"
-              >
-                <Home className={`w-3.5 h-3.5 ${isHomeActive ? 'text-white' : 'text-brand-orange-500'}`} />
-                <span>Home</span>
-              </Link>
+              {visibleDesktopNavigation.map((nav) => {
+                if (nav.itemType === 'HOME') {
+                  return (
+                    <Link
+                      key={nav.id}
+                      to={nav.route || '/'}
+                      className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl font-black text-xs transition-all mr-1 shadow-sm ${
+                        isHomeActive
+                          ? 'bg-brand-blue-900 text-white'
+                          : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70 bg-white border border-slate-200/80'
+                      }`}
+                      title="BUILDORA 60 Homepage"
+                    >
+                      <Home className={`w-3.5 h-3.5 ${isHomeActive ? 'text-white' : 'text-brand-orange-500'}`} />
+                      <span>{nav.label}</span>
+                    </Link>
+                  );
+                }
 
-              {/* 5 Main Categories */}
-              {visibleMainCategories.map((dept) => {
-                const Icon = DEPARTMENT_ICONS[dept.slug] || Building2;
-                const isOpen = activeDepartment === dept.slug;
-                const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === dept.slug);
-                const isActive = isDeptActive({ slug: dept.slug, categorySlugs: fallbackDept?.categorySlugs });
+                if (nav.itemType === 'NEW_LAUNCHES') {
+                  const nlKey = 'new-launches';
+                  const isOpen = nav.hasDropdown && activeDepartment === nlKey;
+                  return (
+                    <div
+                      key={nav.id}
+                      onMouseEnter={() => (nav.hasDropdown ? handleDeptMouseEnter(nlKey) : setActiveDepartment(null))}
+                      onMouseLeave={handleDeptMouseLeave}
+                    >
+                      <Link
+                        to={nav.route || '/new-launches'}
+                        aria-expanded={isOpen}
+                        aria-haspopup={nav.hasDropdown ? 'true' : undefined}
+                        onFocus={() => nav.hasDropdown && handleDeptMouseEnter(nlKey)}
+                        onClick={() => setActiveDepartment(null)}
+                        className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
+                          isNewLaunchesActive
+                            ? 'bg-brand-blue-900 text-white shadow-sm'
+                            : isOpen
+                            ? 'bg-slate-900 text-white shadow-xs'
+                            : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
+                        }`}
+                      >
+                        <Rocket
+                          className={`w-3.5 h-3.5 ${
+                            isNewLaunchesActive || isOpen ? 'text-white' : 'text-brand-orange-500'
+                          }`}
+                        />
+                        <span>{nav.label}</span>
+                        {nav.hasDropdown && (
+                          <ChevronDown
+                            className={`w-3 h-3 transition-transform duration-150 ${
+                              isNewLaunchesActive || isOpen ? 'text-white/80' : 'text-slate-400'
+                            } ${isOpen ? 'rotate-180' : ''}`}
+                          />
+                        )}
+                      </Link>
+                    </div>
+                  );
+                }
+
+                if (nav.itemType === 'DEALS' || (nav.highlight && !nav.hasDropdown)) {
+                  return (
+                    <Link
+                      key={nav.id}
+                      to={nav.route || '/deals'}
+                      onMouseEnter={() => setActiveDepartment(null)}
+                      className={`py-2 px-3 rounded-xl font-black text-xs flex items-center gap-1 transition-all ${
+                        isDealsActive || location.pathname === nav.route
+                          ? 'bg-brand-blue-900 text-white shadow-sm'
+                          : 'text-brand-orange-600 hover:bg-orange-50'
+                      }`}
+                    >
+                      <Sparkles
+                        className={`w-3.5 h-3.5 fill-current ${
+                          isDealsActive ? 'text-white' : 'text-brand-orange-600'
+                        }`}
+                      />
+                      <span>{nav.label}</span>
+                    </Link>
+                  );
+                }
+
+                // MAIN_CATEGORY or CUSTOM_LINK
+                const targetSlug = nav.mainCategorySlug || nav.slug;
+                const linkedMain =
+                  nav.mainCategoryId
+                    ? visibleMainCategories.find((m) => m.id === nav.mainCategoryId || m.slug === targetSlug)
+                    : visibleMainCategories.find((m) => m.slug === targetSlug);
+                const dropdownKey = linkedMain?.slug || targetSlug;
+                const Icon = DEPARTMENT_ICONS[dropdownKey] || Building2;
+                const isOpen = nav.hasDropdown && activeDepartment === dropdownKey;
+                const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === dropdownKey);
+                const isActive =
+                  location.pathname === nav.route ||
+                  (linkedMain ? isDeptActive({ slug: dropdownKey, categorySlugs: fallbackDept?.categorySlugs }) : false);
 
                 return (
                   <div
-                    key={dept.id}
-                    onMouseEnter={() => handleDeptMouseEnter(dept.slug)}
+                    key={nav.id}
+                    onMouseEnter={() => {
+                      if (nav.hasDropdown && linkedMain) {
+                        handleDeptMouseEnter(dropdownKey);
+                      } else {
+                        setActiveDepartment(null);
+                      }
+                    }}
                     onMouseLeave={handleDeptMouseLeave}
                   >
                     <Link
-                      to={`/categories/${dept.slug}`}
-                      aria-expanded={isOpen}
-                      aria-haspopup="true"
-                      onFocus={() => handleDeptMouseEnter(dept.slug)}
+                      to={nav.route || `/categories/${dropdownKey}`}
+                      aria-expanded={nav.hasDropdown ? isOpen : undefined}
+                      aria-haspopup={nav.hasDropdown ? 'true' : undefined}
+                      onFocus={() => nav.hasDropdown && linkedMain && handleDeptMouseEnter(dropdownKey)}
                       onClick={() => {
                         setActiveDepartment(null);
                         setHoveredChildCategorySlug(null);
@@ -660,125 +776,22 @@ export const Header: React.FC = () => {
                       }`}
                     >
                       <Icon className={`w-3.5 h-3.5 ${isActive || isOpen ? 'text-white' : 'text-brand-orange-500'}`} />
-                      <span>{dept.name}</span>
-                      <ChevronDown
-                        className={`w-3 h-3 transition-transform duration-150 ${
-                          isActive || isOpen ? 'text-white/80' : 'text-slate-400'
-                        } ${isOpen ? 'rotate-180' : ''}`}
-                      />
+                      <span>{nav.label}</span>
+                      {nav.hasDropdown && linkedMain && (
+                        <ChevronDown
+                          className={`w-3 h-3 transition-transform duration-150 ${
+                            isActive || isOpen ? 'text-white/80' : 'text-slate-400'
+                          } ${isOpen ? 'rotate-180' : ''}`}
+                        />
+                      )}
                     </Link>
                   </div>
                 );
               })}
-
-              {/* New Launches (Promotional Collection) */}
-              <div
-                onMouseEnter={() => handleDeptMouseEnter('new-launches')}
-                onMouseLeave={handleDeptMouseLeave}
-              >
-                <Link
-                  to="/new-launches"
-                  aria-expanded={activeDepartment === 'new-launches'}
-                  aria-haspopup="true"
-                  onFocus={() => handleDeptMouseEnter('new-launches')}
-                  onClick={() => setActiveDepartment(null)}
-                  className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
-                    isNewLaunchesActive
-                      ? 'bg-brand-blue-900 text-white shadow-sm'
-                      : activeDepartment === 'new-launches'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
-                  }`}
-                  title="Explore New Launches Collection"
-                >
-                  <Rocket
-                    className={`w-3.5 h-3.5 ${
-                      isNewLaunchesActive || activeDepartment === 'new-launches'
-                        ? 'text-white'
-                        : 'text-brand-orange-500'
-                    }`}
-                  />
-                  <span>New Launches</span>
-                  <ChevronDown
-                    className={`w-3 h-3 transition-transform duration-150 ${
-                      isNewLaunchesActive || activeDepartment === 'new-launches'
-                        ? 'text-white/80'
-                        : 'text-slate-400'
-                    } ${activeDepartment === 'new-launches' ? 'rotate-180' : ''}`}
-                  />
-                </Link>
-              </div>
-
-              <Link
-                to="/deals"
-                className={`py-2 px-3 rounded-xl font-black text-xs flex items-center gap-1 transition-all ${
-                  isDealsActive
-                    ? 'bg-brand-blue-900 text-white shadow-sm'
-                    : 'text-brand-orange-600 hover:bg-orange-50'
-                }`}
-              >
-                <Sparkles className={`w-3.5 h-3.5 fill-current ${isDealsActive ? 'text-white' : 'text-brand-orange-600'}`} />
-                <span>Deals</span>
-              </Link>
-
-              {/* Separated Utility Navigation: Tools */}
-              <div className="h-5 w-px bg-slate-300/80 mx-1" aria-hidden="true" />
-              <div
-                className="relative"
-                onMouseEnter={() => {
-                  setActiveDepartment(null);
-                  setIsToolsOpen(true);
-                }}
-                onMouseLeave={() => setIsToolsOpen(false)}
-              >
-                <button
-                  type="button"
-                  onClick={() => setIsToolsOpen((v) => !v)}
-                  className={`flex items-center gap-1.5 py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                    location.pathname.startsWith('/tools') || isToolsOpen
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
-                  }`}
-                >
-                  <Calculator className={`w-3.5 h-3.5 ${location.pathname.startsWith('/tools') || isToolsOpen ? 'text-white' : 'text-brand-blue-900'}`} />
-                  <span>Tools</span>
-                  <ChevronDown className={`w-3 h-3 transition-transform ${isToolsOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isToolsOpen && (
-                  <div className="absolute right-0 top-full pt-1.5 w-64 z-50">
-                    <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-2 space-y-1">
-                      <Link
-                        to="/tools/material-estimator"
-                        onClick={() => setIsToolsOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-50 hover:text-brand-blue-900"
-                      >
-                        <Calculator className="w-4 h-4 text-brand-blue-900" />
-                        <span>Material Quantity Estimator</span>
-                      </Link>
-                      <Link
-                        to="/tools/home-construction-calculator"
-                        onClick={() => setIsToolsOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-50 hover:text-brand-orange-600"
-                      >
-                        <Compass className="w-4 h-4 text-brand-orange-500" />
-                        <span>Home Construction Calculator</span>
-                      </Link>
-                      <Link
-                        to="/knowledge-hub"
-                        onClick={() => setIsToolsOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-50 hover:text-brand-blue-900"
-                      >
-                        <FolderKanban className="w-4 h-4 text-emerald-600" />
-                        <span>Knowledge Hub &amp; Guides</span>
-                      </Link>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
-          {/* FULL-SIZE SPACIOUS 4-LEVEL HOVER MEGA MENU */}
+          {/* TWO-COLUMN HOVER CATEGORY DROPDOWN (PANEL 1: MAIN CATEGORIES, PANEL 2: CHILD CATEGORIES) */}
           {activeDepartment && (() => {
             const isNewLaunches = activeDepartment === 'new-launches';
             const activeDept = !isNewLaunches
@@ -788,18 +801,18 @@ export const Header: React.FC = () => {
 
             if (!isNewLaunches && !activeDept) return null;
 
-            // Categories list for Panel 1: Child Categories under active Main Category (or New Launch featured groups)
+            // Main Categories listed in Panel 1 (Cement & Concrete, Tiling, Adhesives, etc.)
             const menuCategories = isNewLaunches
               ? NEW_LAUNCHES_CATEGORIES
               : getMainChildCategories(activeDept!.slug);
 
             const categorySource = catalogCategories.length > 0 ? catalogCategories : MASTER_CATEGORIES;
 
-            // Currently hovered Child Category in Panel 1
-            const currentCat = menuCategories.find((c) => c.slug === selectedParentCategorySlug);
+            // Currently hovered Main Category in Panel 1
+            const currentCat = menuCategories.find((c: any) => c.slug === selectedParentCategorySlug);
 
-            // Product Types for Panel 2
-            type MenuProductType = {
+            // Child Categories for Panel 2 (mapped from Product Types under hovered Main Category)
+            type MenuChildCategory = {
               id: string;
               name: string;
               slug: string;
@@ -808,12 +821,12 @@ export const Header: React.FC = () => {
               productCount?: number;
             };
 
-            let subcategories: MenuProductType[] = [];
+            let childCategories: MenuChildCategory[] = [];
             if (currentCat) {
               if (isNewLaunches) {
                 const nlCat = currentCat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
                 const masterCat = categorySource.find((m) => m.slug === nlCat.masterCategorySlug);
-                subcategories = (masterCat?.subcategories || []).map((sub: any) => ({
+                childCategories = (masterCat?.subcategories || []).map((sub: any) => ({
                   id: sub.id,
                   name: sub.name,
                   slug: sub.slug,
@@ -823,7 +836,8 @@ export const Header: React.FC = () => {
                 }));
               } else {
                 const deptCat = currentCat as Category;
-                subcategories = (deptCat.subcategories || []).map((sub: any) => ({
+                const rawChildren = (deptCat as any).childCategories || deptCat.subcategories || [];
+                childCategories = rawChildren.map((sub: any) => ({
                   id: sub.id,
                   name: sub.name,
                   slug: sub.slug,
@@ -834,8 +848,8 @@ export const Header: React.FC = () => {
               }
             }
 
-            // All Product Types when 'all' is hovered
-            const allSubcategories: MenuProductType[] = menuCategories.flatMap((cat) => {
+            // All Child Categories in this section when 'all' is hovered
+            const allChildCategories: MenuChildCategory[] = menuCategories.flatMap((cat: any) => {
               if (isNewLaunches) {
                 const nlCat = cat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
                 const masterCat = categorySource.find((m) => m.slug === nlCat.masterCategorySlug);
@@ -849,7 +863,8 @@ export const Header: React.FC = () => {
                 }));
               } else {
                 const deptCat = cat as Category;
-                return (deptCat.subcategories || []).map((sub: any) => ({
+                const rawChildren = (deptCat as any).childCategories || deptCat.subcategories || [];
+                return rawChildren.map((sub: any) => ({
                   id: sub.id,
                   name: sub.name,
                   slug: sub.slug,
@@ -860,95 +875,31 @@ export const Header: React.FC = () => {
               }
             });
 
-            const displayedSubcategories =
-              selectedParentCategorySlug === 'all' ? allSubcategories : subcategories;
-
-            const activeChildCat =
-              displayedSubcategories.find(
-                (s) =>
-                  s.slug === hoveredChildCategorySlug &&
-                  (!hoveredChildMasterSlug || s.targetMasterSlug === hoveredChildMasterSlug)
-              ) || null;
-
-            const currentMainSlug =
-              selectedParentCategorySlug !== 'all'
-                ? isNewLaunches
-                  ? (currentCat as any)?.masterCategorySlug || currentCat?.slug
-                  : currentCat?.slug
-                : undefined;
-
-            const productSource =
-              isNewLaunches && newLaunchProducts.length > 0 ? newLaunchProducts : catalogProducts;
-
-            const matchingPanelProducts = productSource.filter((p) => {
-              if (activeChildCat) {
-                const pChildSlug = (p.childCategorySlug || p.categorySlug || '').toLowerCase();
-                const matchChild =
-                  pChildSlug === activeChildCat.slug.toLowerCase() ||
-                  pChildSlug === activeChildCat.targetMasterSlug.toLowerCase() ||
-                  (p as any).childCategoryId === activeChildCat.targetMasterSlug;
-                const pTypeSlug = (p.productTypeSlug || p.subcategorySlug || '').toLowerCase();
-                const pTypeName = (p.productTypeName || p.subcategory || '').toLowerCase();
-                const matchSub =
-                  pTypeSlug === activeChildCat.slug.toLowerCase() ||
-                  pTypeName === activeChildCat.name.toLowerCase() ||
-                  (p as any).productTypeId === activeChildCat.id ||
-                  (p as any).subcategoryId === activeChildCat.id;
-                return matchChild && matchSub;
-              }
-              if (currentMainSlug) {
-                return (
-                  (p.childCategorySlug || p.categorySlug) === currentMainSlug ||
-                  (p as any).childCategoryId === currentMainSlug
-                );
-              }
-              if (isNewLaunches) {
-                return Boolean(p.isNewLaunch);
-              }
-              const activeChildSlugs = menuCategories.map((c) => c.slug);
-              return (
-                p.mainCategorySlug === activeDept?.slug ||
-                p.mainCategoryId === activeDept?.id ||
-                activeChildSlugs.includes(p.childCategorySlug || p.categorySlug)
-              );
-            });
-
-            const previewProducts = matchingPanelProducts.slice(0, 6);
-            const panelHeading = activeChildCat
-              ? activeChildCat.name
-              : currentCat
-              ? `Featured in ${currentCat.name}`
-              : isNewLaunches
-              ? 'Featured New Launches Collection'
-              : `Top in ${activeDept?.name}`;
-            const panelViewAllUrl = activeChildCat
-              ? `/categories/${activeChildCat.targetMasterSlug}/${activeChildCat.slug}`
-              : currentMainSlug
-              ? `/categories/${currentMainSlug}`
-              : isNewLaunches
-              ? '/new-launches'
-              : `/categories/${activeDept?.slug || ''}`;
+            const displayedChildCategories =
+              selectedParentCategorySlug === 'all' ? allChildCategories : childCategories;
 
             return (
               <div
-                className="absolute top-full left-0 right-0 pt-2 z-50 flex justify-center px-4 sm:px-6 lg:px-8 pointer-events-auto"
-                onMouseEnter={() => {
-                  if (hoverTimeoutRef.current) {
-                    clearTimeout(hoverTimeoutRef.current);
-                    hoverTimeoutRef.current = null;
-                  }
-                }}
-                onMouseLeave={handleDeptMouseLeave}
+                className="absolute top-full left-0 right-0 pt-2 z-50 flex justify-center px-4 sm:px-6 lg:px-8 pointer-events-none"
               >
-                <div className="w-full max-w-[1320px] xl:max-w-[1440px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden transition-all duration-150 animate-in fade-in-0 slide-in-from-top-1">
-                  <div className="flex min-h-[420px] max-h-[540px]">
-                    {/* PANEL 1: CHILD CATEGORIES UNDER ACTIVE MAIN CATEGORY */}
-                    <div className="w-[240px] sm:w-[270px] flex-shrink-0 border-r border-slate-100 bg-white p-4 sm:p-5 overflow-y-auto no-scrollbar">
+                <div
+                  className="w-full max-w-[660px] lg:max-w-[700px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden transition-all duration-150 animate-in fade-in-0 slide-in-from-top-1 pointer-events-auto"
+                  onMouseEnter={() => {
+                    if (hoverTimeoutRef.current) {
+                      clearTimeout(hoverTimeoutRef.current);
+                      hoverTimeoutRef.current = null;
+                    }
+                  }}
+                  onMouseLeave={handleDeptMouseLeave}
+                >
+                  <div className="flex min-h-[360px] max-h-[480px]">
+                    {/* PANEL 1: MAIN CATEGORIES */}
+                    <div className="w-[260px] sm:w-[290px] flex-shrink-0 border-r border-slate-100 bg-white p-4 sm:p-5 overflow-y-auto no-scrollbar">
                       <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3 px-3">
-                        {isNewLaunches ? 'FEATURED COLLECTIONS' : 'CHILD CATEGORIES'}
+                        {isNewLaunches ? 'FEATURED COLLECTIONS' : 'MAIN CATEGORIES'}
                       </div>
                       <div className="space-y-1">
-                        {/* ALL Category Item */}
+                        {/* ALL Main Categories Option */}
                         <button
                           type="button"
                           onMouseEnter={() => {
@@ -983,8 +934,8 @@ export const Header: React.FC = () => {
                           />
                         </button>
 
-                        {/* Child Category Items */}
-                        {menuCategories.map((cat) => {
+                        {/* Main Category Items */}
+                        {menuCategories.map((cat: any) => {
                           const isSelected = selectedParentCategorySlug === cat.slug;
                           const targetUrl = isNewLaunches
                             ? `/categories/${(cat as (typeof NEW_LAUNCHES_CATEGORIES)[0]).masterCategorySlug || cat.slug}`
@@ -1029,17 +980,17 @@ export const Header: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* PANEL 2: PRODUCT TYPES FOR HOVERED CHILD CATEGORY */}
-                    <div className="w-[270px] sm:w-[300px] flex-shrink-0 border-r border-slate-100 bg-slate-50/40 p-4 sm:p-5 overflow-y-auto no-scrollbar flex flex-col">
+                    {/* PANEL 2: CHILD CATEGORIES FOR HOVERED MAIN CATEGORY */}
+                    <div className="flex-1 min-w-0 bg-slate-50/40 p-4 sm:p-5 overflow-y-auto no-scrollbar flex flex-col">
                       <div className="flex items-center justify-between gap-2 mb-3 px-1">
                         <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">
-                          {currentCat ? `${currentCat.name} → Product Types` : 'PRODUCT TYPES'}
+                          {currentCat ? `${currentCat.name} → Child Categories` : 'CHILD CATEGORIES'}
                         </span>
                       </div>
 
-                      {displayedSubcategories.length > 0 ? (
+                      {displayedChildCategories.length > 0 ? (
                         <div className="space-y-1">
-                          {displayedSubcategories.map((sub) => {
+                          {displayedChildCategories.map((sub) => {
                             const subUrl = `/categories/${sub.targetMasterSlug}/${sub.slug}`;
                             const isChildHovered =
                               hoveredChildCategorySlug === sub.slug &&
@@ -1105,100 +1056,7 @@ export const Header: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex-1 flex items-center justify-center text-xs font-medium text-slate-400 text-center px-3">
-                          No product types configured.
-                        </div>
-                      )}
-                    </div>
-
-                    {/* PANEL 3: SECONDARY MATCHING PRODUCTS PANEL */}
-                    <div className="flex-1 bg-white p-5 sm:p-6 overflow-y-auto no-scrollbar flex flex-col">
-                      <div className="flex items-center justify-between gap-3 pb-3 mb-4 border-b border-slate-100">
-                        <div className="min-w-0">
-                          <div className="text-[10px] font-black uppercase tracking-wider text-brand-orange-600">
-                            {activeChildCat
-                              ? `${activeChildCat.targetMasterName} › ${activeChildCat.name}`
-                              : currentCat
-                              ? currentCat.name
-                              : activeDept?.name || 'Matching Products'}
-                          </div>
-                          <h4 className="text-sm font-black text-slate-900 truncate mt-0.5">
-                            {panelHeading}
-                          </h4>
-                        </div>
-                        <Link
-                          to={panelViewAllUrl}
-                          onClick={() => setActiveDepartment(null)}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-brand-blue-900 hover:text-brand-orange-600 transition-colors flex-shrink-0"
-                        >
-                          <span>View all ({matchingPanelProducts.length})</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
-                      </div>
-
-                      {isLoadingProducts && catalogProducts.length === 0 ? (
-                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 animate-pulse">
-                          {Array.from({ length: 6 }).map((_, idx) => (
-                            <div key={idx} className="h-24 rounded-xl bg-slate-100" />
-                          ))}
-                        </div>
-                      ) : previewProducts.length > 0 ? (
-                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                          {previewProducts.map((prod) => (
-                            <Link
-                              key={prod.id}
-                              to={`/products/${prod.slug}`}
-                              onClick={() => {
-                                setActiveDepartment(null);
-                                setHoveredChildCategorySlug(null);
-                              }}
-                              className="group flex items-start gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-brand-blue-200 hover:shadow-md transition-all"
-                            >
-                              <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0">
-                                {prod.images?.[0] ? (
-                                  <img
-                                    src={prod.images[0]}
-                                    alt={prod.name}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">
-                                    SKU
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase truncate">
-                                  {prod.brand}
-                                </div>
-                                <div className="text-xs font-bold text-slate-800 group-hover:text-brand-blue-900 line-clamp-2 leading-snug mt-0.5">
-                                  {prod.name}
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-1.5">
-                                  <span className="text-xs font-black text-slate-900">
-                                    ₹{Number(prod.price || 0).toLocaleString('en-IN')}
-                                  </span>
-                                  {prod.mrp > prod.price && (
-                                    <span className="text-[10px] text-slate-400 line-through">
-                                      ₹{Number(prod.mrp).toLocaleString('en-IN')}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex-1 min-h-[220px] flex flex-col items-center justify-center text-center px-4">
-                          <p className="text-xs font-semibold text-slate-500">
-                            No approved products available yet in this category.
-                          </p>
-                          <Link
-                            to={panelViewAllUrl}
-                            onClick={() => setActiveDepartment(null)}
-                            className="mt-2 text-xs font-bold text-brand-blue-900 hover:underline"
-                          >
-                            Browse category page →
-                          </Link>
+                          No child categories configured.
                         </div>
                       )}
                     </div>
@@ -1340,8 +1198,9 @@ export const Header: React.FC = () => {
                           >
                             View all in {dept.name} →
                           </Link>
-                          {deptCats.map((cat) => {
+                          {deptCats.map((cat: any) => {
                             const isCatExpanded = mobileExpandedCat === cat.slug;
+                            const catChildren = cat.childCategories || cat.subcategories || [];
                             return (
                               <div key={cat.id} className="bg-white rounded-lg border border-slate-200/70 overflow-hidden">
                                 <div className="flex items-center justify-between p-2 text-xs font-bold text-slate-800">
@@ -1353,22 +1212,22 @@ export const Header: React.FC = () => {
                                     <span className="w-1.5 h-1.5 rounded-full bg-brand-orange-500 flex-shrink-0" />
                                     <span className="truncate">{cat.name}</span>
                                   </Link>
-                                  {cat.subcategories && cat.subcategories.length > 0 && (
+                                  {catChildren.length > 0 && (
                                     <button
                                       type="button"
                                       onClick={() => setMobileExpandedCat(isCatExpanded ? null : cat.slug)}
                                       className="p-1 text-slate-400 hover:text-slate-600 flex-shrink-0"
-                                      aria-label={`Toggle product types for ${cat.name}`}
+                                      aria-label={`Toggle child categories for ${cat.name}`}
                                     >
                                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isCatExpanded ? 'rotate-180' : ''}`} />
                                     </button>
                                   )}
                                 </div>
 
-                                {/* Product Types list */}
-                                {isCatExpanded && cat.subcategories && cat.subcategories.length > 0 && (
+                                {/* Child Categories list */}
+                                {isCatExpanded && catChildren.length > 0 && (
                                   <div className="pl-6 pr-2 py-1.5 bg-slate-50/80 border-t border-slate-100 space-y-1 text-[11px]">
-                                    {cat.subcategories.map((sub) => (
+                                    {catChildren.map((sub: any) => (
                                       <Link
                                         key={sub.id}
                                         to={`/categories/${cat.slug}/${sub.slug}`}

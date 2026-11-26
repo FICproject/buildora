@@ -116,30 +116,45 @@ export const ProductInfoAccordion: React.FC<ProductInfoAccordionProps> = ({ prod
   // Include technical specifications
   if (product.specifications && typeof product.specifications === 'object') {
     Object.entries(product.specifications).forEach(([key, val]) => {
-      if (val && typeof val === 'string' && val.trim() !== '') {
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        const strVal = String(val).trim();
         const isDuplicate = highlights.some(
           (h) => h.label.toLowerCase() === key.toLowerCase()
         );
         if (!isDuplicate) {
-          highlights.push({ label: key, value: val });
+          highlights.push({ label: key, value: strVal });
         }
       }
     });
   }
 
-  // Include category attributes
+  // Include category attributes (supports string, number, boolean, and multi-select arrays)
   if (product.categoryAttributes && typeof product.categoryAttributes === 'object') {
     Object.entries(product.categoryAttributes).forEach(([key, val]) => {
-      if (val && typeof val === 'string' && val.trim() !== '') {
-        const formattedKey = key
-          .replace(/([A-Z])/g, ' $1')
-          .replace(/^./, (str) => str.toUpperCase());
-        const isDuplicate = highlights.some(
-          (h) => h.label.toLowerCase() === formattedKey.toLowerCase()
-        );
-        if (!isDuplicate) {
-          highlights.push({ label: formattedKey, value: val });
-        }
+      if (val === undefined || val === null) return;
+      let displayVal = '';
+      if (Array.isArray(val)) {
+        displayVal = val.filter(Boolean).join(', ');
+      } else if (typeof val === 'boolean') {
+        displayVal = val ? 'Yes' : '';
+      } else if (typeof val === 'number') {
+        displayVal = String(val);
+      } else if (typeof val === 'string') {
+        displayVal = val.trim();
+      }
+      if (!displayVal) return;
+
+      const formattedKey = key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, (str) => str.toUpperCase())
+        .trim();
+      const isDuplicate = highlights.some(
+        (h) =>
+          h.label.toLowerCase() === formattedKey.toLowerCase() ||
+          h.label.toLowerCase().replace(/[^a-z0-9]/g, '') === key.toLowerCase().replace(/[^a-z0-9]/g, '')
+      );
+      if (!isDuplicate) {
+        highlights.push({ label: formattedKey, value: displayVal });
       }
     });
   }

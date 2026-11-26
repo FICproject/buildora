@@ -49,8 +49,24 @@ function enrichStorefrontProduct(p: any) {
     strictChildMatch: false,
   });
 
+  const {
+    auditLogs: _auditLogs,
+    versionHistory: _versionHistory,
+    pendingRevision: _pendingRevision,
+    commissionRate: _commissionRate,
+    commissionAmount: _commissionAmount,
+    netPayout: _netPayout,
+    lowStockThreshold: _lowStockThreshold,
+    revisionStatus: _revisionStatus,
+    hasPendingChanges: _hasPendingChanges,
+    rejectedBy: _rejectedBy,
+    rejectedAt: _rejectedAt,
+    rejectionReason: _rejectionReason,
+    ...publicProduct
+  } = p;
+
   return {
-    ...p,
+    ...publicProduct,
     mainCategoryId: p.mainCategoryId || hierarchy.mainCategoryId,
     mainCategorySlug: p.mainCategorySlug || hierarchy.mainCategorySlug,
     mainCategoryName: p.mainCategoryName || hierarchy.mainCategoryName,
@@ -67,6 +83,9 @@ function enrichStorefrontProduct(p: any) {
     subcategoryId: p.subcategoryId || hierarchy.productTypeId,
     subcategorySlug: p.subcategorySlug || hierarchy.productTypeSlug,
     subcategory: p.subcategory || hierarchy.productTypeName,
+    categoryAttributes: p.categoryAttributes || vp?.categoryAttributes || {},
+    specifications: p.specifications || vp?.specifications || {},
+    moq: p.moq ?? vp?.moq ?? 1,
     vendorId,
     vendorName: p.vendorName || vendor?.storeName || vendor?.businessInfo?.businessName || 'Buildora Verified Supplier',
     vendorCity: vendor?.businessInfo?.address?.city || 'Bengaluru',

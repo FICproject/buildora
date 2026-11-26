@@ -4,6 +4,7 @@ import {
   Post,
   Patch,
   Put,
+  Delete,
   Param,
   Query,
   Body,
@@ -12,7 +13,11 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { storageService } from '../../vendors/services/storage.service';
 import { dbStore } from '../../../database/store';
 import { taxonomyService } from '../../catalogue/services/taxonomy.service';
 import {
@@ -1250,15 +1255,55 @@ export class CompanyAdminController {
     @Headers('x-tenant-id') headerTenantId?: string
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:read', headerTenantId);
-    const pool = taxonomyService.getTenantPool(tenantId);
+    const draft = taxonomyService.getDraftState(tenantId);
+    const publishedPool = taxonomyService.getTenantPool(tenantId);
+    const publishMetadata = taxonomyService.getPublishMetadata(tenantId);
     const report = taxonomyService.migrationRecords;
+    const tenantProducts = companyAdminDataService.getTenantProducts(tenantId);
+    const mainCounts = new Map<string, number>();
+    const childCounts = new Map<string, number>();
+    const typeCounts = new Map<string, number>();
+    for (const p of tenantProducts) {
+      const mId = (p as any).mainCategoryId;
+      const cId = (p as any).childCategoryId || (p as any).categoryId;
+      const ptId = (p as any).productTypeId || (p as any).subcategoryId;
+      if (mId) mainCounts.set(mId, (mainCounts.get(mId) || 0) + 1);
+      if (cId) childCounts.set(cId, (childCounts.get(cId) || 0) + 1);
+      if (ptId) typeCounts.set(ptId, (typeCounts.get(ptId) || 0) + 1);
+    }
+
+    const sortedMains = [...draft.mainCategories].sort((a, b) => a.sortOrder - b.sortOrder);
+    const sortedChildren = [...draft.childCategories].sort((a, b) => a.sortOrder - b.sortOrder);
+    const sortedTypes = [...draft.productTypes].sort((a, b) => a.sortOrder - b.sortOrder);
+    const sortedNav = [...draft.desktopNavigation].sort((a, b) => a.displayOrder - b.displayOrder);
+
     return {
       success: true,
       data: {
         categories: dbStore.categories,
-        mainCategories: pool.mainCategories,
-        childCategories: pool.childCategories,
-        productTypes: pool.productTypes,
+        mainCategories: sortedMains.map((m) => ({
+          ...m,
+          productCount: mainCounts.get(m.id) || 0,
+          childCount: sortedChildren.filter((c) => c.mainCategoryId === m.id).length,
+        })),
+        childCategories: sortedChildren.map((c) => ({
+          ...c,
+          productCount: childCounts.get(c.id) || 0,
+          fieldCount: taxonomyService.getTenantFieldSchemas(tenantId, c.id, false).length,
+        })),
+        productTypes: sortedTypes.map((pt) => ({
+          ...pt,
+          productCount: typeCounts.get(pt.id) || 0,
+        })),
+        desktopNavigation: sortedNav,
+        publishMetadata,
+        publishedSummary: {
+          mainCount: publishedPool.mainCategories.length,
+          childCount: publishedPool.childCategories.length,
+          typeCount: publishedPool.productTypes.length,
+          navCount: taxonomyService.getPublishedDesktopNavigation(tenantId, true).length,
+        },
+        fieldSchemas: taxonomyService.getTenantFieldSchemas(tenantId, undefined, true),
         brands: dbStore.brands,
         attributes: companyAdminDataService.attributes,
         newLaunchCollections: taxonomyService.getNewLaunchCollections(tenantId, false),
@@ -1270,6 +1315,175 @@ export class CompanyAdminController {
         },
       },
     };
+  }
+
+  @Get('catalog/navigation')
+  listDesktopNavigation(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:read', headerTenantId);
+    const draft = taxonomyService.getDraftState(tenantId);
+    return {
+      success: true,
+      data: [...draft.desktopNavigation].sort((a, b) => a.displayOrder - b.displayOrder),
+      metadata: taxonomyService.getPublishMetadata(tenantId),
+    };
+  }
+
+  @Post('catalog/navigation')
+  async createDesktopNavItem(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const created = await taxonomyService.createDesktopNavItem(tenantId, body || {});
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { navigationId: created.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, navigationId: created.id }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitToAdmin('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    }
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: body?.saveAsDraft ? 'NAVIGATION_DRAFT_CREATED' : 'NAVIGATION_ITEM_CREATED',
+      module: 'Catalog',
+      entityType: 'DesktopNavItem',
+      entityId: created.id,
+      details: `${body?.saveAsDraft ? 'Staged draft' : 'Published'} nav item "${created.label}".`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Put('catalog/navigation/reorder')
+  async reorderDesktopNav(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { orderedIds?: string[]; saveAsDraft?: boolean },
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const reordered = await taxonomyService.reorderDesktopNavItems(tenantId, body?.orderedIds || [], {
+      saveAsDraft: Boolean(body?.saveAsDraft),
+    });
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { reordered: true }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitToAdmin('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    }
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: body?.saveAsDraft ? 'NAVIGATION_DRAFT_REORDERED' : 'NAVIGATION_REORDERED',
+      module: 'Catalog',
+      entityType: 'DesktopNavItem',
+      entityId: tenantId,
+      details: `Updated desktop navigation display order (${reordered.length} items).`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    return { success: true, data: reordered, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Patch('catalog/navigation/:id')
+  async updateDesktopNavItem(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const updated = await taxonomyService.updateDesktopNavItem(tenantId, id, body || {});
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { navigationId: updated.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, navigationId: updated.id }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitToAdmin('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Delete('catalog/navigation/:id')
+  async deleteDesktopNavItem(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('saveAsDraft') saveAsDraft?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const isDraft = saveAsDraft === 'true';
+    const result = await taxonomyService.deleteDesktopNavItem(tenantId, id, { saveAsDraft: isDraft });
+    if (isDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedNavId: id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitToAdmin('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: result, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Post('catalog/publish')
+  async publishCatalogChanges(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const result = await taxonomyService.publishCatalogDraft(tenantId, admin.email || admin.name, vendorProducts);
+    for (const vp of vendorProducts) {
+      if (vp.tenantId === tenantId) {
+        await platformPersistenceService.upsert(PlatformProductModel, vp);
+      }
+    }
+    realtimeBus.emitPublic(
+      'taxonomy.published',
+      {
+        taxonomyUpdated: true,
+        publishedVersion: result.metadata.publishedVersion,
+        publishedAt: result.metadata.lastPublishedAt,
+      },
+      tenantId
+    );
+    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    realtimeBus.emitToAdmin('taxonomy.published', result, tenantId);
+
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'CATALOG_AND_NAV_PUBLISHED',
+      module: 'Catalog',
+      entityType: 'TaxonomySnapshot',
+      entityId: `v${result.metadata.publishedVersion}`,
+      details: `Published Catalog & Desktop Navigation v${result.metadata.publishedVersion} (${result.mainCategoriesCount} main, ${result.childCategoriesCount} child, ${result.desktopNavigationCount} nav items).`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+
+    return { success: true, data: result };
+  }
+
+  @Post('catalog/discard-draft')
+  async discardCatalogDraft(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const draft = await taxonomyService.discardCatalogDraft(tenantId);
+    realtimeBus.emitToAdmin('taxonomy.draft_saved', { discarded: true }, tenantId);
+    return { success: true, data: draft, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
   @Post('catalog/main-categories')
@@ -1286,15 +1500,20 @@ export class CompanyAdminController {
       actorId: admin.sub,
       actorName: admin.name,
       actorRole: admin.role,
-      action: 'MAIN_CATEGORY_CREATED',
+      action: body?.saveAsDraft ? 'MAIN_CATEGORY_DRAFT_CREATED' : 'MAIN_CATEGORY_CREATED',
       module: 'Catalog',
       entityType: 'MainCategory',
       entityId: created.id,
-      details: `Created main category ${created.name}.`,
+      details: `${body?.saveAsDraft ? 'Staged draft' : 'Created'} main category ${created.name}.`,
       ipAddress: req?.ip || '127.0.0.1',
     });
-    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
-    return { success: true, data: created };
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { mainCategoryId: created.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
   @Patch('catalog/main-categories/:id')
@@ -1306,8 +1525,38 @@ export class CompanyAdminController {
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const updated = await taxonomyService.updateMainCategory(tenantId, id, body || {});
-    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
-    return { success: true, data: updated };
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { mainCategoryId: updated.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Delete('catalog/main-categories/:id')
+  async deleteMainCategory(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('reassignToMainId') reassignToMainId?: string,
+    @Query('saveAsDraft') saveAsDraft?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const isDraft = saveAsDraft === 'true';
+    const res = await taxonomyService.deleteMainCategory(
+      tenantId,
+      id,
+      { reassignToMainId, saveAsDraft: isDraft },
+      vendorProducts
+    );
+    if (isDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedMainId: id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: res, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
   @Post('catalog/child-categories')
@@ -1324,15 +1573,20 @@ export class CompanyAdminController {
       actorId: admin.sub,
       actorName: admin.name,
       actorRole: admin.role,
-      action: 'CHILD_CATEGORY_CREATED',
+      action: body?.saveAsDraft ? 'CHILD_CATEGORY_DRAFT_CREATED' : 'CHILD_CATEGORY_CREATED',
       module: 'Catalog',
       entityType: 'ChildCategory',
       entityId: created.id,
-      details: `Created child category ${created.name} under ${created.mainCategoryId}.`,
+      details: `${body?.saveAsDraft ? 'Staged draft' : 'Created'} child category ${created.name} under ${created.mainCategoryId}.`,
       ipAddress: req?.ip || '127.0.0.1',
     });
-    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
-    return { success: true, data: created };
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { childCategoryId: created.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
   @Patch('catalog/child-categories/:id')
@@ -1343,9 +1597,122 @@ export class CompanyAdminController {
     @Body() body?: any
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
-    const updated = await taxonomyService.updateChildCategory(tenantId, id, body || {});
-    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    const updated = await taxonomyService.updateChildCategory(tenantId, id, body || {}, vendorProducts);
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { childCategoryId: updated.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Delete('catalog/child-categories/:id')
+  async deleteChildCategory(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('reassignToChildId') reassignToChildId?: string,
+    @Query('saveAsDraft') saveAsDraft?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const isDraft = saveAsDraft === 'true';
+    const res = await taxonomyService.deleteChildCategory(
+      tenantId,
+      id,
+      { reassignToChildId, saveAsDraft: isDraft },
+      vendorProducts
+    );
+    if (isDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedChildId: id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: res, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Post('catalog/upload-image')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    })
+  )
+  async uploadCatalogImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Req() req?: any
+  ) {
+    this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    if (!file) throw new BadRequestException('Please attach an image file (JPG, PNG, or WEBP).');
+    const host = req?.get?.('host') || `localhost:${process.env.PORT || 3000}`;
+    const protocol = req?.protocol || 'http';
+    const baseUrl = `${protocol}://${host}`;
+    const meta = await storageService.uploadVendorLogo(file.buffer, file.originalname, file.mimetype, baseUrl);
+    return { success: true, data: { url: meta.url, fileName: file.originalname } };
+  }
+
+  @Get('catalog/fields')
+  listCategoryFields(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('childCategoryId') childCategoryId?: string,
+    @Query('includeInactive') includeInactive?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:read', headerTenantId);
+    const fields = taxonomyService.getTenantFieldSchemas(
+      tenantId,
+      childCategoryId,
+      includeInactive !== 'false'
+    );
+    return { success: true, data: fields };
+  }
+
+  @Post('catalog/fields')
+  async createCategoryField(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const created = await taxonomyService.createCategoryField(tenantId, body || {});
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'CATEGORY_FIELD_CREATED',
+      module: 'Catalog',
+      entityType: 'CategoryFieldSchema',
+      entityId: created.id,
+      details: `Added dynamic field "${created.label}" for ${created.childCategorySlug}.`,
+      ipAddress: '127.0.0.1',
+    });
+    return { success: true, data: created };
+  }
+
+  @Patch('catalog/fields/:id')
+  async updateCategoryField(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const updated = await taxonomyService.updateCategoryField(tenantId, id, body || {});
     return { success: true, data: updated };
+  }
+
+  @Delete('catalog/fields/:id')
+  async deleteCategoryField(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const result = await taxonomyService.deleteCategoryField(tenantId, id);
+    return { success: true, data: result };
   }
 
   @Post('catalog/product-types')
@@ -1356,8 +1723,13 @@ export class CompanyAdminController {
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const created = await taxonomyService.createProductType(tenantId, body || {});
-    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
-    return { success: true, data: created };
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { productTypeId: created.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
   @Patch('catalog/product-types/:id')
@@ -1369,8 +1741,38 @@ export class CompanyAdminController {
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const updated = await taxonomyService.updateProductType(tenantId, id, body || {});
-    realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
-    return { success: true, data: updated };
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { productTypeId: updated.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Delete('catalog/product-types/:id')
+  async deleteProductType(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('reassignToTypeId') reassignToTypeId?: string,
+    @Query('saveAsDraft') saveAsDraft?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const isDraft = saveAsDraft === 'true';
+    const res = await taxonomyService.deleteProductType(
+      tenantId,
+      id,
+      { reassignToTypeId, saveAsDraft: isDraft },
+      vendorProducts
+    );
+    if (isDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedProductTypeId: id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: res, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
   @Post('catalog/new-launches')

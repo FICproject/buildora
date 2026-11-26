@@ -131,11 +131,14 @@ export const api = {
     return request<any>('/health', {}, { status: 'DEGRADED', mode: 'CLIENT_FALLBACK' });
   },
 
-  // Taxonomy (4-level: Main Category -> Child Category -> Product Type -> Product)
+  // Taxonomy (4-level: Main Category -> Child Category -> Product Type -> Product + Desktop Navigation)
   async getTaxonomy(): Promise<{
     mainCategories: any[];
     childCategories: any[];
     productTypes: any[];
+    navigationSections?: any[];
+    desktopNavigation?: any[];
+    publishMetadata?: any;
     tree: any[];
     newLaunchCollections: any[];
   }> {
@@ -149,10 +152,53 @@ export const api = {
         })),
       };
     });
-    return request<any>('/taxonomy', {}, {
+    const fallbackNavigationSections = MAIN_CATEGORIES_SEED.map((mc) => ({
+      id: mc.id,
+      name: mc.name,
+      slug: mc.slug,
+      sortOrder: mc.sortOrder,
+      mainCategories: CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === mc.id).map((child) => ({
+        id: child.id,
+        name: child.name,
+        slug: child.slug,
+        sortOrder: child.sortOrder,
+        departmentId: mc.id,
+        departmentSlug: mc.slug,
+        departmentName: mc.name,
+        childCategories: PRODUCT_TYPES_SEED.filter((pt) => pt.childCategoryId === child.id).map((pt) => ({
+          id: pt.id,
+          name: pt.name,
+          slug: pt.slug,
+          sortOrder: pt.sortOrder,
+          parentMainSlug: child.slug,
+          parentMainName: child.name,
+        })),
+      })),
+    }));
+    const fallbackDesktopNavigation = [
+      { id: 'nav-home', label: 'Home', slug: 'home', itemType: 'HOME', route: '/', icon: 'Home', hasDropdown: false, displayOrder: 1, isVisible: true, isActive: true },
+      ...MAIN_CATEGORIES_SEED.map((mc, idx) => ({
+        id: `nav-${mc.id}`,
+        label: mc.name,
+        slug: mc.slug,
+        itemType: 'MAIN_CATEGORY',
+        mainCategoryId: mc.id,
+        mainCategorySlug: mc.slug,
+        route: `/categories/${mc.slug}`,
+        hasDropdown: true,
+        displayOrder: idx + 2,
+        isVisible: true,
+        isActive: true,
+      })),
+      { id: 'nav-new-launches', label: 'New Launches', slug: 'new-launches', itemType: 'NEW_LAUNCHES', route: '/new-launches', icon: 'Rocket', hasDropdown: true, displayOrder: 98, isVisible: true, isActive: true },
+      { id: 'nav-deals', label: 'Deals', slug: 'deals', itemType: 'DEALS', route: '/deals', icon: 'Sparkles', hasDropdown: false, highlight: true, displayOrder: 99, isVisible: true, isActive: true },
+    ];
+    return request<any>('/taxonomy', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }, {
       mainCategories: MAIN_CATEGORIES_SEED,
       childCategories: CHILD_CATEGORIES_SEED,
       productTypes: PRODUCT_TYPES_SEED,
+      navigationSections: fallbackNavigationSections,
+      desktopNavigation: fallbackDesktopNavigation,
       tree: fallbackTree,
       newLaunchCollections: [],
     });
@@ -184,11 +230,11 @@ export const api = {
 
   // Categories
   async getCategories(): Promise<Category[]> {
-    return request<Category[]>('/categories', {}, MASTER_CATEGORIES);
+    return request<Category[]>('/categories', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }, MASTER_CATEGORIES);
   },
 
   async getCategoryBySlug(slug: string): Promise<any | undefined> {
-    const direct = await request<any | null>(`/categories/${encodeURIComponent(slug)}`, {}, null);
+    const direct = await request<any | null>(`/categories/${encodeURIComponent(slug)}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }, null);
     if (direct && (direct.slug || direct.id)) {
       return direct;
     }

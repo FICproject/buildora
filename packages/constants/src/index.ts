@@ -1187,3 +1187,4 @@ export const AVAILABLE_COUPONS = [
 export * from './seed-data.js';
 export * from './category-filters.js';
 export * from './category-attribute-templates.js';
+export * from './category-field-schemas.js';

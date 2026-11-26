@@ -10,6 +10,8 @@ export type RealtimeEventName =
   | 'product.updated'
   | 'product.suspended'
   | 'inventory.updated'
+  | 'taxonomy.draft_saved'
+  | 'taxonomy.published'
   | 'order.created'
   | 'order.status.updated'
   | 'payment.status.updated'

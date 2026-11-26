@@ -13,6 +13,10 @@ import {
   RefreshCw,
   X,
   Image as ImageIcon,
+  ChevronRight,
+  ChevronLeft,
+  CheckCircle2,
+  Upload,
 } from 'lucide-react';
 import { useVendorProductStore } from '../../store/useVendorProductStore';
 import {
@@ -26,12 +30,14 @@ import {
   EmptyState,
   TablePagination,
 } from '../../components/common';
-import { VendorProduct, AttributeSelectorType } from '@buildora/types';
+import { VendorProduct, AttributeSelectorType, CategoryFieldSchema } from '@buildora/types';
 import {
   MASTER_CATEGORIES,
   MAIN_CATEGORIES_SEED,
   CHILD_CATEGORIES_SEED,
   PRODUCT_TYPES_SEED,
+  CATEGORY_FIELD_SCHEMAS_SEED,
+  getDefaultFieldSchemasForCategory,
   getAttributeTemplatesForCategory,
   resolveCanonicalCategoryHierarchy,
   resolveFullTaxonomy,
@@ -90,14 +96,21 @@ export const VendorProductsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Form states
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [taxonomyState, setTaxonomyState] = useState<{
     mainCategories: any[];
     childCategories: any[];
     productTypes: any[];
+    fieldSchemas: CategoryFieldSchema[];
+    warehouses: any[];
+    brands: any[];
   }>({
     mainCategories: MAIN_CATEGORIES_SEED,
     childCategories: CHILD_CATEGORIES_SEED,
     productTypes: PRODUCT_TYPES_SEED,
+    fieldSchemas: CATEGORY_FIELD_SCHEMAS_SEED,
+    warehouses: [],
+    brands: [],
   });
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
@@ -108,18 +121,28 @@ export const VendorProductsPage: React.FC = () => {
   const [subCategory, setSubCategory] = useState('OPC 53 Grade Cement');
   const [brand, setBrand] = useState('UltraTech Cement');
   const [unit, setUnit] = useState('50 Kg Bag');
+  const [moq, setMoq] = useState('1');
   const [gstRate, setGstRate] = useState('18');
   const [mrp, setMrp] = useState('420');
   const [price, setPrice] = useState('380');
   const [stock, setStock] = useState('250');
   const [lowStockThreshold, setLowStockThreshold] = useState('40');
+  const [warehouseId, setWarehouseId] = useState('WH-BLR-04');
+  const [deliveryModes, setDeliveryModes] = useState<string[]>(['ASAP_60', 'STANDARD']);
+  const [enableBulkPricing, setEnableBulkPricing] = useState(true);
+  const [bulkTier10Discount, setBulkTier10Discount] = useState('5');
+  const [bulkTier50Discount, setBulkTier50Discount] = useState('8');
   const [productStatus, setProductStatus] = useState<'ACTIVE' | 'DRAFT' | 'OUT_OF_STOCK'>('ACTIVE');
   const [inStock, setInStock] = useState(true);
   const [imageUrlsText, setImageUrlsText] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [description, setDescription] = useState('');
   const [productType, setProductType] = useState('');
   const [size, setSize] = useState('');
   const [isNewLaunch, setIsNewLaunch] = useState(false);
+  const [categoryAttributes, setCategoryAttributes] = useState<Record<string, any>>({});
+  const [extraSpecRows, setExtraSpecRows] = useState<Array<{ key: string; value: string }>>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   // Variants
@@ -129,23 +152,54 @@ export const VendorProductsPage: React.FC = () => {
   ]);
   const [formVariants, setFormVariants] = useState<FormVariant[]>([]);
 
-  useEffect(() => {
-    fetchProducts();
+  const refreshVendorTaxonomy = () => {
     vendorApi.getTaxonomy().then((res) => {
       if (
         res &&
         Array.isArray(res.mainCategories) &&
-        res.mainCategories.length > 0 &&
-        Array.isArray(res.childCategories) &&
-        res.childCategories.length > 0
+        Array.isArray(res.childCategories)
       ) {
         setTaxonomyState({
           mainCategories: res.mainCategories.filter((m: any) => m.isActive !== false),
           childCategories: res.childCategories.filter((c: any) => c.isActive !== false),
-          productTypes: (res.productTypes || PRODUCT_TYPES_SEED).filter((pt: any) => pt.isActive !== false),
+          productTypes: (res.productTypes || []).filter((pt: any) => pt.isActive !== false),
+          fieldSchemas: (res.fieldSchemas && res.fieldSchemas.length > 0
+            ? res.fieldSchemas
+            : CATEGORY_FIELD_SCHEMAS_SEED).filter((f: any) => f.isActive !== false),
+          warehouses: res.warehouses || [],
+          brands: res.brands || [],
         });
       }
     }).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchProducts();
+    refreshVendorTaxonomy();
+
+    const onVendorRealtime = (evt: Event) => {
+      const detail = (evt as CustomEvent).detail || {};
+      if (
+        detail.event === 'taxonomy.published' ||
+        detail.event === 'product.approved' ||
+        detail.event === 'product.rejected' ||
+        detail.event === 'product.updated'
+      ) {
+        refreshVendorTaxonomy();
+        fetchProducts();
+      }
+    };
+    const onFocusRefresh = () => {
+      if (document.visibilityState === 'visible') refreshVendorTaxonomy();
+    };
+    window.addEventListener('buildora:vendor:realtime', onVendorRealtime);
+    window.addEventListener('focus', refreshVendorTaxonomy);
+    document.addEventListener('visibilitychange', onFocusRefresh);
+    return () => {
+      window.removeEventListener('buildora:vendor:realtime', onVendorRealtime);
+      window.removeEventListener('focus', refreshVendorTaxonomy);
+      document.removeEventListener('visibilitychange', onFocusRefresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -209,9 +263,88 @@ export const VendorProductsPage: React.FC = () => {
     return found || MASTER_CATEGORIES[0];
   }, [selectedChildCatNode, category]);
 
+  const activeCategoryFields = useMemo(() => {
+    const cid = selectedChildCatNode?.id || childCategoryId;
+    const cslug = selectedChildCatNode?.slug || '';
+    const liveMatches = taxonomyState.fieldSchemas
+      .filter(
+        (f) =>
+          f.isActive !== false &&
+          (f.childCategoryId === cid || (cslug && f.childCategorySlug === cslug))
+      )
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    if (liveMatches.length > 0) return liveMatches;
+    return getDefaultFieldSchemasForCategory(cid || cslug);
+  }, [taxonomyState.fieldSchemas, selectedChildCatNode, childCategoryId]);
+
+  const groupedCategoryFields = useMemo(() => {
+    const groups: Record<string, CategoryFieldSchema[]> = {};
+    for (const f of activeCategoryFields) {
+      const grp = f.group || 'Core Product Attributes';
+      groups[grp] = groups[grp] || [];
+      groups[grp].push(f);
+    }
+    return Object.entries(groups);
+  }, [activeCategoryFields]);
+
+  // Refresh dynamic field schema when vendor switches Child Category inside the modal
+  useEffect(() => {
+    if (!isModalOpen || !childCategoryId) return;
+    vendorApi.getCategoryFields(childCategoryId).then((fields) => {
+      if (Array.isArray(fields) && fields.length > 0) {
+        setTaxonomyState((prev) => ({
+          ...prev,
+          fieldSchemas: [
+            ...prev.fieldSchemas.filter((f) => f.childCategoryId !== childCategoryId),
+            ...fields,
+          ],
+        }));
+      }
+    }).catch(() => {});
+  }, [isModalOpen, childCategoryId]);
+
+  const validateDynamicFieldsClient = (): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    for (const schema of activeCategoryFields) {
+      const rawVal = categoryAttributes[schema.fieldKey];
+      const missing =
+        rawVal === undefined ||
+        rawVal === null ||
+        (typeof rawVal === 'string' && rawVal.trim() === '') ||
+        (Array.isArray(rawVal) && rawVal.length === 0);
+      if (missing) {
+        if (schema.required) errs[schema.fieldKey] = `${schema.label} is required.`;
+        continue;
+      }
+      if (schema.fieldType === 'number') {
+        const num = Number(rawVal);
+        if (Number.isNaN(num)) errs[schema.fieldKey] = `${schema.label} must be a valid number.`;
+        else if (schema.validation?.min !== undefined && num < schema.validation.min) {
+          errs[schema.fieldKey] = `${schema.label} must be at least ${schema.validation.min}.`;
+        } else if (schema.validation?.max !== undefined && num > schema.validation.max) {
+          errs[schema.fieldKey] = `${schema.label} cannot exceed ${schema.validation.max}.`;
+        }
+      } else if (schema.fieldType === 'text' || schema.fieldType === 'textarea') {
+        const s = String(rawVal).trim();
+        if (schema.validation?.minLength !== undefined && s.length < schema.validation.minLength) {
+          errs[schema.fieldKey] = `${schema.label} requires at least ${schema.validation.minLength} characters.`;
+        } else if (schema.validation?.pattern) {
+          try {
+            if (!new RegExp(schema.validation.pattern).test(s)) {
+              errs[schema.fieldKey] = schema.validation.patternMessage || `${schema.label} format is invalid.`;
+            }
+          } catch {}
+        }
+      }
+    }
+    return errs;
+  };
+
   const openAddModal = () => {
     setEditingProduct(null);
+    setWizardStep(1);
     setFormError(null);
+    setFieldErrors({});
     setName('');
     setSku(`SKU-BLR-${Math.floor(1000 + Math.random() * 9000)}`);
     const defaultMain = availableMainCategories[0] || MAIN_CATEGORIES_SEED[0];
@@ -228,11 +361,17 @@ export const VendorProductsPage: React.FC = () => {
     setSubCategory(defaultType?.name || 'OPC 53 Grade Cement');
     setBrand('');
     setUnit('50 Kg Bag');
+    setMoq('1');
     setGstRate('18');
     setMrp('');
     setPrice('');
     setStock('100');
     setLowStockThreshold('30');
+    setWarehouseId(taxonomyState.warehouses[0]?.id || 'WH-BLR-04');
+    setDeliveryModes(['ASAP_60', 'STANDARD']);
+    setEnableBulkPricing(true);
+    setBulkTier10Discount('5');
+    setBulkTier50Discount('8');
     setProductStatus('ACTIVE');
     setInStock(true);
     setImageUrlsText('');
@@ -240,6 +379,8 @@ export const VendorProductsPage: React.FC = () => {
     setProductType('');
     setSize('');
     setIsNewLaunch(false);
+    setCategoryAttributes({});
+    setExtraSpecRows([]);
     setHasVariants(false);
     setFormAttributes([
       { id: 'attr-1', name: 'Size', uiType: 'cards', optionsStr: 'Standard', required: true },
@@ -250,7 +391,9 @@ export const VendorProductsPage: React.FC = () => {
 
   const openEditModal = (p: VendorProduct) => {
     setEditingProduct(p);
+    setWizardStep(1);
     setFormError(null);
+    setFieldErrors({});
     const resolvedStock = p.stockCount ?? p.stock ?? 0;
     const resolvedTax = resolveFullTaxonomy(p as any, {
       mainCategories: availableMainCategories,
@@ -274,11 +417,21 @@ export const VendorProductsPage: React.FC = () => {
     setSubCategory(resolvedTax.productType?.name || p.subCategory || p.subcategory || '');
     setBrand(p.brand);
     setUnit(p.unit);
+    setMoq(String((p as any).moq ?? 1));
     setGstRate(String(p.gstRate ?? 18));
     setMrp(String(p.mrp ?? 0));
     setPrice(String(p.price ?? 0));
     setStock(String(resolvedStock));
     setLowStockThreshold(String(p.lowStockThreshold ?? 30));
+    setWarehouseId((p as any).warehouseId || taxonomyState.warehouses[0]?.id || 'WH-BLR-04');
+    setDeliveryModes(
+      Array.isArray(p.deliverySpeedAvailable) && p.deliverySpeedAvailable.length > 0
+        ? p.deliverySpeedAvailable
+        : ['ASAP_60', 'STANDARD']
+    );
+    setEnableBulkPricing(Boolean(p.bulkPricing && p.bulkPricing.length > 0));
+    setBulkTier10Discount(String(p.bulkPricing?.[0]?.discountPercentage ?? 5));
+    setBulkTier50Discount(String(p.bulkPricing?.[1]?.discountPercentage ?? 8));
     setProductStatus(p.status || (resolvedStock > 0 ? 'ACTIVE' : 'OUT_OF_STOCK'));
     setInStock(p.inStock !== false && resolvedStock > 0);
     setImageUrlsText((p.images || []).join('\n'));
@@ -288,6 +441,11 @@ export const VendorProductsPage: React.FC = () => {
     );
     setSize((p as any).size || p.specifications?.['Size'] || p.packSize || p.unit || '');
     setIsNewLaunch(Boolean(p.isNewLaunch));
+    setCategoryAttributes((p as any).categoryAttributes || {});
+    const specEntries = Object.entries(p.specifications || {}).filter(
+      ([k]) => !['Product Type', 'Size', 'Packaging'].includes(k)
+    );
+    setExtraSpecRows(specEntries.map(([key, value]) => ({ key, value: String(value || '') })));
 
     const hasV = Boolean(
       (p.variants && p.variants.length > 1) || (p.attributes && p.attributes.length > 0)
@@ -453,27 +611,34 @@ export const VendorProductsPage: React.FC = () => {
     setFormVariants(updated);
   };
 
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitWizardProduct = async (submitAsDraft = false) => {
     if (isSaving) return;
 
     const mrpNum = Number(mrp);
     const priceNum = Number(price);
     const stockNum = Number(stock);
 
-    if (!name.trim() || !sku.trim() || !brand.trim()) {
-      setFormError('Please fill in Product Title, SKU, and Brand.');
-      return;
-    }
-    if (priceNum <= 0 || mrpNum <= 0) {
-      setFormError('MRP and Selling Price must be greater than 0.');
-      return;
-    }
-    if (priceNum > mrpNum) {
-      setFormError('Selling Price cannot exceed MRP.');
+    const nextFieldErrors: Record<string, string> = submitAsDraft ? {} : validateDynamicFieldsClient();
+    if (!name.trim()) nextFieldErrors.name = 'Product Name is required.';
+    if (!brand.trim()) nextFieldErrors.brand = 'Brand is required.';
+    if (!sku.trim()) nextFieldErrors.sku = 'SKU / Product Code is required.';
+    if (priceNum <= 0 || Number.isNaN(priceNum)) nextFieldErrors.price = 'Selling Price must be greater than 0.';
+    if (mrpNum <= 0 || Number.isNaN(mrpNum)) nextFieldErrors.mrp = 'MRP must be greater than 0.';
+    if (priceNum > mrpNum) nextFieldErrors.price = 'Selling Price cannot exceed MRP.';
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      const firstMsg = Object.values(nextFieldErrors)[0];
+      setFormError(firstMsg);
+      if (nextFieldErrors.name || nextFieldErrors.brand || Object.keys(validateDynamicFieldsClient()).some((k) => nextFieldErrors[k])) {
+        setWizardStep(2);
+      } else if (nextFieldErrors.sku || nextFieldErrors.price || nextFieldErrors.mrp) {
+        setWizardStep(3);
+      }
       return;
     }
 
+    setFieldErrors({});
     setFormError(null);
     setIsSaving(true);
 
@@ -518,8 +683,11 @@ export const VendorProductsPage: React.FC = () => {
             }))
           : undefined;
 
-      const resolvedStatus =
-        stockNum === 0 ? 'OUT_OF_STOCK' : productStatus;
+      const resolvedStatus = submitAsDraft
+        ? 'DRAFT'
+        : stockNum === 0
+        ? 'OUT_OF_STOCK'
+        : productStatus;
       const resolvedMain = selectedMainCatNode;
       const resolvedChild = selectedChildCatNode;
       const resolvedType = selectedProductTypeNode;
@@ -529,6 +697,29 @@ export const VendorProductsPage: React.FC = () => {
       );
       const canonicalChild = resolvedChild || fallbackHierarchy.matchedMain || MASTER_CATEGORIES[0];
       const canonicalType = resolvedType || fallbackHierarchy.matchedChild || MASTER_CATEGORIES[0].subcategories[0];
+
+      // Build human-readable specifications from dynamic CategoryFieldSchema + manual extra specs
+      const dynamicSpecs: Record<string, string> = {};
+      for (const f of activeCategoryFields) {
+        const val = categoryAttributes[f.fieldKey];
+        if (val === undefined || val === null || val === '') continue;
+        if (Array.isArray(val)) {
+          if (val.length > 0) dynamicSpecs[f.label] = val.join(', ');
+        } else if (typeof val === 'boolean') {
+          if (val) dynamicSpecs[f.label] = 'Yes';
+        } else {
+          dynamicSpecs[f.label] = f.unitSuffix ? `${val} ${f.unitSuffix}` : String(val);
+        }
+      }
+      for (const row of extraSpecRows) {
+        if (row.key.trim() && row.value.trim()) {
+          dynamicSpecs[row.key.trim()] = row.value.trim();
+        }
+      }
+
+      const selectedWh = taxonomyState.warehouses.find((w) => w.id === warehouseId);
+      const t10 = Math.max(1, Number(bulkTier10Discount) || 5);
+      const t50 = Math.max(t10, Number(bulkTier50Discount) || 8);
 
       const productData = {
         name: name.trim(),
@@ -551,6 +742,8 @@ export const VendorProductsPage: React.FC = () => {
         subcategorySlug: canonicalType?.slug || '',
         brand: brand.trim(),
         unit: unit.trim(),
+        packSize: String(categoryAttributes.packSize || categoryAttributes.packVolume || unit.trim()),
+        moq: Math.max(1, Number(moq) || 1),
         gstRate: Number(gstRate),
         mrp: mrpNum,
         price: priceNum,
@@ -562,21 +755,28 @@ export const VendorProductsPage: React.FC = () => {
         images: parsedImages.length > 0 ? parsedImages : editingProduct?.images || [],
         description: description.trim(),
         status: resolvedStatus,
+        isDraft: submitAsDraft,
+        submitForApproval: !submitAsDraft,
+        enforceCategoryFields: !submitAsDraft,
         isActive: resolvedStatus === 'ACTIVE',
         isNewLaunch,
-        productType,
-        size,
+        productType: productType || canonicalType?.name || '',
+        size: size || unit,
+        categoryAttributes,
         specifications: {
-          ...(editingProduct?.specifications || {}),
-          'Product Type': productType || 'Material',
-          Size: size || unit,
-          Packaging: unit,
+          ...dynamicSpecs,
+          Packaging: unit.trim(),
         },
-        bulkPricing: editingProduct?.bulkPricing || [
-          { minQuantity: 10, discountPercentage: 5, unitPrice: Math.round(priceNum * 0.95) },
-          { minQuantity: 50, discountPercentage: 8, unitPrice: Math.round(priceNum * 0.92) },
-        ],
-        warehouseLocation: editingProduct?.warehouseLocation || 'WH-BLR-04 Peenya Hub',
+        isBulkEligible: enableBulkPricing,
+        bulkPricing: enableBulkPricing
+          ? [
+              { minQuantity: 10, discountPercentage: t10, unitPrice: Math.round(priceNum * (1 - t10 / 100)) },
+              { minQuantity: 50, discountPercentage: t50, unitPrice: Math.round(priceNum * (1 - t50 / 100)) },
+            ]
+          : [],
+        warehouseId,
+        warehouseLocation: selectedWh?.name || editingProduct?.warehouseLocation || 'WH-BLR-04 Peenya Hub',
+        deliverySpeedAvailable: deliveryModes.length > 0 ? deliveryModes : ['STANDARD'],
         attributes: finalAttributes,
         variants: finalVariants,
       };
@@ -586,15 +786,30 @@ export const VendorProductsPage: React.FC = () => {
         if (ok && finalVariants && finalVariants.length > 0) {
           await vendorApi.updateProductVariants(editingProduct.id, finalVariants, finalAttributes);
         }
-        if (ok) toast.success('Product updated successfully.');
+        if (ok) toast.success('Product updated and synced for review.');
       } else {
         const ok = await addProduct(productData as any);
-        if (ok) toast.success('New product added to catalog.');
+        if (ok) {
+          toast.success(
+            submitAsDraft
+              ? 'Product saved as Draft.'
+              : 'Product submitted for Company Admin approval.'
+          );
+        }
       }
       setIsModalOpen(false);
+    } catch (err: any) {
+      const msg = err?.message || 'Unable to save product.';
+      setFormError(msg);
+      if (err?.errors) setFieldErrors(err.errors);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitWizardProduct(productStatus === 'DRAFT');
   };
 
   const handleConfirmDelete = async () => {
@@ -879,598 +1094,1039 @@ export const VendorProductsPage: React.FC = () => {
         />
       </Card>
 
-      {/* Add / Edit Product Modal */}
+      {/* Add / Edit 4-Step Product Wizard Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingProduct ? 'Edit Product' : 'Add New Product'}
-        subtitle="Organize product identity, GST pricing, inventory, and optional variants."
+        title={editingProduct ? `Edit Product — ${editingProduct.name}` : 'Create New Product'}
+        subtitle="Select your category hierarchy, enter category-specific product details, set pricing & stock, and submit for Admin approval."
         maxWidth="2xl"
       >
-        <form onSubmit={handleSaveProduct} className="space-y-6">
+        <form onSubmit={handleSaveProduct} className="space-y-5">
+          {/* Stepper Header */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-[#F8F7F5] p-2 rounded-xl border border-[#E7E5E4]">
+            {[
+              { step: 1, label: 'Category' },
+              { step: 2, label: 'Product & Fields' },
+              { step: 3, label: 'Pricing & Stock' },
+              { step: 4, label: 'Review & Submit' },
+            ].map((item) => {
+              const isCurrent = wizardStep === item.step;
+              const isCompleted = wizardStep > item.step;
+              return (
+                <button
+                  key={item.step}
+                  type="button"
+                  onClick={() => setWizardStep(item.step as 1 | 2 | 3 | 4)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all text-left cursor-pointer ${
+                    isCurrent
+                      ? 'bg-[#943D24] text-white shadow-xs'
+                      : isCompleted
+                      ? 'bg-white text-[#292524] border border-emerald-200'
+                      : 'text-[#78716C] hover:bg-white/70'
+                  }`}
+                >
+                  <span
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                      isCurrent
+                        ? 'bg-[#F6C453] text-[#292524]'
+                        : isCompleted
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-[#E7E5E4] text-[#57534E]'
+                    }`}
+                  >
+                    {isCompleted ? '✓' : item.step}
+                  </span>
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {formError && (
             <div className="p-3 rounded-lg bg-[#DC4545]/10 border border-[#DC4545]/20 text-[#DC4545] text-xs font-medium">
               {formError}
             </div>
           )}
 
-          {/* Section 1: Basic Information */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
-              Basic Information
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="portal-label">Product Name *</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  placeholder="e.g. UltraTech Super Cement OPC 53 Grade (50 Kg Bag)"
-                  className="portal-input"
-                />
-              </div>
-              <div>
-                <label className="portal-label">SKU *</label>
-                <input
-                  type="text"
-                  value={sku}
-                  onChange={(e) => setSku(e.target.value)}
-                  required
-                  className="portal-input font-mono"
-                />
-              </div>
-              <div>
-                <label className="portal-label">Brand *</label>
-                <input
-                  type="text"
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                  required
-                  placeholder="e.g. UltraTech, Havells, Astral"
-                  className="portal-input"
-                />
-              </div>
-              <div>
-                <label className="portal-label">Main Category *</label>
-                <select
-                  value={selectedMainCatNode?.id || mainCategoryId}
-                  onChange={(e) => {
-                    const nextMainId = e.target.value;
-                    setMainCategoryId(nextMainId);
-                    const nextChild =
-                      taxonomyState.childCategories.find((c) => c.mainCategoryId === nextMainId) ||
-                      CHILD_CATEGORIES_SEED.find((c) => c.mainCategoryId === nextMainId);
-                    const nextType = nextChild
-                      ? taxonomyState.productTypes.find((pt) => pt.childCategoryId === nextChild.id) ||
-                        PRODUCT_TYPES_SEED.find((pt) => pt.childCategoryId === nextChild.id)
-                      : undefined;
-                    setChildCategoryId(nextChild?.id || '');
-                    setProductTypeId(nextType?.id || '');
-                    setCategory(nextChild?.name || '');
-                    setSubCategory(nextType?.name || '');
-                  }}
-                  className="portal-input"
-                  required
-                >
-                  {availableMainCategories.map((mc) => (
-                    <option key={mc.id} value={mc.id}>
-                      {mc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="portal-label">Child Category *</label>
-                <select
-                  value={selectedChildCatNode?.id || childCategoryId}
-                  onChange={(e) => {
-                    const nextChildId = e.target.value;
-                    const nextChild = availableChildCategories.find((c) => c.id === nextChildId);
-                    const nextType = taxonomyState.productTypes.find(
-                      (pt) => pt.childCategoryId === nextChildId
-                    );
-                    setChildCategoryId(nextChildId);
-                    setProductTypeId(nextType?.id || '');
-                    setCategory(nextChild?.name || '');
-                    setSubCategory(nextType?.name || '');
-                  }}
-                  className="portal-input"
-                  required
-                >
-                  {availableChildCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="md:col-span-2">
-                <label className="portal-label">Product Type / Subcategory *</label>
-                <select
-                  value={selectedProductTypeNode?.id || productTypeId}
-                  onChange={(e) => {
-                    const nextTypeId = e.target.value;
-                    const nextType = availableProductTypes.find((pt) => pt.id === nextTypeId);
-                    setProductTypeId(nextTypeId);
-                    setSubCategory(nextType?.name || '');
-                  }}
-                  className="portal-input"
-                  required
-                >
-                  {availableProductTypes.map((pt) => (
-                    <option key={pt.id} value={pt.id}>
-                      {pt.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Pricing, GST & Availability */}
-          <div className="space-y-3 pt-4 border-t border-[#E7E5E4]">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
-              Pricing, GST & Availability
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="portal-label">MRP (₹) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={mrp}
-                  onChange={(e) => setMrp(e.target.value)}
-                  required
-                  className="portal-input"
-                />
-              </div>
-              <div>
-                <label className="portal-label">Selling Price (₹) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  required
-                  className="portal-input"
-                />
-              </div>
-              <div>
-                <label className="portal-label">GST Rate (%) *</label>
-                <select
-                  value={gstRate}
-                  onChange={(e) => setGstRate(e.target.value)}
-                  className="portal-input"
-                >
-                  <option value="0">0% (Exempt)</option>
-                  <option value="5">5% GST</option>
-                  <option value="12">12% GST</option>
-                  <option value="18">18% GST</option>
-                  <option value="28">28% GST</option>
-                </select>
-              </div>
-              <div>
-                <label className="portal-label">Unit / Pack Size *</label>
-                <input
-                  type="text"
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value)}
-                  required
-                  placeholder="e.g. 50 Kg Bag, 90m Coil"
-                  className="portal-input"
-                />
-              </div>
-              <div>
-                <label className="portal-label">Product Status</label>
-                <select
-                  value={productStatus}
-                  onChange={(e) => setProductStatus(e.target.value as any)}
-                  className="portal-input"
-                >
-                  <option value="ACTIVE">Active</option>
-                  <option value="DRAFT">Draft</option>
-                  <option value="OUT_OF_STOCK">Out of Stock</option>
-                </select>
-              </div>
-              <div className="flex items-end pb-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-[#292524] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={inStock}
-                    onChange={(e) => setInStock(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#943D24]"
-                  />
-                  <span>Available for ordering (In Stock)</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Stock & Specifications */}
-          <div className="space-y-3 pt-4 border-t border-[#E7E5E4]">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
-              Stock & Specifications
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="portal-label">Available Stock (Units) *</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value)}
-                  required
-                  className="portal-input"
-                />
-              </div>
-              <div>
-                <label className="portal-label">Low Stock Alert Threshold</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={lowStockThreshold}
-                  onChange={(e) => setLowStockThreshold(e.target.value)}
-                  className="portal-input"
-                />
-              </div>
-              <div>
-                <label className="portal-label">Product Type</label>
-                <input
-                  type="text"
-                  value={productType}
-                  onChange={(e) => setProductType(e.target.value)}
-                  placeholder="e.g. Rotary Hammer, PPC Cement"
-                  className="portal-input"
-                />
-              </div>
-              <div>
-                <label className="portal-label">Specification Size</label>
-                <input
-                  type="text"
-                  value={size}
-                  onChange={(e) => setSize(e.target.value)}
-                  placeholder="e.g. 18 Inch, 25 Litres"
-                  className="portal-input"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 4: Images & Description */}
-          <div className="space-y-3 pt-4 border-t border-[#E7E5E4]">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#78716C]">
-              Images & Description
-            </h3>
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="portal-label">Product Image URLs (one per line)</label>
-                <textarea
-                  rows={2}
-                  value={imageUrlsText}
-                  onChange={(e) => setImageUrlsText(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="portal-input"
-                />
-                {imageUrlsText.trim() && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {imageUrlsText
-                      .split(/[\n,]/)
-                      .map((u) => u.trim())
-                      .filter(Boolean)
-                      .slice(0, 4)
-                      .map((url, idx) => (
-                        <div
-                          key={idx}
-                          className="w-14 h-14 rounded-lg border border-[#E7E5E4] overflow-hidden bg-[#F8F7F5] flex items-center justify-center"
-                        >
-                          <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="portal-label">Description</label>
-                <textarea
-                  rows={3}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Key material specifications and usage details..."
-                  className="portal-input"
-                />
-              </div>
-              <label className="flex items-center gap-2 text-xs font-medium text-[#292524] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isNewLaunch}
-                  onChange={(e) => setIsNewLaunch(e.target.checked)}
-                  className="w-4 h-4 rounded text-[#943D24]"
-                />
-                <span>Feature this product in New Launches</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Section 5: Variants & Configurable Options */}
-          <div className="p-4 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <div className="text-xs font-semibold text-[#292524] flex items-center gap-1.5">
-                  <Sliders className="w-4 h-4 text-[#943D24]" />
-                  <span>Product Variants</span>
+          {/* STEP 1: CATEGORY SELECTION */}
+          {wizardStep === 1 && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-xl bg-[#FBF3F0] border border-[#943D24]/20 text-xs flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-bold text-[#943D24]">Selected Category Hierarchy</p>
+                  <p className="text-[#292524] mt-0.5 font-medium">
+                    Main Category: <strong>{selectedMainCatNode?.name || '—'}</strong> &rarr; Child Category:{' '}
+                    <strong>{selectedChildCatNode?.name || '—'}</strong>
+                    {selectedProductTypeNode ? ` → ${selectedProductTypeNode.name}` : ''}
+                  </p>
                 </div>
-                <p className="text-[11px] text-[#78716C]">
-                  Optional size, thickness, or colour options with separate SKUs and pricing.
-                </p>
+                <Badge variant="info">{activeCategoryFields.length} Category Fields Loaded</Badge>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-[#292524] bg-white px-3 py-1.5 rounded-lg border border-[#E7E5E4]">
-                <input
-                  type="checkbox"
-                  checked={hasVariants}
-                  onChange={(e) => setHasVariants(e.target.checked)}
-                  className="w-4 h-4 text-[#943D24] rounded"
-                />
-                <span>Enable Variants</span>
-              </label>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="portal-label">Main Category *</label>
+                  <select
+                    value={selectedMainCatNode?.id || mainCategoryId}
+                    onChange={(e) => {
+                      const nextMainId = e.target.value;
+                      setMainCategoryId(nextMainId);
+                      const nextChild =
+                        taxonomyState.childCategories.find((c) => c.mainCategoryId === nextMainId) ||
+                        CHILD_CATEGORIES_SEED.find((c) => c.mainCategoryId === nextMainId);
+                      const nextType = nextChild
+                        ? taxonomyState.productTypes.find((pt) => pt.childCategoryId === nextChild.id) ||
+                          PRODUCT_TYPES_SEED.find((pt) => pt.childCategoryId === nextChild.id)
+                        : undefined;
+                      setChildCategoryId(nextChild?.id || '');
+                      setProductTypeId(nextType?.id || '');
+                      setCategory(nextChild?.name || '');
+                      setSubCategory(nextType?.name || '');
+                      setCategoryAttributes({});
+                      setFieldErrors({});
+                    }}
+                    className="portal-input"
+                    required
+                  >
+                    {availableMainCategories.map((mc) => (
+                      <option key={mc.id} value={mc.id}>
+                        {mc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="portal-label">Child Category *</label>
+                  <select
+                    value={selectedChildCatNode?.id || childCategoryId}
+                    onChange={(e) => {
+                      const nextChildId = e.target.value;
+                      const nextChild = availableChildCategories.find((c) => c.id === nextChildId);
+                      const nextType = taxonomyState.productTypes.find(
+                        (pt) => pt.childCategoryId === nextChildId
+                      );
+                      setChildCategoryId(nextChildId);
+                      setProductTypeId(nextType?.id || '');
+                      setCategory(nextChild?.name || '');
+                      setSubCategory(nextType?.name || '');
+                      setCategoryAttributes({});
+                      setFieldErrors({});
+                    }}
+                    className="portal-input"
+                    required
+                  >
+                    {availableChildCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="portal-label">Subcategory / Product Type (Optional)</label>
+                  <select
+                    value={selectedProductTypeNode?.id || productTypeId}
+                    onChange={(e) => {
+                      const nextTypeId = e.target.value;
+                      const nextType = availableProductTypes.find((pt) => pt.id === nextTypeId);
+                      setProductTypeId(nextTypeId);
+                      setSubCategory(nextType?.name || '');
+                    }}
+                    className="portal-input"
+                  >
+                    {availableProductTypes.length === 0 ? (
+                      <option value="">General</option>
+                    ) : (
+                      availableProductTypes.map((pt) => (
+                        <option key={pt.id} value={pt.id}>
+                          {pt.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              </div>
             </div>
+          )}
 
-            {hasVariants && (
-              <div className="space-y-4 pt-3 border-t border-[#E7E5E4]">
-                {(() => {
-                  const templates = getAttributeTemplatesForCategory(category);
-                  if (templates.length === 0) return null;
-                  return (
-                    <div className="p-3 bg-[#FBF3F0] rounded-lg border border-[#943D24]/15 space-y-1.5">
-                      <div className="text-[11px] font-semibold text-[#943D24]">
-                        Suggested Option Templates for {category}:
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {templates.map((tpl) => {
-                          const isAdded = formAttributes.some(
-                            (a) => a.name.toLowerCase() === tpl.name.toLowerCase()
-                          );
-                          return (
-                            <button
-                              key={tpl.id}
-                              type="button"
-                              disabled={isAdded}
-                              onClick={() => handleAddTemplateOption(tpl)}
-                              className={`text-[11px] font-medium px-2.5 py-1 rounded-md border ${
-                                isAdded
-                                  ? 'bg-[#F8F7F5] text-[#78716C] border-[#E7E5E4] cursor-not-allowed'
-                                  : 'bg-white text-[#943D24] border-[#E7E5E4] hover:border-[#943D24] cursor-pointer'
-                              }`}
-                            >
-                              + {tpl.name}
-                            </button>
-                          );
-                        })}
-                      </div>
+          {/* STEP 2: PRODUCT INFORMATION + DYNAMIC CATEGORY FIELDS */}
+          {wizardStep === 2 && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="portal-label">Product Name *</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setFieldErrors((p) => ({ ...p, name: '' }));
+                    }}
+                    placeholder="e.g. UltraTech Super Cement OPC 53 Grade (50 Kg Bag)"
+                    className="portal-input"
+                  />
+                  {fieldErrors.name && <p className="text-[11px] text-[#DC4545] mt-1">{fieldErrors.name}</p>}
+                </div>
+                <div>
+                  <label className="portal-label">Brand *</label>
+                  <input
+                    type="text"
+                    list="buildora-approved-brands"
+                    value={brand}
+                    onChange={(e) => {
+                      setBrand(e.target.value);
+                      setFieldErrors((p) => ({ ...p, brand: '' }));
+                    }}
+                    placeholder="e.g. UltraTech Cement, Asian Paints, Astral Pipes"
+                    className="portal-input"
+                  />
+                  <datalist id="buildora-approved-brands">
+                    {taxonomyState.brands.map((b) => (
+                      <option key={b.id} value={b.name} />
+                    ))}
+                  </datalist>
+                  {fieldErrors.brand && <p className="text-[11px] text-[#DC4545] mt-1">{fieldErrors.brand}</p>}
+                </div>
+              </div>
+
+              {/* DYNAMIC ADMIN-CONFIGURED CATEGORY FIELDS */}
+              <div className="space-y-4">
+                {groupedCategoryFields.map(([groupName, fields]) => (
+                  <div
+                    key={groupName}
+                    className="p-4 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5]/70 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#943D24]">
+                        {selectedChildCatNode?.name} — {groupName}
+                      </h4>
+                      <span className="text-[10px] text-[#78716C]">{fields.length} field(s)</span>
                     </div>
-                  );
-                })()}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {fields.map((field) => {
+                        const val = categoryAttributes[field.fieldKey];
+                        const err = fieldErrors[field.fieldKey];
+                        const isFullWidth = field.fieldType === 'textarea' || field.fieldType === 'multiselect';
+                        return (
+                          <div key={field.id} className={isFullWidth ? 'md:col-span-2' : ''}>
+                            <label className="portal-label">
+                              {field.label} {field.required && <span className="text-[#DC4545]">*</span>}
+                              {field.unitSuffix && (
+                                <span className="ml-1 text-[10px] text-[#78716C] font-normal">({field.unitSuffix})</span>
+                              )}
+                            </label>
 
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-[#292524]">
-                      Option Groups ({formAttributes.length})
-                    </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={handleAddOptionGroup}
-                      leftIcon={<Plus className="w-3.5 h-3.5" />}
-                    >
-                      Add Option Group
-                    </Button>
+                            {field.fieldType === 'dropdown' ? (
+                              <select
+                                value={val || ''}
+                                onChange={(e) => {
+                                  setCategoryAttributes((prev) => ({ ...prev, [field.fieldKey]: e.target.value }));
+                                  setFieldErrors((p) => ({ ...p, [field.fieldKey]: '' }));
+                                }}
+                                className="portal-input"
+                              >
+                                <option value="">Select {field.label}...</option>
+                                {(field.options || []).map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : field.fieldType === 'multiselect' ? (
+                              <div className="flex flex-wrap gap-2 p-2.5 bg-white rounded-lg border border-[#E7E5E4]">
+                                {(field.options || []).map((opt) => {
+                                  const selectedArr: string[] = Array.isArray(val) ? val : [];
+                                  const checked = selectedArr.includes(opt);
+                                  return (
+                                    <label
+                                      key={opt}
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${
+                                        checked
+                                          ? 'bg-[#943D24] text-white border-[#943D24]'
+                                          : 'bg-[#F8F7F5] text-[#292524] border-[#E7E5E4]'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={checked}
+                                        onChange={() => {
+                                          const next = checked
+                                            ? selectedArr.filter((x) => x !== opt)
+                                            : [...selectedArr, opt];
+                                          setCategoryAttributes((prev) => ({ ...prev, [field.fieldKey]: next }));
+                                          setFieldErrors((p) => ({ ...p, [field.fieldKey]: '' }));
+                                        }}
+                                      />
+                                      <span>{opt}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            ) : field.fieldType === 'checkbox' ? (
+                              <label className="flex items-center gap-2 p-2.5 bg-white rounded-lg border border-[#E7E5E4] text-xs text-[#292524] cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(val)}
+                                  onChange={(e) =>
+                                    setCategoryAttributes((prev) => ({
+                                      ...prev,
+                                      [field.fieldKey]: e.target.checked,
+                                    }))
+                                  }
+                                  className="w-4 h-4 rounded text-[#943D24]"
+                                />
+                                <span>{field.helpText || `Yes, includes ${field.label}`}</span>
+                              </label>
+                            ) : field.fieldType === 'textarea' ? (
+                              <textarea
+                                rows={2}
+                                value={val || ''}
+                                onChange={(e) => {
+                                  setCategoryAttributes((prev) => ({ ...prev, [field.fieldKey]: e.target.value }));
+                                  setFieldErrors((p) => ({ ...p, [field.fieldKey]: '' }));
+                                }}
+                                placeholder={field.placeholder || `Enter ${field.label}`}
+                                className="portal-input"
+                              />
+                            ) : (
+                              <input
+                                type={field.fieldType === 'number' ? 'number' : 'text'}
+                                step="any"
+                                min={field.validation?.min}
+                                max={field.validation?.max}
+                                value={val ?? ''}
+                                onChange={(e) => {
+                                  setCategoryAttributes((prev) => ({ ...prev, [field.fieldKey]: e.target.value }));
+                                  setFieldErrors((p) => ({ ...p, [field.fieldKey]: '' }));
+                                }}
+                                placeholder={field.placeholder || `Enter ${field.label}`}
+                                className="portal-input"
+                              />
+                            )}
+                            {err && <p className="text-[11px] text-[#DC4545] mt-1">{err}</p>}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
+                ))}
+              </div>
 
-                  {formAttributes.map((attr, idx) => (
-                    <div
-                      key={attr.id}
-                      className="p-3 bg-white rounded-lg border border-[#E7E5E4] space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-[#292524]">
-                          Group {idx + 1}
-                        </span>
-                        {formAttributes.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveOptionGroup(attr.id)}
-                            className="text-[#DC4545] p-1 rounded hover:bg-[#DC4545]/10 cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                        <div>
-                          <label className="block text-[11px] font-medium text-[#78716C] mb-1">
-                            Option Name
-                          </label>
-                          <input
-                            type="text"
-                            value={attr.name}
-                            onChange={(e) => handleOptionGroupChange(idx, 'name', e.target.value)}
-                            className="portal-input py-1.5 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-[#78716C] mb-1">
-                            Display Type
-                          </label>
-                          <select
-                            value={attr.uiType}
-                            onChange={(e) =>
-                              handleOptionGroupChange(
-                                idx,
-                                'uiType',
-                                e.target.value as AttributeSelectorType
-                              )
-                            }
-                            className="portal-input py-1.5 text-xs"
-                          >
-                            <option value="cards">Cards</option>
-                            <option value="pills">Pills</option>
-                            <option value="dropdown">Dropdown</option>
-                            <option value="color_swatches">Colour Swatches</option>
-                            <option value="radio">Radio</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-[#78716C] mb-1">
-                            Values (comma separated)
-                          </label>
-                          <input
-                            type="text"
-                            value={attr.optionsStr}
-                            onChange={(e) =>
-                              handleOptionGroupChange(idx, 'optionsStr', e.target.value)
-                            }
-                            className="portal-input py-1.5 text-xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="primary"
-                      onClick={handleGenerateVariantMatrix}
-                      leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-                    >
-                      Generate Variant Matrix
-                    </Button>
+              {/* Extra Technical Specifications & Description & Images */}
+              <div className="space-y-3 pt-2 border-t border-[#E7E5E4]">
+                <div className="flex items-center justify-between">
+                  <label className="portal-label mb-0">Additional Technical Specifications (Optional)</label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setExtraSpecRows((p) => [...p, { key: '', value: '' }])}
+                  >
+                    + Add Spec Row
+                  </Button>
+                </div>
+                {extraSpecRows.map((row, rIdx) => (
+                  <div key={rIdx} className="grid grid-cols-12 gap-2">
+                    <input
+                      placeholder="Spec Label (e.g. Country of Origin)"
+                      value={row.key}
+                      onChange={(e) =>
+                        setExtraSpecRows((prev) =>
+                          prev.map((r, i) => (i === rIdx ? { ...r, key: e.target.value } : r))
+                        )
+                      }
+                      className="col-span-5 portal-input text-xs py-1.5"
+                    />
+                    <input
+                      placeholder="Spec Value (e.g. India)"
+                      value={row.value}
+                      onChange={(e) =>
+                        setExtraSpecRows((prev) =>
+                          prev.map((r, i) => (i === rIdx ? { ...r, value: e.target.value } : r))
+                        )
+                      }
+                      className="col-span-6 portal-input text-xs py-1.5"
+                    />
                     <button
                       type="button"
-                      onClick={handleAddVariantRow}
-                      className="text-xs font-medium text-[#943D24] hover:underline cursor-pointer"
+                      onClick={() => setExtraSpecRows((prev) => prev.filter((_, i) => i !== rIdx))}
+                      className="col-span-1 text-[#DC4545] flex items-center justify-center"
                     >
-                      + Add Custom Row
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
+                ))}
+
+                <div>
+                  <label className="portal-label">Product Description</label>
+                  <textarea
+                    rows={3}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Key material highlights, site applications, and installation guidelines..."
+                    className="portal-input"
+                  />
                 </div>
 
-                {formVariants.length > 0 && (
-                  <div className="overflow-x-auto max-h-64 rounded-lg border border-[#E7E5E4] bg-white">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4] sticky top-0">
-                        <tr>
-                          <th className="p-2.5">Variant</th>
-                          <th className="p-2.5">SKU</th>
-                          <th className="p-2.5">Price (₹)</th>
-                          <th className="p-2.5">MRP (₹)</th>
-                          <th className="p-2.5">Stock</th>
-                          <th className="p-2.5 text-center">Available</th>
-                          <th className="p-2.5 text-center">In Stock</th>
-                          <th className="p-2.5 text-center">Remove</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#E7E5E4]">
-                        {formVariants.map((v, vIdx) => (
-                          <tr key={v.id || vIdx}>
-                            <td className="p-2">
-                              <input
-                                type="text"
-                                value={v.name}
-                                onChange={(e) => handleVariantChange(vIdx, 'name', e.target.value)}
-                                className="w-32 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                type="text"
-                                value={v.sku}
-                                onChange={(e) => handleVariantChange(vIdx, 'sku', e.target.value)}
-                                className="w-28 px-2 py-1 border border-[#E7E5E4] rounded text-xs font-mono"
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                type="number"
-                                value={v.price}
-                                onChange={(e) =>
-                                  handleVariantChange(vIdx, 'price', Number(e.target.value))
-                                }
-                                className="w-20 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                type="number"
-                                value={v.mrp}
-                                onChange={(e) =>
-                                  handleVariantChange(vIdx, 'mrp', Number(e.target.value))
-                                }
-                                className="w-20 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                type="number"
-                                value={v.stock}
-                                onChange={(e) =>
-                                  handleVariantChange(vIdx, 'stock', Number(e.target.value))
-                                }
-                                className="w-16 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
-                              />
-                            </td>
-                            <td className="p-2 text-center">
-                              <input
-                                type="checkbox"
-                                checked={v.isAvailable !== false}
-                                onChange={(e) =>
-                                  handleVariantChange(vIdx, 'isAvailable', e.target.checked)
-                                }
-                              />
-                            </td>
-                            <td className="p-2 text-center">
-                              <input
-                                type="checkbox"
-                                checked={v.inStock}
-                                onChange={(e) =>
-                                  handleVariantChange(vIdx, 'inStock', e.target.checked)
-                                }
-                              />
-                            </td>
-                            <td className="p-2 text-center">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="portal-label mb-0">Product Images (Upload or paste URLs)</label>
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#FBF3F0] border border-[#943D24]/30 text-[#943D24] text-xs font-semibold cursor-pointer">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{uploadingImage ? 'Uploading...' : 'Upload Image'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length === 0) return;
+                          setUploadingImage(true);
+                          try {
+                            const uploadedUrls: string[] = [];
+                            for (const file of files) {
+                              const res = await vendorApi.uploadProductImage(file);
+                              if (res.url) uploadedUrls.push(res.url);
+                            }
+                            setImageUrlsText((prev) =>
+                              [prev.trim(), ...uploadedUrls].filter(Boolean).join('\n')
+                            );
+                            toast.success(`${uploadedUrls.length} image(s) uploaded.`);
+                          } catch (err: any) {
+                            toast.error(err?.message || 'Image upload failed');
+                          } finally {
+                            setUploadingImage(false);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={imageUrlsText}
+                    onChange={(e) => setImageUrlsText(e.target.value)}
+                    placeholder="https://... (one URL per line)"
+                    className="portal-input"
+                  />
+                  {imageUrlsText.trim() && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {imageUrlsText
+                        .split(/[\n,]/)
+                        .map((u) => u.trim())
+                        .filter(Boolean)
+                        .slice(0, 6)
+                        .map((url, idx) => (
+                          <div
+                            key={idx}
+                            className="relative w-14 h-14 rounded-lg border border-[#E7E5E4] overflow-hidden bg-[#F8F7F5]"
+                          >
+                            <img src={url} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Variants Section inside Step 2 */}
+              <div className="p-4 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <div className="text-xs font-semibold text-[#292524] flex items-center gap-1.5">
+                      <Sliders className="w-4 h-4 text-[#943D24]" />
+                      <span>Product Variants (Optional)</span>
+                    </div>
+                    <p className="text-[11px] text-[#78716C]">
+                      Add pack sizes, dimensions, or colour options with separate SKUs.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-[#292524] bg-white px-3 py-1.5 rounded-lg border border-[#E7E5E4]">
+                    <input
+                      type="checkbox"
+                      checked={hasVariants}
+                      onChange={(e) => setHasVariants(e.target.checked)}
+                      className="w-4 h-4 text-[#943D24] rounded"
+                    />
+                    <span>Enable Variants</span>
+                  </label>
+                </div>
+
+                {hasVariants && (
+                  <div className="space-y-4 pt-3 border-t border-[#E7E5E4]">
+                    {(() => {
+                      const templates = getAttributeTemplatesForCategory(category);
+                      if (templates.length === 0) return null;
+                      return (
+                        <div className="p-3 bg-[#FBF3F0] rounded-lg border border-[#943D24]/15 space-y-1.5">
+                          <div className="text-[11px] font-semibold text-[#943D24]">
+                            Suggested Variant Templates for {category}:
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {templates.map((tpl) => {
+                              const isAdded = formAttributes.some(
+                                (a) => a.name.toLowerCase() === tpl.name.toLowerCase()
+                              );
+                              return (
+                                <button
+                                  key={tpl.id}
+                                  type="button"
+                                  disabled={isAdded}
+                                  onClick={() => handleAddTemplateOption(tpl)}
+                                  className={`text-[11px] font-medium px-2.5 py-1 rounded-md border ${
+                                    isAdded
+                                      ? 'bg-[#F8F7F5] text-[#78716C] border-[#E7E5E4] cursor-not-allowed'
+                                      : 'bg-white text-[#943D24] border-[#E7E5E4] hover:border-[#943D24] cursor-pointer'
+                                  }`}
+                                >
+                                  + {tpl.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-[#292524]">
+                          Option Groups ({formAttributes.length})
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={handleAddOptionGroup}
+                          leftIcon={<Plus className="w-3.5 h-3.5" />}
+                        >
+                          Add Option Group
+                        </Button>
+                      </div>
+
+                      {formAttributes.map((attr, idx) => (
+                        <div key={attr.id} className="p-3 bg-white rounded-lg border border-[#E7E5E4] space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-[#292524]">Group {idx + 1}</span>
+                            {formAttributes.length > 1 && (
                               <button
                                 type="button"
-                                onClick={() => handleRemoveVariantRow(vIdx)}
-                                className="text-[#DC4545] p-1 cursor-pointer"
+                                onClick={() => handleRemoveOptionGroup(attr.id)}
+                                className="text-[#DC4545] p-1 rounded hover:bg-[#DC4545]/10 cursor-pointer"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <X className="w-3.5 h-3.5" />
                               </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                            <input
+                              type="text"
+                              value={attr.name}
+                              onChange={(e) => handleOptionGroupChange(idx, 'name', e.target.value)}
+                              className="portal-input py-1.5 text-xs"
+                              placeholder="Option Name"
+                            />
+                            <select
+                              value={attr.uiType}
+                              onChange={(e) => handleOptionGroupChange(idx, 'uiType', e.target.value as AttributeSelectorType)}
+                              className="portal-input py-1.5 text-xs"
+                            >
+                              <option value="cards">Cards</option>
+                              <option value="pills">Pills</option>
+                              <option value="dropdown">Dropdown</option>
+                              <option value="color_swatches">Colour Swatches</option>
+                              <option value="radio">Radio</option>
+                            </select>
+                            <input
+                              type="text"
+                              value={attr.optionsStr}
+                              onChange={(e) => handleOptionGroupChange(idx, 'optionsStr', e.target.value)}
+                              className="portal-input py-1.5 text-xs"
+                              placeholder="Values (comma separated)"
+                            />
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="primary"
+                          onClick={handleGenerateVariantMatrix}
+                          leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                        >
+                          Generate Variant Matrix
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={handleAddVariantRow}
+                          className="text-xs font-medium text-[#943D24] hover:underline cursor-pointer"
+                        >
+                          + Add Custom Row
+                        </button>
+                      </div>
+                    </div>
+
+                    {formVariants.length > 0 && (
+                      <div className="overflow-x-auto max-h-56 rounded-lg border border-[#E7E5E4] bg-white">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4] sticky top-0">
+                            <tr>
+                              <th className="p-2">Variant</th>
+                              <th className="p-2">SKU</th>
+                              <th className="p-2">Price (₹)</th>
+                              <th className="p-2">MRP (₹)</th>
+                              <th className="p-2">Stock</th>
+                              <th className="p-2 text-center">Remove</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#E7E5E4]">
+                            {formVariants.map((v, vIdx) => (
+                              <tr key={v.id || vIdx}>
+                                <td className="p-2">
+                                  <input
+                                    type="text"
+                                    value={v.name}
+                                    onChange={(e) => handleVariantChange(vIdx, 'name', e.target.value)}
+                                    className="w-28 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <input
+                                    type="text"
+                                    value={v.sku}
+                                    onChange={(e) => handleVariantChange(vIdx, 'sku', e.target.value)}
+                                    className="w-24 px-2 py-1 border border-[#E7E5E4] rounded text-xs font-mono"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <input
+                                    type="number"
+                                    value={v.price}
+                                    onChange={(e) => handleVariantChange(vIdx, 'price', Number(e.target.value))}
+                                    className="w-20 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <input
+                                    type="number"
+                                    value={v.mrp}
+                                    onChange={(e) => handleVariantChange(vIdx, 'mrp', Number(e.target.value))}
+                                    className="w-20 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <input
+                                    type="number"
+                                    value={v.stock}
+                                    onChange={(e) => handleVariantChange(vIdx, 'stock', Number(e.target.value))}
+                                    className="w-16 px-2 py-1 border border-[#E7E5E4] rounded text-xs"
+                                  />
+                                </td>
+                                <td className="p-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveVariantRow(vIdx)}
+                                    className="text-[#DC4545] p-1 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#E7E5E4]">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm" isLoading={isSaving || isLoading}>
-              {editingProduct ? 'Save Changes' : 'Add Product'}
-            </Button>
+          {/* STEP 3: PRICING & INVENTORY */}
+          {wizardStep === 3 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="portal-label">SKU / Product Code *</label>
+                  <input
+                    type="text"
+                    value={sku}
+                    onChange={(e) => {
+                      setSku(e.target.value);
+                      setFieldErrors((p) => ({ ...p, sku: '' }));
+                    }}
+                    className="portal-input font-mono"
+                  />
+                  {fieldErrors.sku && <p className="text-[11px] text-[#DC4545] mt-1">{fieldErrors.sku}</p>}
+                </div>
+                <div>
+                  <label className="portal-label">Pack / Unit *</label>
+                  <input
+                    type="text"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="e.g. 50 Kg Bag, 90m Coil, Piece"
+                    className="portal-input"
+                  />
+                </div>
+                <div>
+                  <label className="portal-label">MRP (₹) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={mrp}
+                    onChange={(e) => {
+                      setMrp(e.target.value);
+                      setFieldErrors((p) => ({ ...p, mrp: '' }));
+                    }}
+                    className="portal-input"
+                  />
+                  {fieldErrors.mrp && <p className="text-[11px] text-[#DC4545] mt-1">{fieldErrors.mrp}</p>}
+                </div>
+                <div>
+                  <label className="portal-label">
+                    Selling Price (₹) *{' '}
+                    {Number(mrp) > Number(price) && Number(price) > 0 && (
+                      <span className="ml-2 text-emerald-700 font-bold">
+                        ({Math.round(((Number(mrp) - Number(price)) / Number(mrp)) * 100)}% Discount)
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={price}
+                    onChange={(e) => {
+                      setPrice(e.target.value);
+                      setFieldErrors((p) => ({ ...p, price: '' }));
+                    }}
+                    className="portal-input"
+                  />
+                  {fieldErrors.price && <p className="text-[11px] text-[#DC4545] mt-1">{fieldErrors.price}</p>}
+                </div>
+                <div>
+                  <label className="portal-label">GST Rate (%) *</label>
+                  <select
+                    value={gstRate}
+                    onChange={(e) => setGstRate(e.target.value)}
+                    className="portal-input"
+                  >
+                    <option value="0">0% (Exempt)</option>
+                    <option value="5">5% GST</option>
+                    <option value="12">12% GST</option>
+                    <option value="18">18% GST</option>
+                    <option value="28">28% GST</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="portal-label">Minimum Order Quantity (MOQ)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={moq}
+                    onChange={(e) => setMoq(e.target.value)}
+                    className="portal-input"
+                  />
+                </div>
+                <div>
+                  <label className="portal-label">Available Stock (Units) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                    className="portal-input"
+                  />
+                </div>
+                <div>
+                  <label className="portal-label">Low Stock Alert Threshold</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={lowStockThreshold}
+                    onChange={(e) => setLowStockThreshold(e.target.value)}
+                    className="portal-input"
+                  />
+                </div>
+                <div>
+                  <label className="portal-label">Dispatch Warehouse</label>
+                  <select
+                    value={warehouseId}
+                    onChange={(e) => setWarehouseId(e.target.value)}
+                    className="portal-input"
+                  >
+                    {taxonomyState.warehouses.length === 0 ? (
+                      <option value="WH-BLR-04">WH-BLR-04 Peenya Hub</option>
+                    ) : (
+                      taxonomyState.warehouses.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name} ({w.pincode})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="portal-label">Delivery Availability</label>
+                  <div className="flex items-center gap-4 pt-2 text-xs">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={deliveryModes.includes('ASAP_60')}
+                        onChange={(e) =>
+                          setDeliveryModes((prev) =>
+                            e.target.checked
+                              ? Array.from(new Set([...prev, 'ASAP_60']))
+                              : prev.filter((x) => x !== 'ASAP_60')
+                          )
+                        }
+                      />
+                      <span>60-Min Dispatch</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={deliveryModes.includes('STANDARD')}
+                        onChange={(e) =>
+                          setDeliveryModes((prev) =>
+                            e.target.checked
+                              ? Array.from(new Set([...prev, 'STANDARD']))
+                              : prev.filter((x) => x !== 'STANDARD')
+                          )
+                        }
+                      />
+                      <span>Standard Delivery</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-semibold text-[#292524] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enableBulkPricing}
+                      onChange={(e) => setEnableBulkPricing(e.target.checked)}
+                    />
+                    <span>Enable B2B Bulk Pricing Tiers</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-medium text-[#292524] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isNewLaunch}
+                      onChange={(e) => setIsNewLaunch(e.target.checked)}
+                    />
+                    <span>Tag as New Launch</span>
+                  </label>
+                </div>
+                {enableBulkPricing && (
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="portal-label">10+ Units Discount (%)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={bulkTier10Discount}
+                        onChange={(e) => setBulkTier10Discount(e.target.value)}
+                        className="portal-input py-1.5"
+                      />
+                    </div>
+                    <div>
+                      <label className="portal-label">50+ Units Discount (%)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={bulkTier50Discount}
+                        onChange={(e) => setBulkTier50Discount(e.target.value)}
+                        className="portal-input py-1.5"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: REVIEW & SUBMIT */}
+          {wizardStep === 4 && (
+            <div className="space-y-4 text-xs">
+              {editingProduct && (
+                <div className="p-3 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex items-center justify-between">
+                  <span className="font-semibold text-[#292524]">Current Submission Status</span>
+                  <Badge
+                    variant={
+                      editingProduct.approvalStatus === 'APPROVED'
+                        ? 'success'
+                        : editingProduct.approvalStatus === 'REJECTED'
+                        ? 'danger'
+                        : 'warning'
+                    }
+                  >
+                    {editingProduct.approvalStatus || 'PENDING_APPROVAL'}
+                  </Badge>
+                </div>
+              )}
+
+              <div className="p-4 rounded-xl border border-[#E7E5E4] bg-white space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-[#943D24] uppercase tracking-wider">1. Category Selection</h4>
+                  <button type="button" onClick={() => setWizardStep(1)} className="text-[#943D24] font-semibold hover:underline">
+                    Edit
+                  </button>
+                </div>
+                <p className="text-[#292524]">
+                  {selectedMainCatNode?.name} &rarr; <strong>{selectedChildCatNode?.name}</strong>
+                  {selectedProductTypeNode ? ` → ${selectedProductTypeNode.name}` : ''}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl border border-[#E7E5E4] bg-white space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-[#943D24] uppercase tracking-wider">2. Product Information & Specs</h4>
+                  <button type="button" onClick={() => setWizardStep(2)} className="text-[#943D24] font-semibold hover:underline">
+                    Edit
+                  </button>
+                </div>
+                <p className="font-bold text-sm text-[#292524]">{name || '—'}</p>
+                <p className="text-[#78716C]">Brand: {brand || '—'}</p>
+                {activeCategoryFields.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#E7E5E4]">
+                    {activeCategoryFields.map((f) => {
+                      const v = categoryAttributes[f.fieldKey];
+                      const disp = Array.isArray(v)
+                        ? v.join(', ')
+                        : typeof v === 'boolean'
+                        ? v
+                          ? 'Yes'
+                          : 'No'
+                        : v || '—';
+                      return (
+                        <div key={f.id}>
+                          <span className="text-[#78716C]">{f.label}: </span>
+                          <span className="font-semibold text-[#292524]">{disp}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 rounded-xl border border-[#E7E5E4] bg-white space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-[#943D24] uppercase tracking-wider">3. Pricing & Inventory</h4>
+                  <button type="button" onClick={() => setWizardStep(3)} className="text-[#943D24] font-semibold hover:underline">
+                    Edit
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[#292524]">
+                  <div>SKU: <strong className="font-mono">{sku}</strong></div>
+                  <div>Selling Price: <strong>₹{price || 0}</strong></div>
+                  <div>MRP: <strong>₹{mrp || 0}</strong></div>
+                  <div>GST Rate: <strong>{gstRate}%</strong></div>
+                  <div>Unit / MOQ: <strong>{unit} (Min {moq})</strong></div>
+                  <div>Stock: <strong>{stock} units</strong></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Footer Navigation Controls */}
+          <div className="pt-3 flex items-center justify-between gap-3 border-t border-[#E7E5E4]">
+            <div>
+              {wizardStep > 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setWizardStep((s) => Math.max(1, s - 1) as 1 | 2 | 3 | 4)}
+                  leftIcon={<ChevronLeft className="w-4 h-4" />}
+                >
+                  Back
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              {wizardStep < 4 ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (wizardStep === 2) {
+                      const errs = validateDynamicFieldsClient();
+                      if (!name.trim()) errs.name = 'Product Name is required.';
+                      if (!brand.trim()) errs.brand = 'Brand is required.';
+                      if (Object.keys(errs).length > 0) {
+                        setFieldErrors(errs);
+                        setFormError(Object.values(errs)[0]);
+                        return;
+                      }
+                      setFieldErrors({});
+                      setFormError(null);
+                    }
+                    if (wizardStep === 3) {
+                      const errs: Record<string, string> = {};
+                      if (!sku.trim()) errs.sku = 'SKU is required.';
+                      if (!(Number(mrp) > 0)) errs.mrp = 'MRP must be greater than 0.';
+                      if (!(Number(price) > 0)) errs.price = 'Selling Price must be greater than 0.';
+                      if (Number(price) > Number(mrp)) errs.price = 'Selling Price cannot exceed MRP.';
+                      if (Object.keys(errs).length > 0) {
+                        setFieldErrors(errs);
+                        setFormError(Object.values(errs)[0]);
+                        return;
+                      }
+                      setFieldErrors({});
+                      setFormError(null);
+                    }
+                    setWizardStep((s) => Math.min(4, s + 1) as 1 | 2 | 3 | 4);
+                  }}
+                  rightIcon={<ChevronRight className="w-4 h-4" />}
+                >
+                  Next Step
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    isLoading={isSaving || isLoading}
+                    onClick={() => submitWizardProduct(true)}
+                  >
+                    Save as Draft
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    isLoading={isSaving || isLoading}
+                    leftIcon={<CheckCircle2 className="w-4 h-4" />}
+                    onClick={() => submitWizardProduct(false)}
+                  >
+                    {editingProduct ? 'Save & Submit Update' : 'Submit for Approval'}
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </form>
       </Modal>

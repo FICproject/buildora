@@ -15,8 +15,14 @@ import {
   VendorSupportTicket,
   VendorEmployee,
   VendorWarehouse,
+  CategoryFieldSchema,
 } from '@buildora/types';
-import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES } from '@buildora/constants';
+import {
+  SEED_PRODUCTS,
+  MASTER_CATEGORIES,
+  BENGALURU_WAREHOUSES,
+  getDefaultFieldSchemasForCategory,
+} from '@buildora/constants';
 import { VENDOR_APP_CONFIG } from '../config';
 import {
   apiRequest,
@@ -922,19 +928,47 @@ export const vendorApi = {
     return request<any>(`/vendor/analytics/brands${qs}`, {});
   },
 
-  // Taxonomy (4-level hierarchy from Company Admin master catalog)
+  // Taxonomy (4-level hierarchy + dynamic CategoryFieldSchemas from Company Admin)
   async getTaxonomy(): Promise<{
     mainCategories: any[];
     childCategories: any[];
     productTypes: any[];
+    fieldSchemas: CategoryFieldSchema[];
+    warehouses: any[];
     brands: any[];
   }> {
     return request<any>('/vendor/taxonomy', {}, {
       mainCategories: [],
       childCategories: [],
       productTypes: [],
+      fieldSchemas: [],
+      warehouses: [],
       brands: [],
     });
+  },
+
+  async getCategoryFields(childCategoryId: string): Promise<CategoryFieldSchema[]> {
+    return request<CategoryFieldSchema[]>(
+      `/vendor/taxonomy/fields/${encodeURIComponent(childCategoryId)}`,
+      {},
+      getDefaultFieldSchemasForCategory(childCategoryId)
+    );
+  },
+
+  async uploadProductImage(file: File): Promise<{ url: string; fileName?: string }> {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('buildora_vendor_token') : null;
+    const formData = new FormData();
+    formData.append('image', file);
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE_URL}/vendor/products/upload-image`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.message || 'Failed to upload product image');
+    return json.data || json;
   },
 
   // Products

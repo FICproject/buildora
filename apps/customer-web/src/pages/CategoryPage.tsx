@@ -121,6 +121,7 @@ export const CategoryPage: React.FC = () => {
 
   const isMainCategoryPage = Boolean(
     category?.level === 'MAIN' ||
+      (Array.isArray(category?.childCategories) && !category?.mainCategoryId) ||
       MAIN_CATEGORIES_SEED.some((m) => m.slug === (effectiveCategorySlug || slug))
   );
 
@@ -150,7 +151,7 @@ export const CategoryPage: React.FC = () => {
       setLoadingProducts(true);
       try {
         const cat = await api.getCategoryBySlug(targetSlug);
-        const isMain = Boolean(cat?.level === 'MAIN' || fallbackMain);
+        const isMain = Boolean(cat?.level === 'MAIN' || (!cat && fallbackMain));
         const prods = await api.getProducts(
           isMain ? { mainCategory: targetSlug } : { category: targetSlug }
         );
@@ -251,6 +252,7 @@ export const CategoryPage: React.FC = () => {
 
   const parentMainCategory = useMemo(() => {
     if (isMainCategoryPage) return null;
+    if (category?.mainCategory?.slug) return category.mainCategory;
     const mcSlug = category?.mainCategorySlug || category?.departmentSlug;
     return MAIN_CATEGORIES_SEED.find(
       (m) => m.slug === mcSlug || m.id === category?.mainCategoryId

@@ -153,6 +153,75 @@ export interface BulkPriceTier {
 
 export type AttributeSelectorType = 'cards' | 'pills' | 'dropdown' | 'color_swatches' | 'radio';
 
+export type CategoryFieldType =
+  | 'text'
+  | 'number'
+  | 'dropdown'
+  | 'multiselect'
+  | 'checkbox'
+  | 'textarea';
+
+export interface CategoryFieldValidation {
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  patternMessage?: string;
+}
+
+export interface CategoryFieldSchema {
+  id: string;
+  tenantId?: string;
+  childCategoryId: string;
+  childCategorySlug: string;
+  fieldKey: string;
+  label: string;
+  fieldType: CategoryFieldType;
+  options?: string[];
+  required: boolean;
+  placeholder?: string;
+  helpText?: string;
+  unitSuffix?: string;
+  group?: string;
+  validation?: CategoryFieldValidation;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type DesktopNavItemType = 'HOME' | 'MAIN_CATEGORY' | 'NEW_LAUNCHES' | 'DEALS' | 'CUSTOM_LINK';
+
+export interface DesktopNavItem {
+  id: string;
+  tenantId?: string;
+  label: string;
+  slug: string;
+  itemType: DesktopNavItemType;
+  mainCategoryId?: string;
+  mainCategorySlug?: string;
+  route: string;
+  icon?: string;
+  hasDropdown: boolean;
+  highlight?: boolean;
+  displayOrder: number;
+  isVisible: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CatalogPublishMetadata {
+  tenantId: string;
+  hasUnpublishedChanges: boolean;
+  publishedVersion: number;
+  draftVersion: number;
+  lastPublishedAt?: string;
+  lastPublishedBy?: string;
+  lastDraftSavedAt?: string;
+}
+
 export interface CategoryAttributeTemplate {
   id: string;
   categorySlug: string;
@@ -243,6 +312,8 @@ export interface Product {
   reviewCount: number;
   inStock: boolean;
   stockCount: number;
+  moq?: number;
+  warehouseId?: string;
   isBulkEligible: boolean;
   productType?: string;
   size?: string;
@@ -917,6 +988,8 @@ export interface VendorProduct {
   inStock: boolean;
   stockCount: number;
   stock?: number;
+  moq?: number;
+  warehouseId?: string;
   lowStockThreshold: number;
   isBulkEligible: boolean;
   isNewLaunch?: boolean;
@@ -926,6 +999,8 @@ export interface VendorProduct {
   attributes?: ProductAttribute[];
   variants?: ProductVariant[];
   specifications: Record<string, string>;
+  categoryAttributes?: Record<string, any>;
+  applications?: string[];
   deliverySpeedAvailable: DeliverySpeed[];
   approvalStatus: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string;

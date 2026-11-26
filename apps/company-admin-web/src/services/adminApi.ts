@@ -199,6 +199,31 @@ export const adminApi = {
       method: 'PATCH',
     }),
   getCatalogTaxonomy: () => rawRequest<any>('/company-admin/catalog/categories'),
+  getDesktopNavigation: () => rawRequest<any>('/company-admin/catalog/navigation'),
+  createDesktopNavItem: (payload: any) =>
+    rawRequest<any>('/company-admin/catalog/navigation', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateDesktopNavItem: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/navigation/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteDesktopNavItem: (id: string, saveAsDraft = false) =>
+    rawRequest<any>(
+      `/company-admin/catalog/navigation/${encodeURIComponent(id)}${saveAsDraft ? '?saveAsDraft=true' : ''}`,
+      { method: 'DELETE' }
+    ),
+  reorderDesktopNav: (orderedIds: string[], saveAsDraft = false) =>
+    rawRequest<any>('/company-admin/catalog/navigation/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ orderedIds, saveAsDraft }),
+    }),
+  publishCatalogChanges: () =>
+    rawRequest<any>('/company-admin/catalog/publish', { method: 'POST', body: JSON.stringify({}) }),
+  discardCatalogDraft: () =>
+    rawRequest<any>('/company-admin/catalog/discard-draft', { method: 'POST', body: JSON.stringify({}) }),
   createMainCategory: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/main-categories', {
       method: 'POST',
@@ -209,6 +234,15 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+  deleteMainCategory: (id: string, options?: { reassignToMainId?: string; saveAsDraft?: boolean }) => {
+    const q = new URLSearchParams();
+    if (options?.reassignToMainId) q.set('reassignToMainId', options.reassignToMainId);
+    if (options?.saveAsDraft) q.set('saveAsDraft', 'true');
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return rawRequest<any>(`/company-admin/catalog/main-categories/${encodeURIComponent(id)}${qs}`, {
+      method: 'DELETE',
+    });
+  },
   createChildCategory: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/child-categories', {
       method: 'POST',
@@ -219,6 +253,15 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+  deleteChildCategory: (id: string, options?: { reassignToChildId?: string; saveAsDraft?: boolean }) => {
+    const q = new URLSearchParams();
+    if (options?.reassignToChildId) q.set('reassignToChildId', options.reassignToChildId);
+    if (options?.saveAsDraft) q.set('saveAsDraft', 'true');
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return rawRequest<any>(`/company-admin/catalog/child-categories/${encodeURIComponent(id)}${qs}`, {
+      method: 'DELETE',
+    });
+  },
   createProductType: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/product-types', {
       method: 'POST',
@@ -229,6 +272,15 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+  deleteProductType: (id: string, options?: { reassignToTypeId?: string; saveAsDraft?: boolean }) => {
+    const q = new URLSearchParams();
+    if (options?.reassignToTypeId) q.set('reassignToTypeId', options.reassignToTypeId);
+    if (options?.saveAsDraft) q.set('saveAsDraft', 'true');
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return rawRequest<any>(`/company-admin/catalog/product-types/${encodeURIComponent(id)}${qs}`, {
+      method: 'DELETE',
+    });
+  },
   createNewLaunchCollection: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/new-launches', {
       method: 'POST',
@@ -243,6 +295,40 @@ export const adminApi = {
     rawRequest<any>('/company-admin/catalog/categories', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  uploadCatalogImage: async (file: File): Promise<{ url: string; fileName?: string }> => {
+    const store = useAdminAuthStore.getState();
+    const formData = new FormData();
+    formData.append('image', file);
+    const headers: Record<string, string> = {};
+    if (store.accessToken) headers['Authorization'] = `Bearer ${store.accessToken}`;
+    if (store.tenant?.id) headers['x-tenant-id'] = store.tenant.id;
+    const res = await fetch(`${API_BASE}/company-admin/catalog/upload-image`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json?.message || 'Failed to upload image');
+    return json.data || json;
+  },
+  getCategoryFields: (childCategoryId?: string) =>
+    rawRequest<any[]>(
+      `/company-admin/catalog/fields${childCategoryId ? `?childCategoryId=${encodeURIComponent(childCategoryId)}` : ''}`
+    ),
+  createCategoryField: (payload: any) =>
+    rawRequest<any>('/company-admin/catalog/fields', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateCategoryField: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/fields/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteCategoryField: (id: string) =>
+    rawRequest<any>(`/company-admin/catalog/fields/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     }),
   createBrand: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/brands', {

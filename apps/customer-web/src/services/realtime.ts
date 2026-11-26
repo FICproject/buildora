@@ -43,11 +43,14 @@ export function initCustomerRealtime(queryClient?: QueryClient) {
   });
 
   const refreshCatalog = (payload?: any) => {
+    queryClient?.invalidateQueries({ queryKey: ['taxonomy'] });
+    queryClient?.invalidateQueries({ queryKey: ['categories'] });
     queryClient?.invalidateQueries({ queryKey: ['products'] });
     queryClient?.invalidateQueries({ queryKey: ['product'] });
     window.dispatchEvent(new CustomEvent('buildora:realtime:catalog', { detail: payload }));
   };
 
+  socket.on('taxonomy.published', refreshCatalog);
   socket.on('product.approved', refreshCatalog);
   socket.on('product.updated', refreshCatalog);
   socket.on('product.suspended', refreshCatalog);

@@ -1500,6 +1500,8 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
     custProd.subcategorySlug = resolvedSubcategorySlug;
     custProd.stockCount = vp.stockCount;
     custProd.reservedStock = anyVp.reservedStock || 0;
+    custProd.moq = anyVp.moq ?? 1;
+    custProd.categoryAttributes = anyVp.categoryAttributes || {};
     custProd.inStock = effectiveAvailable > 0;
     custProd.isActive = true;
     custProd.isSuspended = false;
@@ -1599,11 +1601,13 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
       reviewCount: vp.reviewCount,
       inStock: effectiveAvailable > 0,
       stockCount: vp.stockCount,
+      moq: anyVp.moq ?? 1,
       isBulkEligible: vp.isBulkEligible,
       isNewLaunch: Boolean(vp.isNewLaunch),
       bulkPricing: vp.bulkPricing,
       variants: vp.variants,
       attributes: vp.attributes,
+      categoryAttributes: anyVp.categoryAttributes || {},
       specifications: specs,
       deliverySpeedAvailable: vp.deliverySpeedAvailable,
       applications: [],
@@ -3555,16 +3559,68 @@ export class VendorController implements OnModuleInit {
   @Get('taxonomy')
   async getVendorTaxonomy(@Headers('authorization') authHeader?: string) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
-    const pool = taxonomyService.getTenantPool(vendor.tenantId || DEFAULT_TENANT_ID);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const pool = taxonomyService.getTenantPool(tenantId);
+    const activeMains = pool.mainCategories.filter((m) => m.isActive !== false);
+    const activeMainIds = new Set(activeMains.map((m) => m.id));
+    const activeChildren = pool.childCategories.filter(
+      (c) => c.isActive !== false && activeMainIds.has(c.mainCategoryId)
+    );
+    const activeChildIds = new Set(activeChildren.map((c) => c.id));
+    const activeTypes = pool.productTypes.filter(
+      (pt) => pt.isActive !== false && activeChildIds.has(pt.childCategoryId)
+    );
+    const myWarehouses = vendorWarehouses.filter((w: any) => !w.vendorId || w.vendorId === vendor.id);
     return {
       success: true,
       data: {
-        mainCategories: pool.mainCategories.filter((m) => m.isActive !== false),
-        childCategories: pool.childCategories.filter((c) => c.isActive !== false),
-        productTypes: pool.productTypes.filter((pt) => pt.isActive !== false),
+        mainCategories: activeMains,
+        childCategories: activeChildren,
+        productTypes: activeTypes,
+        fieldSchemas: taxonomyService.getTenantFieldSchemas(tenantId, undefined, false),
+        publishMetadata: taxonomyService.getPublishMetadata(tenantId),
+        warehouses: myWarehouses,
         brands: dbStore.brands,
       },
     };
+  }
+
+  @Get('taxonomy/fields/:childCategoryId')
+  async getVendorCategoryFields(
+    @Param('childCategoryId') childCategoryId: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const fields = taxonomyService.getTenantFieldSchemas(tenantId, childCategoryId, false);
+    return { success: true, data: fields };
+  }
+
+  @Post('products/upload-image')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    })
+  )
+  async uploadVendorProductImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('authorization') authHeader?: string,
+    @Req() req?: Request
+  ) {
+    await resolveStrictAuthenticatedVendor(authHeader);
+    if (!file) {
+      throw new BadRequestException('Please attach a valid image file (JPG, PNG, or WEBP).');
+    }
+    const host = req?.get?.('host') || `localhost:${process.env.PORT || 3000}`;
+    const protocol = req?.protocol || 'http';
+    const baseUrl = `${protocol}://${host}`;
+    const meta = await storageService.uploadVendorLogo(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      baseUrl
+    );
+    return { success: true, data: { url: meta.url, fileName: file.originalname } };
   }
 
   @Get('products')
@@ -3680,6 +3736,15 @@ export class VendorController implements OnModuleInit {
     if (!hierarchy.mainCategoryId || !hierarchy.childCategoryId) {
       throw new BadRequestException(`Unknown category "${rawCatInput}". Vendors must choose from Admin-approved categories.`);
     }
+    const activePool = taxonomyService.getTenantPool(tenantId);
+    const matchedMain = activePool.mainCategories.find((m) => m.id === hierarchy.mainCategoryId);
+    const matchedChild = activePool.childCategories.find((c) => c.id === hierarchy.childCategoryId);
+    const matchedType = hierarchy.productTypeId
+      ? activePool.productTypes.find((pt) => pt.id === hierarchy.productTypeId)
+      : undefined;
+    if (matchedMain?.isActive === false || matchedChild?.isActive === false || matchedType?.isActive === false) {
+      throw new BadRequestException('Selected category is inactive and cannot be selected for new products.');
+    }
     if (rawSubInput && !hierarchy.productTypeId) {
       throw new BadRequestException(
         `Product Type "${rawSubInput}" does not belong to "${hierarchy.childCategoryName}".`
@@ -3687,6 +3752,20 @@ export class VendorController implements OnModuleInit {
     }
     const resolvedFull = resolveCanonicalCategoryHierarchy(hierarchy.childCategorySlug, hierarchy.productTypeSlug);
     const defaultChild = resolvedFull.matchedChild || resolvedFull.matchedMain?.subcategories[0];
+
+    const shouldValidateDynamic = Boolean(
+      !isDraft && (body.categoryAttributes !== undefined || body.enforceCategoryFields === true)
+    );
+    const fieldValidation = taxonomyService.validateAndNormalizeCategoryAttributes(
+      tenantId,
+      hierarchy.childCategoryId,
+      body.categoryAttributes,
+      { strictRequired: shouldValidateDynamic }
+    );
+    const mergedSpecifications = {
+      ...fieldValidation.specificationEntries,
+      ...(body.specifications || {}),
+    };
 
     const id = `vp-prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const slugBase = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -3731,7 +3810,7 @@ export class VendorController implements OnModuleInit {
       mrp: Number(body.mrp),
       discount: Math.round(((Number(body.mrp) - Number(body.price)) / Number(body.mrp)) * 100),
       unit: body.unit || 'Piece',
-      packSize: body.packSize || '1 Unit',
+      packSize: body.packSize || fieldValidation.specificationEntries['Pack Size'] || body.unit || '1 Unit',
       gstRate: Number(body.gstRate) || 18,
       rating: 5.0,
       reviewCount: 0,
@@ -3739,8 +3818,11 @@ export class VendorController implements OnModuleInit {
       stockCount,
       stock: stockCount,
       reservedStock: 0,
+      moq: Math.max(1, Number(body.moq) || 1),
+      warehouseId: body.warehouseId || undefined,
+      warehouseLocation: body.warehouseLocation || 'WH-BLR-04 Peenya Hub',
       lowStockThreshold: Number(body.lowStockThreshold) || 10,
-      isBulkEligible: Boolean(body.isBulkEligible),
+      isBulkEligible: Boolean(body.isBulkEligible ?? (Array.isArray(body.bulkPricing) && body.bulkPricing.length > 0)),
       isNewLaunch: Boolean(body.isNewLaunch),
       productType: body.productType || '',
       size: body.size || body.unit || '',
@@ -3749,7 +3831,9 @@ export class VendorController implements OnModuleInit {
       ],
       variants: body.variants || [],
       attributes: body.attributes || [],
-      specifications: body.specifications || {},
+      categoryAttributes: fieldValidation.validatedAttributes,
+      specifications: mergedSpecifications,
+      applications: Array.isArray(body.applications) ? body.applications : [],
       deliverySpeedAvailable: body.deliverySpeedAvailable || ['ASAP_60', 'STANDARD'],
       approvalStatus,
       isActive: false,
@@ -3889,10 +3973,15 @@ export class VendorController implements OnModuleInit {
         'price',
         'mrp',
         'images',
+        'categoryAttributes',
         'specifications',
         'variants',
         'attributes',
         'bulkPricing',
+        'moq',
+        'warehouseId',
+        'warehouseLocation',
+        'applications',
         'categorySlug',
         'category',
         'subcategory',
@@ -3977,6 +4066,20 @@ export class VendorController implements OnModuleInit {
         existing.subcategory = updatedHierarchy.productTypeName;
         existing.subcategorySlug = updatedHierarchy.productTypeSlug;
       }
+    }
+    if (body.categoryAttributes !== undefined || body.enforceCategoryFields === true) {
+      const targetChildId = existing.childCategoryId || existing.categoryId || existing.categorySlug;
+      const fv = taxonomyService.validateAndNormalizeCategoryAttributes(
+        tenantId,
+        targetChildId,
+        body.categoryAttributes ?? existing.categoryAttributes,
+        { strictRequired: !isDraft && (body.categoryAttributes !== undefined || body.enforceCategoryFields === true) }
+      );
+      existing.categoryAttributes = fv.validatedAttributes;
+      existing.specifications = {
+        ...fv.specificationEntries,
+        ...(body.specifications || existing.specifications || {}),
+      };
     }
     existing.vendorId = vendor.id;
     existing.sellingPrice = Number(existing.price);

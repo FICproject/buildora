@@ -59,6 +59,19 @@ export function initVendorRealtime() {
     refreshAll('product.suspended', payload);
   });
 
+  socket.on('taxonomy.published', (payload) => {
+    toast.info('Catalog categories updated by Company Admin.');
+    refreshAll('taxonomy.published', payload);
+  });
+
+  socket.on('product.updated', (payload) => {
+    if (payload?.taxonomyUpdated) {
+      refreshAll('taxonomy.published', payload);
+    } else {
+      refreshAll('product.updated', payload);
+    }
+  });
+
   socket.on('inventory.updated', (payload) => {
     void useVendorInventoryStore.getState().fetchInventory();
     refreshAll('inventory.updated', payload);
