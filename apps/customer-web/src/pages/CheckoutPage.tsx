@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useStoreConfigStore } from '../store/useStoreConfigStore';
 import { useOrderStore } from '../store/useOrderStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { formatCurrency } from '@buildora/utils';
@@ -72,8 +73,8 @@ export const CheckoutPage: React.FC = () => {
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
 
   const [newAddress, setNewAddress] = useState({
-    recipientName: user?.name || 'Arjun Verma',
-    mobile: user?.phone || '9876543210',
+    recipientName: user?.name || '',
+    mobile: user?.phone || '',
     alternatePhone: '',
     building: '',
     street: '',
@@ -268,10 +269,19 @@ export const CheckoutPage: React.FC = () => {
       // 4. Phase 10: Payment Routing
       const finalPayable = summary.payableAmount !== undefined ? summary.payableAmount : summary.grandTotal;
 
+      const paymentCfg = useStoreConfigStore.getState().config?.paymentConfig;
+      const codEnabled = paymentCfg?.codEnabled !== false;
+      const codMax = paymentCfg?.codMaxOrderValue ?? 50000;
+
       if (selectedPayment === 'COD') {
+        if (!codEnabled) {
+          setValidationErrors(['Cash on Delivery is currently disabled by store configuration.']);
+          setIsProcessingPayment(false);
+          return;
+        }
         // Pay on Delivery Flow
-        if (finalPayable > 50000) {
-          setValidationErrors(['Cash on Delivery is limited to orders up to ₹50,000 for site delivery security.']);
+        if (finalPayable > codMax) {
+          setValidationErrors([`Cash on Delivery is limited to orders up to ₹${codMax.toLocaleString('en-IN')} for site delivery security.`]);
           setIsProcessingPayment(false);
           return;
         }
@@ -1019,7 +1029,8 @@ export const CheckoutPage: React.FC = () => {
                       Cash / Cheque on Site Delivery (COD)
                     </strong>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Pay to site delivery executive upon material offload. Eligible for orders up to ₹50,000.
+                      Pay to site delivery executive upon material offload. Eligible for orders up to ₹
+                      {(useStoreConfigStore.getState().config?.paymentConfig?.codMaxOrderValue ?? 50000).toLocaleString('en-IN')}.
                     </p>
                   </div>
                 </div>

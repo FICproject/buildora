@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVendorAuthStore } from '../../store/useVendorAuthStore';
+import { vendorApi } from '../../services/vendorApi';
 import {
   PageHeader,
   Card,
@@ -22,34 +23,27 @@ import {
 } from 'lucide-react';
 import { toast } from '../../store/useToastStore';
 
-const MASTER_CATEGORIES = [
-  'Cement & Concrete',
-  'Steel & Structural Metals',
-  'Bricks, Blocks & Aggregates',
-  'Tiles, Granite & Marble',
-  'Paints, Primers & Textures',
-  'Plumbing Pipes & Fittings',
-  'Sanitaryware & Bath Fittings',
-  'Electrical Wires, Switches & MCB',
-  'Lighting & Fixtures',
-  'Hardware, Locks & Fasteners',
-  'Plywood, Boards & Laminates',
-  'Roofing & Waterproofing',
-  'Power Tools & Hand Tools',
-  'Safety & Construction Equipment',
-];
-
-const BENGALURU_DARK_STORES = [
-  { id: 'WH-BLR-01', name: 'Central Hub (Shivajinagar / MG Road)', zone: 'Central' },
-  { id: 'WH-BLR-02', name: 'South Hub (Electronic City / Bommanahalli)', zone: 'South' },
-  { id: 'WH-BLR-03', name: 'East Hub (Whitefield / Mahadevapura)', zone: 'East' },
-  { id: 'WH-BLR-04', name: 'West Logistics Park (Peenya / Nagarabhavi)', zone: 'West' },
-  { id: 'WH-BLR-05', name: 'North Hub (Hebbal / Yelahanka)', zone: 'North' },
-];
-
 export const VendorOnboardingPage: React.FC = () => {
   const navigate = useNavigate();
   const { vendor, updateOnboarding, isLoading, error } = useVendorAuthStore();
+
+  const [categoryList, setCategoryList] = useState<string[]>([]);
+  const [hubList, setHubList] = useState<any[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      vendorApi.getTaxonomy().catch(() => null),
+      vendorApi.getWarehouses().catch(() => null),
+    ]).then(([tax, wh]) => {
+      if (tax) {
+        const names = (tax.childCategories || tax.mainCategories || []).map((c: any) => c.name);
+        setCategoryList(Array.from(new Set(names)));
+      }
+      if (wh?.darkStores) {
+        setHubList(wh.darkStores);
+      }
+    });
+  }, []);
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
@@ -61,25 +55,25 @@ export const VendorOnboardingPage: React.FC = () => {
     vendor?.businessInfo?.storeName || vendor?.business?.tradeName || vendor?.storeName || ''
   );
   const [gstin, setGstin] = useState(
-    vendor?.businessInfo?.gstin || vendor?.business?.gstin || '29AAAAA0000A1Z5'
+    vendor?.businessInfo?.gstin || vendor?.business?.gstin || ''
   );
   const [pan, setPan] = useState(
-    vendor?.businessInfo?.pan || vendor?.business?.pan || 'AAAAA0000A'
+    vendor?.businessInfo?.pan || vendor?.business?.pan || ''
   );
 
   const [street, setStreet] = useState(
     vendor?.businessInfo?.address?.street ||
       vendor?.business?.address?.street ||
-      '12, 1st Cross, Peenya Industrial Area'
+      ''
   );
   const [city] = useState(
     vendor?.businessInfo?.address?.city || vendor?.business?.address?.city || 'Bengaluru'
   );
   const [pincode, setPincode] = useState(
-    vendor?.businessInfo?.address?.pincode || vendor?.business?.address?.pincode || '560058'
+    vendor?.businessInfo?.address?.pincode || vendor?.business?.address?.pincode || ''
   );
   const [selectedHub, setSelectedHub] = useState(
-    vendor?.businessInfo?.assignedDarkStoreId || 'WH-BLR-04'
+    vendor?.businessInfo?.assignedDarkStoreId || ''
   );
 
   const [accountNumber, setAccountNumber] = useState(
@@ -288,25 +282,29 @@ export const VendorOnboardingPage: React.FC = () => {
               <div>
                 <label className="portal-label">Primary Fulfillment Hub *</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {BENGALURU_DARK_STORES.map((hub) => (
-                    <div
-                      key={hub.id}
-                      onClick={() => setSelectedHub(hub.id)}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-colors ${
-                        selectedHub === hub.id
-                          ? 'border-[#943D24] bg-[#FBF3F0]/60'
-                          : 'border-[#E7E5E4] bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-[#292524]">{hub.id}</span>
-                        <Badge variant={selectedHub === hub.id ? 'brand' : 'neutral'} size="sm">
-                          {hub.zone}
-                        </Badge>
+                  {hubList.length === 0 ? (
+                    <p className="text-xs text-[#78716C] col-span-2 py-2">Loading configured tenant hubs...</p>
+                  ) : (
+                    hubList.map((hub) => (
+                      <div
+                        key={hub.id}
+                        onClick={() => setSelectedHub(hub.id)}
+                        className={`p-3.5 rounded-xl border cursor-pointer transition-colors ${
+                          selectedHub === hub.id
+                            ? 'border-[#943D24] bg-[#FBF3F0]/60'
+                            : 'border-[#E7E5E4] bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-[#292524]">{hub.id}</span>
+                          <Badge variant={selectedHub === hub.id ? 'brand' : 'neutral'} size="sm">
+                            {hub.city || hub.zone || 'Hub'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-[#78716C] mt-1">{hub.name}</p>
                       </div>
-                      <p className="text-xs text-[#78716C] mt-1">{hub.name}</p>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -368,7 +366,7 @@ export const VendorOnboardingPage: React.FC = () => {
             />
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-64 overflow-y-auto p-1">
-                {MASTER_CATEGORIES.map((cat) => {
+                {categoryList.map((cat) => {
                   const isSelected = selectedCategories.includes(cat);
                   return (
                     <button

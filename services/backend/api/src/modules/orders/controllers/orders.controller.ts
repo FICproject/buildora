@@ -133,12 +133,19 @@ export class OrdersController {
       };
     }
 
-    // 2. COD Limit Check
+    // 2. Dynamic COD & Payment Configuration Check from Tenant Settings
+    const tenantCfg = companyAdminDataService.getTenantConfig(tenantId);
     const amountToCheck = Number(body.payableAmount ?? body.grandTotal ?? body.totalAmount ?? 0);
-    if (body.paymentMethod === 'COD' && amountToCheck > 50000) {
-      throw new BadRequestException(
-        'Cash on Delivery is available for orders up to ₹50,000 only. Please choose an online payment method.'
-      );
+    if (body.paymentMethod === 'COD') {
+      if (tenantCfg?.paymentConfig?.codEnabled === false) {
+        throw new BadRequestException('Cash on Delivery is currently disabled by Company Admin.');
+      }
+      const maxCod = Number(tenantCfg?.paymentConfig?.codMaxOrderValue ?? 50000);
+      if (maxCod > 0 && amountToCheck > maxCod) {
+        throw new BadRequestException(
+          `Cash on Delivery is available for orders up to ₹${maxCod.toLocaleString('en-IN')} only. Please choose an online payment method.`
+        );
+      }
     }
 
     if (!Array.isArray(body.items) || body.items.length === 0) {
@@ -220,11 +227,21 @@ export class OrdersController {
           completed: !reserveOnly,
         },
       ],
-      deliveryPartner: {
-        name: 'Ramesh Kumar (Bengaluru Fleet)',
-        phone: '+91-9876543299',
-        vehicleNumber: 'KA-03-EZ-4412 (Tata Ace EV)',
-      },
+      deliveryPartner: (() => {
+        const pin = body.deliveryAddress?.pincode || '';
+        const partners = Array.from(companyAdminDataService.deliveryPartners.values()).filter(
+          (dp) => dp.tenantId === tenantId && dp.status === 'ACTIVE'
+        );
+        const matchedPartner =
+          partners.find((dp) => dp.servicePincodes?.includes(pin)) || partners[0];
+        return matchedPartner
+          ? {
+              name: matchedPartner.name,
+              phone: matchedPartner.phone,
+              vehicleNumber: matchedPartner.vehicleTypes?.[0] || 'Dispatch Fleet',
+            }
+          : undefined;
+      })(),
     };
 
     dbStore.orders.unshift(newOrder);

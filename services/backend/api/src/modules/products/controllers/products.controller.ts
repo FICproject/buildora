@@ -15,6 +15,7 @@ import {
 } from '@buildora/constants';
 import { vendorRecords, vendorProducts } from '../../vendors/controllers/vendor.controller';
 import { taxonomyService } from '../../catalogue/services/taxonomy.service';
+import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
 
 export function isProductCustomerVisible(p: any): boolean {
   if (!p) return false;
@@ -98,9 +99,32 @@ function enrichStorefrontProduct(p: any) {
 
 @Controller('api/v1')
 export class ProductsController {
+  private buildDynamicAttributeTemplates(tenantId?: string) {
+    const merged: Record<string, any[]> = { ...CATEGORY_ATTRIBUTE_TEMPLATES };
+    const attrs = companyAdminDataService.attributes.filter(
+      (a) => !tenantId || !a.tenantId || a.tenantId === tenantId
+    );
+    for (const attr of attrs) {
+      const catKey = (attr.categoryName || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const existing = merged[catKey] ? [...merged[catKey]] : [];
+      if (!existing.some((x) => x.name?.toLowerCase() === attr.name.toLowerCase())) {
+        existing.push({
+          name: attr.name,
+          code: attr.code,
+          uiType: 'pills',
+          options: attr.values || [],
+          required: Boolean(attr.isRequired),
+        });
+      }
+      merged[catKey] = existing;
+    }
+    return merged;
+  }
+
   @Get('categories/:slug/attribute-templates')
   getCategoryAttributeTemplates(@Param('slug') slug: string) {
-    const templates = getAttributeTemplatesForCategory(slug);
+    const all = this.buildDynamicAttributeTemplates();
+    const templates = all[slug.toLowerCase()] || getAttributeTemplatesForCategory(slug);
     return {
       success: true,
       categorySlug: slug,
@@ -110,15 +134,16 @@ export class ProductsController {
 
   @Get('category-attribute-templates')
   getAllCategoryAttributeTemplates(@Query('category') category?: string) {
+    const all = this.buildDynamicAttributeTemplates();
     if (category) {
       return {
         success: true,
-        data: getAttributeTemplatesForCategory(category)
+        data: all[category.toLowerCase()] || getAttributeTemplatesForCategory(category)
       };
     }
     return {
       success: true,
-      data: CATEGORY_ATTRIBUTE_TEMPLATES
+      data: all
     };
   }
   @Get('products')

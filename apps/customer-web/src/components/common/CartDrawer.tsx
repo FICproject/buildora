@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { X, Trash2, ShoppingBag, ArrowRight, Zap, ShieldCheck } from 'lucide-react';
 import { useCartStore } from '../../store/useCartStore';
+import { useStoreConfigStore } from '../../store/useStoreConfigStore';
 import { formatCurrency } from '@buildora/utils';
 import { QuantityControl } from '../ui/QuantityControl';
 import { Button } from '../ui/Button';
@@ -14,6 +15,7 @@ export interface CartDrawerProps {
 export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { items, updateQuantity, removeItem, getSummary, deliverySpeed } = useCartStore();
+  const freeThreshold = useStoreConfigStore((s) => s.config?.deliveryConfig?.freeShippingThreshold ?? 1000);
   const summary = getSummary();
 
   useEffect(() => {
@@ -58,17 +60,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
 
         {/* Free Delivery Bar */}
         <div className="bg-amber-50 px-4 py-2 border-b border-amber-100 text-xs text-amber-800 flex items-center justify-between font-medium">
-          {summary.discountedSubtotal >= 1999 ? (
+          {summary.discountedSubtotal >= freeThreshold ? (
             <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
               <Zap className="w-3.5 h-3.5 fill-current text-emerald-600" />
               You unlocked FREE site delivery!
             </span>
           ) : (
             <span>
-              Add <strong className="text-amber-900">{formatCurrency(1999 - summary.discountedSubtotal)}</strong> more for FREE delivery
+              Add <strong className="text-amber-900">{formatCurrency(Math.max(0, freeThreshold - summary.discountedSubtotal))}</strong> more for FREE delivery
             </span>
           )}
-          <span className="text-[10px] text-amber-600 uppercase font-bold">Standard min ₹1,999</span>
+          <span className="text-[10px] text-amber-600 uppercase font-bold">Standard min {formatCurrency(freeThreshold)}</span>
         </div>
 
         {/* Items List */}

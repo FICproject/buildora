@@ -291,6 +291,10 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+  deleteNewLaunchCollection: (id: string) =>
+    rawRequest<any>(`/company-admin/catalog/new-launches/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   createCategory: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/categories', {
       method: 'POST',
@@ -335,10 +339,28 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  updateBrand: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/brands/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteBrand: (id: string) =>
+    rawRequest<any>(`/company-admin/catalog/brands/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   createAttribute: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/attributes', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  updateAttribute: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/attributes/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteAttribute: (id: string) =>
+    rawRequest<any>(`/company-admin/catalog/attributes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     }),
 
   // Inventory & Warehouses
@@ -361,6 +383,15 @@ export const adminApi = {
     rawRequest<any>('/company-admin/warehouses', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  updateWarehouse: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/warehouses/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteWarehouse: (id: string) =>
+    rawRequest<any>(`/company-admin/warehouses/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     }),
 
   // Orders & Returns
@@ -423,10 +454,29 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  updateCoupon: (code: string, payload: any) =>
+    rawRequest<any>(`/company-admin/coupons/${encodeURIComponent(code)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteCoupon: (code: string) =>
+    rawRequest<any>(`/company-admin/coupons/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    }),
+  createPromotion: (payload: any) =>
+    rawRequest<any>('/company-admin/promotions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   updatePromotionStatus: (id: string, status: 'ACTIVE' | 'EXPIRED') =>
     rawRequest<any>(`/company-admin/promotions/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    }),
+  updateProductBulkPricing: (productId: string, bulkPricing: any[]) =>
+    rawRequest<any>(`/company-admin/products/${encodeURIComponent(productId)}/bulk-pricing`, {
+      method: 'PATCH',
+      body: JSON.stringify({ bulkPricing }),
     }),
 
   // Website Content
@@ -446,11 +496,36 @@ export const adminApi = {
     rawRequest<any>(`/company-admin/content/${id}/publish`, { method: 'POST' }),
   unpublishContent: (id: string) =>
     rawRequest<any>(`/company-admin/content/${id}/unpublish`, { method: 'POST' }),
+  deleteContent: (id: string) =>
+    rawRequest<any>(`/company-admin/content/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getKnowledgeHub: () => rawRequest<any>('/company-admin/content/knowledge-hub'),
   createKnowledgeArticle: (payload: any) =>
     rawRequest<any>('/company-admin/content/knowledge-hub', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  updateKnowledgeArticle: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/content/knowledge-hub/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteKnowledgeArticle: (id: string) =>
+    rawRequest<any>(`/company-admin/content/knowledge-hub/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  createFaq: (payload: any) =>
+    rawRequest<any>('/company-admin/content/faqs', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateFaq: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/content/faqs/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteFaq: (id: string) =>
+    rawRequest<any>(`/company-admin/content/faqs/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     }),
 
   // Customers
@@ -471,6 +546,20 @@ export const adminApi = {
     rawRequest<any>('/company-admin/delivery/partners', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  updateDeliveryPartner: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/delivery/partners/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  upsertPincodeZone: (payload: any) =>
+    rawRequest<any>('/company-admin/delivery/pincodes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deletePincodeZone: (pincode: string) =>
+    rawRequest<any>(`/company-admin/delivery/pincodes/${encodeURIComponent(pincode)}`, {
+      method: 'DELETE',
     }),
   assignDelivery: (payload: any) =>
     rawRequest<any>('/company-admin/delivery/assign', {
@@ -513,8 +602,12 @@ export const adminApi = {
     }),
 
   // Reports
-  getReports: (type = 'sales') =>
-    rawRequest<any>(`/company-admin/reports?type=${encodeURIComponent(type)}`),
+  getReports: (type = 'sales', from?: string, to?: string) => {
+    const q = new URLSearchParams({ type });
+    if (from) q.set('from', from);
+    if (to) q.set('to', to);
+    return rawRequest<any>(`/company-admin/reports?${q.toString()}`);
+  },
 
   // Support & Notifications
   getSupportNotifications: () => rawRequest<any>('/company-admin/support-notifications'),
@@ -525,6 +618,11 @@ export const adminApi = {
     rawRequest<any>(`/company-admin/tickets/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status, resolutionNote }),
+    }),
+  createTemplate: (payload: any) =>
+    rawRequest<any>('/company-admin/templates', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
   updateTemplate: (id: string, payload: any) =>
     rawRequest<any>(`/company-admin/templates/${id}`, {

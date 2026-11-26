@@ -819,42 +819,21 @@ export const vendorApi = {
 
   // Onboarding
   async updateOnboarding(data: Partial<VendorProfile['businessInfo']>) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/onboarding`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    localVendor.businessInfo = { ...localVendor.businessInfo, ...data };
-    return { success: true, data: localVendor.businessInfo };
+    const res = await apiRequest<any>('/vendor/onboarding', {
+      method: 'PUT',
+      body: data,
+      fallbackErrorMessage: 'Failed to save onboarding draft.'
+    });
+    return { success: true, data: res?.data || res };
   },
 
   async submitOnboarding(data?: any): Promise<VendorProfile> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/onboarding/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data || {}),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json.vendor || localVendor;
-      }
-    } catch {}
-    localVendor.status = 'ACTIVE';
-    if (data?.business) {
-      localVendor.business = { ...localVendor.business, ...data.business };
-      if (data.business.tradeName) localVendor.storeName = data.business.tradeName;
-    }
-    if (data?.bank) {
-      localVendor.bankDetails = { ...localVendor.bankDetails, ...data.bank };
-    }
-    if (data?.categories) {
-      localVendor.categories = data.categories;
-    }
-    return localVendor;
+    const res = await apiRequest<any>('/vendor/onboarding', {
+      method: 'PUT',
+      body: data || {},
+      fallbackErrorMessage: 'Failed to submit onboarding details.'
+    });
+    return (res?.data || res) as VendorProfile;
   },
 
   // Dashboard Metrics & Charts
@@ -936,6 +915,15 @@ export const vendorApi = {
     fieldSchemas: CategoryFieldSchema[];
     warehouses: any[];
     brands: any[];
+    config?: {
+      gstSlabs: number[];
+      tdsRate: number;
+      supportedSpeeds: string[];
+      expressEtaText: string;
+      standardEtaText: string;
+      commissionRate: number;
+      freeShippingThreshold: number;
+    };
   }> {
     return request<any>('/vendor/taxonomy', {}, {
       mainCategories: [],
@@ -1366,264 +1354,110 @@ export const vendorApi = {
     });
   },
 
+  async getSettings() {
+    return request<any>('/vendor/settings', {});
+  },
+
   async updateSecuritySettings(data: { currentPassword?: string; newPassword?: string; enable2FA?: boolean }) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/settings/security`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, message: 'Security preferences updated' };
-  },
-
-  async updateNotificationSettings(data: any) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/settings/notifications`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, message: 'Notification preferences updated' };
-  },
-
-  async getDeliverySettings() {
-    return request<any>('/vendor/delivery/settings', {}, {
-      warehouseAddress: localVendor.businessInfo.warehouseAddress,
-      pickupPincode: localVendor.businessInfo.pickupPincode,
-      assignedDarkStoreId: localVendor.businessInfo.assignedDarkStoreId,
-      assignedWarehouseName: 'Bengaluru West Dark Store (WH-BLR-04)',
-      dispatchCutoff: localVendor.businessInfo.dispatchCutoff || '18:00',
-      preparationTimeMins: localVendor.businessInfo.preparationTimeMins || 30
+    return apiRequest<any>('/vendor/settings/security', {
+      method: 'PUT',
+      body: data,
+      fallbackErrorMessage: 'Failed to update security settings.'
     });
   },
 
+  async updateNotificationSettings(data: any) {
+    return apiRequest<any>('/vendor/settings/notifications', {
+      method: 'PUT',
+      body: data,
+      fallbackErrorMessage: 'Failed to update notification preferences.'
+    });
+  },
+
+  async getDeliverySettings() {
+    return request<any>('/vendor/delivery/settings', {});
+  },
+
   async updateDeliverySettings(data: any) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/delivery/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    localVendor.businessInfo = { ...localVendor.businessInfo, ...data };
-    return { success: true, data };
+    return apiRequest<any>('/vendor/delivery/settings', {
+      method: 'PUT',
+      body: data,
+      fallbackErrorMessage: 'Failed to update delivery settings.'
+    });
   },
 
   // Bulk Orders & Quotations (RFQ)
   async getQuotations() {
-    const fallback = [
-      {
-        id: 'rfq-2026-101',
-        rfqNumber: 'RFQ-BLR-2026-401',
-        customerName: 'Prestige Civil Works Pvt Ltd',
-        contactPerson: 'Mahesh Kulkarni',
-        phone: '+91 98450 33112',
-        siteLocation: 'Whitefield ITPL Phase 2, Bengaluru 560066',
-        createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-        requiredBy: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
-        status: 'PENDING_QUOTE' as const,
-        negotiationStatus: 'AWAITING_VENDOR',
-        notes: 'Need batch test certificate along with delivery.',
-        items: [
-          { name: 'UltraTech Super Cement (PPC)', sku: 'CEM-ULT-PPC-50KG', quantity: 400, unit: '50 kg Bag', targetPrice: 365 },
-          { name: 'Astral CPVC PRO Class 1 Pipe (1 inch)', sku: 'PLM-AST-CPVC-1IN', quantity: 120, unit: '3m Length', targetPrice: 390 },
-        ],
-        quotedTotal: 0,
-      },
-      {
-        id: 'rfq-2026-102',
-        rfqNumber: 'RFQ-BLR-2026-398',
-        customerName: 'Gowda Infrastructure & Builders',
-        contactPerson: 'Suresh Gowda',
-        phone: '+91 98451 22334',
-        siteLocation: 'Nagarabhavi Outer Ring Road, Bengaluru 560072',
-        createdAt: new Date(Date.now() - 28 * 3600 * 1000).toISOString(),
-        requiredBy: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
-        status: 'QUOTED' as const,
-        negotiationStatus: 'UNDER_NEGOTIATION',
-        notes: 'Delivery required in two phased trips.',
-        items: [
-          { name: 'Finolex FR 2.5 sq mm Copper Wire (90m)', sku: 'ELE-FIN-25-RED', quantity: 50, unit: '90m Coil', targetPrice: 1620, quotedPrice: 1650 },
-        ],
-        quotedTotal: 82500,
-        validUntil: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
-      },
-      {
-        id: 'rfq-2026-103',
-        rfqNumber: 'RFQ-BLR-2026-385',
-        customerName: 'Apex Residential Projects',
-        contactPerson: 'Kavitha Reddy',
-        phone: '+91 99887 76655',
-        siteLocation: 'Indiranagar 100ft Road, Bengaluru 560038',
-        createdAt: new Date(Date.now() - 72 * 3600 * 1000).toISOString(),
-        requiredBy: new Date(Date.now() + 1 * 24 * 3600 * 1000).toISOString(),
-        status: 'ACCEPTED' as const,
-        negotiationStatus: 'APPROVED_BY_BUYER',
-        notes: 'Converted to PO #PO-BLR-991.',
-        items: [
-          { name: 'Greenply Marine 710 BWP Plywood (18mm)', sku: 'PLY-GRN-BWP-18', quantity: 80, unit: '8x4 Sheet', targetPrice: 2150, quotedPrice: 2180 },
-        ],
-        quotedTotal: 174400,
-      },
-    ];
-    try {
-      const saved = localStorage.getItem('buildora_vendor_quotations');
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return request<any[]>('/vendor/quotations', {}, fallback);
+    const raw = await request<any[]>('/vendor/quotations', {});
+    return (Array.isArray(raw) ? raw : []).map((q: any) => {
+      const mappedStatus =
+        q.status === 'INCOMING' || q.status === 'VENDOR_ASSIGNED'
+          ? 'PENDING_QUOTE'
+          : q.status === 'QUOTES_RECEIVED' || q.status === 'UNDER_NEGOTIATION'
+            ? 'QUOTED'
+            : q.status === 'APPROVED' || q.status === 'CONVERTED_TO_ORDER'
+              ? 'ACCEPTED'
+              : q.status;
+      const latestQuote = Array.isArray(q.vendorQuotes) && q.vendorQuotes.length > 0
+        ? q.vendorQuotes[q.vendorQuotes.length - 1]
+        : null;
+      return {
+        ...q,
+        rfqNumber: q.rfqNumber || q.quoteNumber || q.id,
+        contactPerson: q.contactPerson || q.customerName,
+        phone: q.phone || q.customerPhone,
+        siteLocation: q.siteLocation || q.siteAddress,
+        status: mappedStatus,
+        quotedTotal: q.quotedTotal ?? latestQuote?.totalQuotedAmount ?? q.finalApprovedAmount ?? 0,
+        vendorNotes: q.vendorNotes || latestQuote?.notes || '',
+      };
+    });
   },
 
   async submitQuotation(id: string, payload: { quotedTotal: number; items: any[]; validUntil?: string; vendorNotes?: string }) {
-    const list = await this.getQuotations();
-    const updated = list.map((q: any) =>
-      q.id === id
-        ? {
-            ...q,
-            ...payload,
-            status: 'QUOTED',
-            negotiationStatus: 'QUOTATION_SENT',
-            quotedAt: new Date().toISOString(),
-          }
-        : q
-    );
-    try {
-      localStorage.setItem('buildora_vendor_quotations', JSON.stringify(updated));
-    } catch {}
-    return updated.find((q: any) => q.id === id);
+    return request<any>(`/vendor/quotations/${encodeURIComponent(id)}/quote`, {
+      method: 'POST',
+      body: JSON.stringify({
+        totalQuotedAmount: payload.quotedTotal,
+        notes: payload.vendorNotes,
+        validUntil: payload.validUntil,
+        items: payload.items,
+      }),
+    });
   },
 
   async updateQuotationStatus(id: string, status: 'ACCEPTED' | 'REJECTED') {
-    const list = await this.getQuotations();
-    const updated = list.map((q: any) =>
-      q.id === id
-        ? {
-            ...q,
-            status,
-            negotiationStatus: status === 'ACCEPTED' ? 'APPROVED_BY_BUYER' : 'DECLINED',
-          }
-        : q
-    );
-    try {
-      localStorage.setItem('buildora_vendor_quotations', JSON.stringify(updated));
-    } catch {}
-    return updated.find((q: any) => q.id === id);
+    const backendStatus = status === 'ACCEPTED' ? 'APPROVED' : 'REJECTED';
+    return request<any>(`/vendor/quotations/${encodeURIComponent(id)}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: backendStatus }),
+    });
   },
 
   // Customers Directory
   async getCustomers() {
-    const orders = await this.getOrders();
-    const baseCustomers = [
-      {
-        id: 'cust-1',
-        name: 'Suresh Gowda',
-        company: 'Gowda Constructions',
-        phone: '+91 98451 22334',
-        email: 'suresh@gowdaconstructions.in',
-        gstin: '29AABCG1234D1Z1',
-        city: 'Bengaluru',
-        pincode: '560072',
-        totalOrders: 14,
-        totalSpend: 428500,
-        lastOrderDate: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-        type: 'B2B Contractor',
-      },
-      {
-        id: 'cust-2',
-        name: 'Kavitha Reddy',
-        company: 'Apex Builders',
-        phone: '+91 99887 76655',
-        email: 'procurement@apexbuilders.co.in',
-        gstin: '29AADCA5521H1Z9',
-        city: 'Bengaluru',
-        pincode: '560038',
-        totalOrders: 9,
-        totalSpend: 294800,
-        lastOrderDate: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-        type: 'B2B Builder',
-      },
-      {
-        id: 'cust-3',
-        name: 'Vinay Kumar',
-        company: 'Individual Site Owner',
-        phone: '+91 97410 98765',
-        email: 'vinay.k@gmail.com',
-        city: 'Bengaluru',
-        pincode: '560076',
-        totalOrders: 3,
-        totalSpend: 48200,
-        lastOrderDate: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-        type: 'Direct Buyer',
-      },
-      {
-        id: 'cust-4',
-        name: 'Arjun Verma',
-        company: 'Green Horizon Enclave',
-        phone: '+91 98765 43210',
-        email: 'arjun.verma@greenhorizon.in',
-        gstin: '29AAFCG9012M1Z4',
-        city: 'Bengaluru',
-        pincode: '560038',
-        totalOrders: 11,
-        totalSpend: 312400,
-        lastOrderDate: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
-        type: 'Site Engineer',
-      },
-    ];
-    // Ensure any new order customers are represented
-    const existingNames = new Set(baseCustomers.map((c) => c.name.toLowerCase()));
-    orders.forEach((o, idx) => {
-      const name = (o.customerName || '').split('(')[0].trim();
-      if (name && !existingNames.has(name.toLowerCase())) {
-        existingNames.add(name.toLowerCase());
-        baseCustomers.push({
-          id: `cust-ord-${idx}`,
-          name,
-          company: o.deliveryAddress?.area || 'Bengaluru Site',
-          phone: o.customerPhone || '—',
-          email: '—',
-          city: o.deliveryAddress?.city || 'Bengaluru',
-          pincode: o.deliveryAddress?.pincode || '560001',
-          totalOrders: 1,
-          totalSpend: o.totalAmount || o.subtotal || 0,
-          lastOrderDate: o.createdAt,
-          type: 'Customer',
-        });
-      }
-    });
-    return baseCustomers;
+    const raw = await request<any[]>('/vendor/customers', {});
+    return (Array.isArray(raw) ? raw : []).map((c: any) => ({
+      ...c,
+      company: c.company || c.companyName || (c.customerType ? `${c.customerType} Buyer` : 'Direct Buyer'),
+      type: c.type || c.customerType || 'Direct Buyer',
+      lastOrderDate: c.lastOrderDate || c.lastOrderAt,
+      pincode: c.pincode || c.address?.pincode || '—',
+      city: c.city || c.address?.city || 'Bengaluru',
+    }));
   },
 
   // Delivery & Dispatch
   async getDispatches() {
-    const orders = await this.getOrders();
-    try {
-      const saved = localStorage.getItem('buildora_vendor_dispatch_meta');
-      const meta = saved ? JSON.parse(saved) : {};
-      return orders.map((o) => ({
-        ...o,
-        driverName: meta[o.id]?.driverName || (o.status === 'DISPATCHED' || o.status === 'DELIVERED' ? 'Raju Nayak (EV Mini-Truck)' : ''),
-        vehicleNumber: meta[o.id]?.vehicleNumber || (o.status === 'DISPATCHED' || o.status === 'DELIVERED' ? 'KA-04-EV-4819' : ''),
-        driverPhone: meta[o.id]?.driverPhone || (o.status === 'DISPATCHED' || o.status === 'DELIVERED' ? '+91 98801 44556' : ''),
-        hubName: meta[o.id]?.hubName || 'WH-BLR-04 Peenya Hub',
-      }));
-    } catch {
-      return orders;
-    }
+    const res = await request<any>('/vendor/dispatches', {});
+    return Array.isArray(res) ? res : res?.data || [];
   },
 
-  async assignDelivery(orderId: string, details: { driverName: string; vehicleNumber: string; driverPhone: string; hubName?: string }) {
-    try {
-      const saved = localStorage.getItem('buildora_vendor_dispatch_meta');
-      const meta = saved ? JSON.parse(saved) : {};
-      meta[orderId] = details;
-      localStorage.setItem('buildora_vendor_dispatch_meta', JSON.stringify(meta));
-    } catch {}
-    await this.updateOrderStatus(orderId, 'DISPATCHED', `Assigned to ${details.driverName} (${details.vehicleNumber})`);
-    return { success: true };
+  async assignDelivery(orderId: string, details: { driverName: string; vehicleNumber: string; driverPhone: string; hubName?: string; partnerId?: string }) {
+    return apiRequest<any>(`/vendor/orders/${encodeURIComponent(orderId)}/assign-delivery`, {
+      method: 'POST',
+      body: details,
+      fallbackErrorMessage: 'Failed to assign delivery partner.'
+    });
   },
 };

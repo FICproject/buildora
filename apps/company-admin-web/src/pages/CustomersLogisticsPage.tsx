@@ -208,11 +208,22 @@ export const DeliveryLogisticsPage: React.FC = () => {
     driverPhone: '+91 98450 88776',
   });
   const [partnerModal, setPartnerModal] = useState(false);
+  const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null);
   const [partnerForm, setPartnerForm] = useState({
     name: '',
     phone: '',
     contactPerson: '',
     baseCharge: 199,
+  });
+  const [pinModal, setPinModal] = useState(false);
+  const [pinForm, setPinForm] = useState({
+    pincode: '',
+    locality: '',
+    city: 'Bengaluru',
+    assignedWarehouse: 'Primary Warehouse Hub',
+    etaMinutes: 60,
+    expressAvailable: true,
+    isActive: true,
   });
 
   const loadData = async () => {
@@ -324,38 +335,102 @@ export const DeliveryLogisticsPage: React.FC = () => {
         <Card title="Delivery Partners & SLAs">
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(data.partners || []).map((p: any) => (
-              <div key={p.id} className="py-3 flex justify-between items-center">
+              <div key={p.id} className="py-3 flex justify-between items-center gap-2">
                 <div>
                   <p className="font-semibold text-[#5E5946]">{p.name}</p>
                   <p className="text-[#6E6859]">
                     {p.contactPerson} • {p.phone} • Base {formatINR(p.baseCharge)}
                   </p>
                 </div>
-                <div className="text-right">
-                  <Badge variant="success">{p.onTimeRate}% On-Time</Badge>
-                  <p className="text-[#6E6859] mt-0.5">{p.completedDeliveries} deliveries</p>
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <Badge variant="success">{p.onTimeRate}% On-Time</Badge>
+                    <p className="text-[#6E6859] mt-0.5">{p.completedDeliveries} deliveries</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingPartnerId(p.id);
+                      setPartnerForm({
+                        name: p.name || '',
+                        phone: p.phone || '',
+                        contactPerson: p.contactPerson || '',
+                        baseCharge: p.baseCharge ?? 199,
+                      });
+                      setPartnerModal(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
         </Card>
 
-        <Card title="Serviceable Pincodes & Delivery Zones">
+        <Card
+          title="Serviceable Pincodes & Delivery Zones"
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setPinForm({ pincode: '', locality: '', city: 'Bengaluru', assignedWarehouse: 'Primary Warehouse Hub', etaMinutes: 60, expressAvailable: true, isActive: true });
+                setPinModal(true);
+              }}
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Pincode Zone
+            </Button>
+          }
+        >
           <div className="flex flex-wrap gap-2">
-            {(Array.isArray(data.pincodes) ? data.pincodes : []).map((pin: any, idx: number) => (
-              <div
-                key={idx}
-                className="px-3 py-2 border border-[#E5DCD3] rounded-lg text-xs flex items-center gap-2 bg-[#F9F2EC]"
-              >
-                <MapPin className="w-3.5 h-3.5 text-[#AE887B]" />
-                <span className="font-mono font-semibold text-[#5E5946]">
-                  {typeof pin === 'string' ? pin : pin.pincode || pin.code || ''}
-                </span>
-                {(pin?.area || pin?.zoneName) && (
-                  <span className="text-[#6E6859]">{pin.area || pin.zoneName}</span>
-                )}
-              </div>
-            ))}
+            {(Array.isArray(data.pincodes) ? data.pincodes : []).map((pin: any, idx: number) => {
+              const code = typeof pin === 'string' ? pin : pin.pincode || pin.code || '';
+              return (
+                <div
+                  key={code || idx}
+                  className="px-3 py-2 border border-[#E5DCD3] rounded-lg text-xs flex items-center gap-2 bg-[#F9F2EC]"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-[#AE887B]" />
+                  <span className="font-mono font-semibold text-[#5E5946]">{code}</span>
+                  {(pin?.locality || pin?.area || pin?.zoneName) && (
+                    <span className="text-[#6E6859]">
+                      {pin.locality || pin.area || pin.zoneName} ({pin.etaMinutes || 60}m)
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="text-[11px] text-[#AE887B] hover:underline ml-1"
+                    onClick={() => {
+                      setPinForm({
+                        pincode: code,
+                        locality: pin.locality || pin.area || '',
+                        city: pin.city || 'Bengaluru',
+                        assignedWarehouse: pin.assignedWarehouse || pin.warehouse || 'Primary Warehouse Hub',
+                        etaMinutes: Number(pin.etaMinutes || 60),
+                        expressAvailable: pin.expressAvailable !== false,
+                        isActive: pin.isActive !== false,
+                      });
+                      setPinModal(true);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[11px] text-[#C94444] hover:underline"
+                    onClick={async () => {
+                      await adminApi.deletePincodeZone(code);
+                      pushToast({ title: `Removed pincode ${code}` });
+                      loadData();
+                    }}
+                  >
+                    Del
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </Card>
       </div>
@@ -408,13 +483,26 @@ export const DeliveryLogisticsPage: React.FC = () => {
         </form>
       </Modal>
 
-      <Modal open={partnerModal} onClose={() => setPartnerModal(false)} title="Register Delivery Partner">
+      <Modal
+        open={partnerModal}
+        onClose={() => {
+          setPartnerModal(false);
+          setEditingPartnerId(null);
+        }}
+        title={editingPartnerId ? 'Edit Delivery Partner' : 'Register Delivery Partner'}
+      >
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            await adminApi.createDeliveryPartner(partnerForm);
-            pushToast({ title: 'Delivery Partner Added' });
+            if (editingPartnerId) {
+              await adminApi.updateDeliveryPartner(editingPartnerId, partnerForm);
+              pushToast({ title: 'Delivery Partner Updated' });
+            } else {
+              await adminApi.createDeliveryPartner(partnerForm);
+              pushToast({ title: 'Delivery Partner Added' });
+            }
             setPartnerModal(false);
+            setEditingPartnerId(null);
             loadData();
           }}
           className="space-y-3 text-xs"
@@ -424,6 +512,13 @@ export const DeliveryLogisticsPage: React.FC = () => {
             placeholder="Partner Name"
             value={partnerForm.name}
             onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
+          <input
+            required
+            placeholder="Contact Person"
+            value={partnerForm.contactPerson}
+            onChange={(e) => setPartnerForm({ ...partnerForm, contactPerson: e.target.value })}
             className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
           />
           <input
@@ -444,7 +539,84 @@ export const DeliveryLogisticsPage: React.FC = () => {
             <Button type="button" variant="outline" onClick={() => setPartnerModal(false)}>
               Cancel
             </Button>
-            <Button type="submit">Add Partner</Button>
+            <Button type="submit">{editingPartnerId ? 'Save Changes' : 'Add Partner'}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={pinModal} onClose={() => setPinModal(false)} title="Configure Serviceable Pincode Zone">
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await adminApi.upsertPincodeZone(pinForm);
+            pushToast({ title: `Pincode ${pinForm.pincode} Saved`, message: 'Customer Web serviceability synced.' });
+            setPinModal(false);
+            loadData();
+          }}
+          className="space-y-3 text-xs"
+        >
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              required
+              pattern="[1-9][0-9]{5}"
+              placeholder="6-digit Pincode *"
+              value={pinForm.pincode}
+              onChange={(e) => setPinForm({ ...pinForm, pincode: e.target.value })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
+            />
+            <input
+              required
+              placeholder="Locality / Hub Name *"
+              value={pinForm.locality}
+              onChange={(e) => setPinForm({ ...pinForm, locality: e.target.value })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              placeholder="City"
+              value={pinForm.city}
+              onChange={(e) => setPinForm({ ...pinForm, city: e.target.value })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <input
+              type="number"
+              min={15}
+              placeholder="ETA Minutes (e.g. 60)"
+              value={pinForm.etaMinutes}
+              onChange={(e) => setPinForm({ ...pinForm, etaMinutes: Number(e.target.value) })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+          </div>
+          <input
+            placeholder="Assigned Warehouse Hub"
+            value={pinForm.assignedWarehouse}
+            onChange={(e) => setPinForm({ ...pinForm, assignedWarehouse: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
+          <div className="flex gap-4">
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={pinForm.expressAvailable}
+                onChange={(e) => setPinForm({ ...pinForm, expressAvailable: e.target.checked })}
+              />
+              <span>60-Min Express Enabled</span>
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={pinForm.isActive}
+                onChange={(e) => setPinForm({ ...pinForm, isActive: e.target.checked })}
+              />
+              <span>Active Zone</span>
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setPinModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">Save Pincode Zone</Button>
           </div>
         </form>
       </Modal>

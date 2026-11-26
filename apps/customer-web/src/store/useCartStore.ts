@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CartItem, Product, ProductVariant, Coupon, DeliverySpeed } from '@buildora/types';
-import { AVAILABLE_COUPONS } from '@buildora/constants';
 import { calculateBulkDiscount, calculateCartSummary, UnloadingServiceOptions } from '@buildora/utils';
 import { api } from '../services/api';
+import { useStoreConfigStore } from './useStoreConfigStore';
 
 interface CartStoreState {
   items: CartItem[];
@@ -19,7 +19,7 @@ interface CartStoreState {
   addItem: (product: Product, quantity?: number, variant?: ProductVariant) => void;
   removeItem: (productId: string, variantId?: string) => void;
   updateQuantity: (productId: string, quantity: number, variantId?: string) => void;
-  applyCoupon: (couponCode: string) => { success: boolean; message: string };
+  applyCoupon: (couponCode: string, serverCoupon?: Coupon | null) => { success: boolean; message: string };
   removeCoupon: () => void;
   setDeliverySpeed: (speed: DeliverySpeed) => void;
   setUnloadingOptions: (opts: Partial<UnloadingServiceOptions>) => void;
@@ -139,12 +139,13 @@ export const useCartStore = create<CartStoreState>()(
         });
       },
 
-      applyCoupon: (couponCode) => {
-        const found = AVAILABLE_COUPONS.find(
-          (c) => c.code.toUpperCase() === couponCode.trim().toUpperCase()
-        );
+      applyCoupon: (couponCode, serverCoupon) => {
+        const dynamicCoupons: Coupon[] = (useStoreConfigStore.getState().config?.coupons || []) as Coupon[];
+        const found =
+          serverCoupon ||
+          dynamicCoupons.find((c) => c.code.toUpperCase() === couponCode.trim().toUpperCase());
         if (!found) {
-          return { success: false, message: 'Invalid coupon code. Try BUILD60, CONSTRUCT10, or BULKPRO20' };
+          return { success: false, message: 'Invalid or inactive coupon code.' };
         }
 
         // Expiry check
@@ -202,12 +203,16 @@ export const useCartStore = create<CartStoreState>()(
 
       getSummary: () => {
         const state = get();
+        const delivCfg = useStoreConfigStore.getState().config?.deliveryConfig;
         return calculateCartSummary({
           items: state.items,
           coupon: state.coupon,
           deliverySpeed: state.deliverySpeed,
           unloadingOptions: state.unloadingOptions,
-          walletBalanceToUse: state.walletBalanceToUse
+          walletBalanceToUse: state.walletBalanceToUse,
+          freeDeliveryThreshold: delivCfg?.freeShippingThreshold,
+          standardDeliveryFee: delivCfg?.defaultShippingCharge,
+          baseUnloadingFee: delivCfg?.baseUnloadingFee,
         });
       },
 

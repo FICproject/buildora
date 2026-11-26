@@ -12,8 +12,8 @@ export const AddressesPage: React.FC = () => {
 
   const [isAdding, setIsAdding] = useState(false);
   const [newAddr, setNewAddr] = useState({
-    recipientName: 'Arjun Verma',
-    mobile: '9876543210',
+    recipientName: '',
+    mobile: '',
     type: 'CONSTRUCTION_SITE' as AddressType,
     building: '',
     street: '',
@@ -65,8 +65,8 @@ export const AddressesPage: React.FC = () => {
       }
 
       setNewAddr({
-        recipientName: 'Arjun Verma',
-        mobile: '9876543210',
+        recipientName: '',
+        mobile: '',
         type: 'CONSTRUCTION_SITE',
         building: '',
         street: '',

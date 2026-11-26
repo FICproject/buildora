@@ -1,6 +1,20 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { checkBengaluruServiceability } from '@buildora/constants';
 import { dbStore } from '../../../database/store';
+import {
+  platformPersistenceService,
+  CatalogBrandModel,
+  CatalogAttributeModel,
+  PlatformCouponModel,
+  PlatformPromotionModel,
+  KnowledgeArticleModel,
+  FaqModel,
+  ServiceableZoneModel,
+  NotificationTemplateModel,
+  DispatchAssignmentModel,
+  VendorInvoiceModel,
+} from '../../../database/platform-persistence.service';
 import { taxonomyService } from '../../catalogue/services/taxonomy.service';
 import {
   DEFAULT_TENANT_ID,
@@ -67,11 +81,24 @@ export interface CompanyTenantRecord {
     freeShippingThreshold: number;
     expressDeliveryFee: number;
     estimatedDeliveryDays: number;
+    baseUnloadingFee?: number;
+    expressEtaText?: string;
+    standardEtaText?: string;
+    supportedSpeeds?: string[];
   };
   taxConfig: {
     defaultGstRate: number;
     gstStateCode: string;
     autoInvoicePrefix: string;
+    tdsRate?: number;
+    gstSlabs?: number[];
+  };
+  vendorApprovalConfig?: {
+    requireGstDoc: boolean;
+    requirePanDoc: boolean;
+    requireBankProof: boolean;
+    autoApproveVerifiedGst: boolean;
+    defaultCommissionPercent: number;
   };
   notificationPrefs: {
     emailAlerts: boolean;
@@ -344,14 +371,27 @@ export class CompanyAdminDataService implements OnModuleInit {
       },
       deliveryConfig: {
         defaultShippingCharge: 199,
-        freeShippingThreshold: 5000,
+        freeShippingThreshold: 1000,
         expressDeliveryFee: 499,
         estimatedDeliveryDays: 1,
+        baseUnloadingFee: 199,
+        expressEtaText: 'Delivery in 60 mins',
+        standardEtaText: 'Standard Next-Day Delivery',
+        supportedSpeeds: ['ASAP_60', 'EXPRESS_90', 'STANDARD'],
       },
       taxConfig: {
         defaultGstRate: 18,
         gstStateCode: '29',
         autoInvoicePrefix: 'BLR-INV-',
+        tdsRate: 1,
+        gstSlabs: [0, 5, 12, 18, 28],
+      },
+      vendorApprovalConfig: {
+        requireGstDoc: true,
+        requirePanDoc: true,
+        requireBankProof: true,
+        autoApproveVerifiedGst: false,
+        defaultCommissionPercent: 6,
       },
       notificationPrefs: {
         emailAlerts: true,
@@ -400,11 +440,24 @@ export class CompanyAdminDataService implements OnModuleInit {
         freeShippingThreshold: 10000,
         expressDeliveryFee: 599,
         estimatedDeliveryDays: 2,
+        baseUnloadingFee: 249,
+        expressEtaText: 'Delivery in 90 mins',
+        standardEtaText: '2-Day Regional Dispatch',
+        supportedSpeeds: ['EXPRESS_90', 'STANDARD'],
       },
       taxConfig: {
         defaultGstRate: 18,
         gstStateCode: '36',
         autoInvoicePrefix: 'HYD-INV-',
+        tdsRate: 1,
+        gstSlabs: [0, 5, 12, 18, 28],
+      },
+      vendorApprovalConfig: {
+        requireGstDoc: true,
+        requirePanDoc: true,
+        requireBankProof: true,
+        autoApproveVerifiedGst: false,
+        defaultCommissionPercent: 7,
       },
       notificationPrefs: {
         emailAlerts: true,
@@ -1216,7 +1269,25 @@ export class CompanyAdminDataService implements OnModuleInit {
   private async hydrateFromMongo(): Promise<void> {
     if (!companyAdminPersistenceService.isDbConnected()) return;
     try {
-      const [tenants, users, quotes, contents, logs, partners, custs] = await Promise.all([
+      const [
+        tenants,
+        users,
+        quotes,
+        contents,
+        logs,
+        partners,
+        custs,
+        dbBrands,
+        dbAttrs,
+        dbCoupons,
+        dbPromos,
+        dbArticles,
+        dbFaqs,
+        dbZones,
+        dbTemplates,
+        dbDispatches,
+        dbInvoices,
+      ] = await Promise.all([
         companyAdminPersistenceService.loadCollection<CompanyTenantRecord>(CompanyTenantModel),
         companyAdminPersistenceService.loadCollection<CompanyAdminUserRecord>(CompanyAdminUserModel),
         companyAdminPersistenceService.loadCollection<CompanyQuotationRecord>(CompanyQuotationModel),
@@ -1226,6 +1297,16 @@ export class CompanyAdminDataService implements OnModuleInit {
           CompanyDeliveryPartnerModel
         ),
         companyAdminPersistenceService.loadCollection<CompanyCustomerRecord>(CompanyCustomerModel),
+        platformPersistenceService.loadAll<any>(CatalogBrandModel),
+        platformPersistenceService.loadAll<ProductAttributeRecord>(CatalogAttributeModel),
+        platformPersistenceService.loadAll<any>(PlatformCouponModel),
+        platformPersistenceService.loadAll<any>(PlatformPromotionModel),
+        platformPersistenceService.loadAll<any>(KnowledgeArticleModel),
+        platformPersistenceService.loadAll<any>(FaqModel),
+        platformPersistenceService.loadAll<any>(ServiceableZoneModel),
+        platformPersistenceService.loadAll<NotificationTemplateRecord>(NotificationTemplateModel),
+        platformPersistenceService.loadAll<any>(DispatchAssignmentModel),
+        platformPersistenceService.loadAll<any>(VendorInvoiceModel),
       ]);
 
       for (const t of tenants) this.tenants.set(t.id, t);
@@ -1237,7 +1318,19 @@ export class CompanyAdminDataService implements OnModuleInit {
       if (logs.length > 0) {
         this.auditLogs.splice(0, this.auditLogs.length, ...logs.slice(-500));
       }
-      this.logger.log('Company Admin collections hydrated from MongoDB.');
+      if (dbBrands.length > 0) dbStore.brands.splice(0, dbStore.brands.length, ...dbBrands);
+      if (dbAttrs.length > 0) this.attributes.splice(0, this.attributes.length, ...dbAttrs);
+      if (dbCoupons.length > 0) dbStore.coupons.splice(0, dbStore.coupons.length, ...dbCoupons);
+      if (dbPromos.length > 0) vendorPromotions.splice(0, vendorPromotions.length, ...dbPromos);
+      if (dbArticles.length > 0) dbStore.knowledgeArticles.splice(0, dbStore.knowledgeArticles.length, ...dbArticles);
+      if (dbFaqs.length > 0) dbStore.faqs.splice(0, dbFaqs.length, ...dbFaqs);
+      for (const z of dbZones as any[]) {
+        if (z?.pincode) (dbStore.pincodes as Record<string, any>)[z.pincode] = z;
+      }
+      if (dbTemplates.length > 0) this.notificationTemplates.splice(0, this.notificationTemplates.length, ...dbTemplates);
+      for (const d of dbDispatches) if (d?.orderId) this.dispatchAssignments.set(d.orderId, d);
+      if (dbInvoices.length > 0) vendorInvoices.splice(0, vendorInvoices.length, ...dbInvoices);
+      this.logger.log('Company Admin & Platform configuration collections hydrated from MongoDB.');
     } catch (err: any) {
       this.logger.warn(`Mongo hydration skipped: ${err.message}`);
     }
@@ -1493,13 +1586,197 @@ export class CompanyAdminDataService implements OnModuleInit {
     };
   }
 
-  getPublishedStorefrontContent(tenantId: string) {
-    const items = Array.from(this.contentItems.values())
-      .filter((c) => c.tenantId === tenantId && c.status === 'PUBLISHED')
-      .sort((a, b) => a.position - b.position);
+  getTenantConfig(tenantId: string): CompanyTenantRecord {
+    return (
+      this.tenants.get(tenantId) ||
+      this.tenants.get(DEFAULT_TENANT_ID) ||
+      Array.from(this.tenants.values())[0]
+    );
+  }
+
+  getActiveCoupons(tenantId: string) {
+    const now = Date.now();
+    return dbStore.coupons.filter((c: any) => {
+      if (c.tenantId && c.tenantId !== tenantId) return false;
+      if (c.isActive === false) return false;
+      if (c.expiryDate) {
+        const exp = new Date(c.expiryDate).getTime();
+        if (!Number.isNaN(exp) && exp < now) return false;
+      }
+      return true;
+    });
+  }
+
+  checkTenantPincodeServiceability(tenantId: string, rawPincode: string) {
+    const clean = (rawPincode || '').trim();
+    const tenant = this.getTenantConfig(tenantId);
+    const freeThreshold = Number(tenant?.deliveryConfig?.freeShippingThreshold ?? 1000);
+    const stdFee = Number(tenant?.deliveryConfig?.defaultShippingCharge ?? 199);
+
+    // 1. Check DB/Admin-configured ServiceablePincode entries first
+    const dbZone = (dbStore.pincodes as Record<string, any>)[clean];
+    if (dbZone && (!dbZone.tenantId || dbZone.tenantId === tenantId)) {
+      const isActive = dbZone.isActive !== false && dbZone.isServiceable !== false;
+      const whMatch = this.getTenantWarehouses(tenantId).find(
+        (w: any) => w.id === dbZone.warehouseId || w.name === dbZone.assignedWarehouse
+      );
+      return {
+        pincode: clean,
+        isServiceable: isActive,
+        city: dbZone.city || tenant.city || 'Bengaluru',
+        state: dbZone.state || tenant.state || 'Karnataka',
+        locality: dbZone.locality || dbZone.area || 'Serviceable Zone',
+        area: dbZone.locality || dbZone.area || 'Serviceable Zone',
+        zone: dbZone.zone || 'CENTRAL',
+        assignedWarehouse: whMatch?.name || dbZone.assignedWarehouse || 'Primary Warehouse Hub',
+        warehouseId: whMatch?.id || dbZone.warehouseId || 'WH-BLR-01',
+        etaMinutes: Number(dbZone.etaMinutes || 60),
+        etaText:
+          dbZone.etaText ||
+          (Number(dbZone.etaMinutes || 60) <= 60
+            ? tenant?.deliveryConfig?.expressEtaText || 'Delivery in 60 mins'
+            : tenant?.deliveryConfig?.standardEtaText || `Delivery in ${dbZone.etaMinutes} mins`),
+        expressAvailable: dbZone.expressAvailable !== false,
+        freeDeliveryThreshold: freeThreshold,
+        deliveryCharge: Number(dbZone.deliveryCharge ?? stdFee),
+        message: isActive
+          ? `Express construction supply delivery available in ${dbZone.city || tenant.city}`
+          : `Pincode ${clean} is currently disabled for delivery.`,
+      };
+    }
+
+    // 2. Fallback to static regional lookup enriched cleanly with tenant rules
+    const fallback = checkBengaluruServiceability(clean);
+    return {
+      ...fallback,
+      freeDeliveryThreshold: freeThreshold,
+      deliveryCharge: stdFee,
+      etaText:
+        fallback.isServiceable && fallback.etaMinutes <= 60
+          ? tenant?.deliveryConfig?.expressEtaText || fallback.etaText
+          : fallback.etaText,
+    };
+  }
+
+  getPublicStoreConfig(tenantId: string) {
+    const cleanTenant = tenantId || DEFAULT_TENANT_ID;
+    const tenant = this.getTenantConfig(cleanTenant);
+    const content = this.getPublishedStorefrontContent(cleanTenant);
+    const activeWarehouses = this.getTenantWarehouses(cleanTenant).filter((w: any) => w.isActive !== false);
+
+    return {
+      tenantId: cleanTenant,
+      storeName: tenant.name,
+      legalName: tenant.legalName,
+      city: tenant.city,
+      state: tenant.state,
+      supportEmail: tenant.supportEmail,
+      supportPhone: tenant.supportPhone,
+      logoUrl: tenant.logoUrl,
+      websiteUrl: tenant.websiteUrl,
+      paymentConfig: {
+        razorpayEnabled: tenant.paymentConfig.razorpayEnabled,
+        codEnabled: tenant.paymentConfig.codEnabled,
+        codMaxOrderValue: tenant.paymentConfig.codMaxOrderValue,
+      },
+      deliveryConfig: {
+        defaultShippingCharge: tenant.deliveryConfig.defaultShippingCharge,
+        freeShippingThreshold: tenant.deliveryConfig.freeShippingThreshold,
+        expressDeliveryFee: tenant.deliveryConfig.expressDeliveryFee,
+        estimatedDeliveryDays: tenant.deliveryConfig.estimatedDeliveryDays,
+        baseUnloadingFee: tenant.deliveryConfig.baseUnloadingFee ?? 199,
+        expressEtaText: tenant.deliveryConfig.expressEtaText || 'Delivery in 60 mins',
+        standardEtaText: tenant.deliveryConfig.standardEtaText || 'Standard Next-Day Delivery',
+        supportedSpeeds: tenant.deliveryConfig.supportedSpeeds || ['ASAP_60', 'EXPRESS_90', 'STANDARD'],
+      },
+      taxConfig: {
+        defaultGstRate: tenant.taxConfig.defaultGstRate,
+        gstStateCode: tenant.taxConfig.gstStateCode,
+        gstSlabs: tenant.taxConfig.gstSlabs || [0, 5, 12, 18, 28],
+      },
+      vendorApprovalConfig: tenant.vendorApprovalConfig || {
+        requireGstDoc: true,
+        requirePanDoc: true,
+        requireBankProof: true,
+        autoApproveVerifiedGst: false,
+        defaultCommissionPercent: tenant.paymentConfig.platformCommissionPercent || 6,
+      },
+      coupons: this.getActiveCoupons(cleanTenant),
+      warehouses: activeWarehouses,
+      content,
+      serviceablePincodesCount: Object.values(dbStore.pincodes as Record<string, any>).filter(
+        (z: any) => z && (z.isActive !== false && z.isServiceable !== false) && (!z.tenantId || z.tenantId === cleanTenant)
+      ).length,
+      updatedAt: tenant.updatedAt,
+    };
+  }
+
+  buildDashboardCharts(tenantId: string, orders: any[], products: any[]) {
+    const statusMap = new Map<string, number>();
+    const dayMap = new Map<string, { revenue: number; orders: number }>();
+
+    for (const o of orders) {
+      const st = String(o.status || 'NEW');
+      statusMap.set(st, (statusMap.get(st) || 0) + 1);
+      const day = String(o.createdAt || new Date().toISOString()).slice(0, 10);
+      const cur = dayMap.get(day) || { revenue: 0, orders: 0 };
+      if (!['CANCELLED', 'REFUNDED'].includes(st)) {
+        cur.revenue += Number(o.totalAmount ?? o.grandTotal ?? 0);
+      }
+      cur.orders += 1;
+      dayMap.set(day, cur);
+    }
+
+    const catRevMap = new Map<string, { category: string; productCount: number; stockValue: number }>();
+    for (const p of products) {
+      const catName = p.childCategoryName || p.categoryName || p.category || 'Uncategorized';
+      const cur = catRevMap.get(catName) || { category: catName, productCount: 0, stockValue: 0 };
+      cur.productCount += 1;
+      cur.stockValue += Number(p.sellingPrice || p.price || 0) * Math.max(0, Number(p.stock ?? p.stockCount ?? 0));
+      catRevMap.set(catName, cur);
+    }
+
+    const revenueTrend = Array.from(dayMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-14)
+      .map(([date, stats]) => ({ date, revenue: Math.round(stats.revenue), orders: stats.orders }));
+    const orderStatusBreakdown = Array.from(statusMap.entries()).map(([status, count]) => ({ status, count }));
+    const topCategories = Array.from(catRevMap.values())
+      .sort((a, b) => b.stockValue - a.stockValue)
+      .slice(0, 8)
+      .map((c) => ({ category: c.category, skuCount: c.productCount, productCount: c.productCount, stockValue: Math.round(c.stockValue) }));
 
     return {
       tenantId,
+      revenueTrend,
+      orderStatusBreakdown,
+      topCategories,
+      revenueByDay: revenueTrend,
+      ordersByStatus: orderStatusBreakdown,
+      categoryBreakdown: topCategories,
+    };
+  }
+
+  getPublishedStorefrontContent(tenantId: string) {
+    const cleanTenant = tenantId || DEFAULT_TENANT_ID;
+    const now = Date.now();
+    const items = Array.from(this.contentItems.values())
+      .filter((c) => c.tenantId === cleanTenant && c.status === 'PUBLISHED')
+      .filter((c) => {
+        if (c.startDate) {
+          const s = new Date(c.startDate).getTime();
+          if (!Number.isNaN(s) && now < s) return false;
+        }
+        if (c.endDate) {
+          const e = new Date(c.endDate).getTime();
+          if (!Number.isNaN(e) && now > e) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => a.position - b.position);
+
+    return {
+      tenantId: cleanTenant,
       banners: items.filter((i) => i.contentType === 'BANNER'),
       announcements: items.filter((i) => i.contentType === 'ANNOUNCEMENT'),
       sections: items.filter((i) => i.contentType === 'HOMEPAGE_SECTION'),

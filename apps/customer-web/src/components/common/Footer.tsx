@@ -16,9 +16,14 @@ import {
   HelpCircle,
   Building2
 } from 'lucide-react';
-import { MASTER_CATEGORIES } from '@buildora/constants';
+import { useStoreConfigStore } from '../../store/useStoreConfigStore';
 
 export const Footer: React.FC = () => {
+  const storeCfg = useStoreConfigStore((s) => s.config);
+  const supportPhone = storeCfg?.supportPhone || '1800-60-28453';
+  const supportEmail = storeCfg?.supportEmail || 'support@buildora.com';
+  const cityLabel = storeCfg?.city ? `${storeCfg.city}, ${storeCfg.state || 'Karnataka'}` : 'Bengaluru - 560103';
+
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [isSubscribed, setIsSubscribed] = useState(false);
 
@@ -93,18 +98,18 @@ export const Footer: React.FC = () => {
             <div className="space-y-1.5 text-xs text-slate-400">
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-brand-orange-500" />
-                <span>Outer Ring Road Tech Hub, Bengaluru - 560103</span>
+                <span>{storeCfg?.legalName || 'BUILDORA 60 Technologies Pvt Ltd'}, {cityLabel}</span>
               </div>
               <div className="flex items-center gap-2">
                 <PhoneCall className="w-4 h-4 text-brand-orange-500" />
-                <a href="tel:18006028453" className="hover:text-white">
-                  1800-60-BUILD (1800-60-28453)
+                <a href={`tel:${supportPhone.replace(/[^+\d]/g, '')}`} className="hover:text-white">
+                  {supportPhone}
                 </a>
               </div>
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-brand-orange-500" />
-                <a href="mailto:support@buildora.com" className="hover:text-white">
-                  support@buildora.com
+                <a href={`mailto:${supportEmail}`} className="hover:text-white">
+                  {supportEmail}
                 </a>
               </div>
             </div>

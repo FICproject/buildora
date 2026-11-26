@@ -320,15 +320,19 @@ export const VendorInventoryPage: React.FC = () => {
 
       {activeTab === 'WAREHOUSES' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {(warehouses.length > 0
-            ? warehouses
-            : [{ id: 'wh-1', name: 'Peenya Central Dispatch Depot', city: 'Bengaluru', pincode: '560058', isPrimary: true }]
-          ).map((wh: any, whIdx: number) => {
-            const whItems = inventory.filter((_, idx) =>
-              warehouses.length <= 1 ? true : idx % warehouses.length === whIdx
-            );
-            const whStock = whItems.reduce((sum, i) => sum + i.stock, 0);
-            const whLow = whItems.filter((i) => i.status !== 'IN_STOCK').length;
+          {warehouses.map((wh: any) => {
+            const whItems = inventory.filter((item: any) => {
+              const ws = item.warehouseStocks;
+              if (ws && typeof ws === 'object' && Object.keys(ws).length > 0) {
+                return ws[wh.id] !== undefined;
+              }
+              return wh.isPrimary || item.warehouseId === wh.id;
+            });
+            const whStock =
+              typeof wh.totalUnits === 'number'
+                ? wh.totalUnits
+                : whItems.reduce((sum: number, i: any) => sum + Number(i.warehouseStocks?.[wh.id] ?? i.stock ?? 0), 0);
+            const whLow = whItems.filter((i: any) => i.status !== 'IN_STOCK').length;
             return (
               <Card key={wh.id}>
                 <CardContent className="p-5 space-y-4">

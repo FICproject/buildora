@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -102,6 +102,30 @@ export const AdminLayout: React.FC = () => {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [pwdModalOpen, setPwdModalOpen] = useState(false);
   const [pwdForm, setPwdForm] = useState({ currentPassword: '', newPassword: '' });
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const loadUnread = () => {
+      adminApi
+        .getSupportNotifications()
+        .then((res) => {
+          if (!active) return;
+          const unread = Array.isArray(res?.alerts)
+            ? res.alerts.filter((a: any) => !a.isRead).length
+            : 0;
+          setUnreadAlerts(unread);
+        })
+        .catch(() => {});
+    };
+    loadUnread();
+    const onRealtime = () => loadUnread();
+    window.addEventListener('buildora:admin:realtime', onRealtime);
+    return () => {
+      active = false;
+      window.removeEventListener('buildora:admin:realtime', onRealtime);
+    };
+  }, [location.pathname]);
 
   const allowedNav = NAV_ITEMS.filter((item) => hasPermission(item.permission));
   const currentNav = NAV_ITEMS.find((n) =>
@@ -367,7 +391,11 @@ export const AdminLayout: React.FC = () => {
               title="Notifications & Support"
             >
               <BellRing className="w-5 h-5" />
-              <span className="w-2 h-2 rounded-full bg-[#AE887B] absolute top-1.5 right-1.5 ring-2 ring-white" />
+              {unreadAlerts > 0 && (
+                <span className="min-w-[16px] h-4 px-1 rounded-full bg-[#AE887B] text-white text-[10px] font-bold flex items-center justify-center absolute top-0.5 right-0.5 ring-2 ring-white">
+                  {unreadAlerts > 99 ? '99+' : unreadAlerts}
+                </span>
+              )}
             </button>
 
             {/* Profile Dropdown */}

@@ -90,8 +90,8 @@ export const LocationModal: React.FC = () => {
       }
 
       // Pre-fill user defaults
-      setReceiverName(user?.name || 'Arjun Verma');
-      setReceiverPhone(user?.phone ? user.phone.replace(/\D/g, '').slice(-10) : '6379789641');
+      setReceiverName(user?.name || '');
+      setReceiverPhone(user?.phone ? user.phone.replace(/\D/g, '').slice(-10) : '');
     }
   }, [isModalOpen, addresses, selectedAddressId, user]);
 

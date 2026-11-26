@@ -5,7 +5,7 @@ import { PageHeader, Card, Badge, Button, Modal, statusBadgeVariant, useToastSto
 
 export const WebsiteContentPage: React.FC = () => {
   const pushToast = useToastStore((s) => s.push);
-  const [tab, setTab] = useState<'CMS' | 'KNOWLEDGE'>('CMS');
+  const [tab, setTab] = useState<'CMS' | 'KNOWLEDGE' | 'FAQS'>('CMS');
   const [items, setItems] = useState<any[]>([]);
   const [knowledge, setKnowledge] = useState<{ articles: any[]; faqs: any[] }>({
     articles: [],
@@ -13,6 +13,7 @@ export const WebsiteContentPage: React.FC = () => {
   });
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [createModal, setCreateModal] = useState(false);
+  const [editingContentId, setEditingContentId] = useState<string | null>(null);
   const [form, setForm] = useState({
     contentType: 'ANNOUNCEMENT',
     title: '',
@@ -20,14 +21,28 @@ export const WebsiteContentPage: React.FC = () => {
     badge: 'NEW',
     ctaLabel: 'Browse Deals',
     ctaUrl: '/deals',
+    imageUrl: '',
+    startDate: '',
+    endDate: '',
     position: 1,
   });
 
   const [khModal, setKhModal] = useState(false);
+  const [editingKhId, setEditingKhId] = useState<string | null>(null);
   const [khForm, setKhForm] = useState({
     title: '',
     category: 'Structural Engineering',
     summary: '',
+    content: '',
+    imageUrl: '',
+  });
+
+  const [faqModal, setFaqModal] = useState(false);
+  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
+  const [faqForm, setFaqForm] = useState({
+    question: '',
+    answer: '',
+    category: 'Delivery & Pricing',
   });
 
   const loadData = async () => {
@@ -63,29 +78,38 @@ export const WebsiteContentPage: React.FC = () => {
     <div className="space-y-5">
       <PageHeader
         title="Website Content & Storefront CMS"
-        description="Draft, preview, publish & sync banners, announcements, featured deals & knowledge hub articles to Customer Website."
+        description="Draft, preview, publish & sync banners, announcements, featured deals, guides & FAQs to Customer Website."
         actions={
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={tab === 'CMS' ? 'primary' : 'outline'}
-              onClick={() => setTab('CMS')}
-            >
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant={tab === 'CMS' ? 'primary' : 'outline'} onClick={() => setTab('CMS')}>
               <Globe className="w-4 h-4" /> Storefront Blocks
             </Button>
-            <Button
-              size="sm"
-              variant={tab === 'KNOWLEDGE' ? 'primary' : 'outline'}
-              onClick={() => setTab('KNOWLEDGE')}
-            >
-              <BookOpen className="w-4 h-4" /> Knowledge Hub & FAQs
+            <Button size="sm" variant={tab === 'KNOWLEDGE' ? 'primary' : 'outline'} onClick={() => setTab('KNOWLEDGE')}>
+              <BookOpen className="w-4 h-4" /> Knowledge Hub
+            </Button>
+            <Button size="sm" variant={tab === 'FAQS' ? 'primary' : 'outline'} onClick={() => setTab('FAQS')}>
+              FAQs
             </Button>
             <Button
               size="sm"
               variant="accent"
-              onClick={() => (tab === 'CMS' ? setCreateModal(true) : setKhModal(true))}
+              onClick={() => {
+                if (tab === 'CMS') {
+                  setEditingContentId(null);
+                  setForm({ contentType: 'ANNOUNCEMENT', title: '', subtitle: '', badge: 'NEW', ctaLabel: 'Browse Deals', ctaUrl: '/deals', imageUrl: '', startDate: '', endDate: '', position: 1 });
+                  setCreateModal(true);
+                } else if (tab === 'KNOWLEDGE') {
+                  setEditingKhId(null);
+                  setKhForm({ title: '', category: 'Structural Engineering', summary: '', content: '', imageUrl: '' });
+                  setKhModal(true);
+                } else {
+                  setEditingFaqId(null);
+                  setFaqForm({ question: '', answer: '', category: 'Delivery & Pricing' });
+                  setFaqModal(true);
+                }
+              }}
             >
-              <Plus className="w-4 h-4" /> {tab === 'CMS' ? 'New Content Block' : 'New Article'}
+              <Plus className="w-4 h-4" /> {tab === 'CMS' ? 'New Content Block' : tab === 'KNOWLEDGE' ? 'New Article' : 'New FAQ'}
             </Button>
           </div>
         }
@@ -100,39 +124,143 @@ export const WebsiteContentPage: React.FC = () => {
               subtitle={`${item.contentType} • Slot #${item.position} • Updated ${formatDateTime(item.updatedAt)}`}
               action={<Badge variant={statusBadgeVariant(item.status)}>{item.status}</Badge>}
             >
+              {item.imageUrl && (
+                <img src={item.imageUrl} alt={item.title} className="w-full h-28 object-cover rounded-lg mb-2.5 border border-[#E5DCD3]" />
+              )}
               <p className="text-xs text-[#6E6859] mb-3">{item.subtitle}</p>
               <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#E5DCD3]">
                 <span className="text-[11px] font-mono text-[#6E6859]">
                   CTA: {item.ctaLabel} → {item.ctaUrl}
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   <Button size="sm" variant="outline" onClick={() => setPreviewItem(item)}>
                     <Eye className="w-3.5 h-3.5" /> Preview
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingContentId(item.id);
+                      setForm({
+                        contentType: item.contentType || 'BANNER',
+                        title: item.title || '',
+                        subtitle: item.subtitle || '',
+                        badge: item.badge || '',
+                        ctaLabel: item.ctaLabel || '',
+                        ctaUrl: item.ctaUrl || '',
+                        imageUrl: item.imageUrl || '',
+                        startDate: item.startDate || '',
+                        endDate: item.endDate || '',
+                        position: item.position || 1,
+                      });
+                      setCreateModal(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
                   {item.status !== 'PUBLISHED' ? (
                     <Button size="sm" variant="success" onClick={() => handlePublish(item.id)}>
-                      <UploadCloud className="w-3.5 h-3.5" /> Publish Live
+                      <UploadCloud className="w-3.5 h-3.5" /> Publish
                     </Button>
                   ) : (
                     <Button size="sm" variant="outline" onClick={() => handleUnpublish(item.id)}>
                       Unpublish
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      await adminApi.deleteContent(item.id);
+                      pushToast({ title: 'Block Deleted' });
+                      loadData();
+                    }}
+                  >
+                    Del
+                  </Button>
                 </div>
               </div>
             </Card>
           ))}
         </div>
-      ) : (
+      ) : tab === 'KNOWLEDGE' ? (
         <Card title="Knowledge Hub Articles & Guides">
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(knowledge.articles || []).map((art) => (
               <div key={art.id} className="py-3 flex justify-between items-start gap-4">
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold text-[#5E5946]">{art.title}</p>
                   <p className="text-[#6E6859] mt-0.5">{art.summary}</p>
                 </div>
-                <Badge variant="info">{art.category}</Badge>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="info">{art.category}</Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingKhId(art.id);
+                      setKhForm({
+                        title: art.title || '',
+                        category: art.category || 'Structural Engineering',
+                        summary: art.summary || '',
+                        content: art.content || '',
+                        imageUrl: art.imageUrl || '',
+                      });
+                      setKhModal(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      await adminApi.deleteKnowledgeArticle(art.id);
+                      pushToast({ title: 'Article Deleted' });
+                      loadData();
+                    }}
+                  >
+                    Del
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : (
+        <Card title="Customer & Trade FAQs" subtitle="Published dynamically on Storefront Help / Static pages">
+          <div className="divide-y divide-[#E5DCD3] text-xs">
+            {(knowledge.faqs || []).map((faq: any) => (
+              <div key={faq.id} className="py-3 flex justify-between items-start gap-4">
+                <div>
+                  <p className="font-semibold text-[#5E5946]">{faq.question}</p>
+                  <p className="text-[#6E6859] mt-0.5">{faq.answer}</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Badge variant="info">{faq.category || 'General'}</Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingFaqId(faq.id);
+                      setFaqForm({ question: faq.question || '', answer: faq.answer || '', category: faq.category || 'Delivery & Pricing' });
+                      setFaqModal(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      await adminApi.deleteFaq(faq.id);
+                      pushToast({ title: 'FAQ Removed' });
+                      loadData();
+                    }}
+                  >
+                    Del
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -181,14 +309,27 @@ export const WebsiteContentPage: React.FC = () => {
         )}
       </Modal>
 
-      {/* New Content Draft Modal */}
-      <Modal open={createModal} onClose={() => setCreateModal(false)} title="Draft Website Content">
+      {/* Content Block Create/Edit Modal */}
+      <Modal
+        open={createModal}
+        onClose={() => {
+          setCreateModal(false);
+          setEditingContentId(null);
+        }}
+        title={editingContentId ? 'Edit Website Content Block' : 'Draft Website Content'}
+      >
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            await adminApi.createContent(form);
-            pushToast({ title: 'Draft Saved', message: 'Preview or publish when ready.' });
+            if (editingContentId) {
+              await adminApi.updateContentDraft(editingContentId, form);
+              pushToast({ title: 'Content Block Updated' });
+            } else {
+              await adminApi.createContent(form);
+              pushToast({ title: 'Draft Saved', message: 'Preview or publish when ready.' });
+            }
             setCreateModal(false);
+            setEditingContentId(null);
             loadData();
           }}
           className="space-y-3 text-xs"
@@ -231,23 +372,69 @@ export const WebsiteContentPage: React.FC = () => {
               className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              placeholder="Banner Image URL (or upload below)"
+              value={form.imageUrl}
+              onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const uploaded = await adminApi.uploadCatalogImage(file);
+                setForm((prev) => ({ ...prev, imageUrl: uploaded.url }));
+              }}
+              className="px-2 py-1.5 bg-white border border-[#E5DCD3] rounded-lg text-[11px]"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="date"
+              value={form.startDate}
+              onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <input
+              type="date"
+              value={form.endDate}
+              onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setCreateModal(false)}>
               Cancel
             </Button>
-            <Button type="submit">Save as Draft</Button>
+            <Button type="submit">{editingContentId ? 'Update Draft' : 'Save as Draft'}</Button>
           </div>
         </form>
       </Modal>
 
       {/* Knowledge Hub Article Modal */}
-      <Modal open={khModal} onClose={() => setKhModal(false)} title="Publish Knowledge Hub Guide">
+      <Modal
+        open={khModal}
+        onClose={() => {
+          setKhModal(false);
+          setEditingKhId(null);
+        }}
+        title={editingKhId ? 'Edit Knowledge Hub Guide' : 'Publish Knowledge Hub Guide'}
+      >
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            await adminApi.createKnowledgeArticle(khForm);
-            pushToast({ title: 'Article Published' });
+            if (editingKhId) {
+              await adminApi.updateKnowledgeArticle(editingKhId, khForm);
+              pushToast({ title: 'Article Updated' });
+            } else {
+              await adminApi.createKnowledgeArticle(khForm);
+              pushToast({ title: 'Article Published' });
+            }
             setKhModal(false);
+            setEditingKhId(null);
             loadData();
           }}
           className="space-y-3 text-xs"
@@ -278,7 +465,62 @@ export const WebsiteContentPage: React.FC = () => {
             <Button type="button" variant="outline" onClick={() => setKhModal(false)}>
               Cancel
             </Button>
-            <Button type="submit">Publish Guide</Button>
+            <Button type="submit">{editingKhId ? 'Update Guide' : 'Publish Guide'}</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* FAQ Modal */}
+      <Modal
+        open={faqModal}
+        onClose={() => {
+          setFaqModal(false);
+          setEditingFaqId(null);
+        }}
+        title={editingFaqId ? 'Edit FAQ' : 'Add Storefront FAQ'}
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (editingFaqId) {
+              await adminApi.updateFaq(editingFaqId, faqForm);
+              pushToast({ title: 'FAQ Updated' });
+            } else {
+              await adminApi.createFaq(faqForm);
+              pushToast({ title: 'FAQ Added' });
+            }
+            setFaqModal(false);
+            setEditingFaqId(null);
+            loadData();
+          }}
+          className="space-y-3 text-xs"
+        >
+          <input
+            required
+            placeholder="Question"
+            value={faqForm.question}
+            onChange={(e) => setFaqForm({ ...faqForm, question: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
+          <input
+            placeholder="Category"
+            value={faqForm.category}
+            onChange={(e) => setFaqForm({ ...faqForm, category: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
+          <textarea
+            required
+            rows={4}
+            placeholder="Answer..."
+            value={faqForm.answer}
+            onChange={(e) => setFaqForm({ ...faqForm, answer: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setFaqModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">{editingFaqId ? 'Save FAQ' : 'Publish FAQ'}</Button>
           </div>
         </form>
       </Modal>

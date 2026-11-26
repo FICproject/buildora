@@ -231,36 +231,25 @@ export const VendorTeamPage: React.FC = () => {
         <div className="bg-white rounded-2xl border border-[#E7E5E4] shadow-xs p-5 space-y-3">
           <h3 className="font-extrabold text-sm text-[#292524]">Administrative Security Logs</h3>
           <div className="space-y-2">
-            {(auditLogs.length > 0 ? auditLogs : [
-              {
-                id: 'al-1',
-                action: 'VENDOR_LOGIN',
-                performedBy: 'Vikramaditya Rao (Owner)',
-                performedAt: new Date().toISOString(),
-                details: 'Successful portal login from Bengaluru IP address.',
-              },
-              {
-                id: 'al-2',
-                action: 'STOCK_INWARD_AUTHORIZED',
-                performedBy: 'Ramesh Gowda (Depot Admin)',
-                performedAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-                details: 'Consignment of 200 bags of UltraTech PPC Cement inwarded.',
-              },
-            ]).map((log: any, idx: number) => (
-              <div
-                key={idx}
-                className="p-3 rounded-xl bg-[#FBF3F0] border border-[#E7E5E4] flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs"
-              >
-                <div>
-                  <span className="font-extrabold text-[#943D24]">{log.action}: </span>
-                  <span className="text-[#292524] font-medium">{log.details}</span>
-                  <p className="text-[10px] text-[#78716C] mt-0.5">By: {log.performedBy}</p>
+            {auditLogs.length === 0 ? (
+              <p className="text-xs text-[#78716C] py-4">No administrative security logs recorded yet.</p>
+            ) : (
+              auditLogs.map((log: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-xl bg-[#FBF3F0] border border-[#E7E5E4] flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs"
+                >
+                  <div>
+                    <span className="font-extrabold text-[#943D24]">{log.action}: </span>
+                    <span className="text-[#292524] font-medium">{log.details}</span>
+                    <p className="text-[10px] text-[#78716C] mt-0.5">By: {log.performedBy}</p>
+                  </div>
+                  <span className="text-[10px] font-mono text-[#78716C] shrink-0">
+                    {new Date(log.performedAt).toLocaleString('en-IN')}
+                  </span>
                 </div>
-                <span className="text-[10px] font-mono text-[#78716C] shrink-0">
-                  {new Date(log.performedAt).toLocaleString('en-IN')}
-                </span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}

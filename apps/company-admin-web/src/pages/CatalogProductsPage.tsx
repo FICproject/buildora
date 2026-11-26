@@ -133,6 +133,9 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
   });
   const [brandForm, setBrandForm] = useState({ name: '', description: '' });
   const [attrForm, setAttrForm] = useState({ name: '', categoryName: 'Cement & Concrete', valuesCsv: '' });
+  const [brandEditModal, setBrandEditModal] = useState<any>(null);
+  const [attrEditModal, setAttrEditModal] = useState<any>(null);
+  const [launchEditModal, setLaunchEditModal] = useState<any>(null);
 
   useEffect(() => {
     setSectionTab(initialSection);
@@ -396,50 +399,49 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
         sectionTab === 'MAIN_CATEGORIES' ||
         sectionTab === 'CHILD_CATEGORIES' ||
         sectionTab === 'PRODUCT_TYPES') && (
-        <div
-          className={`p-3.5 rounded-xl border text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
-            taxonomy.publishMetadata?.hasUnpublishedChanges
+          <div
+            className={`p-3.5 rounded-xl border text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${taxonomy.publishMetadata?.hasUnpublishedChanges
               ? 'bg-amber-50 border-amber-300 text-amber-950'
               : 'bg-[#FAF7F4] border-[#E5DCD3] text-[#5E5946]'
-          }`}
-        >
-          <div className="space-y-0.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={taxonomy.publishMetadata?.hasUnpublishedChanges ? 'warning' : 'success'}>
-                {taxonomy.publishMetadata?.hasUnpublishedChanges ? 'Unpublished Draft Changes' : `Published Live (v${taxonomy.publishMetadata?.publishedVersion || 1})`}
-              </Badge>
-              {taxonomy.publishMetadata?.lastPublishedAt && (
-                <span className="text-[11px] text-[#6E6859]">
-                  Last published: {new Date(taxonomy.publishMetadata.lastPublishedAt).toLocaleString()}
-                </span>
-              )}
+              }`}
+          >
+            <div className="space-y-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={taxonomy.publishMetadata?.hasUnpublishedChanges ? 'warning' : 'success'}>
+                  {taxonomy.publishMetadata?.hasUnpublishedChanges ? 'Unpublished Draft Changes' : `Published Live (v${taxonomy.publishMetadata?.publishedVersion || 1})`}
+                </Badge>
+                {taxonomy.publishMetadata?.lastPublishedAt && (
+                  <span className="text-[11px] text-[#6E6859]">
+                    Last published: {new Date(taxonomy.publishMetadata.lastPublishedAt).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-[#6E6859]">
+                Changes saved in Draft Mode can be previewed in Desktop Navigation before publishing atomically to Vendor Portal & Customer Website.
+              </p>
             </div>
-            <p className="text-[11px] text-[#6E6859]">
-              Changes saved in Draft Mode can be previewed in Desktop Navigation before publishing atomically to Vendor Portal & Customer Website.
-            </p>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#E5DCD3] cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                checked={workInDraftMode}
-                onChange={(e) => setWorkInDraftMode(e.target.checked)}
-              />
-              <span>Stage as Draft First</span>
-            </label>
-            {taxonomy.publishMetadata?.hasUnpublishedChanges && (
-              <Button size="sm" variant="outline" onClick={handleDiscardDraft}>
-                <RotateCcw className="w-3.5 h-3.5" /> Discard Draft
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#E5DCD3] cursor-pointer font-medium">
+                <input
+                  type="checkbox"
+                  checked={workInDraftMode}
+                  onChange={(e) => setWorkInDraftMode(e.target.checked)}
+                />
+                <span>Stage as Draft First</span>
+              </label>
+              {taxonomy.publishMetadata?.hasUnpublishedChanges && (
+                <Button size="sm" variant="outline" onClick={handleDiscardDraft}>
+                  <RotateCcw className="w-3.5 h-3.5" /> Discard Draft
+                </Button>
+              )}
+              <Button size="sm" variant="dark" onClick={handlePublishCatalog} disabled={publishing}>
+                <Send className="w-3.5 h-3.5" />
+                {publishing ? 'Publishing...' : 'Publish to Vendor & Customer'}
               </Button>
-            )}
-            <Button size="sm" variant="dark" onClick={handlePublishCatalog} disabled={publishing}>
-              <Send className="w-3.5 h-3.5" />
-              {publishing ? 'Publishing...' : 'Publish to Vendor & Customer'}
-            </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {sectionTab === 'PRODUCTS' ? (
         <>
@@ -618,7 +620,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
           <Card
             title="Customer Desktop Header Preview"
             subtitle="Hover over Main Categories below to preview live two-column Child Category dropdowns exactly as Customers will see them"
-            action={
+            actions={
               <Button size="sm" variant="outline" onClick={() => setShowNavPreview((p) => !p)}>
                 <Eye className="w-3.5 h-3.5" /> {showNavPreview ? 'Hide Preview' : 'Show Preview'}
               </Button>
@@ -650,13 +652,12 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                         className="relative"
                       >
                         <div
-                          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs transition-all cursor-default ${
-                            nav.highlight
-                              ? 'bg-orange-50 text-orange-700 border-orange-200'
-                              : isOpen
+                          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs transition-all cursor-default ${nav.highlight
+                            ? 'bg-orange-50 text-orange-700 border-orange-200'
+                            : isOpen
                               ? 'bg-slate-900 text-white border-slate-900'
                               : 'bg-white text-slate-700 border-slate-200'
-                          }`}
+                            }`}
                         >
                           {nav.itemType === 'HOME' && <Home className="w-3.5 h-3.5 text-orange-500" />}
                           {nav.itemType === 'NEW_LAUNCHES' && <Rocket className="w-3.5 h-3.5 text-orange-500" />}
@@ -678,11 +679,10 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                     <div
                                       key={cc.id}
                                       onMouseEnter={() => setPreviewHoveredChildSlug(cc.slug)}
-                                      className={`px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center justify-between ${
-                                        previewHoveredChildSlug === cc.slug
-                                          ? 'bg-slate-900 text-white font-semibold'
-                                          : 'text-slate-700 hover:bg-slate-100'
-                                      }`}
+                                      className={`px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center justify-between ${previewHoveredChildSlug === cc.slug
+                                        ? 'bg-slate-900 text-white font-semibold'
+                                        : 'text-slate-700 hover:bg-slate-100'
+                                        }`}
                                     >
                                       <span className="truncate">{cc.name}</span>
                                       <span>›</span>
@@ -701,8 +701,8 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                     );
                                   const pts = activeChild
                                     ? taxonomy.productTypes.filter(
-                                        (pt) => pt.childCategoryId === activeChild.id && pt.isActive !== false
-                                      )
+                                      (pt) => pt.childCategoryId === activeChild.id && pt.isActive !== false
+                                    )
                                     : [];
                                   if (pts.length === 0) {
                                     return <p className="text-[11px] text-slate-400 p-2">No active child types configured.</p>;
@@ -732,7 +732,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
           <Card
             title="Desktop Header Navigation Items"
             subtitle="Drag and drop rows (or use arrows) to reorder Customer website navigation, edit labels, assign Main Categories, or toggle visibility"
-            action={
+            actions={
               <Button
                 size="sm"
                 onClick={() =>
@@ -772,13 +772,12 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                       onDragStart={() => setDraggedNavId(nav.id)}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => handleDropNav(nav.id)}
-                      className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 transition-colors cursor-move ${
-                        draggedNavId === nav.id
-                          ? 'bg-[#F0DED0]/60 border-[#AE887B]'
-                          : effectivelyVisible
+                      className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 transition-colors cursor-move ${draggedNavId === nav.id
+                        ? 'bg-[#F0DED0]/60 border-[#AE887B]'
+                        : effectivelyVisible
                           ? 'bg-white border-[#E5DCD3] hover:bg-[#FAF7F4]'
                           : 'bg-slate-50 border-slate-200 opacity-75'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <GripVertical className="w-4 h-4 text-[#8E8777] shrink-0" />
@@ -881,7 +880,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
               <Card
                 title={`Main Categories (${taxonomy.mainCategories.length})`}
                 subtitle="Manage top-level categories, slugs, images, sort order, status & header visibility"
-                action={
+                actions={
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
                     <input
@@ -930,7 +929,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Button
                             size="sm"
-                            variant={mc.showInNavigation !== false ? 'secondary' : 'outline'}
+                            variant={mc.showInNavigation !== false ? 'info' : 'outline'}
                             onClick={async () => {
                               await adminApi.updateMainCategory(mc.id, {
                                 showInNavigation: !(mc.showInNavigation !== false),
@@ -1347,7 +1346,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
               <Card
                 title={`Product Type Management (${taxonomy.productTypes.length})`}
                 subtitle="Manage child classifications displayed in navigation second column and product filtering"
-                action={
+                actions={
                   <select
                     value={ptChildFilter}
                     onChange={(e) => setPtChildFilter(e.target.value)}
@@ -1503,11 +1502,119 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                     <Plus className="w-3.5 h-3.5" /> Add
                   </Button>
                 </form>
-                <div className="divide-y divide-[#E5DCD3] max-h-40 overflow-y-auto text-xs">
+                <div className="divide-y divide-[#E5DCD3] max-h-56 overflow-y-auto text-xs">
                   {taxonomy.brands.map((b) => (
-                    <div key={b.id} className="py-1.5 flex justify-between">
-                      <span className="font-medium text-[#5E5946]">{b.name}</span>
-                      <Badge variant="info">{b.slug}</Badge>
+                    <div key={b.id} className="py-2 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-[#5E5946] truncate">{b.name}</p>
+                        <p className="text-[10px] font-mono text-[#6E6859]">{b.slug}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Badge variant={b.isActive !== false ? 'success' : 'error'}>
+                          {b.isActive !== false ? 'Active' : 'Inactive'}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setBrandEditModal({ ...b })}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await adminApi.deleteBrand(b.id);
+                            pushToast({ title: 'Brand Removed' });
+                            loadTaxonomy();
+                          }}
+                        >
+                          Del
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              <Card title="Product Attributes & Filters" subtitle={`${(taxonomy.attributes || []).length} filter attributes`}>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    await adminApi.createAttribute({
+                      name: attrForm.name,
+                      categoryName: attrForm.categoryName,
+                      values: attrForm.valuesCsv.split(',').map((s) => s.trim()).filter(Boolean),
+                      isFilterable: true,
+                    });
+                    setAttrForm({ name: '', categoryName: 'Cement & Concrete', valuesCsv: '' });
+                    pushToast({ title: 'Attribute Created', message: 'Synced to Customer filters & Vendor product forms.' });
+                    loadTaxonomy();
+                  }}
+                  className="space-y-2 mb-3 text-xs"
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      required
+                      placeholder="Attribute (e.g. Grade, Finish)"
+                      value={attrForm.name}
+                      onChange={(e) => setAttrForm({ ...attrForm, name: e.target.value })}
+                      className="px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
+                    />
+                    <input
+                      required
+                      placeholder="Category (e.g. Cement & Concrete)"
+                      value={attrForm.categoryName}
+                      onChange={(e) => setAttrForm({ ...attrForm, categoryName: e.target.value })}
+                      className="px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      required
+                      placeholder="Values comma separated (e.g. OPC 53, PPC, PSC)"
+                      value={attrForm.valuesCsv}
+                      onChange={(e) => setAttrForm({ ...attrForm, valuesCsv: e.target.value })}
+                      className="flex-1 px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
+                    />
+                    <Button size="sm" type="submit">
+                      <Plus className="w-3.5 h-3.5" /> Add
+                    </Button>
+                  </div>
+                </form>
+                <div className="divide-y divide-[#E5DCD3] max-h-56 overflow-y-auto text-xs">
+                  {(taxonomy.attributes || []).map((a) => (
+                    <div key={a.id} className="py-2 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-[#5E5946] truncate">
+                          {a.name} <span className="text-[#6E6859]">({a.categoryName})</span>
+                        </p>
+                        <p className="text-[10px] text-[#6E6859] truncate">
+                          {(a.values || []).join(', ')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setAttrEditModal({ ...a, valuesCsv: (a.values || []).join(', ') })
+                          }
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await adminApi.deleteAttribute(a.id);
+                            pushToast({ title: 'Attribute Deleted' });
+                            loadTaxonomy();
+                          }}
+                        >
+                          Del
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1820,18 +1927,38 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                           {col.startDate || col.endDate ? ` • Window: ${col.startDate || 'Now'} to ${col.endDate || 'Open'}` : ''}
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        variant={col.isActive !== false ? 'success' : 'outline'}
-                        onClick={async () => {
-                          await adminApi.updateNewLaunchCollection(col.id, {
-                            isActive: !(col.isActive !== false),
-                          });
-                          loadTaxonomy();
-                        }}
-                      >
-                        {col.isActive !== false ? 'Visible' : 'Hidden'}
-                      </Button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setLaunchEditModal({ ...col, title: col.title || col.name || '' })}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={col.isActive !== false ? 'success' : 'outline'}
+                          onClick={async () => {
+                            await adminApi.updateNewLaunchCollection(col.id, {
+                              isActive: !(col.isActive !== false),
+                            });
+                            loadTaxonomy();
+                          }}
+                        >
+                          {col.isActive !== false ? 'Visible' : 'Hidden'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await adminApi.deleteNewLaunchCollection(col.id);
+                            pushToast({ title: 'Collection Removed' });
+                            loadTaxonomy();
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -2843,6 +2970,167 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={Boolean(brandEditModal)} onClose={() => setBrandEditModal(null)} title="Edit Brand">
+        {brandEditModal && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await adminApi.updateBrand(brandEditModal.id, {
+                name: brandEditModal.name,
+                description: brandEditModal.description,
+                isActive: brandEditModal.isActive !== false,
+              });
+              pushToast({ title: 'Brand Updated' });
+              setBrandEditModal(null);
+              loadTaxonomy();
+            }}
+            className="space-y-3 text-xs"
+          >
+            <input
+              required
+              value={brandEditModal.name || ''}
+              onChange={(e) => setBrandEditModal({ ...brandEditModal, name: e.target.value })}
+              placeholder="Brand Name"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <textarea
+              value={brandEditModal.description || ''}
+              onChange={(e) => setBrandEditModal({ ...brandEditModal, description: e.target.value })}
+              placeholder="Description"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={brandEditModal.isActive !== false}
+                onChange={(e) => setBrandEditModal({ ...brandEditModal, isActive: e.target.checked })}
+              />
+              <span>Active Brand on Storefront</span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setBrandEditModal(null)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save Brand</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal open={Boolean(attrEditModal)} onClose={() => setAttrEditModal(null)} title="Edit Product Attribute">
+        {attrEditModal && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await adminApi.updateAttribute(attrEditModal.id, {
+                name: attrEditModal.name,
+                categoryName: attrEditModal.categoryName,
+                values: String(attrEditModal.valuesCsv || '')
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+                isFilterable: attrEditModal.isFilterable !== false,
+              });
+              pushToast({ title: 'Attribute Updated' });
+              setAttrEditModal(null);
+              loadTaxonomy();
+            }}
+            className="space-y-3 text-xs"
+          >
+            <input
+              required
+              value={attrEditModal.name || ''}
+              onChange={(e) => setAttrEditModal({ ...attrEditModal, name: e.target.value })}
+              placeholder="Attribute Name"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <input
+              required
+              value={attrEditModal.categoryName || ''}
+              onChange={(e) => setAttrEditModal({ ...attrEditModal, categoryName: e.target.value })}
+              placeholder="Category Name"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <input
+              required
+              value={attrEditModal.valuesCsv || ''}
+              onChange={(e) => setAttrEditModal({ ...attrEditModal, valuesCsv: e.target.value })}
+              placeholder="Values (comma separated)"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setAttrEditModal(null)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save Attribute</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal open={Boolean(launchEditModal)} onClose={() => setLaunchEditModal(null)} title="Edit New Launch Collection">
+        {launchEditModal && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              await adminApi.updateNewLaunchCollection(launchEditModal.id, {
+                title: launchEditModal.title,
+                description: launchEditModal.description,
+                displayOrder: Number(launchEditModal.displayOrder || 1),
+                startDate: launchEditModal.startDate || undefined,
+                endDate: launchEditModal.endDate || undefined,
+              });
+              pushToast({ title: 'Collection Updated' });
+              setLaunchEditModal(null);
+              loadTaxonomy();
+            }}
+            className="space-y-3 text-xs"
+          >
+            <input
+              required
+              value={launchEditModal.title || ''}
+              onChange={(e) => setLaunchEditModal({ ...launchEditModal, title: e.target.value })}
+              placeholder="Collection Title"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <textarea
+              value={launchEditModal.description || ''}
+              onChange={(e) => setLaunchEditModal({ ...launchEditModal, description: e.target.value })}
+              placeholder="Description"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="number"
+                min={1}
+                value={launchEditModal.displayOrder || 1}
+                onChange={(e) => setLaunchEditModal({ ...launchEditModal, displayOrder: e.target.value })}
+                placeholder="Order"
+                className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              />
+              <input
+                type="date"
+                value={launchEditModal.startDate || ''}
+                onChange={(e) => setLaunchEditModal({ ...launchEditModal, startDate: e.target.value })}
+                className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              />
+              <input
+                type="date"
+                value={launchEditModal.endDate || ''}
+                onChange={(e) => setLaunchEditModal({ ...launchEditModal, endDate: e.target.value })}
+                className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setLaunchEditModal(null)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save Collection</Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

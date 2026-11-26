@@ -154,11 +154,13 @@ export const VendorWarehousesPage: React.FC = () => {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {warehouses.map((wh, idx) => {
+          {warehouses.map((wh: any) => {
             const whUnits =
-              warehouses.length <= 1
-                ? totalUnits
-                : Math.round(totalUnits * (wh.isPrimary ? 0.65 : 0.35 / Math.max(1, warehouses.length - 1)));
+              typeof wh.totalUnits === 'number'
+                ? wh.totalUnits
+                : warehouses.length <= 1
+                  ? totalUnits
+                  : 0;
             return (
               <Card key={wh.id} className={wh.isPrimary ? 'border-[#943D24]/50' : ''}>
                 <CardContent className="p-5 flex flex-col justify-between h-full space-y-4">

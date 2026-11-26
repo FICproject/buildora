@@ -25,75 +25,13 @@ interface AuthStoreState {
   addWalletBalance: (amount: number) => void;
 }
 
-const DEFAULT_DEMO_USER: CustomerProfile = {
-  id: 'cust-demo-1',
-  name: 'Arjun Verma',
-  phone: '9876543210',
-  email: 'arjun.verma@buildora.com',
-  isPhoneVerified: true,
-  isEmailVerified: true,
-  gstin: '29AABCB1234F1Z8',
-  businessName: 'Apex Infra Construction Ltd',
-  walletBalance: 1250,
-  rewardPoints: 480,
-  createdAt: '2026-01-15T10:00:00.000Z'
-};
-
-const DEFAULT_DEMO_ADDRESSES: Address[] = [
-  {
-    id: 'addr-1',
-    type: 'HOME',
-    recipientName: 'Arjun Verma',
-    mobile: '9876543210',
-    building: 'ikuytredsfghj',
-    street: '2nd Stage, Nagarbhavi',
-    area: 'Nagarbhavi',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    pincode: '560072',
-    fullAddress: 'ikuytredsfghj, 2nd Stage, Nagarbhavi, Bengaluru, Karnataka 560072, Bengaluru, 560072',
-    isDefault: true
-  },
-  {
-    id: 'addr-2',
-    type: 'CONSTRUCTION_SITE',
-    recipientName: 'Arjun Verma (Site Engineer)',
-    mobile: '9876543210',
-    building: 'Plot 42, Green Horizon Enclave',
-    street: '14th Cross, 4th Main Road',
-    area: 'Indiranagar',
-    landmark: 'Near BDA Complex',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    pincode: '560038',
-    fullAddress: 'Plot 42, Green Horizon Enclave, 14th Cross, 4th Main Road, Indiranagar, Bengaluru 560038',
-    deliveryInstructions: 'Enter through Gate 2. Inform gate security for material truck unloading.',
-    isDefault: false,
-    isConstructionSite: true
-  },
-  {
-    id: 'addr-3',
-    type: 'WORK',
-    recipientName: 'Arjun Verma',
-    mobile: '9876543210',
-    building: 'BuildTech Solutions, Office 302',
-    street: 'Outer Ring Road, Bellandur',
-    area: 'Bellandur',
-    city: 'Bengaluru',
-    state: 'Karnataka',
-    pincode: '560103',
-    fullAddress: 'BuildTech Solutions, Office 302, Outer Ring Road, Bellandur, Bengaluru 560103',
-    isDefault: false
-  }
-];
-
 export const useAuthStore = create<AuthStoreState>()(
   persist(
     (set, get) => ({
-      isAuthenticated: true,
-      user: DEFAULT_DEMO_USER,
-      token: 'demo-jwt-token-buildora-60',
-      addresses: DEFAULT_DEMO_ADDRESSES,
+      isAuthenticated: false,
+      user: null,
+      token: null,
+      addresses: [],
       isAuthModalOpen: false,
       authPromptReason: null,
       intendedDestination: null,
@@ -115,12 +53,11 @@ export const useAuthStore = create<AuthStoreState>()(
 
       requestOtp: async (phone) => {
         try {
-          const res = await api.requestOtp(phone);
-          return res;
-        } catch {
+          return await api.requestOtp(phone);
+        } catch (err: any) {
           return {
-            success: true,
-            message: 'OTP sent (Development OTP: 6060)'
+            success: false,
+            message: err?.message || 'Unable to send OTP. Please check your connection.'
           };
         }
       },
@@ -128,13 +65,13 @@ export const useAuthStore = create<AuthStoreState>()(
       verifyOtp: async (phone, otp) => {
         try {
           const res = await api.verifyOtp(phone, otp);
-          if (res.success && res.user) {
-            const userAddrs = (res.user as any)?.addresses || DEFAULT_DEMO_ADDRESSES;
+          if (res.success && res.user && res.token) {
+            const userAddrs = Array.isArray((res.user as any)?.addresses) ? (res.user as any).addresses : [];
             set({
               isAuthenticated: true,
               user: res.user,
               addresses: get().addresses.length > 0 ? get().addresses : userAddrs,
-              token: res.token || 'demo-jwt-token-buildora-60'
+              token: res.token
             });
             return { success: true, message: res.message || 'Signed in successfully!' };
           }
@@ -160,17 +97,15 @@ export const useAuthStore = create<AuthStoreState>()(
           const updated = await api.updateProfile(profile);
           if (updated) {
             set((state) => ({
-              isAuthenticated: true,
-              user: { ...(state.user || DEFAULT_DEMO_USER), ...updated }
+              user: state.user ? { ...state.user, ...updated } : updated
             }));
             return;
           }
         } catch {
-          // Fallback to local state
+          // ignore network error
         }
         set((state) => ({
-          isAuthenticated: true,
-          user: { ...(state.user || DEFAULT_DEMO_USER), ...profile }
+          user: state.user ? { ...state.user, ...profile } : null
         }));
       },
 

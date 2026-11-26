@@ -5,6 +5,7 @@ import { Product } from '@buildora/types';
 import { formatCurrency } from '@buildora/utils';
 import { useCartStore } from '../../store/useCartStore';
 import { useWishlistStore } from '../../store/useWishlistStore';
+import { useStoreConfigStore } from '../../store/useStoreConfigStore';
 import { QuantityControl } from '../ui/QuantityControl';
 import { VariantSelectionModal } from './VariantSelectionModal';
 import { BulkPriceTrigger } from './BulkPriceTrigger';
@@ -17,6 +18,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const navigate = useNavigate();
   const { items, addItem, updateQuantity, removeItem } = useCartStore();
   const { isInWishlist, toggleItem } = useWishlistStore();
+  const freeThreshold = useStoreConfigStore((s) => s.config?.deliveryConfig?.freeShippingThreshold ?? 1000);
 
   const isWishlisted = isInWishlist(product.id);
 
@@ -254,7 +256,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                 <span className="font-bold text-[9px] text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
                   Assured 1% cashback
                 </span>
-                <span>Free Delivery on ₹1000+</span>
+                <span>Free Delivery on ₹{freeThreshold.toLocaleString('en-IN')}+</span>
               </div>
 
               {/* Spec tag & Delivery time */}

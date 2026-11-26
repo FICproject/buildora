@@ -50,11 +50,33 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
     stockWarning: true,
   });
   const [savingNotifs, setSavingNotifs] = useState(false);
+  const [deliverySettings, setDeliverySettings] = useState<any>(null);
 
   const loadTeam = async () => {
     try {
-      const members = await vendorApi.getTeam();
+      const [members, settingsRes] = await Promise.all([
+        vendorApi.getTeam(),
+        vendorApi.getSettings().catch(() => null),
+      ]);
       setTeam(members || []);
+      if (settingsRes) {
+        if (typeof settingsRes.twoFactorEnabled === 'boolean') {
+          setEnable2FA(settingsRes.twoFactorEnabled);
+        }
+        if (settingsRes.notificationPreferences) {
+          setNotifPrefs((prev) => ({
+            ...prev,
+            smsDispatch: settingsRes.notificationPreferences.newOrdersSms ?? prev.smsDispatch,
+            whatsappDispatch: settingsRes.notificationPreferences.newOrdersWhatsapp ?? prev.whatsappDispatch,
+            emailSettlement: settingsRes.notificationPreferences.payoutSummaryEmail ?? prev.emailSettlement,
+            stockWarning: settingsRes.notificationPreferences.lowStockEmail ?? prev.stockWarning,
+            ...settingsRes.notificationPreferences,
+          }));
+        }
+        if (settingsRes.deliverySettings) {
+          setDeliverySettings(settingsRes.deliverySettings);
+        }
+      }
     } catch {}
   };
 
@@ -400,13 +422,13 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
             <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]">
               <span className="text-[#78716C] block">Primary Hub</span>
               <span className="text-sm font-semibold text-[#943D24] mt-1 block">
-                WH-BLR-04 Peenya
+                {deliverySettings?.assignedDarkStoreId || 'Configured in Delivery & Dispatch'}
               </span>
             </div>
             <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]">
-              <span className="text-[#78716C] block">Express SLA</span>
+              <span className="text-[#78716C] block">Prep Lead Time & Cutoff</span>
               <span className="text-sm font-semibold text-[#15966B] mt-1 block">
-                60 Minutes
+                {deliverySettings?.preparationTimeMins ?? 25} mins (Cutoff {deliverySettings?.dispatchCutoff || '18:00'})
               </span>
             </div>
           </CardContent>

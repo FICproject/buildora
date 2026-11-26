@@ -6,6 +6,7 @@ import {
   PlatformProductModel,
   PlatformSettlementModel,
   PlatformStockMovementModel,
+  VendorInvoiceModel,
   platformPersistenceService,
 } from '../../../database/platform-persistence.service';
 import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
@@ -22,7 +23,21 @@ import {
   vendorRecords,
   vendorSettlements,
   vendorStockMovements,
+  vendorWarehouses,
 } from '../../vendors/controllers/vendor.controller';
+
+function resolveProductWarehouseMeta(product: any, vendorId: string) {
+  const whId = product?.warehouseId || '';
+  const wh =
+    vendorWarehouses.find((w: any) => w.id === whId) ||
+    vendorWarehouses.find((w: any) => w.vendorId === vendorId && w.isPrimary) ||
+    vendorWarehouses.find((w: any) => w.vendorId === vendorId) ||
+    vendorWarehouses[0];
+  return {
+    warehouseId: wh?.id || whId || 'wh-default',
+    warehouseName: wh?.name || product?.warehouseLocation || 'Primary Fulfillment Hub',
+  };
+}
 
 export const ALLOWED_VENDOR_ORDER_TRANSITIONS: Record<string, string[]> = {
   NEW: ['ACCEPTED', 'REJECTED', 'CANCELLED', 'PROCESSING'],
@@ -179,14 +194,15 @@ class OrderSyncService {
       }
 
       const afterStock = vendProd ? vendProd.stockCount : custProd.stockCount;
+      const whMeta = resolveProductWarehouseMeta(primary, vendorId);
       const movement: any = {
         id: `sm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         vendorId,
         productId: primary.id,
         productName: primary.name,
         sku: primary.sku,
-        warehouseId: 'wh-1',
-        warehouseName: 'Bengaluru Fulfillment Hub',
+        warehouseId: whMeta.warehouseId,
+        warehouseName: whMeta.warehouseName,
         type: reserveOnly ? 'ADJUSTMENT' : 'OUTWARD',
         quantityDelta: reserveOnly ? 0 : -qty,
         quantityBefore: prevStock,
@@ -276,14 +292,15 @@ class OrderSyncService {
       }
 
       const vendorId = primary.vendorId || DEFAULT_VENDOR_ID;
+      const whMeta = resolveProductWarehouseMeta(primary, vendorId);
       const movement: any = {
         id: `sm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         vendorId,
         productId: primary.id,
         productName: primary.name,
         sku: primary.sku,
-        warehouseId: 'wh-1',
-        warehouseName: 'Bengaluru Fulfillment Hub',
+        warehouseId: whMeta.warehouseId,
+        warehouseName: whMeta.warehouseName,
         type: 'OUTWARD',
         quantityDelta: -qty,
         quantityBefore: before,
@@ -367,14 +384,15 @@ class OrderSyncService {
 
       const vendorId = primary.vendorId || DEFAULT_VENDOR_ID;
       const after = vendProd ? vendProd.stockCount : custProd.stockCount;
+      const whMeta = resolveProductWarehouseMeta(primary, vendorId);
       const movement: any = {
         id: `sm-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         vendorId,
         productId: primary.id,
         productName: primary.name,
         sku: primary.sku,
-        warehouseId: 'wh-1',
-        warehouseName: 'Bengaluru Fulfillment Hub',
+        warehouseId: whMeta.warehouseId,
+        warehouseName: whMeta.warehouseName,
         type: 'RETURN',
         quantityDelta: wasReservedOnly ? 0 : qty,
         quantityBefore: before,
@@ -421,6 +439,13 @@ class OrderSyncService {
         : [addr.building, addr.street, addr.area, addr.city, addr.pincode].filter(Boolean).join(', ');
 
     for (const [vendorId, items] of byVendor.entries()) {
+      const tenantCfg = companyAdminDataService.getTenantConfig(tenantId);
+      const vendorRec = vendorRecords.get(vendorId) as any;
+      const commissionRatePercent = Number(
+        vendorRec?.commissionRate ?? tenantCfg?.paymentConfig?.platformCommissionPercent ?? 6
+      );
+      const defaultGstRate = Number(tenantCfg?.taxConfig?.defaultGstRate ?? 18);
+
       const subtotal = items.reduce(
         (sum, it) => sum + Number(it.unitPrice ?? it.price ?? 0) * Number(it.quantity ?? 1),
         0
@@ -428,10 +453,10 @@ class OrderSyncService {
       const gstAmount = Math.round(
         items.reduce((sum, it) => {
           const line = Number(it.unitPrice ?? it.price ?? 0) * Number(it.quantity ?? 1);
-          return sum + (line * Number(it.gstRate || 18)) / 100;
+          return sum + (line * Number(it.gstRate ?? defaultGstRate)) / 100;
         }, 0)
       );
-      const platformFee = Math.round(subtotal * 0.06);
+      const platformFee = Math.round((subtotal * commissionRatePercent) / 100);
       const netPayout = Math.max(0, subtotal - platformFee);
 
       const vOrder: VendorOrder & Record<string, any> = {
@@ -469,8 +494,8 @@ class OrderSyncService {
           const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
           const quantity = Number(it.quantity || 1);
           const lineSubtotal = unitPrice * quantity;
-          const gstAmt = Math.round((lineSubtotal * Number(it.gstRate || 18)) / 100);
-          const commAmt = Math.round(lineSubtotal * 0.06);
+          const gstAmt = Math.round((lineSubtotal * Number(it.gstRate ?? defaultGstRate)) / 100);
+          const commAmt = Math.round((lineSubtotal * commissionRatePercent) / 100);
           return {
             productId: it.productId,
             variantId: it.variantId,
@@ -482,7 +507,7 @@ class OrderSyncService {
             gstAmount: gstAmt,
             totalPrice: lineSubtotal,
             totalAmount: lineSubtotal + gstAmt,
-            commissionRate: 6,
+            commissionRate: commissionRatePercent,
             commissionAmount: commAmt,
             netPayout: Math.max(0, lineSubtotal - commAmt),
             unit: it.unit || 'Unit',
@@ -709,15 +734,20 @@ class OrderSyncService {
         status: 'GENERATED',
       };
       vendorInvoices.unshift(inv);
+      await platformPersistenceService.upsert(VendorInvoiceModel, inv);
     }
 
     const existingSettl = vendorSettlements.find(
       (s: any) => s.orderNumber === vendorOrder.orderNumber && s.vendorId === vendorOrder.vendorId
     );
     if (!existingSettl) {
+      const tenantCfg = companyAdminDataService.getTenantConfig(vendorOrder.tenantId || DEFAULT_TENANT_ID);
+      const vendorRec = vendorRecords.get(vendorOrder.vendorId) as any;
+      const commRate = Number(vendorRec?.commissionRate ?? tenantCfg?.paymentConfig?.platformCommissionPercent ?? 6);
+      const tdsRate = Number(tenantCfg?.taxConfig?.tdsRate ?? 1);
       const gross = Number(vendorOrder.subtotal || 0);
-      const commission = Number(vendorOrder.platformFee || Math.round(gross * 0.06));
-      const taxDeductions = Math.round(gross * 0.01);
+      const commission = Number(vendorOrder.platformFee || Math.round((gross * commRate) / 100));
+      const taxDeductions = Math.round((gross * tdsRate) / 100);
       const netPayable = Math.max(0, gross - commission - taxDeductions);
       const settl: VendorSettlement & Record<string, any> = {
         id: `stl-${Date.now()}-${Math.floor(Math.random() * 1000)}`,

@@ -334,10 +334,16 @@ export class TaxonomyService implements OnModuleInit {
     const cleanTenant = tenantId || DEFAULT_TENANT;
     const pool = this.getTenantPool(cleanTenant);
     const tenantSpecific = this.desktopNavigation.filter((n) => n.tenantId === cleanTenant);
-    const baseItems =
-      tenantSpecific.length > 0
-        ? tenantSpecific
-        : this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT);
+    const globalItems = this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT);
+    const mergedMap = new Map<string, DesktopNavItem>();
+    for (const g of globalItems) {
+      mergedMap.set(g.id, g);
+    }
+    for (const t of tenantSpecific) {
+      const baseKey = t.id.startsWith(`${cleanTenant}::`) ? t.id.slice(cleanTenant.length + 2) : t.id;
+      mergedMap.set(baseKey, t);
+    }
+    const baseItems = Array.from(mergedMap.values());
 
     const hydrated = baseItems.map((nav) => {
       if (nav.itemType === 'MAIN_CATEGORY' && nav.mainCategoryId) {
@@ -1076,7 +1082,7 @@ export class TaxonomyService implements OnModuleInit {
       const pubNav: DesktopNavItem = {
         ...this.cloneRecord(nav),
         id: pubId,
-        tenantId: cleanTenant === DEFAULT_TENANT ? (nav.tenantId || GLOBAL_TENANT) : cleanTenant,
+        tenantId: cleanTenant === DEFAULT_TENANT ? GLOBAL_TENANT : cleanTenant,
       };
       this.upsertArrayById(this.desktopNavigation, pubNav);
       await platformPersistenceService.upsert(DesktopNavItemModel, pubNav);
@@ -1962,6 +1968,16 @@ export class TaxonomyService implements OnModuleInit {
     existing.updatedAt = new Date().toISOString();
     await platformPersistenceService.upsert(NewLaunchCollectionModel, existing);
     return existing;
+  }
+
+  async deleteNewLaunchCollection(tenantId: string, id: string) {
+    const idx = this.newLaunchCollections.findIndex(
+      (c) => c.id === id && (!c.tenantId || c.tenantId === GLOBAL_TENANT || c.tenantId === tenantId)
+    );
+    if (idx < 0) throw new BadRequestException(`New Launch collection ${id} not found.`);
+    const [removed] = this.newLaunchCollections.splice(idx, 1);
+    await platformPersistenceService.remove(NewLaunchCollectionModel, id);
+    return removed;
   }
 
   // ==================== DYNAMIC CATEGORY FIELD SCHEMAS ====================

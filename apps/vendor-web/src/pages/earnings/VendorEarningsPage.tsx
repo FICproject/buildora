@@ -123,15 +123,15 @@ export const VendorEarningsPage: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-sm text-[#292524]">
-                  {bank.bankName || 'HDFC Bank'} •••• {(bank.accountNumber || '2341').slice(-4)}
+                  {bank.bankName || 'Primary Bank'} {bank.accountNumber ? `•••• ${bank.accountNumber.slice(-4)}` : ''}
                 </span>
-                <Badge variant="success" size="sm">
-                  Verified
+                <Badge variant={bank.isVerified ? 'success' : 'neutral'} size="sm">
+                  {bank.isVerified ? 'Verified' : 'Pending Verification'}
                 </Badge>
               </div>
               <p className="text-xs text-[#78716C] mt-0.5">
-                Beneficiary: {bank.accountHolderName || bank.beneficiaryName || 'Supreme Materials BLR'} • IFSC:{' '}
-                <span className="font-mono">{bank.ifsc || bank.ifscCode || 'HDFC0000053'}</span>
+                Beneficiary: {bank.accountHolderName || bank.beneficiaryName || vendor?.storeName || '—'} • IFSC:{' '}
+                <span className="font-mono">{bank.ifsc || bank.ifscCode || '—'}</span>
               </p>
             </div>
           </div>

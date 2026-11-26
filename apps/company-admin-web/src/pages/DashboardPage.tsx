@@ -52,8 +52,17 @@ export const DashboardPage: React.FC = () => {
     }
   }, [period]);
 
+  useEffect(() => {
+    const onRealtime = () => loadDashboard(period, customFrom, customTo);
+    window.addEventListener('buildora:admin:realtime', onRealtime);
+    return () => window.removeEventListener('buildora:admin:realtime', onRealtime);
+  }, [period, customFrom, customTo]);
+
   const kpis = data?.kpis || {};
   const sections = data?.sections || {};
+  const charts = data?.charts || {};
+  const revenueSeries: any[] = charts.revenueTrend || [];
+  const maxTrendRev = Math.max(1, ...revenueSeries.map((r) => Number(r.revenue || 0)));
 
   return (
     <div className="space-y-6">
@@ -199,7 +208,7 @@ export const DashboardPage: React.FC = () => {
               tone="blue"
               onClick={() => navigate('/quotations')}
             />
-            <StatCard
+              <StatCard
               title="Active Dispatches"
               value={kpis.activeDispatches || 0}
               hint={`${kpis.deliveredOrders || 0} delivered in period`}
@@ -208,6 +217,80 @@ export const DashboardPage: React.FC = () => {
               onClick={() => navigate('/delivery')}
             />
           </div>
+
+          {/* Live Revenue Trend & Category/Status Breakdown Charts */}
+          {viewTab === 'DASHBOARD' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              <div className="lg:col-span-7">
+                <Card
+                  title="Revenue & Order Trend"
+                  subtitle={`Live database metrics (${revenueSeries.length} daily data points)`}
+                >
+                  {revenueSeries.length === 0 ? (
+                    <p className="text-xs text-[#6E6859] py-6">No order activity recorded for selected period.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="h-44 flex items-end gap-2 pt-4">
+                        {revenueSeries.map((pt: any) => {
+                          const hPct = Math.max(8, Math.round((Number(pt.revenue || 0) / maxTrendRev) * 100));
+                          return (
+                            <div key={pt.date} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
+                              <span className="text-[10px] font-semibold text-[#5E5946] truncate">
+                                {formatINR(pt.revenue)}
+                              </span>
+                              <div className="w-full max-w-[44px] h-28 flex items-end bg-[#FAF7F4] rounded-t-md p-0.5">
+                                <div
+                                  className="w-full bg-[#AE887B] group-hover:bg-[#5E5946] transition-all rounded-t-sm"
+                                  style={{ height: `${hPct}%` }}
+                                  title={`${pt.date}: ${formatINR(pt.revenue)} (${pt.orders} orders)`}
+                                />
+                              </div>
+                              <span className="text-[10px] text-[#6E6859] truncate max-w-full">
+                                {String(pt.date).slice(5)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              </div>
+              <div className="lg:col-span-5">
+                <Card title="Order Status & Top Categories" subtitle="Live breakdown from tenant ledger">
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <p className="font-semibold text-[#5E5946] mb-1.5">Orders by Status</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(charts.orderStatusBreakdown || []).length === 0 ? (
+                          <span className="text-[#6E6859]">No orders in period</span>
+                        ) : (
+                          (charts.orderStatusBreakdown || []).map((st: any) => (
+                            <Badge key={st.status} variant={statusBadgeVariant(st.status)}>
+                              {st.status}: {st.count}
+                            </Badge>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-[#E5DCD3]">
+                      <p className="font-semibold text-[#5E5946] mb-1.5">Top Categories by Catalog Depth</p>
+                      <div className="space-y-1.5">
+                        {(charts.topCategories || []).slice(0, 4).map((cat: any) => (
+                          <div key={cat.category} className="flex items-center justify-between">
+                            <span className="text-[#6E6859] truncate">{cat.category}</span>
+                            <span className="font-semibold text-[#5E5946]">
+                              {cat.skuCount} SKUs • {formatINR(cat.stockValue)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
 
           {viewTab === 'BUSINESS_OVERVIEW' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

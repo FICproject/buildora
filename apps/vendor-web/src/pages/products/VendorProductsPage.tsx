@@ -104,6 +104,8 @@ export const VendorProductsPage: React.FC = () => {
     fieldSchemas: CategoryFieldSchema[];
     warehouses: any[];
     brands: any[];
+    gstSlabs: number[];
+    commissionRate?: number;
   }>({
     mainCategories: MAIN_CATEGORIES_SEED,
     childCategories: CHILD_CATEGORIES_SEED,
@@ -111,6 +113,7 @@ export const VendorProductsPage: React.FC = () => {
     fieldSchemas: CATEGORY_FIELD_SCHEMAS_SEED,
     warehouses: [],
     brands: [],
+    gstSlabs: [0, 5, 12, 18, 28],
   });
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
@@ -159,7 +162,8 @@ export const VendorProductsPage: React.FC = () => {
         Array.isArray(res.mainCategories) &&
         Array.isArray(res.childCategories)
       ) {
-        setTaxonomyState({
+        setTaxonomyState((prev) => ({
+          ...prev,
           mainCategories: res.mainCategories.filter((m: any) => m.isActive !== false),
           childCategories: res.childCategories.filter((c: any) => c.isActive !== false),
           productTypes: (res.productTypes || []).filter((pt: any) => pt.isActive !== false),
@@ -168,7 +172,9 @@ export const VendorProductsPage: React.FC = () => {
             : CATEGORY_FIELD_SCHEMAS_SEED).filter((f: any) => f.isActive !== false),
           warehouses: res.warehouses || [],
           brands: res.brands || [],
-        });
+          gstSlabs: res.config?.gstSlabs?.length ? res.config.gstSlabs : [0, 5, 12, 18, 28],
+          commissionRate: res.config?.commissionRate,
+        }));
       }
     }).catch(() => {});
   };
@@ -181,6 +187,8 @@ export const VendorProductsPage: React.FC = () => {
       const detail = (evt as CustomEvent).detail || {};
       if (
         detail.event === 'taxonomy.published' ||
+        detail.event === 'settings.updated' ||
+        detail.event === 'filters.updated' ||
         detail.event === 'product.approved' ||
         detail.event === 'product.rejected' ||
         detail.event === 'product.updated'
@@ -1818,11 +1826,11 @@ export const VendorProductsPage: React.FC = () => {
                     onChange={(e) => setGstRate(e.target.value)}
                     className="portal-input"
                   >
-                    <option value="0">0% (Exempt)</option>
-                    <option value="5">5% GST</option>
-                    <option value="12">12% GST</option>
-                    <option value="18">18% GST</option>
-                    <option value="28">28% GST</option>
+                    {(taxonomyState.gstSlabs || [0, 5, 12, 18, 28]).map((slab: number) => (
+                      <option key={slab} value={String(slab)}>
+                        {slab === 0 ? '0% (Exempt)' : `${slab}% GST`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>

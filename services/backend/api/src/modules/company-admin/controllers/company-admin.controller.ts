@@ -43,6 +43,16 @@ import {
   PlatformReturnModel,
   PlatformSettlementModel,
   PlatformSupportTicketModel,
+  PlatformWarehouseModel,
+  CatalogBrandModel,
+  CatalogAttributeModel,
+  PlatformCouponModel,
+  PlatformPromotionModel,
+  KnowledgeArticleModel,
+  FaqModel,
+  ServiceableZoneModel,
+  NotificationTemplateModel,
+  DispatchAssignmentModel,
   platformPersistenceService,
 } from '../../../database/platform-persistence.service';
 import { realtimeBus } from '../../realtime/realtime-bus';
@@ -222,6 +232,7 @@ export class CompanyAdminController {
       data: {
         tenant: companyAdminDataService.tenants.get(tenantId),
         dateRange: { period, label: range.label },
+        charts: companyAdminDataService.buildDashboardCharts(tenantId, filteredOrders, products),
         kpis: {
           totalRevenue,
           totalOrders: filteredOrders.length,
@@ -1689,6 +1700,8 @@ export class CompanyAdminController {
       details: `Added dynamic field "${created.label}" for ${created.childCategorySlug}.`,
       ipAddress: '127.0.0.1',
     });
+    realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, fieldsUpdated: true }, tenantId);
+    realtimeBus.emitPublic('filters.updated', { childCategoryId: created.childCategoryId }, tenantId);
     return { success: true, data: created };
   }
 
@@ -1701,6 +1714,8 @@ export class CompanyAdminController {
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const updated = await taxonomyService.updateCategoryField(tenantId, id, body || {});
+    realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, fieldsUpdated: true }, tenantId);
+    realtimeBus.emitPublic('filters.updated', { childCategoryId: updated.childCategoryId }, tenantId);
     return { success: true, data: updated };
   }
 
@@ -1712,6 +1727,8 @@ export class CompanyAdminController {
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const result = await taxonomyService.deleteCategoryField(tenantId, id);
+    realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, fieldsUpdated: true }, tenantId);
+    realtimeBus.emitPublic('filters.updated', { deletedFieldId: id }, tenantId);
     return { success: true, data: result };
   }
 
@@ -1800,6 +1817,18 @@ export class CompanyAdminController {
     return { success: true, data: updated };
   }
 
+  @Delete('catalog/new-launches/:id')
+  async deleteNewLaunchCollection(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const removed = await taxonomyService.deleteNewLaunchCollection(tenantId, id);
+    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    return { success: true, data: removed };
+  }
+
   @Post('catalog/categories')
   async createCategory(
     @Headers('authorization') authHeader?: string,
@@ -1832,24 +1861,31 @@ export class CompanyAdminController {
   }
 
   @Post('catalog/brands')
-  createBrand(
+  async createBrand(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
-    @Body() body?: { name?: string; description?: string },
+    @Body() body?: { name?: string; description?: string; logo?: string; featured?: boolean },
     @Req() req?: any
   ) {
     const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     if (!body?.name?.trim()) throw new BadRequestException('Brand name is required.');
-    const brand = {
+    const slug = body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    if (dbStore.brands.some((b: any) => b.slug === slug)) {
+      throw new BadRequestException(`Brand "${body.name.trim()}" already exists.`);
+    }
+    const brand: any = {
       id: `brd-${Date.now()}`,
+      tenantId,
       name: body.name.trim(),
-      slug: body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      logo: '',
-      description: body.description || 'Verified Buildora Partner Brand',
+      slug,
+      logo: body.logo?.trim() || '',
+      description: body.description?.trim() || 'Verified Buildora Partner Brand',
       categories: [],
-      featured: true,
+      featured: body.featured !== false,
+      isActive: true,
     };
     dbStore.brands.push(brand);
+    await platformPersistenceService.upsert(CatalogBrandModel, brand);
     companyAdminDataService.recordAuditLog({
       tenantId,
       actorId: admin.sub,
@@ -1862,14 +1898,53 @@ export class CompanyAdminController {
       details: `Added verified brand ${brand.name}.`,
       ipAddress: req?.ip || '127.0.0.1',
     });
+    realtimeBus.emitPublic('taxonomy.published', { brandUpdated: true }, tenantId);
     return { success: true, data: brand };
   }
 
-  @Post('catalog/attributes')
-  createAttribute(
+  @Patch('catalog/brands/:id')
+  async updateBrand(
+    @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
-    @Body() body?: { name?: string; categoryName?: string; values?: string[]; isRequired?: boolean }
+    @Body() body?: { name?: string; description?: string; logo?: string; featured?: boolean; isActive?: boolean }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const brand = dbStore.brands.find((b) => b.id === id) as any;
+    if (!brand) throw new NotFoundException('Brand not found.');
+    if (body?.name !== undefined && body.name.trim()) {
+      brand.name = body.name.trim();
+      brand.slug = body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    }
+    if (body?.description !== undefined) brand.description = body.description;
+    if (body?.logo !== undefined) brand.logo = body.logo;
+    if (body?.featured !== undefined) brand.featured = Boolean(body.featured);
+    if (body?.isActive !== undefined) brand.isActive = Boolean(body.isActive);
+    await platformPersistenceService.upsert(CatalogBrandModel, brand);
+    realtimeBus.emitPublic('taxonomy.published', { brandUpdated: true }, tenantId);
+    return { success: true, data: brand };
+  }
+
+  @Delete('catalog/brands/:id')
+  async deleteBrand(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const idx = dbStore.brands.findIndex((b) => b.id === id);
+    if (idx < 0) throw new NotFoundException('Brand not found.');
+    dbStore.brands.splice(idx, 1);
+    await platformPersistenceService.remove(CatalogBrandModel, id);
+    realtimeBus.emitPublic('taxonomy.published', { brandUpdated: true }, tenantId);
+    return { success: true, data: { id, deleted: true } };
+  }
+
+  @Post('catalog/attributes')
+  async createAttribute(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { name?: string; categoryName?: string; values?: string[]; isRequired?: boolean; isFilterable?: boolean }
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     if (!body?.name?.trim()) throw new BadRequestException('Attribute name required.');
@@ -1881,10 +1956,50 @@ export class CompanyAdminController {
       categoryName: body.categoryName || 'General',
       values: body.values || [],
       isRequired: Boolean(body.isRequired),
-      isFilterable: true,
+      isFilterable: body.isFilterable !== false,
     };
     companyAdminDataService.attributes.push(attr);
+    await platformPersistenceService.upsert(CatalogAttributeModel, attr);
+    realtimeBus.emitPublic('filters.updated', { attributeId: attr.id }, tenantId);
     return { success: true, data: attr };
+  }
+
+  @Patch('catalog/attributes/:id')
+  async updateAttribute(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { name?: string; categoryName?: string; values?: string[]; isRequired?: boolean; isFilterable?: boolean }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const attr = companyAdminDataService.attributes.find((a) => a.id === id && a.tenantId === tenantId);
+    if (!attr) throw new NotFoundException('Attribute not found.');
+    if (body?.name !== undefined && body.name.trim()) {
+      attr.name = body.name.trim();
+      attr.code = body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    }
+    if (body?.categoryName !== undefined) attr.categoryName = body.categoryName;
+    if (body?.values !== undefined) attr.values = body.values;
+    if (body?.isRequired !== undefined) attr.isRequired = Boolean(body.isRequired);
+    if (body?.isFilterable !== undefined) attr.isFilterable = Boolean(body.isFilterable);
+    await platformPersistenceService.upsert(CatalogAttributeModel, attr);
+    realtimeBus.emitPublic('filters.updated', { attributeId: attr.id }, tenantId);
+    return { success: true, data: attr };
+  }
+
+  @Delete('catalog/attributes/:id')
+  async deleteAttribute(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const idx = companyAdminDataService.attributes.findIndex((a) => a.id === id && a.tenantId === tenantId);
+    if (idx < 0) throw new NotFoundException('Attribute not found.');
+    companyAdminDataService.attributes.splice(idx, 1);
+    await platformPersistenceService.remove(CatalogAttributeModel, id);
+    realtimeBus.emitPublic('filters.updated', { deletedAttributeId: id }, tenantId);
+    return { success: true, data: { id, deleted: true } };
   }
 
   // ==================== 4. INVENTORY & WAREHOUSES ====================
@@ -2087,6 +2202,7 @@ export class CompanyAdminController {
       createdAt: new Date().toISOString(),
     };
     vendorWarehouses.push(wh);
+    void platformPersistenceService.upsert(PlatformWarehouseModel, wh);
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -2100,7 +2216,42 @@ export class CompanyAdminController {
       details: `Added warehouse ${wh.name} (${wh.pincode}).`,
       ipAddress: req?.ip || '127.0.0.1',
     });
+    realtimeBus.emitPublic('serviceability.updated', { warehouseId: wh.id }, tenantId);
     return { success: true, data: wh };
+  }
+
+  @Patch('warehouses/:id')
+  async updateWarehouse(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: Record<string, any>
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'warehouses:manage', headerTenantId);
+    const wh = vendorWarehouses.find((w: any) => w.id === id) as any;
+    if (!wh) throw new NotFoundException('Warehouse not found.');
+    for (const k of ['name', 'address', 'city', 'state', 'pincode', 'contactPerson', 'phone', 'servicePincodes', 'isActive', 'avgDispatchMins']) {
+      if (body && body[k] !== undefined) wh[k] = body[k];
+    }
+    wh.updatedAt = new Date().toISOString();
+    await platformPersistenceService.upsert(PlatformWarehouseModel, wh);
+    realtimeBus.emitPublic('serviceability.updated', { warehouseId: wh.id }, tenantId);
+    return { success: true, data: wh };
+  }
+
+  @Delete('warehouses/:id')
+  async deleteWarehouse(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'warehouses:manage', headerTenantId);
+    const idx = vendorWarehouses.findIndex((w: any) => w.id === id);
+    if (idx < 0) throw new NotFoundException('Warehouse not found.');
+    vendorWarehouses.splice(idx, 1);
+    await platformPersistenceService.remove(PlatformWarehouseModel, id);
+    realtimeBus.emitPublic('serviceability.updated', { deletedWarehouseId: id }, tenantId);
+    return { success: true, data: { id, deleted: true } };
   }
 
   // ==================== 5. ORDERS & RETURNS ====================
@@ -2759,35 +2910,52 @@ export class CompanyAdminController {
   }
 
   @Post('coupons')
-  createCoupon(
+  async createCoupon(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
     @Body()
     body?: {
       code: string;
       type?: 'PERCENTAGE' | 'FIXED';
-      value: number;
+      discountType?: 'PERCENTAGE' | 'FIXED';
+      value?: number;
+      discountValue?: number;
       minOrderValue?: number;
       maxDiscount?: number;
+      expiryDate?: string;
+      usageLimit?: number;
       description?: string;
+      isActive?: boolean;
     },
     @Req() req?: any
   ) {
     const { admin, tenantId } = this.requireAdmin(authHeader, 'pricing:manage', headerTenantId);
-    if (!body?.code?.trim() || typeof body?.value !== 'number') {
-      throw new BadRequestException('Coupon code and numeric value are required.');
+    const val = Number(body?.value ?? body?.discountValue);
+    if (!body?.code?.trim() || Number.isNaN(val) || val <= 0) {
+      throw new BadRequestException('Coupon code and positive numeric value are required.');
     }
+    const cleanCode = body.code.trim().toUpperCase();
+    if (dbStore.coupons.some((c: any) => c.code.toUpperCase() === cleanCode)) {
+      throw new BadRequestException(`Coupon '${cleanCode}' already exists.`);
+    }
+    const dType = body.discountType || body.type || 'PERCENTAGE';
     const coupon: any = {
-      code: body.code.trim().toUpperCase(),
-      title: `${body.code.trim().toUpperCase()} Offer`,
-      discountType: body.type || 'PERCENTAGE',
-      discountValue: body.value,
-      minOrderValue: body.minOrderValue || 1000,
-      ...(body.type === 'FIXED' ? {} : { maxDiscount: body.maxDiscount || 2000 }),
-      description: body.description || `${body.value}% off via Company Admin campaign`,
-      expiryDate: new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0],
+      id: `cpn-${Date.now()}`,
+      tenantId,
+      code: cleanCode,
+      title: `${cleanCode} Offer`,
+      discountType: dType,
+      discountValue: val,
+      minOrderValue: Number(body.minOrderValue ?? 1000),
+      ...(dType === 'FIXED' ? {} : { maxDiscount: Number(body.maxDiscount ?? 2000) }),
+      description: body.description || `${val}${dType === 'PERCENTAGE' ? '%' : ' Rs'} off via Company Admin campaign`,
+      expiryDate: body.expiryDate || new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0],
+      usageLimit: body.usageLimit ? Number(body.usageLimit) : undefined,
+      isActive: body.isActive !== false,
     };
     dbStore.coupons.push(coupon);
+    await platformPersistenceService.upsert(PlatformCouponModel, coupon, 'code');
+    realtimeBus.emitPublic('pricing.updated', { couponCode: coupon.code }, tenantId);
     companyAdminDataService.recordAuditLog({
       tenantId,
       actorId: admin.sub,
@@ -2803,18 +2971,102 @@ export class CompanyAdminController {
     return { success: true, data: coupon };
   }
 
+  @Patch('coupons/:code')
+  async updateCoupon(
+    @Param('code') code: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: Record<string, any>
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'pricing:manage', headerTenantId);
+    const coupon = dbStore.coupons.find((c: any) => c.code.toUpperCase() === code.toUpperCase()) as any;
+    if (!coupon) throw new NotFoundException('Coupon not found.');
+    for (const k of ['title', 'discountType', 'discountValue', 'minOrderValue', 'maxDiscount', 'description', 'expiryDate', 'usageLimit', 'isActive']) {
+      if (body && body[k] !== undefined) coupon[k] = body[k];
+    }
+    if (body?.value !== undefined) coupon.discountValue = Number(body.value);
+    if (body?.type !== undefined) coupon.discountType = body.type;
+    await platformPersistenceService.upsert(PlatformCouponModel, coupon, 'code');
+    realtimeBus.emitPublic('pricing.updated', { couponCode: coupon.code }, tenantId);
+    return { success: true, data: coupon };
+  }
+
+  @Delete('coupons/:code')
+  async deleteCoupon(
+    @Param('code') code: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'pricing:manage', headerTenantId);
+    const idx = dbStore.coupons.findIndex((c: any) => c.code.toUpperCase() === code.toUpperCase());
+    if (idx < 0) throw new NotFoundException('Coupon not found.');
+    const [removed] = dbStore.coupons.splice(idx, 1);
+    await platformPersistenceService.remove(PlatformCouponModel, removed.code, 'code');
+    realtimeBus.emitPublic('pricing.updated', { deletedCoupon: removed.code }, tenantId);
+    return { success: true, data: { code: removed.code, deleted: true } };
+  }
+
+  @Post('promotions')
+  async createPromotion(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: Record<string, any>
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'pricing:manage', headerTenantId);
+    if (!body?.title?.trim()) throw new BadRequestException('Promotion title is required.');
+    const promo: any = {
+      id: `promo-${Date.now()}`,
+      vendorId: body.vendorId || companyAdminDataService.getTenantVendors(tenantId)[0]?.id || DEFAULT_VENDOR_ID,
+      tenantId,
+      title: body.title.trim(),
+      description: body.description || '',
+      discountPercent: Number(body.discountPercent ?? body.discountValue ?? 10),
+      bannerText: body.bannerText || body.title.trim(),
+      startDate: body.startDate || new Date().toISOString().split('T')[0],
+      endDate: body.endDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      status: body.status || 'ACTIVE',
+      applicableProductIds: Array.isArray(body.applicableProductIds) ? body.applicableProductIds : [],
+      salesGenerated: 0,
+      usageCount: 0,
+    };
+    vendorPromotions.unshift(promo);
+    await platformPersistenceService.upsert(PlatformPromotionModel, promo);
+    realtimeBus.emitPublic('pricing.updated', { promotionId: promo.id }, tenantId);
+    return { success: true, data: promo };
+  }
+
   @Patch('promotions/:id/status')
-  updateVendorPromotionStatus(
+  async updateVendorPromotionStatus(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
     @Body() body?: { status: 'ACTIVE' | 'EXPIRED' }
   ) {
-    this.requireAdmin(authHeader, 'pricing:manage', headerTenantId);
+    const { tenantId } = this.requireAdmin(authHeader, 'pricing:manage', headerTenantId);
     const promo = vendorPromotions.find((p) => p.id === id);
     if (!promo) throw new NotFoundException('Promotion not found.');
     promo.status = body?.status || 'ACTIVE';
+    await platformPersistenceService.upsert(PlatformPromotionModel, promo);
+    realtimeBus.emitPublic('pricing.updated', { promotionId: promo.id }, tenantId);
     return { success: true, data: promo };
+  }
+
+  @Patch('products/:id/bulk-pricing')
+  async updateProductBulkPricing(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { bulkPricing?: any[] }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'pricing:manage', headerTenantId);
+    const { product } = this.findTenantProduct(tenantId, id);
+    product.bulkPricing = Array.isArray(body?.bulkPricing) ? body.bulkPricing : [];
+    product.isBulkEligible = product.bulkPricing.length > 0;
+    product.updatedAt = new Date().toISOString();
+    companyAdminDataService.syncCustomerPortalProduct(product);
+    await platformPersistenceService.upsert(PlatformProductModel, product);
+    realtimeBus.emitPublic('pricing.updated', { productId: product.id }, tenantId);
+    return { success: true, data: product };
   }
 
   // ==================== 8. WEBSITE CONTENT MANAGEMENT ====================
@@ -2956,6 +3208,9 @@ export class CompanyAdminController {
       ipAddress: req?.ip || '127.0.0.1',
     });
 
+    realtimeBus.emitPublic('content.published', { contentId: item.id, status: 'PUBLISHED' }, tenantId);
+    realtimeBus.emitToAdmin('content.published', { contentId: item.id, status: 'PUBLISHED' }, tenantId);
+
     return { success: true, data: item, message: 'Published to live Customer Storefront.' };
   }
 
@@ -2972,7 +3227,23 @@ export class CompanyAdminController {
     item.updatedBy = admin.email;
     item.updatedAt = new Date().toISOString();
     void companyAdminPersistenceService.upsert(CompanyContentModel, item);
+    realtimeBus.emitPublic('content.published', { contentId: item.id, status: 'UNPUBLISHED' }, tenantId);
     return { success: true, data: item };
+  }
+
+  @Delete('content/:id')
+  async deleteContent(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'content:publish', headerTenantId);
+    const item = companyAdminDataService.contentItems.get(id);
+    if (!item || item.tenantId !== tenantId) throw new NotFoundException('Content item not found.');
+    companyAdminDataService.contentItems.delete(id);
+    await companyAdminPersistenceService.remove(CompanyContentModel, id);
+    realtimeBus.emitPublic('content.published', { deletedContentId: id }, tenantId);
+    return { success: true, data: { id, deleted: true } };
   }
 
   @Get('content/knowledge-hub')
@@ -2982,29 +3253,122 @@ export class CompanyAdminController {
   }
 
   @Post('content/knowledge-hub')
-  createKnowledgeArticle(
+  async createKnowledgeArticle(
     @Headers('authorization') authHeader?: string,
-    @Body() body?: { title: string; category: string; readTimeMinutes?: number; summary: string }
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { title: string; category: string; readTimeMinutes?: number; summary: string; content?: string }
   ) {
-    this.requireAdmin(authHeader, 'content:publish');
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'content:publish', headerTenantId);
     if (!body?.title || !body?.summary) {
       throw new BadRequestException('Title and summary are required.');
     }
-    const art = {
+    const art: any = {
       id: `kh-${Date.now()}`,
-      slug: body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      title: body.title,
+      tenantId,
+      slug: body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      title: body.title.trim(),
       category: body.category || 'Construction Guide',
-      readTimeMinutes: body.readTimeMinutes || 4,
+      readTimeMinutes: Number(body.readTimeMinutes || 4),
       summary: body.summary,
-      content: body.summary,
-      author: 'Buildora Editorial',
+      content: body.content || body.summary,
+      author: admin.name || 'Buildora Editorial',
       image: '',
       tags: [body.category || 'Guide'],
       publishedAt: new Date().toISOString().split('T')[0],
     };
     dbStore.knowledgeArticles.unshift(art);
+    await platformPersistenceService.upsert(KnowledgeArticleModel, art);
+    realtimeBus.emitPublic('content.published', { knowledgeArticleId: art.id }, tenantId);
     return { success: true, data: art };
+  }
+
+  @Patch('content/knowledge-hub/:id')
+  async updateKnowledgeArticle(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: Record<string, any>
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'content:publish', headerTenantId);
+    const art = dbStore.knowledgeArticles.find((a) => a.id === id) as any;
+    if (!art) throw new NotFoundException('Article not found.');
+    for (const k of ['title', 'category', 'readTimeMinutes', 'summary', 'content', 'image', 'tags']) {
+      if (body && body[k] !== undefined) art[k] = body[k];
+    }
+    await platformPersistenceService.upsert(KnowledgeArticleModel, art);
+    realtimeBus.emitPublic('content.published', { knowledgeArticleId: art.id }, tenantId);
+    return { success: true, data: art };
+  }
+
+  @Delete('content/knowledge-hub/:id')
+  async deleteKnowledgeArticle(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'content:publish', headerTenantId);
+    const idx = dbStore.knowledgeArticles.findIndex((a) => a.id === id);
+    if (idx < 0) throw new NotFoundException('Article not found.');
+    dbStore.knowledgeArticles.splice(idx, 1);
+    await platformPersistenceService.remove(KnowledgeArticleModel, id);
+    realtimeBus.emitPublic('content.published', { deletedArticleId: id }, tenantId);
+    return { success: true, data: { id, deleted: true } };
+  }
+
+  @Post('content/faqs')
+  async createFaq(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { question?: string; answer?: string; category?: string }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'content:publish', headerTenantId);
+    if (!body?.question?.trim() || !body?.answer?.trim()) {
+      throw new BadRequestException('FAQ question and answer are required.');
+    }
+    const faq: any = {
+      id: `faq-${Date.now()}`,
+      tenantId,
+      question: body.question.trim(),
+      answer: body.answer.trim(),
+      category: body.category || 'General',
+    };
+    dbStore.faqs.unshift(faq);
+    await platformPersistenceService.upsert(FaqModel, faq);
+    realtimeBus.emitPublic('content.published', { faqId: faq.id }, tenantId);
+    return { success: true, data: faq };
+  }
+
+  @Patch('content/faqs/:id')
+  async updateFaq(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { question?: string; answer?: string; category?: string }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'content:publish', headerTenantId);
+    const faq = dbStore.faqs.find((f) => f.id === id) as any;
+    if (!faq) throw new NotFoundException('FAQ not found.');
+    if (body?.question !== undefined) faq.question = body.question;
+    if (body?.answer !== undefined) faq.answer = body.answer;
+    if (body?.category !== undefined) faq.category = body.category;
+    await platformPersistenceService.upsert(FaqModel, faq);
+    realtimeBus.emitPublic('content.published', { faqId: faq.id }, tenantId);
+    return { success: true, data: faq };
+  }
+
+  @Delete('content/faqs/:id')
+  async deleteFaq(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'content:publish', headerTenantId);
+    const idx = dbStore.faqs.findIndex((f) => f.id === id);
+    if (idx < 0) throw new NotFoundException('FAQ not found.');
+    dbStore.faqs.splice(idx, 1);
+    await platformPersistenceService.remove(FaqModel, id);
+    realtimeBus.emitPublic('content.published', { deletedFaqId: id }, tenantId);
+    return { success: true, data: { id, deleted: true } };
   }
 
   // ==================== 9. CUSTOMERS ====================
@@ -3120,9 +3484,9 @@ export class CompanyAdminController {
             ? Array.isArray(dbStore.pincodes)
               ? dbStore.pincodes
               : Object.entries(dbStore.pincodes || {}).map(([code, info]: any) => ({
-                  pincode: code,
-                  ...(typeof info === 'object' && info !== null ? info : { info }),
-                }))
+                pincode: code,
+                ...(typeof info === 'object' && info !== null ? info : { info }),
+              }))
             : [],
       },
     };
@@ -3203,11 +3567,81 @@ export class CompanyAdminController {
       eta: body.eta || 'Within 60 mins',
     };
     companyAdminDataService.dispatchAssignments.set(order.id, assignment);
+    void platformPersistenceService.upsert(DispatchAssignmentModel, assignment, 'orderId');
     partner.activeDeliveries += 1;
 
     this.updateOrderStatus(order.id, authHeader, headerTenantId, { status: 'DISPATCHED' }, req);
 
     return { success: true, data: assignment };
+  }
+
+  @Patch('delivery/partners/:id')
+  async updateDeliveryPartner(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: Record<string, any>
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'delivery:manage', headerTenantId);
+    const partner = companyAdminDataService.deliveryPartners.get(id);
+    if (!partner || partner.tenantId !== tenantId) throw new NotFoundException('Delivery partner not found.');
+    for (const k of ['name', 'code', 'contactPerson', 'phone', 'vehicleTypes', 'servicePincodes', 'status', 'baseCharge', 'perKmCharge']) {
+      if (body && body[k] !== undefined) (partner as any)[k] = body[k];
+    }
+    await companyAdminPersistenceService.upsert(CompanyDeliveryPartnerModel, partner);
+    realtimeBus.emitPublic('serviceability.updated', { partnerId: id }, tenantId);
+    return { success: true, data: partner };
+  }
+
+  @Post('delivery/pincodes')
+  async upsertPincodeZone(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: Record<string, any>
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'delivery:manage', headerTenantId);
+    const pin = String(body?.pincode || '').trim();
+    if (!/^[1-9][0-9]{5}$/.test(pin)) {
+      throw new BadRequestException('Valid 6-digit Indian pincode is required.');
+    }
+    const existing = (dbStore.pincodes as Record<string, any>)[pin];
+    const zone: any = {
+      ...(existing || {}),
+      id: existing?.id || `pin-${pin}`,
+      tenantId,
+      pincode: pin,
+      locality: body?.locality || body?.area || existing?.locality || 'Custom Service Zone',
+      area: body?.area || body?.locality || existing?.area || existing?.locality || 'Custom Service Zone',
+      city: body?.city || existing?.city || companyAdminDataService.getTenantConfig(tenantId).city || 'Bengaluru',
+      state: body?.state || existing?.state || companyAdminDataService.getTenantConfig(tenantId).state || 'Karnataka',
+      warehouseId: body?.warehouseId || existing?.warehouseId || '',
+      warehouse: body?.assignedWarehouse || body?.warehouse || existing?.warehouse || 'Primary Warehouse Hub',
+      assignedWarehouse: body?.assignedWarehouse || body?.warehouse || existing?.assignedWarehouse || existing?.warehouse || 'Primary Warehouse Hub',
+      zone: body?.zone || existing?.zone || 'CENTRAL',
+      etaMinutes: Number(body?.etaMinutes ?? existing?.etaMinutes ?? 60),
+      expressAvailable: body?.expressAvailable !== undefined ? body.expressAvailable !== false : true,
+      deliveryCharge: body?.deliveryCharge !== undefined ? Number(body.deliveryCharge) : existing?.deliveryCharge,
+      isActive: body?.isActive !== false,
+    };
+    (dbStore.pincodes as Record<string, any>)[pin] = zone;
+    await platformPersistenceService.upsert(ServiceableZoneModel, zone, 'pincode');
+    realtimeBus.emitPublic('serviceability.updated', { pincode: pin }, tenantId);
+    return { success: true, data: zone };
+  }
+
+  @Delete('delivery/pincodes/:pincode')
+  async deletePincodeZone(
+    @Param('pincode') pincode: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'delivery:manage', headerTenantId);
+    const storeMap = dbStore.pincodes as Record<string, any>;
+    if (!storeMap[pincode]) throw new NotFoundException('Pincode zone not found.');
+    delete storeMap[pincode];
+    await platformPersistenceService.remove(ServiceableZoneModel, pincode, 'pincode');
+    realtimeBus.emitPublic('serviceability.updated', { deletedPincode: pincode }, tenantId);
+    return { success: true, data: { pincode, deleted: true } };
   }
 
   @Patch('delivery/assignments/:orderId/status')
@@ -3225,6 +3659,7 @@ export class CompanyAdminController {
     }
     assignment.status = body?.status || 'IN_TRANSIT';
     assignment.updatedAt = new Date().toISOString();
+    void platformPersistenceService.upsert(DispatchAssignmentModel, assignment, 'orderId');
 
     if (assignment.status === 'DELIVERED') {
       this.updateOrderStatus(orderId, authHeader, headerTenantId, { status: 'DELIVERED' }, req);
@@ -3267,8 +3702,18 @@ export class CompanyAdminController {
     const totalSettled = paidSettlements.reduce((s, x) => s + Number(x.netAmount || 0), 0);
     const totalPendingPayout = pendingSettlements.reduce((s, x) => s + Number(x.netAmount || 0), 0);
     const commissionRate = tenant?.paymentConfig?.platformCommissionPercent ?? 6;
+    const defaultGstRate = tenant?.taxConfig?.defaultGstRate ?? 18;
     const totalCommission = Math.round((grossSales * commissionRate) / 100);
-    const gstCollected = Math.round(grossSales * 0.18);
+    const gstCollected = Math.round(
+      orders
+        .filter((o) => o.status !== 'CANCELLED')
+        .reduce((s, o) => {
+          if (o.gstTotal !== undefined || o.gstAmount !== undefined) {
+            return s + Number(o.gstTotal ?? o.gstAmount ?? 0);
+          }
+          return s + (Number(o.totalAmount || 0) * defaultGstRate) / (100 + defaultGstRate);
+        }, 0)
+    );
 
     return {
       success: true,
@@ -3277,6 +3722,7 @@ export class CompanyAdminController {
           grossSales,
           totalCommission,
           gstCollected,
+          gstRatePercent: defaultGstRate,
           totalSettled,
           totalPendingPayout,
           pendingSettlementCount: pendingSettlements.length,
@@ -3313,11 +3759,13 @@ export class CompanyAdminController {
     const orders = companyAdminDataService
       .getTenantOrders(tenantId)
       .filter((o) => o.vendorId === vendor.id && o.status === 'DELIVERED');
-    const gross = orders.reduce((s, o) => s + Number(o.totalAmount || 0), 0) || 48500;
-    const commissionRate = vendor.commissionRate || 6;
+    const tenant = companyAdminDataService.getTenantConfig(tenantId);
+    const gross = orders.reduce((s, o) => s + Number(o.totalAmount || 0), 0);
+    const commissionRate = vendor.commissionRate ?? tenant?.paymentConfig?.platformCommissionPercent ?? 6;
+    const tdsRate = tenant?.taxConfig?.tdsRate ?? 1;
     const commission = Math.round((gross * commissionRate) / 100);
-    const tdsAmount = Math.round(gross * 0.01);
-    const netAmount = gross - commission - tdsAmount;
+    const tdsAmount = Math.round((gross * tdsRate) / 100);
+    const netAmount = Math.max(0, gross - commission - tdsAmount);
 
     const batch: any = {
       id: `stl-${Date.now()}`,
@@ -3577,12 +4025,20 @@ export class CompanyAdminController {
   getReports(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
-    @Query('type') reportType = 'sales'
+    @Query('type') reportType = 'sales',
+    @Query('from') fromDate?: string,
+    @Query('to') toDate?: string
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'reports:read', headerTenantId);
     const vendors = companyAdminDataService.getTenantVendors(tenantId);
     const products = companyAdminDataService.getTenantProducts(tenantId);
-    const orders = companyAdminDataService.getTenantOrders(tenantId);
+    const allOrders = companyAdminDataService.getTenantOrders(tenantId);
+    const fromTs = fromDate ? new Date(fromDate).getTime() : 0;
+    const toTs = toDate ? new Date(toDate).getTime() + 86400000 - 1 : Number.MAX_SAFE_INTEGER;
+    const orders = allOrders.filter((o) => {
+      const ts = new Date(o.createdAt || Date.now()).getTime();
+      return ts >= fromTs && ts <= toTs;
+    });
     const settlements = companyAdminDataService.getTenantSettlements(tenantId);
     const customers = Array.from(companyAdminDataService.customers.values()).filter(
       (c) => c.tenantId === tenantId
@@ -3591,9 +4047,10 @@ export class CompanyAdminController {
       (p) => p.tenantId === tenantId
     );
 
-    const salesByCategory = dbStore.categories.map((cat) => {
+    const pool = taxonomyService.getTenantPool(tenantId);
+    const salesByCategory = pool.childCategories.map((cat) => {
       const catProds = products.filter(
-        (p) => p.categoryId === cat.id || p.categoryName === cat.name
+        (p) => p.childCategoryId === cat.id || p.categoryId === cat.id || p.categoryName === cat.name
       );
       return {
         category: cat.name,
@@ -3605,17 +4062,77 @@ export class CompanyAdminController {
       };
     });
 
+    const reportRowsMap: Record<string, any[]> = {
+      sales: salesByCategory,
+      orders: orders.slice(0, 50).map((o) => ({
+        orderNumber: o.orderNumber || o.id,
+        customerName: o.customerName,
+        status: o.status,
+        paymentMethod: o.paymentMethod || 'RAZORPAY',
+        totalAmount: o.totalAmount,
+        createdAt: o.createdAt,
+      })),
+      vendors: vendors.map((v) => ({
+        businessName: v.businessName,
+        approvalStatus: v.approvalStatus,
+        skuCount: products.filter((p) => p.vendorId === v.id).length,
+        commissionRate: v.commissionRate,
+        fulfillmentRate: v.fulfillmentRate,
+      })),
+      products: products.slice(0, 50).map((p) => ({
+        sku: p.sku,
+        name: p.name,
+        category: p.childCategoryName || p.categoryName,
+        price: p.sellingPrice,
+        stock: p.stock,
+        approvalStatus: p.approvalStatus,
+      })),
+      inventory: products
+        .filter((p) => p.stock <= (p.lowStockThreshold || 25))
+        .map((p) => ({
+          sku: p.sku,
+          name: p.name,
+          stock: p.stock,
+          threshold: p.lowStockThreshold || 25,
+          status: p.stock <= 0 ? 'OUT_OF_STOCK' : 'LOW_STOCK',
+        })),
+      customers: customers.map((c) => ({
+        name: c.name,
+        customerType: c.customerType,
+        city: c.city,
+        totalOrders: c.totalOrders,
+        totalSpent: c.totalSpent,
+      })),
+      delivery: partners.map((d) => ({
+        name: d.name,
+        code: d.code,
+        activeDeliveries: d.activeDeliveries,
+        completedDeliveries: d.completedDeliveries,
+        onTimeRate: d.onTimeRate,
+      })),
+      financial: settlements.map((s) => ({
+        settlementNumber: s.settlementNumber,
+        vendorName: s.vendorName || s.vendorId,
+        grossAmount: s.grossRevenue,
+        commissionAmount: s.platformCommission,
+        netAmount: s.netPayable,
+        status: s.status,
+      })),
+    };
+
     return {
       success: true,
       data: {
         reportType,
+        dateRange: { from: fromDate || null, to: toDate || null },
+        reportRows: reportRowsMap[reportType] || salesByCategory,
         generatedAt: new Date().toISOString(),
         salesSummary: {
           totalGross: orders.reduce((s, o) => s + Number(o.totalAmount || 0), 0),
           averageOrderValue: orders.length
             ? Math.round(
-                orders.reduce((s, o) => s + Number(o.totalAmount || 0), 0) / orders.length
-              )
+              orders.reduce((s, o) => s + Number(o.totalAmount || 0), 0) / orders.length
+            )
             : 0,
           salesByCategory,
         },
@@ -3757,22 +4274,51 @@ export class CompanyAdminController {
     return { success: true, data: ticket };
   }
 
+  @Post('templates')
+  async createNotificationTemplate(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { name?: string; channel?: 'EMAIL' | 'SMS' | 'WHATSAPP' | 'IN_APP'; eventKey?: string; subject?: string; body?: string }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'support:manage', headerTenantId);
+    if (!body?.name?.trim() || !body?.body?.trim()) {
+      throw new BadRequestException('Template name and body are required.');
+    }
+    const tpl = {
+      id: `tpl-${Date.now()}`,
+      tenantId,
+      name: body.name.trim(),
+      channel: body.channel || 'EMAIL',
+      eventKey: body.eventKey || 'CUSTOM_EVENT',
+      subject: body.subject || body.name.trim(),
+      body: body.body,
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    };
+    companyAdminDataService.notificationTemplates.push(tpl);
+    await platformPersistenceService.upsert(NotificationTemplateModel, tpl);
+    return { success: true, data: tpl };
+  }
+
   @Put('templates/:id')
-  updateNotificationTemplate(
+  async updateNotificationTemplate(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
-    @Body() body?: { subject?: string; body?: string; isActive?: boolean }
+    @Body() body?: { name?: string; channel?: any; subject?: string; body?: string; isActive?: boolean }
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'support:manage', headerTenantId);
     const tpl = companyAdminDataService.notificationTemplates.find(
       (t) => t.id === id && t.tenantId === tenantId
     );
     if (!tpl) throw new NotFoundException('Template not found.');
+    if (body?.name !== undefined) tpl.name = body.name;
+    if (body?.channel !== undefined) tpl.channel = body.channel;
     if (body?.subject !== undefined) tpl.subject = body.subject;
     if (body?.body !== undefined) tpl.body = body.body;
     if (body?.isActive !== undefined) tpl.isActive = body.isActive;
     tpl.updatedAt = new Date().toISOString();
+    await platformPersistenceService.upsert(NotificationTemplateModel, tpl);
     return { success: true, data: tpl };
   }
 
@@ -3809,12 +4355,24 @@ export class CompanyAdminController {
       paymentConfig: { ...tenant.paymentConfig, ...(body?.paymentConfig || {}) },
       deliveryConfig: { ...tenant.deliveryConfig, ...(body?.deliveryConfig || {}) },
       taxConfig: { ...tenant.taxConfig, ...(body?.taxConfig || {}) },
+      vendorApprovalConfig: {
+        ...(tenant.vendorApprovalConfig || {
+          requireGstDoc: true,
+          requirePanDoc: true,
+          requireBankProof: true,
+          autoApproveVerifiedGst: false,
+          defaultCommissionPercent: 6,
+        }),
+        ...(body?.vendorApprovalConfig || {}),
+      },
       notificationPrefs: { ...tenant.notificationPrefs, ...(body?.notificationPrefs || {}) },
       securitySettings: { ...tenant.securitySettings, ...(body?.securitySettings || {}) },
       updatedAt: new Date().toISOString(),
     };
     companyAdminDataService.tenants.set(tenantId, updated);
     void companyAdminPersistenceService.upsert(CompanyTenantModel, updated);
+    realtimeBus.emitPublic('settings.updated', { updatedAt: updated.updatedAt }, tenantId);
+    realtimeBus.emitToAdmin('settings.updated', { settings: updated }, tenantId);
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -3825,7 +4383,7 @@ export class CompanyAdminController {
       module: 'Settings',
       entityType: 'CompanyTenant',
       entityId: tenantId,
-      details: 'Updated company profile, tax, payment, or delivery settings.',
+      details: 'Updated company profile, tax, payment, vendor approval, or delivery settings.',
       ipAddress: req?.ip || '127.0.0.1',
     });
 

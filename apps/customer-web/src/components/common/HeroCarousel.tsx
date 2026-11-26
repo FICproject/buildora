@@ -14,9 +14,10 @@ import {
   Package
 } from 'lucide-react';
 import { useLocationStore } from '../../store/useLocationStore';
+import { useStoreConfigStore } from '../../store/useStoreConfigStore';
 
 interface SlideData {
-  id: number;
+  id: string | number;
   tag: string;
   tagColor: string;
   headline: string;
@@ -30,95 +31,70 @@ interface SlideData {
   icon: React.ElementType;
 }
 
-const HERO_SLIDES: SlideData[] = [
-  {
-    id: 1,
-    tag: '60-MIN SITE DISPATCH',
-    tagColor: 'bg-brand-orange-500 text-white',
-    headline: 'Everything Your Site Needs. Delivered Faster.',
-    subheadline: 'Direct Mill Dispatches to Active Bengaluru Sites',
-    description: 'UltraTech cement, Astral CPVC, Havells FRLS wires, and Greenply marine boards dispatched in 60 minutes.',
-    highlights: ['UltraTech', 'Astral', 'Havells', 'Greenply'],
-    ctaText: 'Order Materials Now',
-    ctaLink: '/products',
-    imageUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1200&q=80',
-    fallbackGradient: 'from-blue-950 via-slate-900 to-indigo-950',
-    icon: Zap
-  },
-  {
-    id: 2,
-    tag: 'STRUCTURAL CIVIL SUPPLIES',
-    tagColor: 'bg-amber-400 text-slate-950',
-    headline: 'Build Strong From the Foundation.',
-    subheadline: 'OPC 53, PPC Cement, Ready-Mix Mortar & Steel',
-    description: 'Certified 53-grade structural cement, ready-mix masonry plaster, aggregates, and corrosion-resistant steel.',
-    highlights: ['Fresh Plant Stock', 'IS 12269 Certified', 'Zero Wastage Bags'],
-    ctaText: 'Browse Civil Supplies',
-    ctaLink: '/categories/cement-concrete',
-    imageUrl: 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=1200&q=80',
-    fallbackGradient: 'from-amber-950 via-slate-900 to-stone-900',
-    icon: Building2
-  },
-  {
-    id: 3,
-    tag: 'PREMIUM INTERIOR FINISHES',
-    tagColor: 'bg-emerald-500 text-white',
-    headline: 'Finish Every Detail Perfectly.',
-    subheadline: 'Paints, Waterproof Plywood, Tiles & Designer Knobs',
-    description: 'BWP marine plywood, moisture-proof HDHMR boards, Asian Paints luxury emulsions, and vitrified tiles.',
-    highlights: ['BWP Calibrated', 'Asian Paints', 'CenturyPly', 'Kajaria'],
-    ctaText: 'Explore Interiors',
-    ctaLink: '/categories/plywood-mdf-hdhmr',
-    imageUrl: 'https://images.unsplash.com/photo-1546484396-fb3fc6f95f98?auto=format&fit=crop&w=1200&q=80',
-    fallbackGradient: 'from-emerald-950 via-slate-900 to-teal-950',
-    icon: Layers
-  },
-  {
-    id: 4,
-    tag: 'MEP & INFRASTRUCTURE',
-    tagColor: 'bg-cyan-500 text-slate-950',
-    headline: 'Reliable Materials for Every Installation.',
-    subheadline: 'FRLS Copper Wires, CPVC Plumbing & Sanitary Brassware',
-    description: 'Flame retardant electrical wires, Schneider modular switches, Astral pipes, and Kohler bathroom fittings.',
-    highlights: ['100% Electrolytic Copper', 'Lead-Free CPVC', 'GST Tax Invoices'],
-    ctaText: 'Shop MEP Materials',
-    ctaLink: '/categories/wires-mcb-distribution-boards',
-    imageUrl: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=1200&q=80',
-    fallbackGradient: 'from-cyan-950 via-slate-900 to-blue-950',
-    icon: Compass
-  },
-  {
-    id: 5,
-    tag: 'PRO TOOLS & SITE SAFETY',
-    tagColor: 'bg-orange-600 text-white',
-    headline: 'Keep Your Work Moving.',
-    subheadline: 'Bosch Power Drills, Demolition Hammers & Safety Gear',
-    description: 'Heavy-duty rotary hammers, laser distance meters, safety helmets, cut-resistant gloves, and site essentials.',
-    highlights: ['Bosch Professional', 'Stanley Tough', '3M Safety Tested'],
-    ctaText: 'Browse Tools & Equipment',
-    ctaLink: '/categories/power-tools-accessories',
-    imageUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=80',
-    fallbackGradient: 'from-orange-950 via-slate-900 to-stone-900',
-    icon: Wrench
-  }
+const SLIDE_STYLE_DEFAULTS = [
+  { tagColor: 'bg-brand-orange-500 text-white', fallbackGradient: 'from-blue-950 via-slate-900 to-indigo-950', icon: Zap },
+  { tagColor: 'bg-amber-400 text-slate-950', fallbackGradient: 'from-amber-950 via-slate-900 to-stone-900', icon: Building2 },
+  { tagColor: 'bg-emerald-500 text-white', fallbackGradient: 'from-emerald-950 via-slate-900 to-teal-950', icon: Layers },
+  { tagColor: 'bg-cyan-500 text-slate-950', fallbackGradient: 'from-cyan-950 via-slate-900 to-blue-950', icon: Compass },
+  { tagColor: 'bg-orange-600 text-white', fallbackGradient: 'from-orange-950 via-slate-900 to-stone-900', icon: Wrench },
 ];
 
 export const HeroCarousel: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
+  const [failedImages, setFailedImages] = useState<Record<string | number, boolean>>({});
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
 
   const { pincode, locality, warehouseName, etaMinutes } = useLocationStore();
+  const storeConfig = useStoreConfigStore((s) => s.config);
+  const apiBanners: any[] = storeConfig?.content?.banners || [];
+
+  const slides: SlideData[] = React.useMemo(() => {
+    if (apiBanners.length > 0) {
+      return apiBanners.map((b, idx) => {
+        const style = SLIDE_STYLE_DEFAULTS[idx % SLIDE_STYLE_DEFAULTS.length];
+        return {
+          id: b.id || idx + 1,
+          tag: b.badge || 'FEATURED SUPPLY',
+          tagColor: style.tagColor,
+          headline: b.title || 'Certified Building Materials Delivered Fast',
+          subheadline: b.subtitle || '',
+          description: b.subtitle || 'Verified suppliers with live dark-store fulfillment and GST tax invoices.',
+          highlights: Array.isArray(b.publishedPayload?.highlights) ? b.publishedPayload.highlights : [storeConfig?.city || 'Bengaluru', 'GST Verified'],
+          ctaText: b.ctaLabel || 'Browse Catalog',
+          ctaLink: b.ctaUrl || '/products',
+          imageUrl: b.imageUrl || b.publishedPayload?.imageUrl || '',
+          fallbackGradient: style.fallbackGradient,
+          icon: style.icon,
+        };
+      });
+    }
+    return [
+      {
+        id: 'default-store-hero',
+        tag: `${etaMinutes || 60}-MIN SITE DISPATCH`,
+        tagColor: SLIDE_STYLE_DEFAULTS[0].tagColor,
+        headline: storeConfig?.storeName ? `${storeConfig.storeName} — Site Supply Hub` : 'Certified Construction Materials Delivered Fast.',
+        subheadline: locality || storeConfig?.city || 'Bengaluru',
+        description: `Order verified construction supplies for ${pincode || 'your project'} with transparent GST billing and live tracking.`,
+        highlights: [storeConfig?.city || 'Bengaluru', 'Direct Verified Brands', 'GST Invoices'],
+        ctaText: 'Order Materials Now',
+        ctaLink: '/products',
+        imageUrl: '',
+        fallbackGradient: SLIDE_STYLE_DEFAULTS[0].fallbackGradient,
+        icon: Zap,
+      },
+    ];
+  }, [apiBanners, storeConfig, etaMinutes, locality, pincode]);
 
   const nextSlide = useCallback(() => {
-    setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
-  }, []);
+    setCurrentSlide((prev) => (prev + 1) % Math.max(1, slides.length));
+  }, [slides.length]);
 
   const prevSlide = useCallback(() => {
-    setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
-  }, []);
+    setCurrentSlide((prev) => (prev - 1 + Math.max(1, slides.length)) % Math.max(1, slides.length));
+  }, [slides.length]);
 
   // Auto-play timer
   useEffect(() => {
@@ -164,9 +140,9 @@ export const HeroCarousel: React.FC = () => {
       onTouchEnd={handleTouchEnd}
     >
       {/* Slides Deck */}
-      {HERO_SLIDES.map((slide, idx) => {
-        const isActive = idx === currentSlide;
-        const isFailed = failedImages[slide.id];
+      {slides.map((slide, idx) => {
+        const isActive = idx === currentSlide % Math.max(1, slides.length);
+        const isFailed = !slide.imageUrl || Boolean(failedImages[slide.id]);
         const IconComponent = slide.icon;
 
         return (
@@ -181,7 +157,7 @@ export const HeroCarousel: React.FC = () => {
               <img
                 src={slide.imageUrl}
                 alt={slide.headline}
-                onError={() => handleImageError(slide.id)}
+                onError={() => setFailedImages((prev) => ({ ...prev, [slide.id]: true }))}
                 className={`w-full h-full object-cover transition-transform duration-1000 ${
                   isActive ? 'scale-105' : 'scale-100'
                 }`}
@@ -208,7 +184,7 @@ export const HeroCarousel: React.FC = () => {
                 </span>
 
                 <span className="text-[11px] font-mono font-bold text-white/60 bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10">
-                  0{idx + 1} / 0{HERO_SLIDES.length}
+                  0{idx + 1} / 0{slides.length}
                 </span>
               </div>
 
@@ -294,8 +270,8 @@ export const HeroCarousel: React.FC = () => {
 
       {/* Pagination Dots */}
       <div className="absolute bottom-16 sm:bottom-18 left-0 right-0 z-30 flex items-center justify-center gap-1.5">
-        {HERO_SLIDES.map((_, dotIdx) => {
-          const isCurrent = dotIdx === currentSlide;
+        {slides.map((_, dotIdx) => {
+          const isCurrent = dotIdx === currentSlide % Math.max(1, slides.length);
           return (
             <button
               key={dotIdx}

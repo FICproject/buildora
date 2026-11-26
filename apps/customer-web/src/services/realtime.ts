@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import type { QueryClient } from '@tanstack/react-query';
 import { useOrderStore } from '../store/useOrderStore';
 import { useNotificationStore } from '../store/useNotificationStore';
+import { useStoreConfigStore } from '../store/useStoreConfigStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 const SOCKET_ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
@@ -50,11 +51,35 @@ export function initCustomerRealtime(queryClient?: QueryClient) {
     window.dispatchEvent(new CustomEvent('buildora:realtime:catalog', { detail: payload }));
   };
 
-  socket.on('taxonomy.published', refreshCatalog);
+  const refreshConfig = (payload?: any) => {
+    void useStoreConfigStore.getState().loadConfig(true);
+    queryClient?.invalidateQueries({ queryKey: ['store-config'] });
+    queryClient?.invalidateQueries({ queryKey: ['deals'] });
+    queryClient?.invalidateQueries({ queryKey: ['filters'] });
+    queryClient?.invalidateQueries({ queryKey: ['content'] });
+    queryClient?.invalidateQueries({ queryKey: ['brands'] });
+    window.dispatchEvent(new CustomEvent('buildora:realtime:config', { detail: payload }));
+  };
+
+  socket.on('taxonomy.published', (payload) => {
+    refreshCatalog(payload);
+    refreshConfig(payload);
+  });
   socket.on('product.approved', refreshCatalog);
   socket.on('product.updated', refreshCatalog);
   socket.on('product.suspended', refreshCatalog);
   socket.on('inventory.updated', refreshCatalog);
+  socket.on('content.published', refreshConfig);
+  socket.on('pricing.updated', (payload) => {
+    refreshCatalog(payload);
+    refreshConfig(payload);
+  });
+  socket.on('settings.updated', refreshConfig);
+  socket.on('serviceability.updated', refreshConfig);
+  socket.on('filters.updated', (payload) => {
+    refreshCatalog(payload);
+    refreshConfig(payload);
+  });
 
   socket.on('order.created', (payload) => {
     void useOrderStore.getState().syncWithBackend();

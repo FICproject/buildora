@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   PhoneCall,
   Mail,
@@ -11,7 +11,8 @@ import {
   Search,
   AlertCircle
 } from 'lucide-react';
-import { SEED_FAQS, SERVICEABLE_PINCODES } from '@buildora/constants';
+import { api } from '../services/api';
+import { useStoreConfigStore } from '../store/useStoreConfigStore';
 import { Button } from '../components/ui/Button';
 
 // 1. ABOUT US PAGE
@@ -60,11 +61,24 @@ export const AboutPage: React.FC = () => (
 
 // 2. CONTACT US PAGE
 export const ContactPage: React.FC = () => {
+  const storeCfg = useStoreConfigStore((s) => s.config);
+  const supportPhone = storeCfg?.supportPhone || '1800-60-28453';
+  const supportEmail = storeCfg?.supportEmail || 'support@buildora.com';
+  const legalName = storeCfg?.legalName || 'BUILDORA 60 Technologies Pvt Ltd';
+  const cityState = storeCfg?.city ? `${storeCfg.city}, ${storeCfg.state || 'Karnataka'}` : 'Bengaluru, Karnataka';
+
   const [sent, setSent] = useState(false);
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', subject: '', message: '' });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'}/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+    } catch {}
     setSent(true);
   };
 
@@ -73,7 +87,7 @@ export const ContactPage: React.FC = () => {
       <div className="text-center max-w-xl mx-auto space-y-2">
         <h1 className="text-3xl font-black text-slate-900">Contact BUILDORA 60</h1>
         <p className="text-xs text-slate-500">
-          Our construction material advisors and dispatch dispatchers are on duty 7:00 AM to 11:00 PM every day.
+          Our construction material advisors and dispatch coordinators are ready to assist.
         </p>
       </div>
 
@@ -83,19 +97,21 @@ export const ContactPage: React.FC = () => {
           <div className="space-y-4 text-xs text-slate-300">
             <div className="flex items-start gap-3">
               <MapPin className="w-4 h-4 text-brand-orange-500 flex-shrink-0 mt-0.5" />
-              <span>BUILDORA 60 Technologies Pvt Ltd, Outer Ring Road, Tech Corridor, Bengaluru - 560103, Karnataka, India</span>
+              <span>{legalName}, {cityState}</span>
             </div>
             <div className="flex items-center gap-3">
               <PhoneCall className="w-4 h-4 text-brand-orange-500 flex-shrink-0" />
-              <a href="tel:18006028453" className="hover:text-white font-bold text-sm">1800-60-BUILD (1800-60-28453)</a>
+              <a href={`tel:${supportPhone.replace(/[^+\d]/g, '')}`} className="hover:text-white font-bold text-sm">
+                {supportPhone}
+              </a>
             </div>
             <div className="flex items-center gap-3">
               <Mail className="w-4 h-4 text-brand-orange-500 flex-shrink-0" />
-              <a href="mailto:support@buildora.com" className="hover:text-white">support@buildora.com</a>
+              <a href={`mailto:${supportEmail}`} className="hover:text-white">{supportEmail}</a>
             </div>
             <div className="flex items-center gap-3">
               <Clock className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-              <span>Dispatch Operating Hours: 7:00 AM - 11:00 PM (All 7 Days)</span>
+              <span>{storeCfg?.deliveryConfig?.standardEtaText || 'Dispatch Operating Hours: 7:00 AM - 11:00 PM'}</span>
             </div>
           </div>
         </div>
@@ -166,11 +182,16 @@ export const ContactPage: React.FC = () => {
 export const FaqPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const [faqs, setFaqs] = useState<any[]>([]);
 
-  const filteredFaqs = SEED_FAQS.filter(
+  useEffect(() => {
+    api.getFaqs().then((list) => setFaqs(Array.isArray(list) ? list : []));
+  }, []);
+
+  const filteredFaqs = faqs.filter(
     (f) =>
-      f.question.toLowerCase().includes(search.toLowerCase()) ||
-      f.answer.toLowerCase().includes(search.toLowerCase())
+      String(f.question || '').toLowerCase().includes(search.toLowerCase()) ||
+      String(f.answer || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (

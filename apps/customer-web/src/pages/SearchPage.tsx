@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, ChevronRight, Sparkles } from 'lucide-react';
-import { SEED_PRODUCTS, MASTER_CATEGORIES } from '@buildora/constants';
 import { Category, Product } from '@buildora/types';
 import { api } from '../services/api';
 import { ProductCard } from '../components/common/ProductCard';
@@ -10,17 +9,19 @@ export const SearchPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
 
-  const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
-  const [categories, setCategories] = useState<Category[]>(MASTER_CATEGORIES);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     if (query) {
       api.getProducts({ search: query }).then((prods) => {
-        if (prods && prods.length > 0) setProducts(prods);
+        setProducts(Array.isArray(prods) ? prods : []);
       });
+    } else {
+      api.getProducts().then((prods) => setProducts(Array.isArray(prods) ? prods : []));
     }
     api.getCategories().then((cats) => {
-      if (cats && cats.length > 0) setCategories(cats);
+      setCategories(Array.isArray(cats) ? cats : []);
     });
   }, [query]);
 

@@ -69,11 +69,20 @@ import {
   PlatformWarehouseModel,
   PlatformSupportTicketModel,
   PlatformWalletTxnModel,
+  PlatformPromotionModel,
+  PlatformReviewModel,
+  VendorInvoiceModel,
+  DispatchAssignmentModel,
   platformPersistenceService
 } from '../../../database/platform-persistence.service';
 import { realtimeBus } from '../../realtime/realtime-bus';
 import { platformNotificationService } from '../../notifications/platform-notification.service';
 import { companyAdminSecurityService } from '../../company-admin/services/company-admin-security.service';
+import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
+import {
+  companyAdminPersistenceService,
+  CompanyQuotationModel,
+} from '../../company-admin/services/company-admin-persistence.service';
 import { orderSyncService } from '../../orders/services/order-sync.service';
 import {
   AnalyticsGranularity,
@@ -1638,7 +1647,7 @@ export class VendorController implements OnModuleInit {
       }
     };
 
-    const [pProducts, pMovements, pWarehouses, pOrders, pReturns, pSettlements, pTickets] =
+    const [pProducts, pMovements, pWarehouses, pOrders, pReturns, pSettlements, pTickets, pPromotions, pReviews, pInvoices] =
       await Promise.all([
         platformPersistenceService.loadAll<VendorProduct>(PlatformProductModel),
         platformPersistenceService.loadAll<VendorStockMovement>(PlatformStockMovementModel),
@@ -1647,6 +1656,9 @@ export class VendorController implements OnModuleInit {
         platformPersistenceService.loadAll<VendorReturnRequest>(PlatformReturnModel),
         platformPersistenceService.loadAll<VendorSettlement>(PlatformSettlementModel),
         platformPersistenceService.loadAll<VendorSupportTicket>(PlatformSupportTicketModel),
+        platformPersistenceService.loadAll<VendorPromotion>(PlatformPromotionModel),
+        platformPersistenceService.loadAll<VendorProductReview>(PlatformReviewModel),
+        platformPersistenceService.loadAll<VendorInvoice>(VendorInvoiceModel),
       ]);
 
     mergeById(vendorProducts, pProducts);
@@ -1656,6 +1668,9 @@ export class VendorController implements OnModuleInit {
     mergeById(vendorReturns, pReturns);
     mergeById(vendorSettlements, pSettlements);
     mergeById(vendorSupportTickets, pTickets);
+    mergeById(vendorPromotions, pPromotions);
+    mergeById(vendorReviews, pReviews);
+    mergeById(vendorInvoices, pInvoices);
 
     taxonomyService.migrateLegacyCatalogRecords(vendorProducts);
 
@@ -3538,16 +3553,38 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('categories/attribute-templates')
-  getAllCategoryAttributeTemplates(@Query('category') category?: string) {
+  getAllCategoryAttributeTemplates(
+    @Query('category') category?: string,
+    @Headers('x-tenant-id') tenantId?: string
+  ) {
+    const activeTenant = tenantId || DEFAULT_TENANT_ID;
+    const dynamicAttrs = companyAdminDataService.attributes.filter(
+      (a) => !a.tenantId || a.tenantId === activeTenant
+    );
+    const merged: Record<string, any[]> = { ...CATEGORY_ATTRIBUTE_TEMPLATES };
+    for (const attr of dynamicAttrs) {
+      const catKey = (attr.categoryName || 'general').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const existing = merged[catKey] ? [...merged[catKey]] : [];
+      if (!existing.some((item) => item.name?.toLowerCase() === attr.name.toLowerCase())) {
+        existing.push({
+          name: attr.name,
+          code: attr.code,
+          uiType: 'pills',
+          options: attr.values || [],
+          required: Boolean(attr.isRequired),
+        });
+      }
+      merged[catKey] = existing;
+    }
     if (category) {
       return {
         success: true,
-        data: getAttributeTemplatesForCategory(category)
+        data: merged[category.toLowerCase()] || getAttributeTemplatesForCategory(category)
       };
     }
     return {
       success: true,
-      data: CATEGORY_ATTRIBUTE_TEMPLATES
+      data: merged
     };
   }
 
@@ -3571,6 +3608,10 @@ export class VendorController implements OnModuleInit {
       (pt) => pt.isActive !== false && activeChildIds.has(pt.childCategoryId)
     );
     const myWarehouses = vendorWarehouses.filter((w: any) => !w.vendorId || w.vendorId === vendor.id);
+    const tenantCfg = companyAdminDataService.getTenantConfig(tenantId);
+    const brands = (dbStore.brands as any[]).filter(
+      (b: any) => (!b.tenantId || b.tenantId === tenantId) && b.isActive !== false
+    );
     return {
       success: true,
       data: {
@@ -3580,7 +3621,16 @@ export class VendorController implements OnModuleInit {
         fieldSchemas: taxonomyService.getTenantFieldSchemas(tenantId, undefined, false),
         publishMetadata: taxonomyService.getPublishMetadata(tenantId),
         warehouses: myWarehouses,
-        brands: dbStore.brands,
+        brands,
+        config: {
+          gstSlabs: tenantCfg.taxConfig?.gstSlabs || [0, 5, 12, 18, 28],
+          tdsRate: tenantCfg.taxConfig?.tdsRate ?? 0.01,
+          supportedSpeeds: tenantCfg.deliveryConfig?.supportedSpeeds || ['60-min Express', 'Standard Same-Day'],
+          expressEtaText: tenantCfg.deliveryConfig?.expressEtaText || '60 mins',
+          standardEtaText: tenantCfg.deliveryConfig?.standardEtaText || 'Same-day',
+          commissionRate: (vendor as any).commissionRate ?? tenantCfg.paymentConfig?.platformCommissionPercent ?? 6,
+          freeShippingThreshold: tenantCfg.deliveryConfig?.freeShippingThreshold ?? 1000,
+        },
       },
     };
   }
@@ -4380,26 +4430,39 @@ export class VendorController implements OnModuleInit {
   @Get('inventory')
   async getInventory(@Headers('authorization') authHeader?: string) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
     const mine = vendorProducts.filter((p) => p.vendorId === vendor.id);
-    const vendorPrimaryWh = vendorWarehouses.find((w: any) => w.vendorId === vendor.id);
+    const myWarehouses = vendorWarehouses.filter((w: any) => !w.vendorId || w.vendorId === vendor.id);
+    const vendorPrimaryWh = myWarehouses.find((w: any) => w.isPrimary) || myWarehouses[0];
+    const tenantWarehouses = companyAdminDataService.getTenantWarehouses(tenantId);
+    const fallbackDarkStore = tenantWarehouses.find(
+      (w: any) => w.id === vendor.businessInfo?.assignedDarkStoreId
+    ) || tenantWarehouses[0];
 
     const items = mine.map((p: any) => {
       const reserved = Number(p.reservedStock || 0);
-      const available = Math.max(0, Number(p.stockCount || 0) - reserved);
+      const stockCount = Number(p.stockCount || 0);
+      const available = Math.max(0, stockCount - reserved);
+      const primaryWhId = vendorPrimaryWh?.id || fallbackDarkStore?.id || 'WH-BLR-04';
+      const warehouseStocks =
+        p.warehouseStocks && Object.keys(p.warehouseStocks).length > 0
+          ? p.warehouseStocks
+          : { [primaryWhId]: stockCount };
       return {
         productId: p.id,
         name: p.name,
         sku: p.sku,
         category: p.category,
         unit: p.unit,
-        stockCount: p.stockCount,
+        stockCount,
         reservedStock: reserved,
         availableStock: available,
         lowStockThreshold: p.lowStockThreshold,
         status:
           available === 0 ? 'OUT_OF_STOCK' : available <= p.lowStockThreshold ? 'LOW_STOCK' : 'IN_STOCK',
-        warehouse: vendorPrimaryWh?.name || vendor.businessInfo?.warehouseAddress || 'Primary Depot',
-        warehouseId: vendorPrimaryWh?.id || 'wh-1'
+        warehouse: vendorPrimaryWh?.name || fallbackDarkStore?.name || vendor.businessInfo?.warehouseAddress || 'Primary Depot',
+        warehouseId: primaryWhId,
+        warehouseStocks,
       };
     });
 
@@ -4543,13 +4606,36 @@ export class VendorController implements OnModuleInit {
   @Get('warehouses')
   async getWarehouses(@Headers('authorization') authHeader?: string) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
     const mine = vendorWarehouses.filter(
       (w: any) => !w.vendorId || w.vendorId === vendor.id
     );
+    const myProds = vendorProducts.filter((p) => p.vendorId === vendor.id) as any[];
+    const primaryWh = mine.find((w: any) => w.isPrimary) || mine[0];
+
+    const enriched = mine.map((wh: any) => {
+      let skuCount = 0;
+      let totalUnits = 0;
+      for (const p of myProds) {
+        const ws = p.warehouseStocks || (primaryWh ? { [primaryWh.id]: Number(p.stockCount || 0) } : {});
+        const units = Number(ws[wh.id] ?? 0);
+        if (units > 0 || (primaryWh?.id === wh.id && Object.keys(ws).length === 0)) {
+          skuCount += 1;
+          totalUnits += units;
+        }
+      }
+      return {
+        ...wh,
+        skuCount,
+        totalUnits,
+      };
+    });
+
+    const tenantDarkStores = companyAdminDataService.getTenantWarehouses(tenantId);
     return {
       success: true,
-      data: mine,
-      darkStores: Object.values(BENGALURU_WAREHOUSES)
+      data: enriched,
+      darkStores: tenantDarkStores.length > 0 ? tenantDarkStores : Object.values(BENGALURU_WAREHOUSES)
     };
   }
 
@@ -4751,13 +4837,18 @@ export class VendorController implements OnModuleInit {
     );
     if (!order) throw new NotFoundException('Order not found for your vendor account');
 
+    const tenantStores = companyAdminDataService.getTenantWarehouses(vendor.tenantId || DEFAULT_TENANT_ID);
+    const darkStoreId = vendor.businessInfo?.assignedDarkStoreId || 'WH-BLR-04';
     return {
       success: true,
       slipNumber: `PS-${order.orderNumber}`,
       generatedAt: new Date().toISOString(),
       order,
       vendor: vendor.businessInfo,
-      assignedDarkStore: BENGALURU_WAREHOUSES[vendor.businessInfo?.assignedDarkStoreId || 'WH-BLR-04']
+      assignedDarkStore:
+        tenantStores.find((w: any) => w.id === darkStoreId) ||
+        tenantStores[0] ||
+        BENGALURU_WAREHOUSES[darkStoreId]
     };
   }
 
@@ -4918,23 +5009,30 @@ export class VendorController implements OnModuleInit {
   // 10. OFFERS, DEALS & PROMOTIONS
   // ==========================================
   @Get('promotions')
-  getPromotions() {
+  async getPromotions(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const mine = vendorPromotions.filter((p) => p.vendorId === vendor.id);
     return {
       success: true,
-      count: vendorPromotions.length,
-      data: vendorPromotions
+      count: mine.length,
+      data: mine
     };
   }
 
   @Post('promotions')
-  createPromotion(@Body() body: Partial<VendorPromotion>) {
+  async createPromotion(
+    @Body() body: Partial<VendorPromotion>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     if (!body.title || !body.discountValue || !body.startDate || !body.endDate) {
       throw new BadRequestException('Promotion title, discount value, start date, and end date are required.');
     }
 
-    const promo: VendorPromotion = {
+    const promo: VendorPromotion & Record<string, any> = {
       id: `promo-${Date.now()}`,
-      vendorId: DEFAULT_VENDOR_ID,
+      vendorId: vendor.id,
+      tenantId: vendor.tenantId || DEFAULT_TENANT_ID,
       title: body.title,
       description: body.description || '',
       discountType: body.discountType || 'PERCENTAGE',
@@ -4949,6 +5047,8 @@ export class VendorController implements OnModuleInit {
     };
 
     vendorPromotions.unshift(promo);
+    await platformPersistenceService.upsert(PlatformPromotionModel, promo);
+    realtimeBus.emitPublic('pricing.updated', { source: 'vendor_promotion', promotion: promo }, vendor.tenantId || DEFAULT_TENANT_ID);
 
     return {
       success: true,
@@ -4958,10 +5058,17 @@ export class VendorController implements OnModuleInit {
   }
 
   @Put('promotions/:id/status')
-  updatePromotionStatus(@Param('id') id: string, @Body() body: { status: VendorPromotion['status'] }) {
-    const promo = vendorPromotions.find((p) => p.id === id);
+  async updatePromotionStatus(
+    @Param('id') id: string,
+    @Body() body: { status: VendorPromotion['status'] },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const promo = vendorPromotions.find((p) => p.id === id && p.vendorId === vendor.id);
     if (!promo) throw new NotFoundException('Promotion not found');
     promo.status = body.status;
+    await platformPersistenceService.upsert(PlatformPromotionModel, promo);
+    realtimeBus.emitPublic('pricing.updated', { source: 'vendor_promotion', promotion: promo }, vendor.tenantId || DEFAULT_TENANT_ID);
     return { success: true, message: `Promotion marked as ${body.status}`, data: promo };
   }
 
@@ -5011,29 +5118,47 @@ export class VendorController implements OnModuleInit {
   // 12. CUSTOMER RATINGS & REVIEWS
   // ==========================================
   @Get('reviews')
-  getReviews() {
-    const totalReviews = vendorReviews.length;
-    const avgRating = totalReviews > 0 ? Number((vendorReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)) : 5.0;
+  async getReviews(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const myProductIds = new Set(
+      vendorProducts.filter((p) => p.vendorId === vendor.id).map((p) => p.id)
+    );
+    const mine = vendorReviews.filter(
+      (r: any) => !r.vendorId ? myProductIds.has(r.productId) || vendor.id === DEFAULT_VENDOR_ID : r.vendorId === vendor.id
+    );
+    const totalReviews = mine.length;
+    const avgRating = totalReviews > 0 ? Number((mine.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)) : 5.0;
 
     return {
       success: true,
       averageRating: avgRating,
       totalCount: totalReviews,
-      data: vendorReviews
+      data: mine
     };
   }
 
   @Post('reviews/:id/reply')
-  replyToReview(@Param('id') id: string, @Body() body: { message: string }) {
-    const rev = vendorReviews.find((r) => r.id === id);
+  async replyToReview(
+    @Param('id') id: string,
+    @Body() body: { message: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const myProductIds = new Set(
+      vendorProducts.filter((p) => p.vendorId === vendor.id).map((p) => p.id)
+    );
+    const rev = vendorReviews.find(
+      (r: any) => r.id === id && (!r.vendorId ? myProductIds.has(r.productId) || vendor.id === DEFAULT_VENDOR_ID : r.vendorId === vendor.id)
+    );
     if (!rev) throw new NotFoundException('Review not found');
     if (!body.message) throw new BadRequestException('Reply message cannot be empty');
 
     rev.vendorReply = {
       message: body.message,
       repliedAt: new Date().toISOString(),
-      repliedBy: 'Vikramaditya Rao'
+      repliedBy: vendor.name || vendor.storeName || vendor.businessInfo?.businessName || 'Vendor Admin'
     };
+    await platformPersistenceService.upsert(PlatformReviewModel, rev);
 
     return {
       success: true,
@@ -5567,47 +5692,407 @@ export class VendorController implements OnModuleInit {
     };
   }
 
+  @Get('settings')
+  async getVendorSettings(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const anyBiz = vendor.businessInfo as any;
+    const notifPrefs = anyBiz?.notificationPreferences || {
+      newOrdersSms: true,
+      newOrdersWhatsapp: true,
+      lowStockEmail: true,
+      payoutSummaryEmail: true,
+    };
+    return {
+      success: true,
+      data: {
+        twoFactorEnabled: Boolean(anyBiz?.twoFactorEnabled),
+        notificationPreferences: notifPrefs,
+        deliverySettings: {
+          warehouseAddress: vendor.businessInfo?.warehouseAddress || '',
+          pickupPincode: vendor.businessInfo?.pickupPincode || '',
+          assignedDarkStoreId: vendor.businessInfo?.assignedDarkStoreId || '',
+          dispatchCutoff: vendor.businessInfo?.dispatchCutoff || '18:00',
+          preparationTimeMins: vendor.businessInfo?.preparationTimeMins ?? 25,
+        },
+      },
+    };
+  }
+
   @Put('settings/security')
-  updateSecuritySettings(@Body() body: { currentPassword?: string; newPassword?: string; enable2FA?: boolean }) {
+  async updateSecuritySettings(
+    @Body() body: { currentPassword?: string; newPassword?: string; enable2FA?: boolean },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    if (body.newPassword) {
+      if (!body.currentPassword || !vendorSecurityService.verifyPassword(body.currentPassword, vendor.passwordHash)) {
+        throw new BadRequestException('Current password is incorrect.');
+      }
+      const pwCheck = validatePassword(body.newPassword);
+      if (!pwCheck.isValid) throw new BadRequestException(pwCheck.error);
+      vendor.passwordHash = vendorSecurityService.hashPassword(body.newPassword);
+    }
+    if (typeof body.enable2FA === 'boolean') {
+      (vendor.businessInfo as any).twoFactorEnabled = body.enable2FA;
+    }
+    vendor.updatedAt = new Date().toISOString();
+    await vendorPersistenceService.saveVendorRecord(vendor);
     return {
       success: true,
       message: body.newPassword ? 'Password changed successfully.' : 'Two-factor authentication preference saved.',
-      twoFactorEnabled: Boolean(body.enable2FA)
+      twoFactorEnabled: Boolean((vendor.businessInfo as any)?.twoFactorEnabled)
     };
   }
 
   @Put('settings/notifications')
-  updateNotificationSettings(@Body() body: any) {
+  async updateNotificationSettings(@Body() body: any, @Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const updated = {
+      ...((vendor.businessInfo as any)?.notificationPreferences || {}),
+      ...(body || {}),
+    };
+    (vendor.businessInfo as any).notificationPreferences = updated;
+    vendor.updatedAt = new Date().toISOString();
+    await vendorPersistenceService.saveVendorRecord(vendor);
     return {
       success: true,
       message: 'Notification preferences updated.',
-      data: body
+      data: updated
     };
   }
 
   @Get('delivery/settings')
-  getDeliverySettings() {
+  async getDeliverySettings(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const tenantStores = companyAdminDataService.getTenantWarehouses(tenantId);
+    const darkStoreId = vendor.businessInfo?.assignedDarkStoreId || tenantStores[0]?.id || 'WH-BLR-04';
+    const matchedStore = tenantStores.find((w: any) => w.id === darkStoreId) || BENGALURU_WAREHOUSES[darkStoreId];
     return {
       success: true,
-      warehouseAddress: currentVendor.businessInfo.warehouseAddress,
-      pickupPincode: currentVendor.businessInfo.pickupPincode,
-      assignedDarkStoreId: currentVendor.businessInfo.assignedDarkStoreId,
-      assignedWarehouseName: BENGALURU_WAREHOUSES[currentVendor.businessInfo.assignedDarkStoreId || 'WH-BLR-04']?.name || 'Bengaluru West Dark Store',
-      dispatchCutoff: currentVendor.businessInfo.dispatchCutoff,
-      preparationTimeMins: currentVendor.businessInfo.preparationTimeMins
+      warehouseAddress: vendor.businessInfo?.warehouseAddress || '',
+      pickupPincode: vendor.businessInfo?.pickupPincode || '',
+      assignedDarkStoreId: darkStoreId,
+      assignedWarehouseName: matchedStore?.name || 'Bengaluru Dark Store',
+      dispatchCutoff: vendor.businessInfo?.dispatchCutoff || '18:00',
+      preparationTimeMins: vendor.businessInfo?.preparationTimeMins ?? 25,
+      tenantDarkStores: tenantStores,
     };
   }
 
   @Put('delivery/settings')
-  updateDeliverySettings(@Body() body: any) {
-    currentVendor.businessInfo = {
-      ...currentVendor.businessInfo,
+  async updateDeliverySettings(@Body() body: any, @Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    vendor.businessInfo = {
+      ...vendor.businessInfo,
       ...body
     };
+    vendor.updatedAt = new Date().toISOString();
+    await vendorPersistenceService.saveVendorRecord(vendor);
     return {
       success: true,
       message: 'Delivery settings saved successfully',
-      data: currentVendor.businessInfo
+      data: vendor.businessInfo
+    };
+  }
+
+  @Put('onboarding')
+  async updateOnboardingDraft(@Body() body: any, @Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    vendor.registrationData = {
+      ...(vendor.registrationData || ({} as any)),
+      ...(body || {}),
+    };
+    if (body?.legalBusinessName || body?.storeName) {
+      vendor.storeName = body.storeName || vendor.storeName;
+      vendor.businessInfo = {
+        ...vendor.businessInfo,
+        businessName: body.legalBusinessName || vendor.businessInfo?.businessName,
+        storeName: body.storeName || vendor.businessInfo?.storeName,
+      };
+    }
+    vendor.updatedAt = new Date().toISOString();
+    await vendorPersistenceService.saveVendorRecord(vendor);
+    return {
+      success: true,
+      message: 'Onboarding details saved.',
+      data: serializeVendorProfile(vendor),
+    };
+  }
+
+  @Get('quotations')
+  async getVendorQuotations(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const list = Array.from(companyAdminDataService.quotations.values())
+      .filter(
+        (q) =>
+          (q.tenantId || DEFAULT_TENANT_ID) === tenantId &&
+          (q.assignedVendorIds.length === 0 ||
+            q.assignedVendorIds.includes(vendor.id) ||
+            q.selectedVendorId === vendor.id)
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return {
+      success: true,
+      count: list.length,
+      data: list,
+    };
+  }
+
+  @Post('quotations/:id/quote')
+  async submitVendorQuotation(
+    @Param('id') id: string,
+    @Body() body: { quotedAmount?: number; totalQuotedAmount?: number; deliveryDays?: number; notes?: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const quote = companyAdminDataService.quotations.get(id);
+    if (!quote || (quote.tenantId || DEFAULT_TENANT_ID) !== tenantId) {
+      throw new NotFoundException('Quotation request not found');
+    }
+    if (
+      quote.assignedVendorIds.length > 0 &&
+      !quote.assignedVendorIds.includes(vendor.id) &&
+      quote.selectedVendorId !== vendor.id
+    ) {
+      throw new ForbiddenException('Quotation belongs to another vendor');
+    }
+    const targetEstimate = quote.items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.targetPrice || 0), 0);
+    const amt = Number(body.quotedAmount ?? body.totalQuotedAmount ?? targetEstimate);
+    if (isNaN(amt) || amt <= 0) {
+      throw new BadRequestException('Valid quoted amount is required');
+    }
+    if (!quote.assignedVendorIds.includes(vendor.id)) {
+      quote.assignedVendorIds.push(vendor.id);
+    }
+    const nowIso = new Date().toISOString();
+    const vendorName = vendor.storeName || vendor.businessInfo?.businessName || vendor.name;
+    const idx = quote.vendorQuotes.findIndex((vq) => vq.vendorId === vendor.id);
+    const entry = {
+      vendorId: vendor.id,
+      vendorName,
+      totalQuotedAmount: amt,
+      deliveryDays: Number(body.deliveryDays || 1),
+      notes: body.notes || '',
+      status: 'SUBMITTED' as const,
+      submittedAt: nowIso,
+    };
+    if (idx >= 0) quote.vendorQuotes[idx] = entry;
+    else quote.vendorQuotes.push(entry);
+
+    quote.status = 'QUOTES_RECEIVED';
+    quote.negotiationHistory.push({
+      id: `neg-${Date.now()}`,
+      actor: vendorName,
+      role: 'VENDOR',
+      message: body.notes || `Submitted vendor quote for ₹${amt.toLocaleString('en-IN')}`,
+      proposedTotal: amt,
+      createdAt: nowIso,
+    });
+    quote.updatedAt = nowIso;
+    companyAdminDataService.quotations.set(quote.id, quote);
+    await companyAdminPersistenceService.upsert(CompanyQuotationModel, quote);
+    realtimeBus.emitVendorAndAdmin(vendor.id, 'order.status.updated', { quotation: quote }, tenantId);
+    return {
+      success: true,
+      message: 'Quotation submitted to buyer.',
+      data: quote,
+    };
+  }
+
+  @Put('quotations/:id/status')
+  async updateVendorQuotationStatus(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      status:
+        | 'INCOMING'
+        | 'VENDOR_ASSIGNED'
+        | 'QUOTES_RECEIVED'
+        | 'UNDER_NEGOTIATION'
+        | 'APPROVED'
+        | 'CONVERTED_TO_ORDER'
+        | 'REJECTED';
+      notes?: string;
+    },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const quote = companyAdminDataService.quotations.get(id);
+    if (!quote || (quote.tenantId || DEFAULT_TENANT_ID) !== tenantId) {
+      throw new NotFoundException('Quotation request not found');
+    }
+    quote.status = body.status;
+    if (body.notes) {
+      quote.negotiationHistory.push({
+        id: `neg-${Date.now()}`,
+        actor: vendor.storeName || vendor.name,
+        role: 'VENDOR',
+        message: body.notes,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    quote.updatedAt = new Date().toISOString();
+    companyAdminDataService.quotations.set(quote.id, quote);
+    await companyAdminPersistenceService.upsert(CompanyQuotationModel, quote);
+    return {
+      success: true,
+      message: `Quotation status updated to ${body.status}`,
+      data: quote,
+    };
+  }
+
+  @Get('customers')
+  async getVendorCustomers(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const myOrders = vendorOrders.filter((o) => o.vendorId === vendor.id);
+    const buyerMap = new Map<string, any>();
+
+    for (const o of myOrders) {
+      const key = String(o.customerPhone || o.customerName || 'buyer').toLowerCase();
+      const existing = buyerMap.get(key) || {
+        id: `cust-${key.replace(/[^a-z0-9]/g, '')}`,
+        name: o.customerName,
+        phone: o.customerPhone,
+        address: o.deliveryAddress,
+        totalOrders: 0,
+        totalSpend: 0,
+        lastOrderAt: o.createdAt,
+        lastOrderNumber: o.orderNumber,
+      };
+      existing.totalOrders += 1;
+      existing.totalSpend += Number(o.subtotal || 0);
+      if (String(o.createdAt || '') > String(existing.lastOrderAt || '')) {
+        existing.lastOrderAt = o.createdAt;
+        existing.lastOrderNumber = o.orderNumber;
+      }
+      buyerMap.set(key, existing);
+    }
+
+    for (const c of companyAdminDataService.customers.values()) {
+      if ((c.tenantId || DEFAULT_TENANT_ID) !== tenantId) continue;
+      const key = String(c.phone || c.name || '').toLowerCase();
+      if (buyerMap.has(key)) {
+        const entry = buyerMap.get(key);
+        entry.email = c.email;
+        entry.gstin = c.gstin;
+        entry.customerType = c.customerType;
+      }
+    }
+
+    const list = Array.from(buyerMap.values()).sort((a, b) => b.totalSpend - a.totalSpend);
+    return {
+      success: true,
+      count: list.length,
+      data: list,
+    };
+  }
+
+  @Get('dispatches')
+  async getVendorDispatches(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const myOrders = vendorOrders.filter((o) => o.vendorId === vendor.id);
+    const partners = Array.from(companyAdminDataService.deliveryPartners.values()).filter(
+      (p) => (p.tenantId || DEFAULT_TENANT_ID) === tenantId
+    );
+    const darkStores = companyAdminDataService.getTenantWarehouses(tenantId);
+
+    const dispatches = myOrders.map((o: any) => {
+      const assignment = companyAdminDataService.dispatchAssignments.get(o.id);
+      return {
+        id: `disp-${o.id}`,
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        customerName: o.customerName,
+        customerPhone: o.customerPhone,
+        deliveryAddress: o.deliveryAddress,
+        deliverySpeed: o.deliverySpeed,
+        status: assignment?.status || o.status,
+        totalAmount: o.subtotal ?? 0,
+        driverName: assignment?.driverName || o.deliveryPartnerName || '',
+        driverPhone: assignment?.driverPhone || o.deliveryPartnerPhone || '',
+        vehicleNumber: assignment?.vehicleNumber || o.vehicleNumber || '',
+        partnerId: assignment?.partnerId || o.deliveryPartnerId || '',
+        partnerName: assignment?.partnerName || '',
+        eta: assignment?.eta || 'Within 60 mins',
+        assignedAt: assignment?.assignedAt || null,
+        createdAt: o.createdAt,
+      };
+    });
+
+    return {
+      success: true,
+      count: dispatches.length,
+      data: dispatches,
+      deliveryPartners: partners,
+      darkStores,
+    };
+  }
+
+  @Post('orders/:id/assign-delivery')
+  async assignDeliveryPartner(
+    @Param('id') id: string,
+    @Body() body: { partnerId?: string; driverName?: string; driverPhone?: string; vehicleNumber?: string; eta?: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const order = vendorOrders.find((o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id) as any;
+    if (!order) throw new NotFoundException('Order not found for your vendor account');
+
+    const partner = body.partnerId ? companyAdminDataService.deliveryPartners.get(body.partnerId) : undefined;
+    const driverName = (partner?.contactPerson || partner?.name || body.driverName || '').trim();
+    const driverPhone = (partner?.phone || body.driverPhone || '').trim();
+    const vehicleNumber = (body.vehicleNumber || partner?.vehicleTypes?.[0] || 'KA-01-BLD').trim();
+    if (!driverName) {
+      throw new BadRequestException('Delivery partner or driver name is required');
+    }
+
+    const nowIso = new Date().toISOString();
+    const assignment = {
+      orderId: order.id,
+      tenantId,
+      partnerId: partner?.id || body.partnerId || '',
+      partnerName: partner?.name || driverName,
+      driverName,
+      driverPhone,
+      vehicleNumber,
+      status: 'ASSIGNED' as const,
+      eta: body.eta || 'Within 60 mins',
+      assignedAt: nowIso,
+      updatedAt: nowIso,
+    };
+    companyAdminDataService.dispatchAssignments.set(order.id, assignment);
+    await platformPersistenceService.upsert(DispatchAssignmentModel, assignment, 'orderId');
+
+    order.deliveryPartnerId = assignment.partnerId;
+    order.deliveryPartnerName = assignment.driverName;
+    order.deliveryPartnerPhone = assignment.driverPhone;
+    order.vehicleNumber = assignment.vehicleNumber;
+    if (order.status === 'READY_FOR_DISPATCH' || order.status === 'PACKING' || order.status === 'ACCEPTED') {
+      order.status = 'DISPATCHED';
+    }
+    await platformPersistenceService.upsert(PlatformOrderModel, order);
+
+    const custOrd = dbStore.orders.find((co: any) => co.id === order.id || co.orderNumber === order.orderNumber);
+    if (custOrd) {
+      (custOrd as any).driverName = driverName;
+      (custOrd as any).driverPhone = driverPhone;
+      (custOrd as any).vehicleNumber = vehicleNumber;
+      if (custOrd.status !== 'DELIVERED') custOrd.status = 'OUT_FOR_DELIVERY';
+      await platformPersistenceService.upsert(PlatformOrderModel, custOrd);
+    }
+
+    realtimeBus.emitVendorAndAdmin(vendor.id, 'order.status.updated', { order, assignment }, tenantId);
+    return {
+      success: true,
+      message: `Assigned ${driverName} for order #${order.orderNumber}`,
+      data: assignment,
     };
   }
 

@@ -1,7 +1,9 @@
-import { Controller, Post, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Headers } from '@nestjs/common';
 import { calculateCartSummary } from '@buildora/utils';
-import { checkBengaluruServiceability } from '@buildora/constants';
 import { dbStore } from '../../../database/store';
+import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
+import { isProductCustomerVisible } from '../../products/controllers/products.controller';
+import { DEFAULT_TENANT_ID } from '../../vendors/controllers/vendor.controller';
 
 export interface CheckoutValidatePayload {
   items: {
@@ -38,7 +40,12 @@ const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 @Controller('api/v1/checkout')
 export class CheckoutController {
   @Post('validate')
-  validateCheckout(@Body() body: CheckoutValidatePayload) {
+  validateCheckout(
+    @Body() body: CheckoutValidatePayload,
+    @Headers('x-tenant-id') tenantId?: string
+  ) {
+    const cleanTenant = tenantId || DEFAULT_TENANT_ID;
+    const tenantCfg = companyAdminDataService.getTenantConfig(cleanTenant);
     const errors: string[] = [];
 
     // 1. Validate Cart Items
@@ -47,12 +54,12 @@ export class CheckoutController {
       return { success: false, errors };
     }
 
-    // 2. Validate Product Stock & Prices against master dbStore
+    // 2. Validate Product Stock, Approval Visibility & Prices against master dbStore
     const enrichedItems: any[] = [];
     for (const item of body.items) {
       const prod = dbStore.products.find((p) => p.id === item.productId);
-      if (!prod) {
-        errors.push(`Material with ID ${item.productId} was not found in our live dark store catalogue.`);
+      if (!prod || !isProductCustomerVisible(prod)) {
+        errors.push(`Material with ID ${item.productId} is currently unavailable or not approved in catalog.`);
         continue;
       }
 
@@ -127,9 +134,9 @@ export class CheckoutController {
         errors.push('Delivery pincode is required.');
       } else {
         const pin = addr.pincode.trim();
-        const pinCheck = checkBengaluruServiceability(pin);
+        const pinCheck = companyAdminDataService.checkTenantPincodeServiceability(cleanTenant, pin);
         if (!pinCheck.isServiceable) {
-          errors.push(pinCheck.message || `Pincode ${pin} is outside our Bengaluru delivery network. Please select an eligible Bengaluru site address.`);
+          errors.push(pinCheck.message || `Pincode ${pin} is currently outside our delivery network.`);
         }
       }
     }
@@ -145,15 +152,15 @@ export class CheckoutController {
       }
     }
 
-    // 5. Validate Coupon
+    // 5. Validate Coupon from live active DB pool
     let validatedCoupon = null;
     if (body.couponCode) {
       const cCode = body.couponCode.trim().toUpperCase();
-      const found = dbStore.coupons.find((c) => c.code.toUpperCase() === cCode);
+      const found = companyAdminDataService
+        .getActiveCoupons(cleanTenant)
+        .find((c: any) => c.code.toUpperCase() === cCode);
       if (!found) {
-        errors.push(`Coupon '${cCode}' is invalid or expired.`);
-      } else if (found.expiryDate && new Date(found.expiryDate) < new Date()) {
-        errors.push(`Coupon '${cCode}' has expired.`);
+        errors.push(`Coupon '${cCode}' is invalid, inactive, or expired.`);
       } else {
         validatedCoupon = found;
       }
@@ -166,13 +173,16 @@ export class CheckoutController {
       };
     }
 
-    // 6. Recalculate bill summary server-side
+    // 6. Recalculate bill summary server-side using tenant rules
     const summary = calculateCartSummary({
       items: enrichedItems,
       coupon: validatedCoupon,
       deliverySpeed: body.deliverySpeed || 'ASAP_60',
       unloadingOptions: body.unloadingOptions,
-      walletBalanceToUse: body.walletBalanceToUse || 0
+      walletBalanceToUse: body.walletBalanceToUse || 0,
+      freeDeliveryThreshold: Number(tenantCfg?.deliveryConfig?.freeShippingThreshold ?? 1000),
+      standardDeliveryFee: Number(tenantCfg?.deliveryConfig?.defaultShippingCharge ?? 199),
+      baseUnloadingFee: Number(tenantCfg?.deliveryConfig?.baseUnloadingFee ?? 199),
     });
 
     return {

@@ -2,6 +2,8 @@ import { Controller, Get, Headers, Param, Query } from '@nestjs/common';
 import { dbStore } from '../../../database/store';
 import { isProductCustomerVisible } from '../../products/controllers/products.controller';
 import { taxonomyService } from '../services/taxonomy.service';
+import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
+import { vendorPromotions } from '../../vendors/controllers/vendor.controller';
 
 function buildTaxonomyData(tenantId?: string, includeHidden = false) {
   const pool = taxonomyService.getTenantPool(tenantId);
@@ -229,19 +231,90 @@ export class CatalogueController {
   }
 
   @Get('brands')
-  getBrands() {
+  getBrands(@Headers('x-tenant-id') tenantId?: string) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const list = dbStore.brands.filter(
+      (b: any) => (!b.tenantId || b.tenantId === cleanTenant) && b.isActive !== false
+    );
     return {
       success: true,
-      data: dbStore.brands
+      data: list,
     };
   }
 
   @Get('brands/:slug')
-  getBrandBySlug(@Param('slug') slug: string) {
-    const brand = dbStore.brands.find((b) => b.slug === slug);
+  getBrandBySlug(@Param('slug') slug: string, @Headers('x-tenant-id') tenantId?: string) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const brand = dbStore.brands.find(
+      (b: any) =>
+        b.slug === slug &&
+        b.isActive !== false &&
+        (!b.tenantId || b.tenantId === cleanTenant)
+    );
     return {
       success: !!brand,
-      data: brand
+      data: brand,
+    };
+  }
+
+  @Get('config/store')
+  getPublicStoreConfig(@Headers('x-tenant-id') tenantId?: string) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    return {
+      success: true,
+      data: companyAdminDataService.getPublicStoreConfig(cleanTenant),
+    };
+  }
+
+  @Get('storefront/config')
+  getStorefrontConfigAlias(@Headers('x-tenant-id') tenantId?: string) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    return {
+      success: true,
+      data: companyAdminDataService.getPublicStoreConfig(cleanTenant),
+    };
+  }
+
+  @Get('filters')
+  getPublicFilters(
+    @Headers('x-tenant-id') tenantId?: string,
+    @Query('category') category?: string
+  ) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const attributes = companyAdminDataService.attributes.filter(
+      (a) =>
+        (!a.tenantId || a.tenantId === cleanTenant) &&
+        a.isFilterable !== false &&
+        (!category ||
+          a.categoryName?.toLowerCase() === category.toLowerCase() ||
+          a.code?.toLowerCase() === category.toLowerCase())
+    );
+    const fieldSchemas = taxonomyService.getTenantFieldSchemas(cleanTenant, category, false);
+    return {
+      success: true,
+      data: {
+        attributes,
+        fieldSchemas,
+      },
+    };
+  }
+
+  @Get('deals')
+  getPublicDeals(@Headers('x-tenant-id') tenantId?: string) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const coupons = companyAdminDataService.getActiveCoupons(cleanTenant);
+    const activePromos = vendorPromotions.filter((p: any) => p.status === 'ACTIVE');
+    const visibleProducts = dbStore.products.filter(isProductCustomerVisible);
+    const discountedProducts = visibleProducts.filter(
+      (p) => Number(p.mrp || 0) > Number(p.price || 0)
+    );
+    return {
+      success: true,
+      data: {
+        coupons,
+        promotions: activePromos,
+        products: discountedProducts,
+      },
     };
   }
 }

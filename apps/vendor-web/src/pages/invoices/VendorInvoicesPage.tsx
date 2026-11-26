@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Eye, Search, Printer } from 'lucide-react';
 import { vendorApi } from '../../services/vendorApi';
+import { useVendorAuthStore } from '../../store/useVendorAuthStore';
 import { VendorInvoice } from '@buildora/types';
 import {
   PageHeader,
@@ -13,6 +14,7 @@ import {
 } from '../../components/common';
 
 export const VendorInvoicesPage: React.FC = () => {
+  const vendor = useVendorAuthStore((s) => s.vendor);
   const [invoices, setInvoices] = useState<VendorInvoice[]>([]);
   const [search, setSearch] = useState('');
   const [viewingInvoice, setViewingInvoice] = useState<VendorInvoice | null>(null);
@@ -149,8 +151,10 @@ export const VendorInvoicesPage: React.FC = () => {
               <div className="flex justify-between items-start border-b border-[#E7E5E4] pb-4">
                 <div>
                   <h3 className="text-base font-bold text-[#943D24]">BUILDORA 60</h3>
-                  <p className="font-medium text-[#292524]">Supreme Building Materials Pvt Ltd</p>
-                  <p className="text-[#78716C]">GSTIN: 29AABCB9876F1Z2</p>
+                  <p className="font-medium text-[#292524]">
+                    {vendor?.businessInfo?.businessName || vendor?.storeName || 'Buildora Partner Store'}
+                  </p>
+                  <p className="text-[#78716C]">GSTIN: {vendor?.businessInfo?.gstin || '—'}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-[#292524]">{viewingInvoice.invoiceNumber}</p>

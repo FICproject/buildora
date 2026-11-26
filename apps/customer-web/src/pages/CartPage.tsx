@@ -106,7 +106,7 @@ export const CartPage: React.FC = () => {
     try {
       const backendRes = await api.validateCoupon(code, summary.discountedSubtotal);
       if (backendRes && backendRes.success && backendRes.data) {
-        applyCoupon(code);
+        applyCoupon(code, backendRes.data);
         setCouponFeedback({
           type: 'success',
           text: backendRes.message || `Coupon '${code}' applied successfully!`
@@ -119,7 +119,6 @@ export const CartPage: React.FC = () => {
         });
       }
     } catch {
-      // Client-side fallback check
       const res = applyCoupon(code);
       setCouponFeedback({
         type: res.success ? 'success' : 'error',

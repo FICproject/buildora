@@ -12,7 +12,6 @@ import {
   Scale
 } from 'lucide-react';
 import { Product, ProductVariant } from '@buildora/types';
-import { SEED_PRODUCTS } from '@buildora/constants';
 import { api } from '../services/api';
 import { formatCurrency } from '@buildora/utils';
 import { useCartStore } from '../store/useCartStore';
@@ -90,8 +89,9 @@ function getExactVariantForAttrs(
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
 
-  const initialProduct = SEED_PRODUCTS.find((p) => p.slug === slug) || SEED_PRODUCTS[0];
-  const [product, setProduct] = useState<Product>(initialProduct);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [loadingProduct, setLoadingProduct] = useState(true);
 
   const { addItem } = useCartStore();
   const { isInWishlist, toggleItem } = useWishlistStore();
@@ -99,29 +99,20 @@ export const ProductDetailPage: React.FC = () => {
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | undefined>(
-    initialProduct.variants?.[0]
-  );
-
-  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>(() => {
-    const initAttrs: Record<string, string> = {};
-    if (initialProduct.attributes && initialProduct.attributes.length > 0) {
-      for (const attr of initialProduct.attributes) {
-        const firstOpt = getOptVal(attr.options[0]);
-        initAttrs[attr.name] = firstOpt;
-      }
-    } else if (initialProduct.variants?.[0]?.attributes) {
-      Object.assign(initAttrs, initialProduct.variants[0].attributes);
-    }
-    return initAttrs;
-  });
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | undefined>(undefined);
+  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
 
   const [compareAlert, setCompareAlert] = useState<string | null>(null);
 
-  // Fetch product details from Backend API / Sync overrides
+  // Fetch product details & related category products from Backend API
   useEffect(() => {
-    if (slug) {
-      api.getProductBySlug(slug).then((liveProd) => {
+    if (!slug) return;
+    let active = true;
+    setLoadingProduct(true);
+    api
+      .getProductBySlug(slug)
+      .then((liveProd) => {
+        if (!active) return;
         if (liveProd) {
           setProduct(liveProd);
           const initAttrs: Record<string, string> = {};
@@ -136,14 +127,26 @@ export const ProductDetailPage: React.FC = () => {
           setSelectedAttributes(initAttrs);
           const matched = findVariantForAttributes(initAttrs, liveProd.variants);
           setSelectedVariant(matched || liveProd.variants?.[0]);
+          if (liveProd.categorySlug) {
+            api.getProducts({ category: liveProd.categorySlug }).then((rel) => {
+              if (active && Array.isArray(rel)) {
+                setRelatedProducts(rel.filter((r) => r.id !== liveProd.id).slice(0, 4));
+              }
+            });
+          }
         }
+      })
+      .finally(() => {
+        if (active) setLoadingProduct(false);
       });
-    }
+    return () => {
+      active = false;
+    };
   }, [slug]);
 
   // Cross-tab synchronization listener for real-time customer-vendor catalog updates
   useEffect(() => {
-    if (typeof BroadcastChannel !== 'undefined') {
+    if (typeof BroadcastChannel !== 'undefined' && product) {
       const bc = new BroadcastChannel('buildora_product_sync');
       bc.onmessage = (event) => {
         if (event.data?.productId === product.id || event.data?.slug === product.slug) {
@@ -162,7 +165,15 @@ export const ProductDetailPage: React.FC = () => {
         bc.close();
       };
     }
-  }, [product.id, product.slug, slug, selectedAttributes]);
+  }, [product?.id, product?.slug, slug, selectedAttributes]);
+
+  if (!product) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center text-sm text-slate-500">
+        {loadingProduct ? 'Loading material specifications...' : 'Product not found.'}
+      </div>
+    );
+  }
 
   const isWishlisted = isInWishlist(product.id);
   const inCompare = isInCompare(product.id);
@@ -188,10 +199,7 @@ export const ProductDetailPage: React.FC = () => {
       (!selectedVariant.inStock ||
         (selectedVariant.stock !== undefined && selectedVariant.stock <= 0)));
 
-  // Related products from same category
-  const relatedProducts = SEED_PRODUCTS.filter(
-    (p) => p.categorySlug === product.categorySlug && p.id !== product.id
-  ).slice(0, 4);
+  // Related products fetched from backend above
 
   const handleAttributeChange = (attrName: string, val: string) => {
     const next = { ...selectedAttributes, [attrName]: val };

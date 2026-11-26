@@ -15,22 +15,21 @@ import {
   CheckCircle2,
   Package
 } from 'lucide-react';
-import { MASTER_CATEGORIES, MASTER_BRANDS, SEED_PRODUCTS } from '@buildora/constants';
+import { Product, Category, Brand } from '@buildora/types';
 import { api } from '../../services/api';
 import { formatCurrency } from '@buildora/utils';
 import { useCartStore } from '../../store/useCartStore';
 import { useWishlistStore } from '../../store/useWishlistStore';
 
 const POPULAR_SEARCH_TERMS = [
-  'UltraTech Cement',
-  'Havells Wires',
-  'Astral CPVC',
+  'Cement',
+  'Wires',
+  'CPVC Pipes',
   'Waterproofing',
   'Vitrified Tiles',
   'Marine Plywood',
-  'Asian Paints',
-  'Bosch Drill',
-  'Mortise Locks'
+  'Interior Paint',
+  'Power Tools',
 ];
 
 export const SmartSearchBar: React.FC = () => {
@@ -43,12 +42,16 @@ export const SmartSearchBar: React.FC = () => {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
-  const [products, setProducts] = useState(SEED_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
 
-  // Fetch real products from backend
+  // Fetch real catalog entities from backend
   useEffect(() => {
-    api.getProducts().then((data) => {
-      if (data && data.length > 0) setProducts(data);
+    Promise.all([api.getProducts(), api.getCategories(), api.getBrands()]).then(([p, c, b]) => {
+      if (Array.isArray(p)) setProducts(p);
+      if (Array.isArray(c)) setCategories(c);
+      if (Array.isArray(b)) setBrands(b);
     });
   }, []);
 
@@ -85,13 +88,13 @@ export const SmartSearchBar: React.FC = () => {
       'Search for Lighting',
       'Search for General Hardware'
     ];
-    MASTER_CATEGORIES.forEach((cat) => {
-      cat.subcategories.slice(0, 2).forEach((sub) => {
+    categories.forEach((cat) => {
+      (cat.subcategories || []).slice(0, 2).forEach((sub) => {
         list.push(`Search for ${sub.name}`);
       });
     });
     return list;
-  }, []);
+  }, [categories]);
 
   // Rotating placeholder interval
   useEffect(() => {
@@ -188,18 +191,18 @@ export const SmartSearchBar: React.FC = () => {
   const filteredCategories = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase().trim();
-    return MASTER_CATEGORIES.filter((c) =>
+    return categories.filter((c) =>
       c.name.toLowerCase().includes(q) || c.slug.includes(q)
     ).slice(0, 3);
-  }, [query]);
+  }, [query, categories]);
 
   const filteredBrands = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase().trim();
-    return MASTER_BRANDS.filter((b) =>
+    return brands.filter((b) =>
       b.name.toLowerCase().includes(q) || b.slug.includes(q)
     ).slice(0, 2);
-  }, [query]);
+  }, [query, brands]);
 
   // Section 2: New Launches Products
   const newLaunches = useMemo(() => {
@@ -421,7 +424,7 @@ export const SmartSearchBar: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {MASTER_CATEGORIES.slice(0, 8).map((cat) => (
+                  {categories.slice(0, 8).map((cat) => (
                     <Link
                       key={cat.id}
                       to={`/categories/${cat.slug}`}
@@ -715,7 +718,7 @@ export const SmartSearchBar: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    {MASTER_CATEGORIES.slice(0, 6).map((cat) => (
+                    {categories.slice(0, 6).map((cat) => (
                       <Link
                         key={cat.id}
                         to={`/categories/${cat.slug}`}

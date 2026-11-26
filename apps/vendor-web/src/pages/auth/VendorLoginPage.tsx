@@ -243,14 +243,16 @@ export const VendorLoginPage: React.FC = () => {
     }
   };
 
-  // Select Demo Account Persona
-  const selectDemoPersona = (email: string, pass = 'Vendor@123', label: string) => {
+  const isDevEnv = Boolean((import.meta as any).env?.DEV);
+
+  // Select Demo Account Persona (DEV only)
+  const selectDemoPersona = (email: string, pass = '', label: string) => {
     setIdentifier(email);
     setPassword(pass);
     setLoginMethod('password');
     clearError();
     setIsDemoDrawerOpen(false);
-    setStatusNotice(`Loaded: ${label}. Click "Login ->" to test role status.`);
+    setStatusNotice(`Loaded: ${label}. Enter password to sign in.`);
   };
 
   return (
@@ -277,17 +279,19 @@ export const VendorLoginPage: React.FC = () => {
           </div>
         </Link>
 
-        {/* Quick Demo Accounts Pill Button (Discrete developer/testing convenience) */}
-        <button
-          type="button"
-          onClick={() => setIsDemoDrawerOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold text-[#943D24] bg-[#FBF3F0] hover:bg-[#FBF3F0] border border-[#E7E5E4] transition-colors shadow-2xs cursor-pointer select-none"
-          title="Click to quickly switch test vendor accounts across all 5 review statuses"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-[#F6C453]" />
-          <span className="hidden sm:inline">Quick Test Accounts</span>
-          <span className="sm:hidden">Test</span>
-        </button>
+        {/* Quick Demo Accounts Pill Button (Development Only) */}
+        {isDevEnv && (
+          <button
+            type="button"
+            onClick={() => setIsDemoDrawerOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold text-[#943D24] bg-[#FBF3F0] hover:bg-[#FBF3F0] border border-[#E7E5E4] transition-colors shadow-2xs cursor-pointer select-none"
+            title="Click to quickly switch test vendor accounts across all 5 review statuses"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#F6C453]" />
+            <span className="hidden sm:inline">Quick Test Accounts</span>
+            <span className="sm:hidden">Test</span>
+          </button>
+        )}
       </header>
 
       {/* MAIN CONTENT AREA: 2-Column Split Matching Reference Screenshot */}
@@ -732,9 +736,9 @@ export const VendorLoginPage: React.FC = () => {
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* DRAWER 2: Discreet QA & Developer Test Persona Switcher      */}
+      {/* DRAWER 2: Discreet QA & Developer Test Persona Switcher (DEV ONLY) */}
       {/* ------------------------------------------------------------- */}
-      {isDemoDrawerOpen && (
+      {isDevEnv && isDemoDrawerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-xs p-4 animate-in fade-in-0 duration-200">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[#E7E5E4] space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[#E7E5E4]">

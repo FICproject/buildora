@@ -26,12 +26,7 @@ import {
   FileText,
   Home
 } from 'lucide-react';
-import {
-  MASTER_CATEGORIES,
-  SEED_PRODUCTS,
-  SEED_KNOWLEDGE_ARTICLES
-} from '@buildora/constants';
-import { Category, Product } from '@buildora/types';
+import { KnowledgeArticle, Category, Product } from '@buildora/types';
 import { api } from '../services/api';
 import { ProductCard } from '../components/common/ProductCard';
 import { CategoryCard } from '../components/common/CategoryCard';
@@ -41,25 +36,36 @@ import { HeroCarousel } from '../components/common/HeroCarousel';
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
 
-  // Dynamic live backend state initialized with defaults
-  const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
-  const [categories, setCategories] = useState<Category[]>(MASTER_CATEGORIES);
+  // Dynamic live backend state loaded cleanly from API
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
   const [storefrontContent, setStorefrontContent] = useState<any>(null);
 
-  // Fetch real data from Backend API on mount
+  // Fetch real data from Backend API on mount & refresh on realtime updates
   useEffect(() => {
     let isMounted = true;
-    api.getProducts().then((p) => {
-      if (isMounted && p && p.length > 0) setProducts(p);
-    });
-    api.getCategories().then((c) => {
-      if (isMounted && c && c.length > 0) setCategories(c);
-    });
-    api.getPublishedStorefrontContent().then((sf) => {
-      if (isMounted && sf) setStorefrontContent(sf);
-    });
+    const loadHomeData = () => {
+      api.getProducts().then((p) => {
+        if (isMounted && Array.isArray(p)) setProducts(p);
+      });
+      api.getCategories().then((c) => {
+        if (isMounted && Array.isArray(c)) setCategories(c);
+      });
+      api.getArticles().then((a) => {
+        if (isMounted && Array.isArray(a)) setArticles(a);
+      });
+      api.getPublishedStorefrontContent().then((sf) => {
+        if (isMounted && sf) setStorefrontContent(sf);
+      });
+    };
+    loadHomeData();
+    window.addEventListener('buildora:realtime:catalog', loadHomeData);
+    window.addEventListener('buildora:realtime:config', loadHomeData);
     return () => {
       isMounted = false;
+      window.removeEventListener('buildora:realtime:catalog', loadHomeData);
+      window.removeEventListener('buildora:realtime:config', loadHomeData);
     };
   }, []);
 
@@ -486,7 +492,7 @@ export const HomePage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-          {SEED_KNOWLEDGE_ARTICLES.map((art) => (
+          {articles.slice(0, 3).map((art) => (
             <Link
               key={art.id}
               to={`/knowledge-hub/${art.slug}`}

@@ -271,18 +271,21 @@ const REPORT_TYPES = [
 
 export const ReportsPage: React.FC = () => {
   const [reportType, setReportType] = useState('sales');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    adminApi.getReports(reportType).then(setData);
-  }, [reportType]);
+    adminApi.getReports(reportType, fromDate || undefined, toDate || undefined).then(setData);
+  }, [reportType, fromDate, toDate]);
 
   const exportCsv = () => {
     if (!data) return;
-    const rows = (data.salesSummary?.salesByCategory || []).map(
-      (r: any) => `${r.category},${r.skuCount},${r.stockValue}`
-    );
-    const blob = new Blob([`Category,SKUs,StockValue\n${rows.join('\n')}`], {
+    const rowsData: any[] = data.reportRows || data.salesSummary?.salesByCategory || [];
+    if (rowsData.length === 0) return;
+    const headers = Object.keys(rowsData[0]);
+    const lines = rowsData.map((r) => headers.map((h) => JSON.stringify(r[h] ?? '')).join(','));
+    const blob = new Blob([`${headers.join(',')}\n${lines.join('\n')}`], {
       type: 'text/csv',
     });
     const url = URL.createObjectURL(blob);
@@ -293,15 +296,32 @@ export const ReportsPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const activeRows: any[] = data?.reportRows || [];
+
   return (
     <div className="space-y-5">
       <PageHeader
         title="Reports & Business Analytics"
         description="Cross-portal intelligence across sales, vendors, catalog, stock valuation, customers & logistics."
         actions={
-          <Button size="sm" variant="outline" onClick={exportCsv}>
-            <Download className="w-4 h-4" /> Export CSV
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <span className="text-xs text-[#6E6859]">to</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+            />
+            <Button size="sm" variant="outline" onClick={exportCsv}>
+              <Download className="w-4 h-4" /> Export CSV
+            </Button>
+          </div>
         }
       />
 
@@ -320,6 +340,35 @@ export const ReportsPage: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {data && activeRows.length > 0 && (
+        <Card title={`${REPORT_TYPES.find((r) => r.id === reportType)?.label || reportType} Table`} subtitle={`${activeRows.length} rows matching filters`}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-[#E5DCD3] text-[11px] uppercase text-[#5E5946]">
+                  {Object.keys(activeRows[0]).map((col) => (
+                    <th key={col} className="py-2 px-3">{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5DCD3]">
+                {activeRows.slice(0, 30).map((row, idx) => (
+                  <tr key={idx} className="hover:bg-[#FAF7F4]">
+                    {Object.keys(activeRows[0]).map((col) => (
+                      <td key={col} className="py-2 px-3 text-[#5E5946] whitespace-nowrap">
+                        {typeof row[col] === 'number' && /amount|value|revenue|spend|commission/i.test(col)
+                          ? formatINR(row[col])
+                          : String(row[col] ?? '—')}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {data && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

@@ -3,6 +3,7 @@ import { Truck, Clock, IndianRupee } from 'lucide-react';
 import { Product } from '@buildora/types';
 import { formatCurrency, DEFAULT_FREE_DELIVERY_THRESHOLD } from '@buildora/utils';
 import { useLocationStore } from '../../store/useLocationStore';
+import { useStoreConfigStore } from '../../store/useStoreConfigStore';
 
 export interface ProductDeliveryInfoBarProps {
   product: Product;
@@ -10,10 +11,13 @@ export interface ProductDeliveryInfoBarProps {
 
 export const ProductDeliveryInfoBar: React.FC<ProductDeliveryInfoBarProps> = ({ product }) => {
   const { isServiceable, etaMinutes, dispatchStatus } = useLocationStore();
+  const storeDeliveryCfg = useStoreConfigStore((s) => s.config?.deliveryConfig);
 
-  // 1. Dynamic Delivery Offer Threshold from existing configuration
+  // 1. Dynamic Delivery Offer Threshold from Admin Store Configuration
   const freeThreshold =
-    (product.categoryAttributes as any)?.freeDeliveryThreshold || DEFAULT_FREE_DELIVERY_THRESHOLD;
+    (product.categoryAttributes as any)?.freeDeliveryThreshold ||
+    storeDeliveryCfg?.freeShippingThreshold ||
+    DEFAULT_FREE_DELIVERY_THRESHOLD;
 
   // 2. Dynamic Estimated Delivery Time based on location store and product availability
   const getEstimatedDeliveryTime = (): string => {
@@ -43,14 +47,17 @@ export const ProductDeliveryInfoBar: React.FC<ProductDeliveryInfoBarProps> = ({ 
 
   const estimatedTimeText = getEstimatedDeliveryTime();
 
-  // 3. Dynamic Payment Information based on order eligibility and serviceability
+  // 3. Dynamic Payment Information based on tenant COD config and serviceability
+  const paymentCfg = useStoreConfigStore((s) => s.config?.paymentConfig);
+  const codEnabled = paymentCfg?.codEnabled !== false;
+  const codMax = paymentCfg?.codMaxOrderValue ?? 50000;
+
   const getPaymentInfoText = (): string => {
     if (!isServiceable || dispatchStatus === 'UNSERVICEABLE') {
       return 'Payment options at checkout';
     }
 
-    // COD is enabled in BUILDORA 60 for orders up to ₹50,000 in serviceable dark-store zones
-    const isCodEligible = product.price <= 50000;
+    const isCodEligible = codEnabled && product.price <= codMax;
     if (isCodEligible) {
       return 'Pay on Delivery';
     }

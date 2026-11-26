@@ -18,11 +18,6 @@ import {
   SUPPORTED_INDIAN_LOCATIONS
 } from '@buildora/utils';
 import {
-  MASTER_CATEGORIES,
-  MASTER_BRANDS,
-  SEED_PRODUCTS,
-  SEED_KNOWLEDGE_ARTICLES,
-  SEED_FAQS,
   MAIN_CATEGORIES_SEED,
   CHILD_CATEGORIES_SEED,
   PRODUCT_TYPES_SEED,
@@ -108,27 +103,28 @@ async function postJson<T>(endpoint: string, body: any): Promise<T> {
   }
 }
 
-function applyLocalOverrides(products: Product[]): Product[] {
-  try {
-    const raw = localStorage.getItem('buildora_vendor_product_overrides');
-    if (!raw) return products;
-    const overrides: Record<string, Partial<Product>> = JSON.parse(raw);
-    return products.map((p) => {
-      const match = overrides[p.id] || overrides[p.sku] || overrides[p.slug];
-      if (match) {
-        return { ...p, ...match };
-      }
-      return p;
-    });
-  } catch {
-    return products;
-  }
-}
-
 export const api = {
   // Health & Diagnostics
   async getHealth() {
-    return request<any>('/health', {}, { status: 'DEGRADED', mode: 'CLIENT_FALLBACK' });
+    return request<any>('/health', {}, { status: 'DEGRADED', mode: 'OFFLINE' });
+  },
+
+  // Tenant Storefront Public Configuration (delivery, COD, tax, coupons, banners, warehouses)
+  async getStoreConfig() {
+    return request<any>('/config/store', { cache: 'no-store' }, null);
+  },
+
+  async getDeals(): Promise<{ coupons: any[]; promotions: any[]; dealsContent: any[]; products: Product[] }> {
+    return request<any>('/deals', { cache: 'no-store' }, { coupons: [], promotions: [], dealsContent: [], products: [] });
+  },
+
+  async getFilters(category?: string): Promise<any> {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+    return request<any>(`/filters${qs}`, { cache: 'no-store' }, { attributes: [], brands: [], priceRange: null });
+  },
+
+  async getCoupons(): Promise<any[]> {
+    return request<any[]>('/coupons', { cache: 'no-store' }, []);
   },
 
   // Taxonomy (4-level: Main Category -> Child Category -> Product Type -> Product + Desktop Navigation)
@@ -209,28 +205,24 @@ export const api = {
     activeCollection: any | null;
     products: Product[];
   }> {
-    const fallbackProducts = SEED_PRODUCTS.filter((p) => p.isNewLaunch);
     const data = await request<any>('/new-launches', {}, {
       collections: [],
       activeCollection: null,
-      products: fallbackProducts,
+      products: [],
     });
     if (Array.isArray(data?.products)) {
-      return {
-        ...data,
-        products: applyLocalOverrides(data.products),
-      };
+      return data;
     }
     return {
       collections: [],
       activeCollection: null,
-      products: fallbackProducts,
+      products: [],
     };
   },
 
   // Categories
   async getCategories(): Promise<Category[]> {
-    return request<Category[]>('/categories', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }, MASTER_CATEGORIES);
+    return request<Category[]>('/categories', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }, []);
   },
 
   async getCategoryBySlug(slug: string): Promise<any | undefined> {
@@ -254,7 +246,7 @@ export const api = {
 
   // Brands
   async getBrands(): Promise<Brand[]> {
-    return request<Brand[]>('/brands', {}, MASTER_BRANDS);
+    return request<Brand[]>('/brands', { cache: 'no-store' }, []);
   },
 
   async getBrandBySlug(slug: string): Promise<Brand | undefined> {
@@ -288,8 +280,8 @@ export const api = {
     if (params?.newLaunch) queryParts.push(`newLaunch=true`);
 
     const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
-    let products = await request<Product[]>(`/products${queryStr}`, {}, SEED_PRODUCTS);
-    products = applyLocalOverrides(products).map((p) => {
+    let products = await request<Product[]>(`/products${queryStr}`, {}, []);
+    products = products.map((p) => {
       const resolved = resolveFullTaxonomy({
         mainInput: p.mainCategoryId || p.mainCategorySlug || p.mainCategoryName,
         childInput: p.childCategoryId || p.childCategorySlug || p.categorySlug || p.category,
@@ -454,45 +446,19 @@ export const api = {
   },
 
   // Authentication
-  async requestOtp(phone: string): Promise<{ success: boolean; message: string }> {
-    return request<{ success: boolean; message: string }>(
-      '/auth/request-otp',
-      {
-        method: 'POST',
-        body: JSON.stringify({ phone })
-      },
-      { success: true, message: 'OTP sent (Dev OTP: 6060)' }
-    );
+  async requestOtp(phone: string): Promise<{ success: boolean; message: string; devOtpHint?: string }> {
+    return postJson<{ success: boolean; message: string; devOtpHint?: string }>('/auth/request-otp', {
+      phone,
+    });
   },
 
   async verifyOtp(
     phone: string,
     otp: string
   ): Promise<{ success: boolean; message: string; token?: string; user?: CustomerProfile }> {
-    return request<any>(
+    return postJson<{ success: boolean; message: string; token?: string; user?: CustomerProfile }>(
       '/auth/verify-otp',
-      {
-        method: 'POST',
-        body: JSON.stringify({ phone, otp })
-      },
-      {
-        success: true,
-        message: 'Signed in (fallback)',
-        token: 'dev-token-6060',
-        user: {
-          id: 'cust-demo-1',
-          name: 'Arjun Verma',
-          phone: phone.replace(/\D/g, '').slice(-10),
-          email: 'arjun.verma@buildora.com',
-          isPhoneVerified: true,
-          isEmailVerified: true,
-          gstin: '29AABCB1234F1Z8',
-          businessName: 'Apex Infra Construction Ltd',
-          walletBalance: 1250,
-          rewardPoints: 480,
-          createdAt: new Date().toISOString()
-        }
-      }
+      { phone, otp }
     );
   },
 
@@ -672,7 +638,7 @@ export const api = {
 
   // Wallet
   async getWallet(): Promise<any> {
-    return request<any>('/wallet', {}, { currentBalance: 1250, availableBalance: 1250, pendingBalance: 0 });
+    return request<any>('/wallet', {}, { currentBalance: 0, availableBalance: 0, pendingBalance: 0 });
   },
 
   async getWalletTransactions(type?: string, category?: string): Promise<any[]> {
@@ -730,16 +696,18 @@ export const api = {
 
   // Knowledge Hub & FAQ
   async getArticles(): Promise<KnowledgeArticle[]> {
-    return request<KnowledgeArticle[]>('/knowledge-hub', {}, SEED_KNOWLEDGE_ARTICLES);
+    return request<KnowledgeArticle[]>('/knowledge-hub', { cache: 'no-store' }, []);
   },
 
   async getArticleBySlug(slug: string): Promise<KnowledgeArticle | undefined> {
+    const direct = await request<KnowledgeArticle | undefined>(`/knowledge-hub/${encodeURIComponent(slug)}`, {}, undefined);
+    if (direct && (direct as any).id) return direct;
     const articles = await api.getArticles();
     return articles.find((a) => a.slug === slug);
   },
 
   async getFaqs(): Promise<FaqItem[]> {
-    return request<FaqItem[]>('/faqs', {}, SEED_FAQS);
+    return request<FaqItem[]>('/faqs', { cache: 'no-store' }, []);
   },
 
   async getBengaluruZones(): Promise<any> {

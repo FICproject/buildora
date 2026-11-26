@@ -24,53 +24,10 @@ interface NotificationStoreState {
   addNotification: (notification: Omit<NotificationItem, 'id' | 'time' | 'read'>) => void;
 }
 
-const DEFAULT_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 'notif-1',
-    title: '60-Minute Site Delivery Active in Bengaluru',
-    message: 'Instant EV mini-truck dispatch is operational across 105+ Bengaluru pincodes with zero minimum order.',
-    time: '10 mins ago',
-    read: false,
-    type: 'ANNOUNCEMENT',
-    link: '/serviceability',
-    isGuestVisible: true
-  },
-  {
-    id: 'notif-2',
-    title: 'Order Dispatched to Site',
-    message: 'Driver Ramesh Kumar (KA-03-EZ-4412) has departed from Dark Store WH-BLR-01. Expected at site in 22 mins.',
-    time: '25 mins ago',
-    read: false,
-    type: 'DISPATCH',
-    link: '/orders/BLD-2026-8941/track',
-    isGuestVisible: false
-  },
-  {
-    id: 'notif-3',
-    title: '₹500 Cashback Credited',
-    message: 'Promotional cashback on your UltraTech cement order has been credited to your Buildora Wallet.',
-    time: 'Yesterday',
-    read: true,
-    type: 'WALLET',
-    link: '/account/wallet',
-    isGuestVisible: false
-  },
-  {
-    id: 'notif-4',
-    title: 'Contractor Price Drop: Greenply BWP Plywood',
-    message: 'Calibrated 19mm BWP marine sheets now available with an extra 10% volume discount for orders this week.',
-    time: '2 days ago',
-    read: false,
-    type: 'OFFER',
-    link: '/categories/plywood-mdf-hdhmr',
-    isGuestVisible: true
-  }
-];
-
 export const useNotificationStore = create<NotificationStoreState>()(
   persist(
     (set, get) => ({
-      notifications: DEFAULT_NOTIFICATIONS,
+      notifications: [],
 
       syncNotifications: async () => {
         const res = await api.getNotifications();

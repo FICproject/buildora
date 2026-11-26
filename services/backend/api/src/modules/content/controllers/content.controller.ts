@@ -16,16 +16,23 @@ export class ContentController {
   }
 
   @Get('knowledge-hub')
-  getArticles() {
+  getArticles(@Headers('x-tenant-id') tenantId?: string) {
+    const activeTenant = tenantId || DEFAULT_TENANT_ID;
+    const articles = dbStore.knowledgeArticles.filter(
+      (a: any) => a.isPublished !== false && (!a.tenantId || a.tenantId === activeTenant)
+    );
     return {
       success: true,
-      data: dbStore.knowledgeArticles
+      data: articles
     };
   }
 
   @Get('knowledge-hub/:slug')
-  getArticleBySlug(@Param('slug') slug: string) {
-    const article = dbStore.knowledgeArticles.find((a) => a.slug === slug);
+  getArticleBySlug(@Param('slug') slug: string, @Headers('x-tenant-id') tenantId?: string) {
+    const activeTenant = tenantId || DEFAULT_TENANT_ID;
+    const article = dbStore.knowledgeArticles.find(
+      (a: any) => a.slug === slug && a.isPublished !== false && (!a.tenantId || a.tenantId === activeTenant)
+    );
     return {
       success: !!article,
       data: article
@@ -33,10 +40,14 @@ export class ContentController {
   }
 
   @Get('faqs')
-  getFaqs() {
+  getFaqs(@Headers('x-tenant-id') tenantId?: string) {
+    const activeTenant = tenantId || DEFAULT_TENANT_ID;
+    const faqs = dbStore.faqs.filter(
+      (f: any) => f.isActive !== false && (!f.tenantId || f.tenantId === activeTenant)
+    );
     return {
       success: true,
-      data: dbStore.faqs
+      data: faqs
     };
   }
 

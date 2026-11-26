@@ -130,7 +130,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
   const [savedProjects, setSavedProjects] = useState<SavedConstructionProject[]>([]);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState<boolean>(false);
   const [quoteCategory, setQuoteCategory] = useState<string>('Bricks & Blocks');
-  const [quoteForm, setQuoteForm] = useState({ name: 'Arjun Verma', phone: '9876543210', email: 'arjun@apexinfra.com', notes: '' });
+  const [quoteForm, setQuoteForm] = useState({ name: '', phone: '', email: '', notes: '' });
   const [quoteSuccess, setQuoteSuccess] = useState<boolean>(false);
 
   // Buy Materials Drawer

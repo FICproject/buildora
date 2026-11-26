@@ -106,7 +106,11 @@ export const VendorReviewsPage: React.FC = () => {
               {[1, 2, 3, 4, 5].map((star) => (
                 <Star key={star} className="w-4 h-4 fill-amber-400 text-amber-400" />
               ))}
-              <span className="text-xs font-bold text-[#78716C] ml-2">96% Positive Ratings</span>
+              <span className="text-xs font-bold text-[#78716C] ml-2">
+                {reviews.length > 0
+                  ? `${Math.round((reviews.filter((r) => r.rating >= 4).length / reviews.length) * 100)}% Positive Ratings`
+                  : 'No reviews yet'}
+              </span>
             </div>
           </div>
 

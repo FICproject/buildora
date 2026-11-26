@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { ChevronRight, RotateCcw, PackageOpen } from 'lucide-react';
 import {
-  SEED_PRODUCTS,
   getAvailableFiltersForCategory,
   applyCategoryFilters,
   ActiveCategoryFilters
@@ -28,7 +27,7 @@ export const NewLaunchesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // State
-  const [products, setProducts] = useState<Product[]>(() => SEED_PRODUCTS.filter((p) => p.isNewLaunch));
+  const [products, setProducts] = useState<Product[]>([]);
   const [collectionMeta, setCollectionMeta] = useState<{
     title?: string;
     name?: string;

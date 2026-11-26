@@ -67,6 +67,15 @@ class CompanyAdminPersistenceService {
     }
   }
 
+  async remove(model: Model<any>, idValue: string): Promise<void> {
+    if (!this.isDbConnected() || !idValue) return;
+    try {
+      await model.deleteOne({ id: idValue }).exec();
+    } catch (err: any) {
+      this.logger.warn(`MongoDB remove failed (${model.modelName}): ${err.message}`);
+    }
+  }
+
   async loadCollection<T>(model: Model<any>): Promise<T[]> {
     if (!this.isDbConnected()) return [];
     try {

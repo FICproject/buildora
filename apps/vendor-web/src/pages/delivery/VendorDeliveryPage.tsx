@@ -15,37 +15,11 @@ import { toast } from '../../store/useToastStore';
 
 type DeliveryTab = 'DISPATCH' | 'HISTORY' | 'SETTINGS';
 
-const BENGALURU_HUBS = [
-  {
-    id: 'WH-BLR-04',
-    name: 'West Logistics Park (Peenya / Nagarabhavi)',
-    address: 'Plot 44, 2nd Stage, Peenya Industrial Area, Bengaluru 560058',
-    coverage: '560072, 560058, 560079, 560091',
-  },
-  {
-    id: 'WH-BLR-01',
-    name: 'Central Distribution Hub (Shivajinagar / MG Road)',
-    address: 'Shed 12, Queens Road Goods Yard, Bengaluru 560001',
-    coverage: '560001, 560025, 560020, 560052',
-  },
-  {
-    id: 'WH-BLR-02',
-    name: 'South Mega Hub (Electronic City)',
-    address: 'Phase 1, Hosur Main Road, Electronic City, Bengaluru 560100',
-    coverage: '560100, 560068, 560076, 560102',
-  },
-  {
-    id: 'WH-BLR-03',
-    name: 'East Tech Hub (Whitefield)',
-    address: 'ITPB Road, Hoodi Industrial Area, Whitefield, Bengaluru 560066',
-    coverage: '560066, 560048, 560037, 560036',
-  },
-];
-
 export const VendorDeliveryPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<DeliveryTab>('DISPATCH');
   const [dispatches, setDispatches] = useState<any[]>([]);
-  const [selectedHub, setSelectedHub] = useState('WH-BLR-04');
+  const [darkStores, setDarkStores] = useState<any[]>([]);
+  const [selectedHub, setSelectedHub] = useState('');
   const [leadTime, setLeadTime] = useState('30');
   const [cutoffTime, setCutoffTime] = useState('18:00');
   const [savingSettings, setSavingSettings] = useState(false);
@@ -59,13 +33,17 @@ export const VendorDeliveryPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [list, settings] = await Promise.all([
+      const [list, settings, whRes] = await Promise.all([
         vendorApi.getDispatches(),
         vendorApi.getDeliverySettings(),
+        vendorApi.getWarehouses(),
       ]);
       setDispatches(list || []);
+      const hubs = whRes?.darkStores || settings?.tenantDarkStores || [];
+      setDarkStores(hubs);
       if (settings) {
         if (settings.assignedDarkStoreId) setSelectedHub(settings.assignedDarkStoreId);
+        else if (hubs[0]?.id) setSelectedHub(hubs[0].id);
         if (settings.preparationTimeMins) setLeadTime(String(settings.preparationTimeMins));
         if (settings.dispatchCutoff) setCutoffTime(settings.dispatchCutoff);
       }
@@ -94,9 +72,9 @@ export const VendorDeliveryPage: React.FC = () => {
 
   const openAssignModal = (ord: any) => {
     setAssignTarget(ord);
-    setDriverName(ord.driverName || 'Raju Nayak');
-    setVehicleNumber(ord.vehicleNumber || 'KA-04-EV-4819');
-    setDriverPhone(ord.driverPhone || '+91 98801 44556');
+    setDriverName(ord.driverName || '');
+    setVehicleNumber(ord.vehicleNumber || '');
+    setDriverPhone(ord.driverPhone || '');
   };
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
@@ -310,35 +288,44 @@ export const VendorDeliveryPage: React.FC = () => {
           <Card>
             <CardHeader
               title="Primary Fulfillment Hub"
-              subtitle="Select the Bengaluru hub linked to your dispatch facility."
+              subtitle="Select the tenant fulfillment hub linked to your dispatch facility."
             />
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {BENGALURU_HUBS.map((hub) => {
-                const isSelected = selectedHub === hub.id;
-                return (
-                  <div
-                    key={hub.id}
-                    onClick={() => setSelectedHub(hub.id)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'border-[#943D24] bg-[#FBF3F0]/60'
-                        : 'border-[#E7E5E4] hover:border-[#943D24]/40 bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Warehouse className="w-4 h-4 text-[#943D24]" />
-                        <span className="font-semibold text-sm text-[#292524]">{hub.name}</span>
+              {darkStores.length === 0 ? (
+                <p className="text-xs text-[#78716C] col-span-2 py-4">
+                  No tenant dark stores configured by Company Admin yet.
+                </p>
+              ) : (
+                darkStores.map((hub: any) => {
+                  const isSelected = selectedHub === hub.id;
+                  const coverageText = Array.isArray(hub.servicePincodes)
+                    ? hub.servicePincodes.join(', ')
+                    : hub.coverage || hub.pincode || '';
+                  return (
+                    <div
+                      key={hub.id}
+                      onClick={() => setSelectedHub(hub.id)}
+                      className={`p-4 rounded-xl border cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'border-[#943D24] bg-[#FBF3F0]/60'
+                          : 'border-[#E7E5E4] hover:border-[#943D24]/40 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Warehouse className="w-4 h-4 text-[#943D24]" />
+                          <span className="font-semibold text-sm text-[#292524]">{hub.name}</span>
+                        </div>
+                        <Badge variant={isSelected ? 'brand' : 'neutral'} size="sm">
+                          {isSelected ? 'Selected' : hub.id}
+                        </Badge>
                       </div>
-                      <Badge variant={isSelected ? 'brand' : 'neutral'} size="sm">
-                        {isSelected ? 'Selected' : hub.id}
-                      </Badge>
+                      <p className="text-xs text-[#78716C] mt-2">{hub.address}</p>
+                      <p className="text-[11px] text-[#78716C] mt-2">Pincodes: {coverageText || 'Citywide'}</p>
                     </div>
-                    <p className="text-xs text-[#78716C] mt-2">{hub.address}</p>
-                    <p className="text-[11px] text-[#78716C] mt-2">Pincodes: {hub.coverage}</p>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </CardContent>
           </Card>
 

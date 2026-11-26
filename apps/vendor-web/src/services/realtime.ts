@@ -98,6 +98,10 @@ export function initVendorRealtime() {
     refreshAll('settlement.status.updated', payload);
   });
 
+  for (const extraEvt of ['settings.updated', 'serviceability.updated', 'pricing.updated', 'content.published', 'filters.updated']) {
+    socket.on(extraEvt, (payload) => refreshAll(extraEvt, payload));
+  }
+
   socket.on('notification.created', (payload) => {
     void useVendorNotificationStore.getState().fetchNotifications();
     refreshAll('notification.created', payload);

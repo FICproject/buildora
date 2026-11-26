@@ -1,18 +1,46 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronRight, Award, ShieldCheck } from 'lucide-react';
-import { MASTER_BRANDS, SEED_PRODUCTS, MASTER_CATEGORIES } from '@buildora/constants';
+import { ChevronRight, ShieldCheck } from 'lucide-react';
+import { Brand, Product } from '@buildora/types';
+import { api } from '../services/api';
 import { BrandCard } from '../components/common/BrandCard';
 import { ProductCard } from '../components/common/ProductCard';
 
 export const BrandsPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [brandProducts, setBrandProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // If specific brand slug selected
-  const activeBrand = slug ? MASTER_BRANDS.find((b) => b.slug === slug) : null;
-  const brandProducts = activeBrand
-    ? SEED_PRODUCTS.filter((p) => p.brandSlug === activeBrand.slug)
-    : [];
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    Promise.all([
+      api.getBrands(),
+      slug ? api.getProducts({ brand: slug }) : Promise.resolve([]),
+    ])
+      .then(([loadedBrands, loadedProds]) => {
+        if (!active) return;
+        setBrands(loadedBrands || []);
+        setBrandProducts(loadedProds || []);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [slug]);
+
+  const activeBrand = slug ? brands.find((b) => b.slug === slug) : null;
+
+  if (slug && loading && !activeBrand) {
+    return (
+      <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-12 text-center text-xs text-slate-500">
+        Loading brand catalog...
+      </div>
+    );
+  }
 
   if (activeBrand) {
     return (
@@ -73,7 +101,7 @@ export const BrandsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-        {MASTER_BRANDS.map((brand) => (
+        {brands.map((brand) => (
           <BrandCard key={brand.id} brand={brand} />
         ))}
       </div>

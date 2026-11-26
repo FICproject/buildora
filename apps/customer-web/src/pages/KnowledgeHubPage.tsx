@@ -1,16 +1,39 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ChevronRight, Clock, User, Tag, BookOpen } from 'lucide-react';
-import { SEED_KNOWLEDGE_ARTICLES } from '@buildora/constants';
+import { KnowledgeArticle } from '@buildora/types';
+import { api } from '../services/api';
 
 export const KnowledgeHubPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
+  const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    api
+      .getArticles()
+      .then((list) => {
+        if (active) setArticles(list || []);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [slug]);
 
   // If viewing specific article
-  const article = slug ? SEED_KNOWLEDGE_ARTICLES.find((a) => a.slug === slug) : null;
+  const article = slug ? articles.find((a) => a.slug === slug) : null;
+
+  if (slug && loading && !article) {
+    return <div className="max-w-4xl mx-auto px-4 py-12 text-center text-xs text-slate-500">Loading guide...</div>;
+  }
 
   if (article) {
-    const related = SEED_KNOWLEDGE_ARTICLES.filter((a) => a.id !== article.id);
+    const related = articles.filter((a) => a.id !== article.id);
 
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -111,7 +134,7 @@ export const KnowledgeHubPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {SEED_KNOWLEDGE_ARTICLES.map((art) => (
+        {articles.map((art) => (
           <Link
             key={art.id}
             to={`/knowledge-hub/${art.slug}`}

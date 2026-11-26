@@ -91,6 +91,46 @@ const CatalogPublishSnapshotSchema = new Schema(
   },
   { collection: 'catalog_publish_snapshots', strict: false }
 );
+const CatalogBrandSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, slug: { type: String, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'catalog_brands', strict: false }
+);
+const CatalogAttributeSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'catalog_attributes', strict: false }
+);
+const PlatformCouponSchema = new Schema(
+  { code: { type: String, required: true, unique: true, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'platform_coupons', strict: false }
+);
+const PlatformPromotionSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, vendorId: { type: String, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'platform_promotions', strict: false }
+);
+const KnowledgeArticleSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, slug: { type: String, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'knowledge_articles', strict: false }
+);
+const FaqItemSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'faq_items', strict: false }
+);
+const ServiceableZoneSchema = new Schema(
+  { pincode: { type: String, required: true, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'serviceable_zones', strict: false }
+);
+const NotificationTemplateSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'notification_templates', strict: false }
+);
+const DispatchAssignmentSchema = new Schema(
+  { orderId: { type: String, required: true, unique: true, index: true }, tenantId: { type: String, index: true } },
+  { collection: 'dispatch_assignments', strict: false }
+);
+const VendorInvoiceSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, vendorId: { type: String, index: true } },
+  { collection: 'vendor_invoices', strict: false }
+);
 
 export const PlatformProductModel: Model<any> =
   mongoose.models.PlatformProduct || mongoose.model('PlatformProduct', PlatformProductSchema);
@@ -133,6 +173,26 @@ export const DesktopNavItemModel: Model<any> =
   mongoose.models.DesktopNavItem || mongoose.model('DesktopNavItem', DesktopNavItemSchema);
 export const CatalogPublishSnapshotModel: Model<any> =
   mongoose.models.CatalogPublishSnapshot || mongoose.model('CatalogPublishSnapshot', CatalogPublishSnapshotSchema);
+export const CatalogBrandModel: Model<any> =
+  mongoose.models.CatalogBrand || mongoose.model('CatalogBrand', CatalogBrandSchema);
+export const CatalogAttributeModel: Model<any> =
+  mongoose.models.CatalogAttribute || mongoose.model('CatalogAttribute', CatalogAttributeSchema);
+export const PlatformCouponModel: Model<any> =
+  mongoose.models.PlatformCoupon || mongoose.model('PlatformCoupon', PlatformCouponSchema);
+export const PlatformPromotionModel: Model<any> =
+  mongoose.models.PlatformPromotion || mongoose.model('PlatformPromotion', PlatformPromotionSchema);
+export const KnowledgeArticleModel: Model<any> =
+  mongoose.models.KnowledgeArticle || mongoose.model('KnowledgeArticle', KnowledgeArticleSchema);
+export const FaqModel: Model<any> =
+  mongoose.models.FaqItem || mongoose.model('FaqItem', FaqItemSchema);
+export const ServiceableZoneModel: Model<any> =
+  mongoose.models.ServiceableZone || mongoose.model('ServiceableZone', ServiceableZoneSchema);
+export const NotificationTemplateModel: Model<any> =
+  mongoose.models.NotificationTemplate || mongoose.model('NotificationTemplate', NotificationTemplateSchema);
+export const DispatchAssignmentModel: Model<any> =
+  mongoose.models.DispatchAssignment || mongoose.model('DispatchAssignment', DispatchAssignmentSchema);
+export const VendorInvoiceModel: Model<any> =
+  mongoose.models.VendorInvoice || mongoose.model('VendorInvoice', VendorInvoiceSchema);
 
 class PlatformPersistenceService {
   private readonly logger = new Logger(PlatformPersistenceService.name);

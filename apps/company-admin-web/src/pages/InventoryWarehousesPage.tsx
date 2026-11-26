@@ -23,6 +23,7 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
   });
 
   const [whModal, setWhModal] = useState(false);
+  const [editingWhId, setEditingWhId] = useState<string | null>(null);
   const [whForm, setWhForm] = useState({
     name: '',
     address: '',
@@ -31,6 +32,7 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
     pincode: '',
     contactPerson: '',
     phone: '',
+    servicePincodesCsv: '',
   });
 
   const loadAll = async () => {
@@ -70,9 +72,21 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
   const submitWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await adminApi.createWarehouse(whForm);
-      pushToast({ title: 'Warehouse Added' });
+      const payload = {
+        ...whForm,
+        servicePincodes: whForm.servicePincodesCsv
+          ? whForm.servicePincodesCsv.split(',').map((p) => p.trim()).filter(Boolean)
+          : [whForm.pincode].filter(Boolean),
+      };
+      if (editingWhId) {
+        await adminApi.updateWarehouse(editingWhId, payload);
+        pushToast({ title: 'Warehouse Updated' });
+      } else {
+        await adminApi.createWarehouse(payload);
+        pushToast({ title: 'Warehouse Added' });
+      }
       setWhModal(false);
+      setEditingWhId(null);
       setWhForm({
         name: '',
         address: '',
@@ -81,6 +95,7 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
         pincode: '',
         contactPerson: '',
         phone: '',
+        servicePincodesCsv: '',
       });
       await loadAll();
     } catch (err: any) {
@@ -218,13 +233,26 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
       {mainTab === 'WAREHOUSES' && (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <Button size="sm" variant="dark" onClick={() => setWhModal(true)}>
+            <Button
+              size="sm"
+              variant="dark"
+              onClick={() => {
+                setEditingWhId(null);
+                setWhForm({ name: '', address: '', city: 'Bengaluru', state: 'Karnataka', pincode: '', contactPerson: '', phone: '', servicePincodesCsv: '' });
+                setWhModal(true);
+              }}
+            >
               <Plus className="w-4 h-4" /> Add Fulfillment Warehouse
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {warehouses.map((wh) => (
-              <Card key={wh.id} title={wh.name} subtitle={`Pincode: ${wh.pincode} • ${wh.city}`}>
+              <Card
+                key={wh.id}
+                title={wh.name}
+                subtitle={`Pincode: ${wh.pincode} • ${wh.city}`}
+                action={<Badge variant={wh.isActive !== false ? 'success' : 'error'}>{wh.isActive !== false ? 'ACTIVE' : 'INACTIVE'}</Badge>}
+              >
                 <div className="space-y-2 text-xs">
                   <p className="text-[#6E6859]">{wh.address}</p>
                   <div className="flex justify-between pt-2 border-t border-[#E5DCD3]">
@@ -238,6 +266,50 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
                   <div className="flex justify-between">
                     <span className="text-[#6E6859]">Manager / Contact</span>
                     <span className="font-medium text-[#5E5946]">{wh.contactPerson || 'Assigned Desk'}</span>
+                  </div>
+                  <div className="flex gap-1.5 pt-2 border-t border-[#E5DCD3]">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingWhId(wh.id);
+                        setWhForm({
+                          name: wh.name || '',
+                          address: wh.address || '',
+                          city: wh.city || 'Bengaluru',
+                          state: wh.state || 'Karnataka',
+                          pincode: wh.pincode || '',
+                          contactPerson: wh.contactPerson || '',
+                          phone: wh.phone || '',
+                          servicePincodesCsv: (wh.servicePincodes || []).join(', '),
+                        });
+                        setWhModal(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        await adminApi.updateWarehouse(wh.id, { isActive: !(wh.isActive !== false) });
+                        pushToast({ title: 'Warehouse Status Updated' });
+                        loadAll();
+                      }}
+                    >
+                      {wh.isActive !== false ? 'Deactivate' : 'Activate'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        await adminApi.deleteWarehouse(wh.id);
+                        pushToast({ title: 'Warehouse Deleted' });
+                        loadAll();
+                      }}
+                    >
+                      Del
+                    </Button>
                   </div>
                 </div>
               </Card>
@@ -328,8 +400,15 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
         </form>
       </Modal>
 
-      {/* Add Warehouse Modal */}
-      <Modal open={whModal} onClose={() => setWhModal(false)} title="Add Warehouse Hub">
+      {/* Add/Edit Warehouse Modal */}
+      <Modal
+        open={whModal}
+        onClose={() => {
+          setWhModal(false);
+          setEditingWhId(null);
+        }}
+        title={editingWhId ? 'Edit Warehouse Hub' : 'Add Warehouse Hub'}
+      >
         <form onSubmit={submitWarehouse} className="space-y-3 text-xs">
           <input
             required
@@ -368,11 +447,17 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
               className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
+          <input
+            placeholder="Serviceable Pincodes (comma-separated)"
+            value={whForm.servicePincodesCsv}
+            onChange={(e) => setWhForm({ ...whForm, servicePincodesCsv: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setWhModal(false)}>
               Cancel
             </Button>
-            <Button type="submit">Create Warehouse</Button>
+            <Button type="submit">{editingWhId ? 'Save Warehouse' : 'Create Warehouse'}</Button>
           </div>
         </form>
       </Modal>

@@ -5,6 +5,8 @@ import { adminApi } from '../services/adminApi';
 import { useAdminAuthStore } from '../store/useAdminAuthStore';
 import { Button, ToastContainer, useToastStore } from '../components/ui';
 
+const isDevEnv = Boolean((import.meta as any).env?.DEV);
+
 const DEMO_ACCOUNTS = [
   { label: 'Company Owner (BLR)', email: 'admin@buildora.in', role: 'Full Access' },
   { label: 'Operations Mgr (BLR)', email: 'ops@buildora.in', role: 'Orders & Logistics' },
@@ -18,8 +20,8 @@ export const LoginPage: React.FC = () => {
   const setSession = useAdminAuthStore((s) => s.setSession);
   const pushToast = useToastStore((s) => s.push);
 
-  const [email, setEmail] = useState('admin@buildora.in');
-  const [password, setPassword] = useState('Admin@123');
+  const [email, setEmail] = useState(isDevEnv ? 'admin@buildora.in' : '');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -135,34 +137,35 @@ export const LoginPage: React.FC = () => {
             </Button>
           </form>
 
-          {/* Demo Role Switcher */}
-          <div className="mt-6 pt-5 border-t border-[#E5DCD3]">
-            <p className="text-[11px] font-semibold text-[#5E5946] uppercase tracking-wider mb-2.5">
-              Quick Role Select (Password: Admin@123)
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {DEMO_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(acc.email);
-                    setPassword('Admin@123');
-                  }}
-                  className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
-                    email === acc.email
-                      ? 'border-[#AE887B] bg-[#F0DED0]/70 text-[#5E5946]'
-                      : 'border-[#E5DCD3] bg-white hover:bg-[#FAF7F4] text-[#3D392C]'
-                  }`}
-                >
-                  <p className="font-semibold truncate text-[#5E5946]">{acc.label}</p>
-                  <p className="text-[10px] text-[#6E6859] truncate">
-                    {acc.email} • {acc.role}
-                  </p>
-                </button>
-              ))}
+          {/* Demo Role Switcher — Development Mode Only */}
+          {isDevEnv && (
+            <div className="mt-6 pt-5 border-t border-[#E5DCD3]">
+              <p className="text-[11px] font-semibold text-[#5E5946] uppercase tracking-wider mb-2.5">
+                Quick Role Select (Dev Sandbox)
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {DEMO_ACCOUNTS.map((acc) => (
+                  <button
+                    key={acc.email}
+                    type="button"
+                    onClick={() => {
+                      setEmail(acc.email);
+                    }}
+                    className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                      email === acc.email
+                        ? 'border-[#AE887B] bg-[#F0DED0]/70 text-[#5E5946]'
+                        : 'border-[#E5DCD3] bg-white hover:bg-[#FAF7F4] text-[#3D392C]'
+                    }`}
+                  >
+                    <p className="font-semibold truncate text-[#5E5946]">{acc.label}</p>
+                    <p className="text-[10px] text-[#6E6859] truncate">
+                      {acc.email} • {acc.role}
+                    </p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       <ToastContainer />
