@@ -123,6 +123,27 @@ class VendorPersistenceService {
       return null;
     }
   }
+
+  /**
+   * Finds a vendor record by persisted refresh token.
+   */
+  async loadVendorByRefreshToken(refreshToken: string, targetMap?: Map<string, any>): Promise<any | null> {
+    if (!this.isDbConnected() || !refreshToken) return null;
+    try {
+      const doc = await VendorMongoModel.findOne({ refreshToken }).lean().exec();
+      if (!doc) return null;
+      const clean = { ...doc };
+      delete (clean as any)._id;
+      delete (clean as any).__v;
+      if (targetMap && clean.id) {
+        targetMap.set(clean.id, clean);
+      }
+      return clean;
+    } catch (err: any) {
+      this.logger.warn(`MongoDB loadVendorByRefreshToken failed: ${err.message}`);
+      return null;
+    }
+  }
 }
 
 export const vendorPersistenceService = new VendorPersistenceService();

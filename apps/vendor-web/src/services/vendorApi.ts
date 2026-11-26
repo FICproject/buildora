@@ -18,7 +18,13 @@ import {
 } from '@buildora/types';
 import { SEED_PRODUCTS, MASTER_CATEGORIES, BENGALURU_WAREHOUSES } from '@buildora/constants';
 import { VENDOR_APP_CONFIG } from '../config';
-import { apiRequest, mapFriendlyApiError, warmupBackend } from './apiClient';
+import {
+  apiRequest,
+  clearVendorSessionTokens,
+  mapFriendlyApiError,
+  saveVendorSessionTokens,
+  warmupBackend,
+} from './apiClient';
 
 const API_BASE_URL = VENDOR_APP_CONFIG.apiBaseUrl;
 
@@ -399,35 +405,28 @@ function getAuthHeaders(): Record<string, string> {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}, fallbackData?: T): Promise<T> {
-  if (API_BASE_URL) {
+async function request<T>(path: string, options: RequestInit = {}, _fallbackData?: T): Promise<T> {
+  const { body, headers, method, ...rest } = options;
+  let parsedBody: unknown = body;
+  if (typeof body === 'string') {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), VENDOR_APP_CONFIG.requestTimeoutMs);
-      const res = await fetch(`${API_BASE_URL}${path}`, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Tenant-ID': VENDOR_APP_CONFIG.defaultTenantId,
-          ...getAuthHeaders(),
-          ...options.headers,
-        },
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const json = await res.json();
-        return json.data !== undefined ? json.data : json;
-      }
+      parsedBody = JSON.parse(body);
     } catch {
-      // Fall back cleanly if offline/fallbackData provided
+      parsedBody = body;
     }
   }
 
-  if (fallbackData !== undefined) {
-    return fallbackData;
+  const res = await apiRequest<any>(path, {
+    ...rest,
+    method: method || 'GET',
+    headers: headers as Record<string, string> | undefined,
+    body: parsedBody,
+  });
+
+  if (res && typeof res === 'object' && res.data !== undefined) {
+    return res.data as T;
   }
-  throw new Error('Unable to connect to the server. Please try again.');
+  return res as T;
 }
 
 function broadcastProductChange(_prod: any) {
@@ -435,25 +434,29 @@ function broadcastProductChange(_prod: any) {
 }
 
 export const vendorApi = {
-  getStoredProfile(): VendorProfile {
-    return localVendor;
+  getStoredProfile(): VendorProfile | null {
+    try {
+      const raw = localStorage.getItem('buildora_vendor_profile');
+      return raw ? (JSON.parse(raw) as VendorProfile) : null;
+    } catch {
+      return null;
+    }
   },
 
   logout(): void {
-    // Clears in-memory session if needed
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('buildora_vendor_token') : null;
+    clearVendorSessionTokens();
+    if (token) {
+      void apiRequest('/vendor/auth/logout', {
+        method: 'POST',
+        includeAuth: false,
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
   },
 
-  async register(payload: { storeName: string; email: string; phone: string }): Promise<{ token: string; vendor: VendorProfile }> {
-    localVendor.storeName = payload.storeName;
-    localVendor.email = payload.email;
-    localVendor.phone = payload.phone;
-    localVendor.businessInfo.storeName = payload.storeName;
-    localVendor.businessInfo.email = payload.email;
-    localVendor.businessInfo.phone = payload.phone;
-    return {
-      token: 'jwt-vendor-token-buildora-60',
-      vendor: localVendor,
-    };
+  async register(_payload: { storeName: string; email: string; phone: string }): Promise<{ token: string; vendor: VendorProfile }> {
+    throw new Error('Please use the multi-step vendor registration wizard.');
   },
 
   // ==========================================
@@ -498,7 +501,7 @@ export const vendorApi = {
       fallbackErrorMessage: 'Login failed. Please check your credentials.'
     });
     if (data.token) {
-      localStorage.setItem('buildora_vendor_token', data.token);
+      saveVendorSessionTokens(data.token, data.refreshToken, data.vendor);
     }
     return data;
   },
@@ -511,7 +514,7 @@ export const vendorApi = {
       fallbackErrorMessage: 'OTP verification failed.'
     });
     if (data.token) {
-      localStorage.setItem('buildora_vendor_token', data.token);
+      saveVendorSessionTokens(data.token, data.refreshToken, data.vendor);
     }
     return data;
   },
@@ -552,7 +555,7 @@ export const vendorApi = {
       fallbackErrorMessage: 'Unable to complete account registration. Please try again.'
     });
     if (data.token) {
-      localStorage.setItem('buildora_vendor_token', data.token);
+      saveVendorSessionTokens(data.token, data.refreshToken, data.vendor);
     }
     return data;
   },
@@ -611,7 +614,7 @@ export const vendorApi = {
       fallbackErrorMessage: 'Unable to submit vendor application. Please try again.'
     });
     if (data.token) {
-      localStorage.setItem('buildora_vendor_token', data.token);
+      saveVendorSessionTokens(data.token, data.refreshToken, data.vendor);
     }
     return data;
   },

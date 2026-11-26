@@ -14,14 +14,20 @@ export interface TopBrandSalesRow {
 
 interface TopBrandsCardProps {
   loading?: boolean;
+  error?: string | null;
+  hasData?: boolean;
   brands: TopBrandSalesRow[];
   onBrandClick: (brandName: string) => void;
+  onRetry?: () => void;
 }
 
 export const TopBrandsCard: React.FC<TopBrandsCardProps> = ({
   loading,
+  error,
+  hasData = true,
   brands,
   onBrandClick,
+  onRetry,
 }) => {
   const maxSales = Math.max(1, ...brands.map((b) => b.totalSales));
 
@@ -44,6 +50,23 @@ export const TopBrandsCard: React.FC<TopBrandsCardProps> = ({
               <div key={i} className="h-10 bg-[#FAF7F5] rounded-lg" />
             ))}
           </div>
+        ) : error && !hasData ? (
+          <EmptyState
+            icon={<Award className="w-5 h-5 text-red-500" />}
+            title="Unable to load brand sales"
+            description={error}
+            action={
+              onRetry ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="px-3 py-1.5 rounded-lg bg-[#943D24] text-white text-xs font-semibold cursor-pointer"
+                >
+                  Retry
+                </button>
+              ) : undefined
+            }
+          />
         ) : brands.length === 0 ? (
           <EmptyState
             icon={<Award className="w-5 h-5" />}

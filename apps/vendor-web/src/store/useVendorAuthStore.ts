@@ -26,15 +26,43 @@ interface VendorAuthState {
 }
 
 const TOKEN_KEY = 'buildora_vendor_token';
+const REFRESH_TOKEN_KEY = 'buildora_vendor_refresh_token';
 const SAVED_VENDOR_KEY = 'buildora_vendor_profile';
 
 export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
   const savedProfileRaw = localStorage.getItem(SAVED_VENDOR_KEY);
   let initialVendor: VendorProfile | null = null;
   try {
-    initialVendor = savedProfileRaw ? JSON.parse(savedProfileRaw) : vendorApi.getStoredProfile();
+    initialVendor = savedProfileRaw ? JSON.parse(savedProfileRaw) : null;
   } catch {
-    initialVendor = vendorApi.getStoredProfile();
+    initialVendor = null;
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('buildora:vendor:session-expired', () => {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      localStorage.removeItem(SAVED_VENDOR_KEY);
+      set({
+        vendor: null,
+        token: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: 'Session expired. Please sign in again.',
+        redirectTo: null,
+      });
+    });
+    window.addEventListener('buildora:vendor:session-refreshed', (ev: any) => {
+      const detail = ev?.detail;
+      if (detail?.token) {
+        set({
+          token: detail.token,
+          vendor: detail.vendor || get().vendor,
+          isAuthenticated: true,
+          error: null,
+        });
+      }
+    });
   }
 
   return {
@@ -130,6 +158,7 @@ export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
     logout: () => {
       vendorApi.logout();
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
       localStorage.removeItem(SAVED_VENDOR_KEY);
       set({
         vendor: null,
@@ -153,6 +182,19 @@ export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
         set({ isLoading: false });
         return null;
       } catch (err: any) {
+        if (err?.status === 401 || err?.code === 'SESSION_EXPIRED') {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(REFRESH_TOKEN_KEY);
+          localStorage.removeItem(SAVED_VENDOR_KEY);
+          set({
+            vendor: null,
+            token: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: err?.message || 'Session expired. Please sign in again.',
+          });
+          return null;
+        }
         set({
           isLoading: false,
           error: err?.message || 'Unable to load business profile.'

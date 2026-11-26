@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
-import { DatabaseService } from './database/database.service';
+import { DatabaseService, databaseService } from './database/database.service';
 import { AuthController } from './modules/auth/controllers/auth.controller';
 import { CatalogueController } from './modules/catalogue/controllers/catalogue.controller';
 import { ProductsController } from './modules/products/controllers/products.controller';
@@ -42,7 +42,10 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     AdminVendorApprovalController,
     ConstructionCalculatorController,
   ],
-  providers: [DatabaseService, ConstructionCalculatorService],
+  providers: [
+    { provide: DatabaseService, useValue: databaseService },
+    ConstructionCalculatorService
+  ],
   exports: [DatabaseService, ConstructionCalculatorService],
 })
 export class AppModule {}

@@ -1737,7 +1737,7 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('auth/login')
-  login(@Body() body: { identifier: string; password?: string; rememberMe?: boolean }) {
+  async login(@Body() body: { identifier: string; password?: string; rememberMe?: boolean }) {
     const { identifier, password } = body;
     if (!identifier || !password) {
       throw new BadRequestException('Registered email/mobile and password are required.');
@@ -1780,6 +1780,8 @@ export class VendorController implements OnModuleInit {
 
     // 5. Generate secure JWT tokens
     const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
+    vendor.refreshToken = tokens.refreshToken;
+    await vendorPersistenceService.saveVendorRecord(vendor);
     const redirectTo = getVendorRedirectUrl(vendor.status, vendor.applicationId);
 
     return {
@@ -1795,7 +1797,7 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('auth/login-otp')
-  loginWithOtp(@Body() body: { identifier: string; otp: string }) {
+  async loginWithOtp(@Body() body: { identifier: string; otp: string }) {
     const { identifier, otp } = body;
     if (!identifier || !otp) {
       throw new BadRequestException('Identifier and OTP code are required.');
@@ -1824,6 +1826,8 @@ export class VendorController implements OnModuleInit {
     vendorSecurityService.clearLoginAttempts(clean);
 
     const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
+    vendor.refreshToken = tokens.refreshToken;
+    await vendorPersistenceService.saveVendorRecord(vendor);
     const redirectTo = getVendorRedirectUrl(vendor.status, vendor.applicationId);
 
     return {
@@ -1954,8 +1958,58 @@ export class VendorController implements OnModuleInit {
     };
   }
 
+  @Post('auth/refresh')
+  async refreshSession(
+    @Body() body: { refreshToken?: string },
+    @Headers('x-refresh-token') headerRefreshToken?: string
+  ) {
+    const incomingToken = (body?.refreshToken || headerRefreshToken || '').trim();
+    if (!incomingToken) {
+      throw new UnauthorizedException('Refresh token is required.');
+    }
+
+    let matched: BackendVendorRecord | undefined;
+    for (const v of vendorRecords.values()) {
+      if (v.refreshToken && v.refreshToken === incomingToken) {
+        matched = v;
+        break;
+      }
+    }
+
+    if (!matched) {
+      const fromDb = await vendorPersistenceService.loadVendorByRefreshToken(incomingToken, vendorRecords);
+      if (fromDb) {
+        matched = fromDb as BackendVendorRecord;
+      }
+    }
+
+    if (!matched) {
+      throw new UnauthorizedException('Invalid or expired refresh token. Please sign in again.');
+    }
+
+    const tokens = vendorSecurityService.generateTokens(matched.id, matched.email);
+    matched.refreshToken = tokens.refreshToken;
+    matched.updatedAt = new Date().toISOString();
+    await vendorPersistenceService.saveVendorRecord(matched);
+
+    return {
+      success: true,
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+      status: matched.status,
+      redirectTo: getVendorRedirectUrl(matched.status, matched.applicationId),
+      vendor: serializeVendorProfile(matched)
+    };
+  }
+
   @Post('auth/logout')
-  logout() {
+  async logout(@Headers('authorization') authHeader?: string) {
+    const vendor = getAuthenticatedVendor(authHeader);
+    if (vendor) {
+      vendor.refreshToken = undefined;
+      await vendorPersistenceService.saveVendorRecord(vendor);
+    }
     return {
       success: true,
       message: 'Vendor logged out successfully'

@@ -58,8 +58,12 @@ async function bootstrap() {
       'X-Tenant-ID',
       'x-tenant-id',
       'x-admin-key',
-      'x-admin-id'
+      'x-admin-id',
+      'x-refresh-token',
+      'Cache-Control',
+      'Pragma'
     ],
+    exposedHeaders: ['Content-Disposition', 'X-Request-Id'],
     credentials: true,
     preflightContinue: false,
     optionsSuccessStatus: 204

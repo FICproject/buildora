@@ -23,7 +23,7 @@ export function getVendorRedirect(status?: VendorAccountStatus, applicationId?: 
 }
 
 export const ProtectedRoute: React.FC = () => {
-  const { isAuthenticated, vendor, fetchProfile } = useVendorAuthStore();
+  const { isAuthenticated, vendor, isLoading, error, fetchProfile, logout } = useVendorAuthStore();
   const location = useLocation();
 
   // Always verify status against the backend on mount/navigation rather than trusting localStorage alone
@@ -35,6 +35,42 @@ export const ProtectedRoute: React.FC = () => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (!vendor && isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F7F5] text-sm text-[#78716C]">
+        Verifying vendor session...
+      </div>
+    );
+  }
+
+  if (!vendor) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F7F5] p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-[#E7E5E4] p-6 text-center space-y-4 shadow-sm">
+          <p className="text-sm font-semibold text-[#292524]">
+            {error || 'Unable to verify your vendor session with the server.'}
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => fetchProfile()}
+              className="px-4 py-2 rounded-lg bg-[#943D24] text-white text-xs font-semibold cursor-pointer"
+            >
+              Retry Connection
+            </button>
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="px-4 py-2 rounded-lg border border-[#E7E5E4] text-xs font-semibold text-[#292524] cursor-pointer"
+            >
+              Sign In Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const status = vendor?.status;

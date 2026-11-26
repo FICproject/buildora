@@ -33,6 +33,7 @@ export class AppController {
         uriConfigured: dbStatus.uriConfigured,
         hasPlaceholderCredentials: dbStatus.hasPlaceholderCredentials,
         fallbackMode: dbStatus.fallbackMode,
+        ...(dbStatus.error ? { connectionError: dbStatus.error } : {}),
         note: dbStatus.hasPlaceholderCredentials
           ? 'MongoDB URI is configured with placeholder credentials. Replace YOUR_PASSWORD in .env with real credentials.'
           : dbStatus.status === 'CONNECTED'

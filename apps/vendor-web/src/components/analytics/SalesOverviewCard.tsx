@@ -16,6 +16,8 @@ export interface SalesSeriesBucket {
 
 interface SalesOverviewCardProps {
   loading?: boolean;
+  error?: string | null;
+  hasData?: boolean;
   totalRevenue: number;
   previousPeriodRevenue: number;
   growthPct: number | null;
@@ -26,6 +28,7 @@ interface SalesOverviewCardProps {
   endDate: string;
   onDateRangeChange: (start: string, end: string) => void;
   onPointClick: (bucket: SalesSeriesBucket) => void;
+  onRetry?: () => void;
 }
 
 function formatAxisInr(val: number): string {
@@ -36,6 +39,8 @@ function formatAxisInr(val: number): string {
 
 export const SalesOverviewCard: React.FC<SalesOverviewCardProps> = ({
   loading,
+  error,
+  hasData = true,
   totalRevenue,
   previousPeriodRevenue,
   growthPct,
@@ -46,6 +51,7 @@ export const SalesOverviewCard: React.FC<SalesOverviewCardProps> = ({
   endDate,
   onDateRangeChange,
   onPointClick,
+  onRetry,
 }) => {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const [showCustomDates, setShowCustomDates] = useState(false);
@@ -88,19 +94,23 @@ export const SalesOverviewCard: React.FC<SalesOverviewCardProps> = ({
         <div>
           <div className="flex items-center gap-2.5">
             <h3 className="text-base font-bold text-[#943D24]">Sales Overview</h3>
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-              }`}
-            >
-              {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-              {isPositive ? '+' : ''}
-              {growthPct ?? 0}% vs prev (₹{previousPeriodRevenue.toLocaleString('en-IN')})
-            </span>
+            {hasData && !loading && (
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                  isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                }`}
+              >
+                {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {isPositive ? '+' : ''}
+                {growthPct ?? 0}% vs prev (₹{previousPeriodRevenue.toLocaleString('en-IN')})
+              </span>
+            )}
           </div>
           <p className="text-xs text-[#78716C] mt-0.5">
             Revenue trend for selected period:{' '}
-            <strong className="text-[#292524]">₹{totalRevenue.toLocaleString('en-IN')}</strong>
+            <strong className="text-[#292524]">
+              {loading ? '—' : hasData ? `₹${totalRevenue.toLocaleString('en-IN')}` : 'Unavailable'}
+            </strong>
           </p>
         </div>
 
@@ -151,6 +161,23 @@ export const SalesOverviewCard: React.FC<SalesOverviewCardProps> = ({
           <div className="h-56 rounded-xl bg-[#FAF7F5] animate-pulse flex items-center justify-center text-xs text-[#78716C]">
             Loading revenue trend...
           </div>
+        ) : error && !hasData ? (
+          <EmptyState
+            icon={<IndianRupee className="w-5 h-5 text-red-500" />}
+            title="Unable to load sales overview"
+            description={error}
+            action={
+              onRetry ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="px-3 py-1.5 rounded-lg bg-[#943D24] text-white text-xs font-semibold cursor-pointer"
+                >
+                  Retry
+                </button>
+              ) : undefined
+            }
+          />
         ) : series.length === 0 ? (
           <EmptyState
             icon={<IndianRupee className="w-5 h-5" />}

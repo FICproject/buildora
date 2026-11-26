@@ -16,6 +16,8 @@ export interface OrderSeriesBucket {
 
 interface OrdersOverviewCardProps {
   loading?: boolean;
+  error?: string | null;
+  hasData?: boolean;
   totalOrders: number;
   previousPeriodOrders: number;
   growthPct: number | null;
@@ -26,10 +28,13 @@ interface OrdersOverviewCardProps {
   endDate: string;
   onDateRangeChange: (start: string, end: string) => void;
   onBarClick: (bucket: OrderSeriesBucket) => void;
+  onRetry?: () => void;
 }
 
 export const OrdersOverviewCard: React.FC<OrdersOverviewCardProps> = ({
   loading,
+  error,
+  hasData = true,
   totalOrders,
   previousPeriodOrders,
   growthPct,
@@ -40,6 +45,7 @@ export const OrdersOverviewCard: React.FC<OrdersOverviewCardProps> = ({
   endDate,
   onDateRangeChange,
   onBarClick,
+  onRetry,
 }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [showCustomDates, setShowCustomDates] = useState(false);
@@ -59,19 +65,23 @@ export const OrdersOverviewCard: React.FC<OrdersOverviewCardProps> = ({
         <div>
           <div className="flex items-center gap-2.5">
             <h3 className="text-base font-bold text-[#943D24]">Orders Overview</h3>
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-              }`}
-            >
-              {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-              {isPositive ? '+' : ''}
-              {growthPct ?? 0}% vs prev ({previousPeriodOrders})
-            </span>
+            {hasData && !loading && (
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                  isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                }`}
+              >
+                {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {isPositive ? '+' : ''}
+                {growthPct ?? 0}% vs prev ({previousPeriodOrders})
+              </span>
+            )}
           </div>
           <p className="text-xs text-[#78716C] mt-0.5">
             Total orders received in selected period:{' '}
-            <strong className="text-[#292524]">{totalOrders.toLocaleString('en-IN')}</strong>
+            <strong className="text-[#292524]">
+              {loading ? '—' : hasData ? totalOrders.toLocaleString('en-IN') : 'Unavailable'}
+            </strong>
           </p>
         </div>
 
@@ -130,6 +140,23 @@ export const OrdersOverviewCard: React.FC<OrdersOverviewCardProps> = ({
               />
             ))}
           </div>
+        ) : error && !hasData ? (
+          <EmptyState
+            icon={<BarChart2 className="w-5 h-5 text-red-500" />}
+            title="Unable to load orders overview"
+            description={error}
+            action={
+              onRetry ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="px-3 py-1.5 rounded-lg bg-[#943D24] text-white text-xs font-semibold cursor-pointer"
+                >
+                  Retry
+                </button>
+              ) : undefined
+            }
+          />
         ) : series.length === 0 ? (
           <EmptyState
             icon={<BarChart2 className="w-5 h-5" />}

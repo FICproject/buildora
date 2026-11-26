@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -62,7 +62,10 @@ export const VendorDashboardPage: React.FC = () => {
   const { notifications, fetchNotifications, markAsRead } = useVendorNotificationStore();
   const { settlements, fetchSettlements } = useVendorSettlementStore();
 
+  const requestIdRef = useRef(0);
+
   const loadAnalytics = useCallback(async () => {
+    const reqId = ++requestIdRef.current;
     try {
       setRefreshing(true);
       setAnalyticsError(null);
@@ -74,12 +77,18 @@ export const VendorDashboardPage: React.FC = () => {
         salesStartDate: salesDateRange.start || undefined,
         salesEndDate: salesDateRange.end || undefined,
       });
-      setAnalytics(data);
+      if (reqId === requestIdRef.current) {
+        setAnalytics(data);
+      }
     } catch (err: any) {
-      setAnalyticsError(err?.message || 'Unable to load dashboard analytics.');
+      if (reqId === requestIdRef.current) {
+        setAnalyticsError(err?.message || 'Unable to connect to the server. Please try again.');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (reqId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [
     ordersGranularity,
@@ -90,32 +99,35 @@ export const VendorDashboardPage: React.FC = () => {
     salesDateRange.end,
   ]);
 
+  const loadAnalyticsRef = useRef(loadAnalytics);
+  loadAnalyticsRef.current = loadAnalytics;
+
   useEffect(() => {
     loadAnalytics();
   }, [loadAnalytics]);
 
+  // Operational data + realtime listener bind once on mount (do not re-run on granularity filter changes)
   useEffect(() => {
-    fetchOrders();
-    fetchInventory();
-    fetchSettlements();
-    fetchNotifications();
-
-    const onRealtime = () => loadAnalytics();
+    void fetchSettlements();
+    const onRealtime = () => {
+      void loadAnalyticsRef.current();
+    };
     window.addEventListener('buildora:vendor:realtime', onRealtime);
     return () => window.removeEventListener('buildora:vendor:realtime', onRealtime);
-  }, [loadAnalytics]);
+  }, [fetchSettlements]);
 
-  const kpis = analytics?.kpis || {
-    totalOrders: orders.length,
-    ordersGrowthPct: 0,
-    totalSales: 0,
-    salesGrowthPct: 0,
-    totalProducts: inventory.length,
-    productsGrowthPct: 0,
-    totalBrands: 0,
-    activeProducts: 0,
-    lowStockCount: 0,
-  };
+  const handleRefreshAll = useCallback(async () => {
+    await Promise.all([
+      loadAnalytics(),
+      fetchOrders(),
+      fetchInventory(),
+      fetchSettlements(),
+      fetchNotifications(),
+    ]);
+  }, [loadAnalytics, fetchOrders, fetchInventory, fetchSettlements, fetchNotifications]);
+
+  const hasAnalytics = Boolean(analytics);
+  const kpis = analytics?.kpis;
 
   const ordersOv = analytics?.ordersOverview || {
     totalOrders: 0,
@@ -197,10 +209,11 @@ export const VendorDashboardPage: React.FC = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={loadAnalytics}
+            onClick={handleRefreshAll}
+            disabled={refreshing}
             leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />}
           >
-            Refresh
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
         }
       />
@@ -208,8 +221,8 @@ export const VendorDashboardPage: React.FC = () => {
       {analyticsError && (
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between gap-3 text-xs text-red-800">
           <span>{analyticsError}</span>
-          <Button size="sm" variant="secondary" onClick={loadAnalytics}>
-            Retry
+          <Button size="sm" variant="secondary" onClick={handleRefreshAll} disabled={refreshing}>
+            {refreshing ? 'Retrying...' : 'Retry'}
           </Button>
         </div>
       )}
@@ -224,12 +237,18 @@ export const VendorDashboardPage: React.FC = () => {
             <div className="w-9 h-9 rounded-full bg-[#FBF3F0] flex items-center justify-center text-[#943D24] shrink-0">
               <ShoppingCart className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-[#78716C]">Total Orders</p>
-              <p className="text-xl font-bold text-[#292524] mt-0.5">
-                {loading ? '—' : kpis.totalOrders.toLocaleString('en-IN')}
-              </p>
-              {!loading && renderGrowth(kpis.ordersGrowthPct)}
+              {loading ? (
+                <div className="h-6 w-14 bg-[#F2EDE9] rounded animate-pulse mt-1" />
+              ) : (
+                <>
+                  <p className="text-xl font-bold text-[#292524] mt-0.5">
+                    {hasAnalytics ? Number(kpis?.totalOrders ?? 0).toLocaleString('en-IN') : '—'}
+                  </p>
+                  {hasAnalytics && renderGrowth(kpis?.ordersGrowthPct)}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -242,12 +261,18 @@ export const VendorDashboardPage: React.FC = () => {
             <div className="w-9 h-9 rounded-full bg-[#FBF3F0] flex items-center justify-center text-[#943D24] shrink-0">
               <IndianRupee className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-[#78716C]">Total Sales</p>
-              <p className="text-xl font-bold text-[#292524] mt-0.5 truncate">
-                {loading ? '—' : `₹${Number(kpis.totalSales || 0).toLocaleString('en-IN')}`}
-              </p>
-              {!loading && renderGrowth(kpis.salesGrowthPct)}
+              {loading ? (
+                <div className="h-6 w-20 bg-[#F2EDE9] rounded animate-pulse mt-1" />
+              ) : (
+                <>
+                  <p className="text-xl font-bold text-[#292524] mt-0.5 truncate">
+                    {hasAnalytics ? `₹${Number(kpis?.totalSales ?? 0).toLocaleString('en-IN')}` : '—'}
+                  </p>
+                  {hasAnalytics && renderGrowth(kpis?.salesGrowthPct)}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -260,12 +285,18 @@ export const VendorDashboardPage: React.FC = () => {
             <div className="w-9 h-9 rounded-full bg-[#FBF3F0] flex items-center justify-center text-[#943D24] shrink-0">
               <Package className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-[#78716C]">Total Products</p>
-              <p className="text-xl font-bold text-[#292524] mt-0.5">
-                {loading ? '—' : kpis.totalProducts.toLocaleString('en-IN')}
-              </p>
-              {!loading && renderGrowth(kpis.productsGrowthPct)}
+              {loading ? (
+                <div className="h-6 w-12 bg-[#F2EDE9] rounded animate-pulse mt-1" />
+              ) : (
+                <>
+                  <p className="text-xl font-bold text-[#292524] mt-0.5">
+                    {hasAnalytics ? Number(kpis?.totalProducts ?? 0).toLocaleString('en-IN') : '—'}
+                  </p>
+                  {hasAnalytics && renderGrowth(kpis?.productsGrowthPct)}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -278,11 +309,15 @@ export const VendorDashboardPage: React.FC = () => {
             <div className="w-9 h-9 rounded-full bg-[#FFF7E0] flex items-center justify-center text-[#B45309] shrink-0">
               <Layers className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-[#78716C]">Total Brands</p>
-              <p className="text-xl font-bold text-[#292524] mt-0.5">
-                {loading ? '—' : kpis.totalBrands.toLocaleString('en-IN')}
-              </p>
+              {loading ? (
+                <div className="h-6 w-12 bg-[#F2EDE9] rounded animate-pulse mt-1" />
+              ) : (
+                <p className="text-xl font-bold text-[#292524] mt-0.5">
+                  {hasAnalytics ? Number(kpis?.totalBrands ?? 0).toLocaleString('en-IN') : '—'}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -295,11 +330,15 @@ export const VendorDashboardPage: React.FC = () => {
             <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-700 shrink-0">
               <CheckCircle2 className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-[#78716C]">Active Products</p>
-              <p className="text-xl font-bold text-[#292524] mt-0.5">
-                {loading ? '—' : kpis.activeProducts.toLocaleString('en-IN')}
-              </p>
+              {loading ? (
+                <div className="h-6 w-12 bg-[#F2EDE9] rounded animate-pulse mt-1" />
+              ) : (
+                <p className="text-xl font-bold text-[#292524] mt-0.5">
+                  {hasAnalytics ? Number(kpis?.activeProducts ?? 0).toLocaleString('en-IN') : '—'}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -312,11 +351,15 @@ export const VendorDashboardPage: React.FC = () => {
             <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center text-red-600 shrink-0">
               <AlertTriangle className="w-4 h-4" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-[#78716C]">Low Stock</p>
-              <p className="text-xl font-bold text-[#292524] mt-0.5">
-                {loading ? '—' : kpis.lowStockCount.toLocaleString('en-IN')}
-              </p>
+              {loading ? (
+                <div className="h-6 w-10 bg-[#F2EDE9] rounded animate-pulse mt-1" />
+              ) : (
+                <p className="text-xl font-bold text-[#292524] mt-0.5">
+                  {hasAnalytics ? Number(kpis?.lowStockCount ?? 0).toLocaleString('en-IN') : '—'}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -326,6 +369,8 @@ export const VendorDashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <OrdersOverviewCard
           loading={loading}
+          error={analyticsError}
+          hasData={hasAnalytics}
           totalOrders={ordersOv.totalOrders}
           previousPeriodOrders={ordersOv.previousPeriodOrders}
           growthPct={ordersOv.growthPct}
@@ -335,6 +380,7 @@ export const VendorDashboardPage: React.FC = () => {
           startDate={ordersDateRange.start}
           endDate={ordersDateRange.end}
           onDateRangeChange={(start, end) => setOrdersDateRange({ start, end })}
+          onRetry={handleRefreshAll}
           onBarClick={(b) =>
             setDrilldown({
               label: b.label,
@@ -347,6 +393,8 @@ export const VendorDashboardPage: React.FC = () => {
 
         <SalesOverviewCard
           loading={loading}
+          error={analyticsError}
+          hasData={hasAnalytics}
           totalRevenue={salesOv.totalRevenue}
           previousPeriodRevenue={salesOv.previousPeriodRevenue}
           growthPct={salesOv.growthPct}
@@ -356,6 +404,7 @@ export const VendorDashboardPage: React.FC = () => {
           startDate={salesDateRange.start}
           endDate={salesDateRange.end}
           onDateRangeChange={(start, end) => setSalesDateRange({ start, end })}
+          onRetry={handleRefreshAll}
           onPointClick={(b) =>
             setDrilldown({
               label: b.label,
@@ -372,21 +421,27 @@ export const VendorDashboardPage: React.FC = () => {
         <div className="lg:col-span-2">
           <ProductBrandOverviewCard
             loading={loading}
+            error={analyticsError}
+            hasData={hasAnalytics}
             products={pbOv.products}
             brands={pbOv.brands}
             onSelectProductsFilter={(status) => navigate(`/products?status=${status}`)}
             onSelectBrandsFilter={(status) =>
               navigate(`/reports?tab=BRANDS&brandStatus=${status}`)
             }
+            onRetry={handleRefreshAll}
           />
         </div>
 
         <TopBrandsCard
           loading={loading}
+          error={analyticsError}
+          hasData={hasAnalytics}
           brands={topBrands}
           onBrandClick={(brandName) =>
             navigate(`/products?brand=${encodeURIComponent(brandName)}`)
           }
+          onRetry={handleRefreshAll}
         />
       </div>
 

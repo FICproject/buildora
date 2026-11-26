@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Package, Tag } from 'lucide-react';
-import { Card, CardContent } from '../common';
+import { Package, Tag, AlertCircle } from 'lucide-react';
+import { Card, CardContent, EmptyState } from '../common';
 
 interface DonutSegment {
   label: string;
@@ -114,18 +114,24 @@ const InteractiveDonut: React.FC<SingleDonutProps> = ({
 
 interface ProductBrandOverviewCardProps {
   loading?: boolean;
+  error?: string | null;
+  hasData?: boolean;
   products: { total: number; active: number; inactive: number; activePct: number; inactivePct: number };
   brands: { total: number; active: number; inactive: number; activePct: number; inactivePct: number };
   onSelectProductsFilter: (status: 'ACTIVE' | 'INACTIVE') => void;
   onSelectBrandsFilter: (status: 'ACTIVE' | 'INACTIVE') => void;
+  onRetry?: () => void;
 }
 
 export const ProductBrandOverviewCard: React.FC<ProductBrandOverviewCardProps> = ({
   loading,
+  error,
+  hasData = true,
   products,
   brands,
   onSelectProductsFilter,
   onSelectBrandsFilter,
+  onRetry,
 }) => {
   return (
     <Card>
@@ -135,6 +141,23 @@ export const ProductBrandOverviewCard: React.FC<ProductBrandOverviewCardProps> =
       <CardContent className="p-5">
         {loading ? (
           <div className="h-40 bg-[#FAF7F5] rounded-xl animate-pulse" />
+        ) : error && !hasData ? (
+          <EmptyState
+            icon={<AlertCircle className="w-5 h-5 text-red-500" />}
+            title="Unable to load product & brand overview"
+            description={error}
+            action={
+              onRetry ? (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="px-3 py-1.5 rounded-lg bg-[#943D24] text-white text-xs font-semibold cursor-pointer"
+                >
+                  Retry
+                </button>
+              ) : undefined
+            }
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <InteractiveDonut
