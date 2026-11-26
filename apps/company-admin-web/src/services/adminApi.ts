@@ -334,6 +334,31 @@ export const adminApi = {
     rawRequest<any>(`/company-admin/catalog/fields/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     }),
+  getCategoryFilterConfigs: (childCategoryId?: string, useDraft = true) => {
+    const q = new URLSearchParams();
+    if (childCategoryId) q.set('childCategoryId', childCategoryId);
+    q.set('useDraft', String(useDraft));
+    return rawRequest<any[]>(`/company-admin/catalog/filters?${q.toString()}`);
+  },
+  createCategoryFilterConfig: (payload: any) =>
+    rawRequest<any>('/company-admin/catalog/filters', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateCategoryFilterConfig: (id: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/filters/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteCategoryFilterConfig: (id: string, saveAsDraft = false) =>
+    rawRequest<any>(
+      `/company-admin/catalog/filters/${encodeURIComponent(id)}${saveAsDraft ? '?saveAsDraft=true' : ''}`,
+      { method: 'DELETE' }
+    ),
+  getCategoryNodeProducts: (id: string) =>
+    rawRequest<any[]>(`/company-admin/catalog/categories/${encodeURIComponent(id)}/products`),
+  reconcileCivilTaxonomy: () =>
+    rawRequest<any>('/company-admin/catalog/reconcile-civil', { method: 'POST', body: JSON.stringify({}) }),
   createBrand: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/brands', {
       method: 'POST',

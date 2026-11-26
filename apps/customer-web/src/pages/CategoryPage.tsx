@@ -10,11 +10,14 @@ import {
   MAIN_CATEGORIES_SEED,
   CHILD_CATEGORIES_SEED,
   NEW_LAUNCHES_CATEGORIES,
+  LEGACY_CATEGORY_SLUG_ALIASES,
+  filterConfigsToDimensions,
   getAvailableFiltersForCategory,
   applyCategoryFilters,
-  ActiveCategoryFilters
+  ActiveCategoryFilters,
+  CategoryFilterDimension
 } from '@buildora/constants';
-import { Category, Product } from '@buildora/types';
+import { Category, Product, CategoryFilterConfiguration } from '@buildora/types';
 import { api } from '../services/api';
 import { ProductCard } from '../components/common/ProductCard';
 import {
@@ -90,11 +93,12 @@ export const CategoryPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Resolve canonical slug if a legacy new-launch alias slug was passed
+  // Resolve canonical slug if a legacy new-launch or legacy category alias slug was passed
   const effectiveCategorySlug = useMemo(() => {
     if (!slug) return '';
     const nlCat = NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug);
-    return nlCat ? nlCat.masterCategorySlug : slug;
+    const base = nlCat ? nlCat.masterCategorySlug : slug;
+    return LEGACY_CATEGORY_SLUG_ALIASES[base.toLowerCase()] || base;
   }, [slug]);
 
   const initialMainMatch = useMemo(
@@ -117,6 +121,7 @@ export const CategoryPage: React.FC = () => {
     );
   });
   const [productList, setProductList] = useState<Product[]>([]);
+  const [dynamicFilterDimensions, setDynamicFilterDimensions] = useState<CategoryFilterDimension[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
   const isMainCategoryPage = Boolean(
@@ -152,12 +157,17 @@ export const CategoryPage: React.FC = () => {
       try {
         const cat = await api.getCategoryBySlug(targetSlug);
         const isMain = Boolean(cat?.level === 'MAIN' || (!cat && fallbackMain));
-        const prods = await api.getProducts(
-          isMain ? { mainCategory: targetSlug } : { category: targetSlug }
-        );
+        const [prods, filtersRes] = await Promise.all([
+          api.getProducts(isMain ? { mainCategory: targetSlug } : { category: targetSlug }),
+          api.getFilters(targetSlug, subcategorySlug),
+        ]);
         if (!active) return;
         if (cat) setCategory(cat);
         setProductList(Array.isArray(prods) ? prods : []);
+        const cfgs: CategoryFilterConfiguration[] = Array.isArray(filtersRes?.filterConfigs)
+          ? filtersRes.filterConfigs
+          : [];
+        setDynamicFilterDimensions(filterConfigsToDimensions(cfgs));
       } finally {
         if (active) setLoadingProducts(false);
       }
@@ -169,11 +179,13 @@ export const CategoryPage: React.FC = () => {
       void loadCategoryData();
     };
     window.addEventListener('buildora:realtime:catalog', onRealtime);
+    window.addEventListener('buildora:realtime:config', onRealtime);
     return () => {
       active = false;
       window.removeEventListener('buildora:realtime:catalog', onRealtime);
+      window.removeEventListener('buildora:realtime:config', onRealtime);
     };
-  }, [slug, effectiveCategorySlug]);
+  }, [slug, effectiveCategorySlug, subcategorySlug]);
 
   // Synchronize URL changes (initial load + browser Back/Forward navigation) into filter state
   useEffect(() => {
@@ -277,19 +289,25 @@ export const CategoryPage: React.FC = () => {
     );
   }, [isMainCategoryPage, mainChildCategories, productList, category.slug, category.id]);
 
-  // Compute Child Category / Product Type + specification filters strictly scoped to current view
+  // Compute Child Category / Subcategory + Admin-configured dynamic specification filters strictly scoped to current view
   const availableFilters = useMemo(() => {
     return getAvailableFiltersForCategory(
       category.slug,
       allCategoryProducts,
       category.subcategories || [],
-      mainChildCategories
+      mainChildCategories,
+      dynamicFilterDimensions
     );
-  }, [category.slug, category.subcategories, mainChildCategories, allCategoryProducts]);
+  }, [category.slug, category.subcategories, mainChildCategories, allCategoryProducts, dynamicFilterDimensions]);
 
   // Apply active filters and sorting
   const filteredProducts = useMemo(() => {
-    let result = applyCategoryFilters(allCategoryProducts, activeFilters, category.slug);
+    let result = applyCategoryFilters(
+      allCategoryProducts,
+      activeFilters,
+      category.slug,
+      dynamicFilterDimensions
+    );
 
     // Apply sorting
     if (activeFilters.sortBy === 'price-low') {

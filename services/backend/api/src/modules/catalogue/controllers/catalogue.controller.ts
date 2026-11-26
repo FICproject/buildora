@@ -1,4 +1,5 @@
 import { Controller, Get, Headers, Param, Query } from '@nestjs/common';
+import { LEGACY_CATEGORY_SLUG_ALIASES } from '@buildora/constants';
 import { dbStore } from '../../../database/store';
 import { isProductCustomerVisible } from '../../products/controllers/products.controller';
 import { taxonomyService } from '../services/taxonomy.service';
@@ -149,7 +150,8 @@ export class CatalogueController {
     @Param('slug') slug: string,
     @Headers('x-tenant-id') tenantId?: string
   ) {
-    const needle = slug.toLowerCase();
+    const rawNeedle = slug.toLowerCase();
+    const needle = LEGACY_CATEGORY_SLUG_ALIASES[rawNeedle] || rawNeedle;
     const { mainCategories, allChildren } = buildTaxonomyData(tenantId, false);
 
     // Match Child Category first
@@ -278,23 +280,76 @@ export class CatalogueController {
   @Get('filters')
   getPublicFilters(
     @Headers('x-tenant-id') tenantId?: string,
-    @Query('category') category?: string
+    @Query('category') category?: string,
+    @Query('subcategory') subcategory?: string
   ) {
     const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const rawNeedle = (category || '').trim().toLowerCase();
+    const canonicalSlug = LEGACY_CATEGORY_SLUG_ALIASES[rawNeedle] || rawNeedle;
+    const { mainCategories, allChildren } = buildTaxonomyData(cleanTenant, false);
+    const matchedChild = canonicalSlug
+      ? allChildren.find((c) => c.slug.toLowerCase() === canonicalSlug || c.id.toLowerCase() === rawNeedle)
+      : undefined;
+    const matchedMain = !matchedChild && canonicalSlug
+      ? mainCategories.find((m) => m.slug.toLowerCase() === canonicalSlug || m.id.toLowerCase() === rawNeedle)
+      : undefined;
+
     const attributes = companyAdminDataService.attributes.filter(
       (a) =>
         (!a.tenantId || a.tenantId === cleanTenant) &&
         a.isFilterable !== false &&
         (!category ||
           a.categoryName?.toLowerCase() === category.toLowerCase() ||
+          a.categoryName?.toLowerCase() === canonicalSlug ||
           a.code?.toLowerCase() === category.toLowerCase())
     );
-    const fieldSchemas = taxonomyService.getTenantFieldSchemas(cleanTenant, category, false);
+    const fieldSchemas = taxonomyService.getTenantFieldSchemas(cleanTenant, canonicalSlug || category, false);
+
+    // Filter customer-visible approved products scoped to matched category/subcategory
+    const visibleProducts = dbStore.products.filter(isProductCustomerVisible).map((p) => ({
+      ...p,
+      ...taxonomyService.resolveAndValidateProductTaxonomy(p, { strictChildMatch: false, tenantId: cleanTenant }),
+    }));
+    const categoryProducts = matchedChild
+      ? visibleProducts.filter((p) => {
+          const sameChild = p.childCategoryId === matchedChild.id || p.childCategorySlug === matchedChild.slug;
+          if (!sameChild) return false;
+          if (subcategory) {
+            const subLow = subcategory.trim().toLowerCase();
+            return (
+              p.productTypeSlug?.toLowerCase() === subLow ||
+              p.subcategorySlug?.toLowerCase() === subLow ||
+              p.productTypeName?.toLowerCase() === subLow ||
+              p.productTypeId?.toLowerCase() === subLow
+            );
+          }
+          return true;
+        })
+      : matchedMain
+      ? visibleProducts.filter((p) => p.mainCategoryId === matchedMain.id || p.mainCategorySlug === matchedMain.slug)
+      : visibleProducts;
+
+    const childCategoriesForFilter = matchedChild
+      ? matchedChild.productTypes || matchedChild.subcategories || []
+      : [];
+    const mainChildCategoriesForFilter = matchedMain ? matchedMain.childCategories || [] : [];
+
+    const { filterConfigs, availableFilters } = taxonomyService.getCustomerAvailableFilters(
+      cleanTenant,
+      matchedChild?.slug || matchedMain?.slug || canonicalSlug,
+      categoryProducts,
+      childCategoriesForFilter,
+      mainChildCategoriesForFilter
+    );
+
     return {
       success: true,
       data: {
+        filterConfigs,
+        availableFilters,
         attributes,
         fieldSchemas,
+        totalMatchingProducts: categoryProducts.length,
       },
     };
   }

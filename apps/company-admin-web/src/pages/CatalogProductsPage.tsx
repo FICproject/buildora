@@ -43,6 +43,7 @@ export type CatalogSectionTab =
   | 'MAIN_CATEGORIES'
   | 'CHILD_CATEGORIES'
   | 'PRODUCT_TYPES'
+  | 'FILTERS'
   | 'FIELDS'
   | 'NEW_LAUNCHES';
 
@@ -71,6 +72,8 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
       lastPublishedBy?: string;
     };
     fieldSchemas: any[];
+    filterConfigs: any[];
+    civilMigrationReport?: any;
     newLaunchCollections: any[];
     migrationSummary?: { totalRecords: number; migrated: number; unmapped: number };
     brands: any[];
@@ -82,6 +85,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
     productTypes: [],
     desktopNavigation: [],
     fieldSchemas: [],
+    filterConfigs: [],
     newLaunchCollections: [],
     brands: [],
     attributes: [],
@@ -112,9 +116,17 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
   const [childEditModal, setChildEditModal] = useState<any>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Dynamic Field Configurator state
+  // Dynamic Field & Filter Configurator state
   const [selectedFieldChildId, setSelectedFieldChildId] = useState('cat-1');
   const [fieldModal, setFieldModal] = useState<any>(null);
+  const [selectedFilterChildId, setSelectedFilterChildId] = useState('cat-1');
+  const [filterConfigModal, setFilterConfigModal] = useState<any>(null);
+  const [categoryProductsModal, setCategoryProductsModal] = useState<{
+    title: string;
+    subtitle: string;
+    loading: boolean;
+    products: any[];
+  } | null>(null);
 
   const [editModal, setEditModal] = useState<any>(null);
   const [rejectModal, setRejectModal] = useState<any>(null);
@@ -161,11 +173,24 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
       desktopNavigation: res?.desktopNavigation || [],
       publishMetadata: res?.publishMetadata,
       fieldSchemas: res?.fieldSchemas || [],
+      filterConfigs: res?.filterConfigs || [],
+      civilMigrationReport: res?.civilMigrationReport,
       newLaunchCollections: res?.newLaunchCollections || [],
       migrationSummary: res?.migrationSummary,
       brands: res?.brands || [],
       attributes: res?.attributes || [],
     });
+  };
+
+  const openCategoryProductsModal = async (nodeId: string, title: string, subtitle: string) => {
+    setCategoryProductsModal({ title, subtitle, loading: true, products: [] });
+    try {
+      const items = await adminApi.getCategoryNodeProducts(nodeId);
+      setCategoryProductsModal({ title, subtitle, loading: false, products: items || [] });
+    } catch (err: any) {
+      pushToast({ title: 'Load Failed', message: err.message, variant: 'error' });
+      setCategoryProductsModal(null);
+    }
   };
 
   useEffect(() => {
@@ -381,6 +406,9 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
             <Button variant={sectionTab === 'PRODUCT_TYPES' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('PRODUCT_TYPES')}>
               <Compass className="w-4 h-4" /> Product Types
             </Button>
+            <Button variant={sectionTab === 'FILTERS' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('FILTERS')}>
+              <Sliders className="w-4 h-4" /> Filter Configuration
+            </Button>
             <Button variant={sectionTab === 'FIELDS' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('FIELDS')}>
               <Sliders className="w-4 h-4" /> Dynamic Fields
             </Button>
@@ -398,7 +426,8 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
       {(sectionTab === 'NAVIGATION' ||
         sectionTab === 'MAIN_CATEGORIES' ||
         sectionTab === 'CHILD_CATEGORIES' ||
-        sectionTab === 'PRODUCT_TYPES') && (
+        sectionTab === 'PRODUCT_TYPES' ||
+        sectionTab === 'FILTERS') && (
           <div
             className={`p-3.5 rounded-xl border text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${taxonomy.publishMetadata?.hasUnpublishedChanges
               ? 'bg-amber-50 border-amber-300 text-amber-950'
@@ -620,7 +649,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
           <Card
             title="Customer Desktop Header Preview"
             subtitle="Hover over Main Categories below to preview live two-column Child Category dropdowns exactly as Customers will see them"
-            actions={
+            action={
               <Button size="sm" variant="outline" onClick={() => setShowNavPreview((p) => !p)}>
                 <Eye className="w-3.5 h-3.5" /> {showNavPreview ? 'Hide Preview' : 'Show Preview'}
               </Button>
@@ -732,7 +761,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
           <Card
             title="Desktop Header Navigation Items"
             subtitle="Drag and drop rows (or use arrows) to reorder Customer website navigation, edit labels, assign Main Categories, or toggle visibility"
-            actions={
+            action={
               <Button
                 size="sm"
                 onClick={() =>
@@ -880,7 +909,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
               <Card
                 title={`Main Categories (${taxonomy.mainCategories.length})`}
                 subtitle="Manage top-level categories, slugs, images, sort order, status & header visibility"
-                actions={
+                action={
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
                     <input
@@ -929,7 +958,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Button
                             size="sm"
-                            variant={mc.showInNavigation !== false ? 'info' : 'outline'}
+                            variant={mc.showInNavigation !== false ? 'secondary' : 'outline'}
                             onClick={async () => {
                               await adminApi.updateMainCategory(mc.id, {
                                 showInNavigation: !(mc.showInNavigation !== false),
@@ -1212,6 +1241,29 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                     <Button
                                       size="sm"
                                       variant="outline"
+                                      onClick={() =>
+                                        openCategoryProductsModal(
+                                          cc.id,
+                                          `Products in ${cc.name}`,
+                                          `/${cc.slug} • Parent: ${mc.name}`
+                                        )
+                                      }
+                                    >
+                                      <Package className="w-3 h-3" /> Products ({cc.productCount ?? 0})
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSelectedFilterChildId(cc.id);
+                                        setSectionTab('FILTERS');
+                                      }}
+                                    >
+                                      <Sliders className="w-3 h-3" /> Filters ({cc.filterCount ?? 0})
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
                                       onClick={() => {
                                         setSelectedFieldChildId(cc.id);
                                         setSectionTab('FIELDS');
@@ -1346,7 +1398,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
               <Card
                 title={`Product Type Management (${taxonomy.productTypes.length})`}
                 subtitle="Manage child classifications displayed in navigation second column and product filtering"
-                actions={
+                action={
                   <select
                     value={ptChildFilter}
                     onChange={(e) => setPtChildFilter(e.target.value)}
@@ -1378,6 +1430,19 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                openCategoryProductsModal(
+                                  pt.id,
+                                  `Products in ${pt.name}`,
+                                  `Parent: ${parentChild?.name || pt.childCategorySlug} (/${pt.slug})`
+                                )
+                              }
+                            >
+                              <Package className="w-3 h-3" /> Products ({pt.productCount ?? 0})
+                            </Button>
                             <Button
                               size="sm"
                               variant={pt.isActive !== false ? 'success' : 'outline'}
@@ -1619,6 +1684,237 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                   ))}
                 </div>
               </Card>
+            </div>
+          </div>
+        </div>
+      ) : sectionTab === 'FILTERS' ? (
+        <div className="space-y-4">
+          {taxonomy.civilMigrationReport && (
+            <div className="p-3 rounded-xl border border-[#E5DCD3] bg-[#FAF7F4] flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="success">Civil &amp; Interiors Sync Active</Badge>
+                <span className="text-[#5E5946]">
+                  <strong>{taxonomy.civilMigrationReport.matchedExistingCategories}</strong> categories matched •{' '}
+                  <strong>{taxonomy.civilMigrationReport.matchedSubcategories + taxonomy.civilMigrationReport.createdSubcategories}</strong> child categories synced •{' '}
+                  <strong>{taxonomy.civilMigrationReport.productsPreserved}</strong> products preserved
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await adminApi.reconcileCivilTaxonomy();
+                    pushToast({ title: 'Taxonomy Reconciled', message: 'Civil & Interiors hierarchy & products verified.' });
+                    loadTaxonomy();
+                  } catch (err: any) {
+                    pushToast({ title: 'Reconcile Failed', message: err.message, variant: 'error' });
+                  }
+                }}
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reconcile Civil &amp; Interiors
+              </Button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className="lg:col-span-4">
+              <Card title="Categories" subtitle="Select a category to configure Customer & Vendor filters">
+                <div className="space-y-1.5 max-h-[560px] overflow-y-auto text-xs">
+                  {taxonomy.childCategories.map((cc) => {
+                    const count = (taxonomy.filterConfigs || []).filter(
+                      (f) => f.childCategoryId === cc.id || f.childCategorySlug === cc.slug
+                    ).length;
+                    const active = selectedFilterChildId === cc.id;
+                    return (
+                      <button
+                        key={cc.id}
+                        type="button"
+                        onClick={() => setSelectedFilterChildId(cc.id)}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors flex items-center justify-between gap-2 ${
+                          active
+                            ? 'bg-[#943D24] text-white border-[#943D24]'
+                            : 'bg-white text-[#5E5946] border-[#E5DCD3] hover:bg-[#FAF7F4]'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold truncate">{cc.name}</p>
+                          <p className={`text-[10px] truncate ${active ? 'text-white/80' : 'text-[#8E8777]'}`}>
+                            /{cc.slug} • {cc.productCount ?? 0} products
+                          </p>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                            active ? 'bg-white/20 text-white' : 'bg-[#FAF7F4] text-[#6E6859]'
+                          }`}
+                        >
+                          {count} filters
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-8">
+              {(() => {
+                const selectedChild =
+                  taxonomy.childCategories.find((c) => c.id === selectedFilterChildId) ||
+                  taxonomy.childCategories[0];
+                const filtersForChild = (taxonomy.filterConfigs || [])
+                  .filter(
+                    (f) =>
+                      selectedChild &&
+                      (f.childCategoryId === selectedChild.id || f.childCategorySlug === selectedChild.slug)
+                  )
+                  .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+                return (
+                  <Card
+                    title={`Filter Configuration — ${selectedChild?.name || ''}`}
+                    subtitle="Configure category-specific filters, selection modes (Single vs Multi), Vendor attributes, and Customer PLP visibility."
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                      <span className="text-xs text-[#6E6859]">
+                        Showing <strong>{filtersForChild.length}</strong> configured filters for{' '}
+                        <strong>{selectedChild?.name}</strong>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {selectedChild && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              openCategoryProductsModal(
+                                selectedChild.id,
+                                `Products in ${selectedChild.name}`,
+                                `/${selectedChild.slug}`
+                              )
+                            }
+                          >
+                            <Package className="w-3.5 h-3.5" /> View Products ({selectedChild.productCount ?? 0})
+                          </Button>
+                        )}
+                        {selectedChild && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              setFilterConfigModal({
+                                isNew: true,
+                                mainCategoryId: selectedChild.mainCategoryId || 'mc-1',
+                                childCategoryId: selectedChild.id,
+                                childCategorySlug: selectedChild.slug,
+                                filterName: '',
+                                fieldKey: '',
+                                fieldType: 'DROPDOWN',
+                                optionsCsv: '',
+                                selectionMode: 'MULTI',
+                                isRequired: false,
+                                showInVendor: true,
+                                showInCustomer: true,
+                                sortOrder: filtersForChild.length + 1,
+                                isActive: true,
+                              })
+                            }
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Add Filter Rule
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {filtersForChild.length === 0 ? (
+                      <EmptyState
+                        title="No custom filters configured"
+                        description="Add category-specific filters such as Grade, Thickness, Adhesive Type, or Application Area."
+                      />
+                    ) : (
+                      <div className="space-y-2.5 text-xs">
+                        {filtersForChild.map((fc) => (
+                          <div
+                            key={fc.id}
+                            className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                              fc.isActive !== false
+                                ? 'border-[#E5DCD3] bg-white'
+                                : 'border-dashed border-slate-300 bg-slate-50 opacity-75'
+                            }`}
+                          >
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#FAF7F4] border border-[#E5DCD3] text-[#6E6859]">
+                                  #{fc.sortOrder}
+                                </span>
+                                <span className="font-bold text-[#5E5946] text-sm">{fc.filterName}</span>
+                                <code className="text-[10px] text-[#6E6859] bg-[#FAF7F4] px-1.5 py-0.5 rounded">
+                                  {fc.fieldKey}
+                                </code>
+                                <Badge variant="info">{fc.fieldType}</Badge>
+                                <Badge variant={fc.selectionMode === 'SINGLE' ? 'warning' : 'default'}>
+                                  {fc.selectionMode || 'MULTI'} Select
+                                </Badge>
+                                {fc.isRequired && <Badge variant="warning">Required</Badge>}
+                                {fc.showInVendor && <Badge variant="success">Vendor Form</Badge>}
+                                {fc.showInCustomer && <Badge variant="info">Customer Filter</Badge>}
+                                <Badge variant={fc.publishedStatus === 'DRAFT' ? 'warning' : 'success'}>
+                                  {fc.publishedStatus || 'PUBLISHED'}
+                                </Badge>
+                              </div>
+                              {Array.isArray(fc.options) && fc.options.length > 0 && (
+                                <p className="text-[11px] text-[#6E6859] truncate">
+                                  Options ({fc.options.length}): {fc.options.join(', ')}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Button
+                                size="sm"
+                                variant={fc.isActive !== false ? 'success' : 'outline'}
+                                onClick={async () => {
+                                  await adminApi.updateCategoryFilterConfig(fc.id, {
+                                    isActive: !(fc.isActive !== false),
+                                    saveAsDraft: workInDraftMode,
+                                  });
+                                  loadTaxonomy();
+                                }}
+                              >
+                                {fc.isActive !== false ? 'Active' : 'Inactive'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  setFilterConfigModal({
+                                    ...fc,
+                                    isNew: false,
+                                    optionsCsv: (fc.options || []).join(', '),
+                                  })
+                                }
+                              >
+                                <Edit3 className="w-3.5 h-3.5" /> Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                onClick={async () => {
+                                  await adminApi.deleteCategoryFilterConfig(fc.id, workInDraftMode);
+                                  pushToast({
+                                    title: workInDraftMode ? 'Filter Deletion Staged' : 'Filter Deleted',
+                                  });
+                                  loadTaxonomy();
+                                }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -3130,6 +3426,222 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
               <Button type="submit">Save Collection</Button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* Add / Edit Centralized Category Filter Configuration Modal */}
+      <Modal
+        open={Boolean(filterConfigModal)}
+        onClose={() => setFilterConfigModal(null)}
+        title={filterConfigModal?.isNew ? 'Add Category Filter Rule' : 'Edit Category Filter Rule'}
+      >
+        {filterConfigModal && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const parsedOptions = String(filterConfigModal.optionsCsv || '')
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                const payload = {
+                  childCategoryId: filterConfigModal.childCategoryId,
+                  filterName: filterConfigModal.filterName,
+                  fieldKey: filterConfigModal.fieldKey || undefined,
+                  fieldType: filterConfigModal.fieldType,
+                  options: parsedOptions,
+                  selectionMode: filterConfigModal.selectionMode || 'MULTI',
+                  isRequired: Boolean(filterConfigModal.isRequired),
+                  showInVendor: filterConfigModal.showInVendor !== false,
+                  showInCustomer: filterConfigModal.showInCustomer !== false,
+                  sortOrder: Number(filterConfigModal.sortOrder || 1),
+                  isActive: filterConfigModal.isActive !== false,
+                  saveAsDraft: workInDraftMode,
+                };
+                if (filterConfigModal.isNew) {
+                  await adminApi.createCategoryFilterConfig(payload);
+                  pushToast({
+                    title: workInDraftMode ? 'Filter Saved to Draft' : 'Filter Published Live',
+                  });
+                } else {
+                  await adminApi.updateCategoryFilterConfig(filterConfigModal.id, payload);
+                  pushToast({
+                    title: workInDraftMode ? 'Filter Draft Updated' : 'Filter Updated Live',
+                  });
+                }
+                setFilterConfigModal(null);
+                loadTaxonomy();
+              } catch (err: any) {
+                pushToast({ title: 'Filter Config Error', message: err.message, variant: 'error' });
+              }
+            }}
+            className="space-y-3 text-xs"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Filter Display Name *</label>
+                <input
+                  required
+                  value={filterConfigModal.filterName || ''}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, filterName: e.target.value })}
+                  placeholder="e.g. Adhesive Grade, Thickness"
+                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Field Key</label>
+                <input
+                  value={filterConfigModal.fieldKey || ''}
+                  disabled={!filterConfigModal.isNew}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, fieldKey: e.target.value })}
+                  placeholder="auto-generated e.g. grade"
+                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono disabled:bg-slate-50"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Field Type *</label>
+                <select
+                  value={filterConfigModal.fieldType || 'DROPDOWN'}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, fieldType: e.target.value })}
+                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                >
+                  <option value="DROPDOWN">DROPDOWN</option>
+                  <option value="MULTISELECT">MULTISELECT</option>
+                  <option value="CHECKBOX">CHECKBOX</option>
+                  <option value="RANGE">RANGE</option>
+                  <option value="TEXT">TEXT</option>
+                  <option value="NUMBER">NUMBER</option>
+                  <option value="BOOLEAN">BOOLEAN</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Selection Mode</label>
+                <select
+                  value={filterConfigModal.selectionMode || 'MULTI'}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, selectionMode: e.target.value })}
+                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                >
+                  <option value="MULTI">MULTI (OR within group)</option>
+                  <option value="SINGLE">SINGLE</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-[#5E5946] mb-1">Sort Order</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={filterConfigModal.sortOrder ?? 1}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, sortOrder: e.target.value })}
+                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-[#5E5946] mb-1">
+                Filter / Field Options (comma separated)
+              </label>
+              <textarea
+                rows={2}
+                value={filterConfigModal.optionsCsv || ''}
+                onChange={(e) => setFilterConfigModal({ ...filterConfigModal, optionsCsv: e.target.value })}
+                placeholder="e.g. Type 1 Standard, Type 2 High Strength, Epoxy 2-Part"
+                className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(filterConfigModal.isRequired)}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, isRequired: e.target.checked })}
+                />
+                <span>Required Field</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterConfigModal.showInVendor !== false}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, showInVendor: e.target.checked })}
+                />
+                <span>Show in Vendor</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterConfigModal.showInCustomer !== false}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, showInCustomer: e.target.checked })}
+                />
+                <span>Show in Customer</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterConfigModal.isActive !== false}
+                  onChange={(e) => setFilterConfigModal({ ...filterConfigModal, isActive: e.target.checked })}
+                />
+                <span>Active</span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setFilterConfigModal(null)}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                {workInDraftMode ? 'Save Filter Draft' : 'Save & Publish Filter'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* View Assigned Products in Category Modal */}
+      <Modal
+        open={Boolean(categoryProductsModal)}
+        onClose={() => setCategoryProductsModal(null)}
+        title={categoryProductsModal?.title || 'Assigned Products'}
+      >
+        {categoryProductsModal && (
+          <div className="space-y-3 text-xs">
+            <p className="text-[#6E6859]">{categoryProductsModal.subtitle}</p>
+            {categoryProductsModal.loading ? (
+              <p className="py-6 text-center text-[#8E8777]">Loading assigned products...</p>
+            ) : categoryProductsModal.products.length === 0 ? (
+              <EmptyState
+                title="No products assigned yet"
+                description="Approved and vendor-submitted products mapped to this category will appear here."
+              />
+            ) : (
+              <div className="divide-y divide-[#E5DCD3] max-h-96 overflow-y-auto">
+                {categoryProductsModal.products.map((p) => (
+                  <div key={p.id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {p.images?.[0] && (
+                        <img src={p.images[0]} alt={p.name} className="w-9 h-9 rounded object-cover border border-[#E5DCD3]" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-semibold text-[#5E5946] truncate">{p.name}</p>
+                        <p className="text-[11px] text-[#6E6859] truncate">
+                          SKU: {p.sku} • {p.brand} • {p.productTypeName || p.subcategory}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-bold text-[#5E5946]">{formatINR(p.sellingPrice ?? p.price)}</p>
+                      <Badge variant={statusBadgeVariant(p.approvalStatus || 'APPROVED')}>
+                        {p.approvalStatus || 'APPROVED'}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </Modal>
     </div>

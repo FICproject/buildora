@@ -1,4 +1,4 @@
-import { Product } from '@buildora/types';
+import { Product, CategoryFilterConfiguration } from '@buildora/types';
 
 export type FilterType = 'checkbox' | 'range' | 'toggle';
 
@@ -6,6 +6,8 @@ export interface CategoryFilterDimension {
   id: string; // Unique identifier for the filter dimension
   name: string; // Human-readable display label
   type: FilterType;
+  selectionMode?: 'SINGLE' | 'MULTI';
+  configuredOptions?: string[];
   specKeys?: string[]; // Keys to look for in product.specifications
   catAttrKeys?: string[]; // Keys to look for in product.categoryAttributes
   isStandardField?: 'category' | 'brand' | 'subcategory' | 'price' | 'packSize' | 'rating' | 'inStock' | 'asap';
@@ -21,6 +23,7 @@ export interface AvailableCategoryFilter {
   id: string;
   name: string;
   type: FilterType;
+  selectionMode?: 'SINGLE' | 'MULTI';
   options: FilterOption[];
   minPrice?: number;
   maxPrice?: number;
@@ -40,77 +43,317 @@ export interface ActiveCategoryFilters {
   searchQuery?: string;
 }
 
-// -------------------------------------------------------------------------------------
-// CONFIGURATION FOR ALL 28 MASTER CATEGORIES (HomeRun Strict Reference Filter Taxonomy)
-// STRICT REQUIREMENT: NO REDUNDANT CATEGORY FILTER ON PLP (Rule 2 & Rule 9)
-// -------------------------------------------------------------------------------------
-export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> = {
-  // 1. Cement & Concrete
-  'cement-concrete': [
-    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'cementType', name: 'Type', type: 'checkbox', specKeys: ['Cement Type', 'Standard'], catAttrKeys: ['cementType'] },
-    { id: 'grade', name: 'Grade', type: 'checkbox', specKeys: ['Grade', 'Compressive Strength (28 Days)'], catAttrKeys: ['grade'] },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging', 'Bag Type'] },
-    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color', 'Whiteness'] },
-    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
-    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
-  ],
+const CEMENT_FILTERS: CategoryFilterDimension[] = [
+  { id: 'brand', name: 'Brand', type: 'checkbox', selectionMode: 'MULTI', isStandardField: 'brand' },
+  {
+    id: 'cementType',
+    name: 'Cement Type',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Cement Type', 'Grade', 'Standard'],
+    catAttrKeys: ['cementType'],
+  },
+  {
+    id: 'grade',
+    name: 'Grade',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Grade', 'Compressive Strength (28 Days)'],
+    catAttrKeys: ['grade'],
+  },
+  {
+    id: 'packSize',
+    name: 'Pack Size',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    isStandardField: 'packSize',
+    specKeys: ['Packaging', 'Bag Type', 'Weight'],
+    catAttrKeys: ['packSize'],
+  },
+  {
+    id: 'colour',
+    name: 'Color',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Colour', 'Color', 'Whiteness'],
+    catAttrKeys: ['colour'],
+  },
+  { id: 'rating', name: 'Rating', type: 'checkbox', selectionMode: 'SINGLE', isStandardField: 'rating' },
+  { id: 'price', name: 'Price', type: 'range', selectionMode: 'SINGLE', isStandardField: 'price' },
+];
 
-  // 2. Tiling & Tile Adhesives
-  'tiling-tile-adhesives': [
-    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'tileType', name: 'Type', type: 'checkbox', specKeys: ['Tile Type', 'Product Type', 'Adhesive Type'] },
-    { id: 'tileDimensions', name: 'Size', type: 'checkbox', specKeys: ['Tile Dimensions', 'Dimensions', 'Size'] },
-    { id: 'tileMaterial', name: 'Material', type: 'checkbox', specKeys: ['Tile Material', 'Material'] },
-    { id: 'surfaceFinish', name: 'Finish', type: 'checkbox', specKeys: ['Surface Finish', 'Finish'] },
-    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color'] },
-    { id: 'grade', name: 'Grade', type: 'checkbox', specKeys: ['Grade', 'Standard'] },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Coverage', 'Coverage per Box', 'Packaging'] },
-    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
-    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
-  ],
+const TILING_FILTERS: CategoryFilterDimension[] = [
+  { id: 'brand', name: 'Brand', type: 'checkbox', selectionMode: 'MULTI', isStandardField: 'brand' },
+  {
+    id: 'application',
+    name: 'Application',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Application', 'Interior / Exterior', 'Tile Type'],
+    catAttrKeys: ['application'],
+  },
+  {
+    id: 'adhesiveType',
+    name: 'Adhesive Type',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Adhesive Type', 'Product Type', 'Standard'],
+    catAttrKeys: ['adhesiveType'],
+  },
+  {
+    id: 'material',
+    name: 'Material',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Tile Material', 'Material'],
+    catAttrKeys: ['material'],
+  },
+  {
+    id: 'size',
+    name: 'Size',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Tile Dimensions', 'Dimensions', 'Size'],
+    catAttrKeys: ['size'],
+  },
+  {
+    id: 'finish',
+    name: 'Surface Finish',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Surface Finish', 'Finish'],
+    catAttrKeys: ['finish'],
+  },
+  {
+    id: 'packSize',
+    name: 'Pack Size',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    isStandardField: 'packSize',
+    specKeys: ['Coverage', 'Coverage per Box', 'Packaging'],
+    catAttrKeys: ['packSize'],
+  },
+  {
+    id: 'colour',
+    name: 'Color',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Colour', 'Color'],
+    catAttrKeys: ['colour'],
+  },
+  { id: 'rating', name: 'Rating', type: 'checkbox', selectionMode: 'SINGLE', isStandardField: 'rating' },
+  { id: 'price', name: 'Price', type: 'range', selectionMode: 'SINGLE', isStandardField: 'price' },
+];
+
+const PLYWOOD_FILTERS: CategoryFilterDimension[] = [
+  { id: 'brand', name: 'Brand', type: 'checkbox', selectionMode: 'MULTI', isStandardField: 'brand' },
+  {
+    id: 'materialType',
+    name: 'Material Type',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Material Type', 'Material', 'Grade'],
+    catAttrKeys: ['materialType'],
+  },
+  {
+    id: 'grade',
+    name: 'Grade',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Grade', 'Preservative Treatment', 'Standard'],
+    catAttrKeys: ['grade'],
+  },
+  {
+    id: 'thickness',
+    name: 'Thickness',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Thickness'],
+    catAttrKeys: ['thickness'],
+  },
+  {
+    id: 'size',
+    name: 'Size',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Size', 'Dimensions'],
+    catAttrKeys: ['size'],
+  },
+  {
+    id: 'finish',
+    name: 'Finish',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Surface Finish', 'Finish', 'Surface'],
+    catAttrKeys: ['finish'],
+  },
+  {
+    id: 'waterproofRating',
+    name: 'Waterproof Rating',
+    type: 'checkbox',
+    selectionMode: 'SINGLE',
+    specKeys: ['Water Resistance', 'Preservative Treatment', 'Waterproof Rating'],
+    catAttrKeys: ['waterproofRating'],
+  },
+  { id: 'rating', name: 'Rating', type: 'checkbox', selectionMode: 'SINGLE', isStandardField: 'rating' },
+  { id: 'price', name: 'Price', type: 'range', selectionMode: 'SINGLE', isStandardField: 'price' },
+];
+
+const FEVICOL_FILTERS: CategoryFilterDimension[] = [
+  { id: 'brand', name: 'Brand', type: 'checkbox', selectionMode: 'MULTI', isStandardField: 'brand' },
+  {
+    id: 'adhesiveType',
+    name: 'Adhesive Type',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Adhesive Type', 'Product Type', 'Water Resistance'],
+    catAttrKeys: ['adhesiveType'],
+  },
+  {
+    id: 'bondingApplication',
+    name: 'Bonding Application',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Compatibility', 'Material Compatibility', 'Applications'],
+    catAttrKeys: ['bondingApplication', 'applications'],
+  },
+  {
+    id: 'waterResistance',
+    name: 'Water Resistance',
+    type: 'checkbox',
+    selectionMode: 'SINGLE',
+    specKeys: ['Water Resistance'],
+    catAttrKeys: ['waterResistance'],
+  },
+  {
+    id: 'settingTime',
+    name: 'Setting Time',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Setting Time'],
+    catAttrKeys: ['settingTime'],
+  },
+  {
+    id: 'packSize',
+    name: 'Pack Size',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    isStandardField: 'packSize',
+    specKeys: ['Spread Coverage', 'Packaging'],
+    catAttrKeys: ['packSize'],
+  },
+  { id: 'rating', name: 'Rating', type: 'checkbox', selectionMode: 'SINGLE', isStandardField: 'rating' },
+  { id: 'price', name: 'Price', type: 'range', selectionMode: 'SINGLE', isStandardField: 'price' },
+];
+
+const WATERPROOFING_FILTERS: CategoryFilterDimension[] = [
+  { id: 'brand', name: 'Brand', type: 'checkbox', selectionMode: 'MULTI', isStandardField: 'brand' },
+  {
+    id: 'waterproofingType',
+    name: 'Product Type',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Product Type', 'Standard', 'Waterproofing Properties'],
+    catAttrKeys: ['waterproofingType'],
+  },
+  {
+    id: 'applicationArea',
+    name: 'Application Area',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Application Area', 'Compatibility'],
+    catAttrKeys: ['applicationArea', 'applicationAreas'],
+  },
+  {
+    id: 'materialBase',
+    name: 'Material Base',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Material', 'Base Type', 'Standard'],
+    catAttrKeys: ['materialBase'],
+  },
+  {
+    id: 'packSize',
+    name: 'Pack Size',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    isStandardField: 'packSize',
+    specKeys: ['Dosage', 'Packaging'],
+    catAttrKeys: ['packSize'],
+  },
+  { id: 'rating', name: 'Rating', type: 'checkbox', selectionMode: 'SINGLE', isStandardField: 'rating' },
+  { id: 'price', name: 'Price', type: 'range', selectionMode: 'SINGLE', isStandardField: 'price' },
+];
+
+const PAINTING_FILTERS: CategoryFilterDimension[] = [
+  { id: 'brand', name: 'Brand', type: 'checkbox', selectionMode: 'MULTI', isStandardField: 'brand' },
+  {
+    id: 'paintType',
+    name: 'Paint Type',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Paint Type', 'Warranty'],
+    catAttrKeys: ['paintType'],
+  },
+  {
+    id: 'finish',
+    name: 'Finish',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Finish', 'Surface Finish'],
+    catAttrKeys: ['finish'],
+  },
+  {
+    id: 'applicationSurface',
+    name: 'Application Surface',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Surface Type', 'Application', 'Warranty'],
+    catAttrKeys: ['applicationSurface'],
+  },
+  {
+    id: 'colour',
+    name: 'Color',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    specKeys: ['Colour', 'Color'],
+    catAttrKeys: ['colour'],
+  },
+  {
+    id: 'packSize',
+    name: 'Pack Size',
+    type: 'checkbox',
+    selectionMode: 'MULTI',
+    isStandardField: 'packSize',
+    specKeys: ['Coverage', 'Packaging'],
+    catAttrKeys: ['packSize'],
+  },
+  { id: 'rating', name: 'Rating', type: 'checkbox', selectionMode: 'SINGLE', isStandardField: 'rating' },
+  { id: 'price', name: 'Price', type: 'range', selectionMode: 'SINGLE', isStandardField: 'price' },
+];
+
+export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> = {
+  // 1. Cement
+  cement: CEMENT_FILTERS,
+  'cement-concrete': CEMENT_FILTERS,
+
+  // 2. Tiling
+  tiling: TILING_FILTERS,
+  'tiling-tile-adhesives': TILING_FILTERS,
 
   // 3. Plywood, MDF & HDHMR
-  'plywood-mdf-hdhmr': [
-    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'grade', name: 'Grade', type: 'checkbox', specKeys: ['Grade', 'Preservative Treatment'] },
-    { id: 'thickness', name: 'Thickness', type: 'checkbox', specKeys: ['Thickness'] },
-    { id: 'dimensions', name: 'Size', type: 'checkbox', specKeys: ['Dimensions', 'Size'] },
-    { id: 'surfaceFinish', name: 'Finish', type: 'checkbox', specKeys: ['Surface Finish', 'Surface'] },
-    { id: 'application', name: 'Application', type: 'checkbox', specKeys: ['Application', 'Density'] },
-    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
-    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
-  ],
+  'plywood-mdf-hdhmr': PLYWOOD_FILTERS,
 
-  // 4. Adhesives
-  'adhesives': [
-    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'compatibility', name: 'Material', type: 'checkbox', specKeys: ['Compatibility', 'Material Compatibility'] },
-    { id: 'bondingType', name: 'Type', type: 'checkbox', specKeys: ['Water Resistance', 'Setting Time', 'Product Type'] },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Spread Coverage', 'Packaging'] },
-    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
-    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
-  ],
+  // 4. Fevicol
+  fevicol: FEVICOL_FILTERS,
+  adhesives: FEVICOL_FILTERS,
 
   // 5. Waterproofing
-  'waterproofing': [
-    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'applicationArea', name: 'Application', type: 'checkbox', specKeys: ['Application Area', 'Compatibility'] },
-    { id: 'materialBase', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Base Type', 'Standard'] },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Dosage', 'Packaging'] },
-    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
-    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
-  ],
+  waterproofing: WATERPROOFING_FILTERS,
 
-  // 6. Painting & Finishes
-  'painting-finishes': [
-    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'surfaceFinish', name: 'Finish', type: 'checkbox', specKeys: ['Finish', 'Surface Finish'] },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Coverage', 'Packaging'] },
-    { id: 'surfaceType', name: 'Application', type: 'checkbox', specKeys: ['Surface Type', 'Warranty', 'Drying Time', 'Application'] },
-    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
-    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
-  ],
+  // 6. Painting
+  painting: PAINTING_FILTERS,
+  'painting-finishes': PAINTING_FILTERS,
 
   // 7. Hinges, Channels & Handles
   'hinges-channels-handles': [
@@ -529,23 +772,133 @@ export function buildChildCategoryFilter(
   };
 }
 
+export function filterConfigsToDimensions(
+  configs: CategoryFilterConfiguration[]
+): CategoryFilterDimension[] {
+  return [...configs]
+    .filter((c) => c.isActive !== false && c.showInCustomer !== false && c.publishedStatus === 'PUBLISHED')
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+    .map((c) => ({
+      id: c.fieldKey,
+      name: c.filterName,
+      type: c.fieldType === 'RANGE' ? 'range' : 'checkbox',
+      selectionMode: c.selectionMode || 'MULTI',
+      configuredOptions: Array.isArray(c.options) && c.options.length > 0 ? c.options : undefined,
+      specKeys: c.specKeys && c.specKeys.length > 0 ? c.specKeys : [c.filterName],
+      catAttrKeys: c.catAttrKeys && c.catAttrKeys.length > 0 ? c.catAttrKeys : [c.fieldKey],
+      isStandardField: c.isStandardField,
+    }));
+}
+
+export const CATEGORY_FILTER_CONFIGS_SEED: CategoryFilterConfiguration[] = (() => {
+  const slugToMeta: Record<string, { id: string; name: string; mainCategoryId: string }> = {
+    cement: { id: 'cat-1', name: 'Cement', mainCategoryId: 'mc-1' },
+    tiling: { id: 'cat-2', name: 'Tiling', mainCategoryId: 'mc-1' },
+    'plywood-mdf-hdhmr': { id: 'cat-3', name: 'Plywood, MDF & HDHMR', mainCategoryId: 'mc-1' },
+    fevicol: { id: 'cat-4', name: 'Fevicol', mainCategoryId: 'mc-1' },
+    waterproofing: { id: 'cat-5', name: 'Waterproofing', mainCategoryId: 'mc-1' },
+    painting: { id: 'cat-6', name: 'Painting', mainCategoryId: 'mc-1' },
+  };
+  const presetOptions: Record<string, Record<string, { options: string[]; fieldType?: CategoryFilterConfiguration['fieldType']; isRequired?: boolean; showInVendor?: boolean }>> = {
+    'cat-1': {
+      cementType: { options: ['OPC 53 Grade', 'OPC 43 Grade', 'PPC (IS 1489)', 'White Portland Cement', 'Waterproof Cement', 'Ready-Mix Mortar'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      grade: { options: ['Grade 53', 'Grade 43', 'PPC (IS 1489 Part 1)', 'White Cement 53 Grade', 'Super High Strength'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      packSize: { options: ['50 Kg', '50 Kilograms', '40 Kg', '25 Kg', '5 Kg', '1 Kg'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      colour: { options: ['Grey', 'Super White', 'Off White'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+    },
+    'cat-2': {
+      application: { options: ['Floor', 'Wall', 'Drywall & Wood', 'Swimming Pool & Wet Area', 'Outdoor Facade', 'Stone & Marble'], fieldType: 'MULTISELECT', isRequired: true, showInVendor: true },
+      adhesiveType: { options: ['Polymer-modified', 'Polymer-modified Paste', 'Epoxy 2-Part', 'Type 1 Standard', 'Type 2 High Strength', 'Cementitious Grout'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      material: { options: ['Ceramic', 'Double Charge Vitrified', 'Porcelain', 'Cementitious Polymer', 'Epoxy Resin'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      size: { options: ['600 mm x 600 mm (2 ft x 2 ft)', '600 x 600 mm', '800 x 1600 mm', '300 x 450 mm'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      finish: { options: ['Nano Polished Ultra Gloss', 'Matt', 'Satin', 'Rustic Anti-Skid', 'Smooth Grey'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      packSize: { options: ['4 Tiles per Box', '30 kg', '20 kg', '10 kg', '5 Kg Bucket', '1 Kg'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      colour: { options: ['Grey', 'White', 'Ivory', 'Terracotta', 'Graphite Black'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+    },
+    'cat-3': {
+      materialType: { options: ['BWP Marine Plywood', 'BWR Commercial Plywood', 'HDHMR Moisture Resistant Board', 'Interior MDF', 'Blockboard', 'WPC Board'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      grade: { options: ['IS 710 BWP', 'IS 303 MR Grade', 'BWR IS 303', 'HDHMR High Density', 'IS 1659 Blockboard'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      thickness: { options: ['6mm', '8mm', '9mm', '12mm', '16mm', '18mm', '19mm', '25mm'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      size: { options: ["8' X 4'", "7' X 4'", "8' X 3'", "7' X 3'"], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      finish: { options: ['Calibrated Double Sanded', 'Smooth Uncoated', 'Pre-Laminated Matt', 'Veneer Face'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      waterproofRating: { options: ['Boiling Water Proof (BWP)', 'Moisture Resistant (BWR/MR)', 'High Moisture Proof (HDHMR)', '100% Termite & Waterproof (WPC)'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+    },
+    'cat-4': {
+      adhesiveType: { options: ['Synthetic Resin Wood Adhesive', 'Boiling Water Proof Marine Adhesive', 'Epoxy 2-Part Structural', 'Silicone & Hybrid Sealant', 'Contact Rubber Adhesive'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      bondingApplication: { options: ['Woodworking & Veneer', 'Marine Plywood & Wet Areas', 'Acrylic & Laminates', 'Glass, Metal & Ceramic', 'Marble & Stone Crack Repair'], fieldType: 'MULTISELECT', isRequired: true, showInVendor: true },
+      waterResistance: { options: ['Boiling water proof (IS 4835)', 'D3 Water Resistant', 'Standard Interior Bond', 'Marine Grade Waterproof'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      settingTime: { options: ['Quick Set (5 - 30 mins)', '4 to 6 hours', '6 to 8 hours Curing'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      packSize: { options: ['500 g', '1 Kg', '2 Kg', '5 Kilograms', '10 Kg', '20 Kg', '50 Kg Drum'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+    },
+    'cat-5': {
+      waterproofingType: { options: ['Integral Liquid Admixture (LW+)', 'Acrylic Elastomeric Coating', '2K Cementitious Slurry Membrane', 'PU Waterproof Coating', 'Crack Seal & Injection Grout'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      applicationArea: { options: ['Roof & Terrace Slab', 'Bathroom & Wet Zone', 'Water Tank & Sump', 'Foundation & Retaining Wall', 'Exterior Damp Walls'], fieldType: 'MULTISELECT', isRequired: true, showInVendor: true },
+      materialBase: { options: ['Polymer-Modified Plasticiser', '100% Acrylic Elastomeric', 'Two-Component Cementitious', 'Polyurethane Resin'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      packSize: { options: ['1 Litre', '5 Litres', '10 Litres', '20 Litres', '25 Kg Bag'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+    },
+    'cat-6': {
+      paintType: { options: ['Exterior Emulsion', 'Interior Emulsion', 'Enamel & Wood Polish', 'Wall Primer & Putty', 'Elastomeric Waterproof Paint'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      finish: { options: ['Rich Sheen', 'Matt Finish', 'Satin Silk', 'Ultra Gloss Enamel', 'Dead Flat Primer'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      applicationSurface: { options: ['Exterior Walls & Facades', 'Interior Living Walls', 'Metal & Wood Trim', 'Plaster & Ceiling'], fieldType: 'MULTISELECT', isRequired: true, showInVendor: true },
+      colour: { options: ['Brilliant White', 'Pastel Ivory', 'Warm Beige', 'Slate Grey', 'Clear / Translucent'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      packSize: { options: ['1 Litre Can', '4 Litre Can', '10 Litre Bucket', '20 Litre Bucket', '20 Litres'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+    },
+  };
+
+  const out: CategoryFilterConfiguration[] = [];
+  for (const [slug, meta] of Object.entries(slugToMeta)) {
+    const dims = CATEGORY_FILTER_CONFIGS[slug] || [];
+    dims.forEach((dim, idx) => {
+      const preset = presetOptions[meta.id]?.[dim.id];
+      out.push({
+        id: `cfc-${meta.id}-${dim.id}`,
+        mainCategoryId: meta.mainCategoryId,
+        mainCategoryName: 'Civil & Interiors',
+        childCategoryId: meta.id,
+        childCategorySlug: slug,
+        childCategoryName: meta.name,
+        filterName: dim.name,
+        fieldKey: dim.id,
+        fieldType: preset?.fieldType || (dim.type === 'range' ? 'RANGE' : 'CHECKBOX'),
+        options: preset?.options || [],
+        specKeys: dim.specKeys,
+        catAttrKeys: dim.catAttrKeys,
+        isStandardField: dim.isStandardField,
+        selectionMode: dim.selectionMode || (dim.isStandardField === 'rating' || dim.type === 'range' ? 'SINGLE' : 'MULTI'),
+        isRequired: Boolean(preset?.isRequired),
+        showInVendor: Boolean(preset?.showInVendor),
+        showInCustomer: true,
+        hideEmptyOptions: true,
+        sortOrder: idx + 1,
+        isActive: true,
+        publishedStatus: 'PUBLISHED',
+      });
+    });
+  }
+  return out;
+})();
+
 /**
  * Extracts all valid, available filter options for a category based on the actual products in that category.
- * Supports both Main Category landing pages (Child Categories + Product Types) and Child Category PLPs (Product Types + category specs).
+ * Supports Admin-published dynamic filter configurations as well as Main Category & Child Category PLPs.
  */
 export function getAvailableFiltersForCategory(
   categorySlug: string,
   categoryProducts: Product[],
   childCategories?: ChildCategoryMeta[],
-  mainChildCategories?: Array<{ id: string; name: string; slug: string }>
+  mainChildCategories?: Array<{ id: string; name: string; slug: string }>,
+  configuredDimensions?: CategoryFilterDimension[]
 ): AvailableCategoryFilter[] {
   const isMainLanding = Array.isArray(mainChildCategories) && mainChildCategories.length > 0;
-  const rawDimensions = CATEGORY_FILTER_CONFIGS[categorySlug] || [
-    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging'] },
-    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
-    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
-  ];
+  const rawDimensions =
+    configuredDimensions && configuredDimensions.length > 0
+      ? configuredDimensions
+      : CATEGORY_FILTER_CONFIGS[categorySlug] || [
+          { id: 'brand', name: 'Brand', type: 'checkbox', selectionMode: 'MULTI', isStandardField: 'brand' },
+          { id: 'packSize', name: 'Pack Size', type: 'checkbox', selectionMode: 'MULTI', isStandardField: 'packSize', specKeys: ['Packaging'] },
+          { id: 'rating', name: 'Rating', type: 'checkbox', selectionMode: 'SINGLE', isStandardField: 'rating' },
+          { id: 'price', name: 'Price', type: 'range', selectionMode: 'SINGLE', isStandardField: 'price' }
+        ];
 
   const dimensions = rawDimensions.filter(
     (dim) => dim.id !== 'subcategory' && dim.id !== 'category' && dim.name.toLowerCase() !== 'category'
@@ -559,7 +912,7 @@ export function getAvailableFiltersForCategory(
   const childCatFilter = buildChildCategoryFilter(
     categoryProducts,
     childCategories || [],
-    'Product Type'
+    'Category'
   );
   if (childCatFilter) {
     availableFilters.push(childCatFilter);
@@ -576,6 +929,7 @@ export function getAvailableFiltersForCategory(
           id: dim.id,
           name: dim.name,
           type: 'range',
+          selectionMode: dim.selectionMode || 'SINGLE',
           options: [],
           minPrice: Math.floor(minPrice / 10) * 10,
           maxPrice: Math.ceil(maxPrice / 10) * 10
@@ -616,11 +970,16 @@ export function getAvailableFiltersForCategory(
             }
           }
         }
-        // Check categoryAttributes
-        if (dim.catAttrKeys && p.categoryAttributes) {
-          for (const key of dim.catAttrKeys) {
+        // Check categoryAttributes (supports both string and string[])
+        const catAttrCandidates = new Set<string>([dim.id, ...(dim.catAttrKeys || [])]);
+        if (p.categoryAttributes) {
+          for (const key of catAttrCandidates) {
             const val = p.categoryAttributes[key];
-            if (val && typeof val === 'string' && val.trim()) {
+            if (Array.isArray(val)) {
+              for (const item of val) {
+                if (typeof item === 'string' && item.trim()) valuesFound.push(item.trim());
+              }
+            } else if (val && typeof val === 'string' && val.trim()) {
               valuesFound.push(val.trim());
             }
           }
@@ -680,7 +1039,7 @@ export function getAvailableFiltersForCategory(
       }
     }
 
-    // Only include this filter if at least 1 option exists!
+    // Only include this filter if at least 1 matching option exists!
     if (countsMap.size > 0) {
       const options: FilterOption[] = Array.from(countsMap.entries())
         .map(([value, count]) => ({
@@ -690,7 +1049,6 @@ export function getAvailableFiltersForCategory(
         }))
         .sort((a, b) => {
           if (dim.isStandardField === 'rating') {
-            // Sort rating descending (4.5, 4, 3)
             return b.value.localeCompare(a.value);
           }
           return b.count - a.count || a.label.localeCompare(b.label);
@@ -700,6 +1058,7 @@ export function getAvailableFiltersForCategory(
         id: dim.id,
         name: dim.name,
         type: 'checkbox',
+        selectionMode: dim.selectionMode || 'MULTI',
         options
       });
     }
@@ -819,9 +1178,15 @@ export function getAvailableFiltersForCatalog(
 export function applyCategoryFilters(
   products: Product[],
   activeFilters: ActiveCategoryFilters,
-  categorySlug?: string
+  categorySlug?: string,
+  configuredDimensions?: CategoryFilterDimension[]
 ): Product[] {
-  const dimensions = categorySlug ? CATEGORY_FILTER_CONFIGS[categorySlug] || [] : [];
+  const dimensions =
+    configuredDimensions && configuredDimensions.length > 0
+      ? configuredDimensions
+      : categorySlug
+      ? CATEGORY_FILTER_CONFIGS[categorySlug] || []
+      : [];
   const dimMap = new Map(dimensions.map((d) => [d.id, d]));
 
   return products.filter((p) => {
@@ -935,10 +1300,15 @@ export function applyCategoryFilters(
           }
         }
 
-        if (dim.catAttrKeys && p.categoryAttributes) {
-          for (const key of dim.catAttrKeys) {
+        const catAttrCandidates = new Set<string>([dim.id, ...(dim.catAttrKeys || [])]);
+        if (p.categoryAttributes) {
+          for (const key of catAttrCandidates) {
             const val = p.categoryAttributes[key];
-            if (val && typeof val === 'string') {
+            if (Array.isArray(val)) {
+              for (const item of val) {
+                if (typeof item === 'string' && item.trim()) productValues.push(item.trim());
+              }
+            } else if (val && typeof val === 'string') {
               productValues.push(val.trim());
             }
           }

@@ -76,6 +76,18 @@ const CategoryFieldSchemaDef = new Schema(
   },
   { collection: 'category_field_schemas', strict: false }
 );
+const CategoryFilterConfigSchemaDef = new Schema(
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    mainCategoryId: { type: String, index: true },
+    childCategoryId: { type: String, index: true },
+    childCategorySlug: { type: String, index: true },
+    fieldKey: { type: String, index: true },
+    publishedStatus: { type: String, index: true },
+    tenantId: { type: String, index: true },
+  },
+  { collection: 'category_filter_configs', strict: false }
+);
 const DesktopNavItemSchema = new Schema(
   {
     id: { type: String, required: true, unique: true, index: true },
@@ -169,6 +181,8 @@ export const NewLaunchCollectionModel: Model<any> =
   mongoose.models.NewLaunchCollection || mongoose.model('NewLaunchCollection', NewLaunchCollectionSchema);
 export const CategoryFieldSchemaModel: Model<any> =
   mongoose.models.CategoryFieldSchema || mongoose.model('CategoryFieldSchema', CategoryFieldSchemaDef);
+export const CategoryFilterConfigModel: Model<any> =
+  mongoose.models.CategoryFilterConfig || mongoose.model('CategoryFilterConfig', CategoryFilterConfigSchemaDef);
 export const DesktopNavItemModel: Model<any> =
   mongoose.models.DesktopNavItem || mongoose.model('DesktopNavItem', DesktopNavItemSchema);
 export const CatalogPublishSnapshotModel: Model<any> =

@@ -38,62 +38,68 @@ function makeSchemas(
 }
 
 export const CATEGORY_FIELD_SCHEMAS_SEED: CategoryFieldSchema[] = [
-  // cat-1: Cement & Concrete
-  ...makeSchemas('cat-1', 'cement-concrete', [
-    { key: 'cementType', label: 'Cement Type', type: 'dropdown', required: true, options: ['OPC 53 Grade', 'OPC 43 Grade', 'PPC (IS 1489)', 'White Portland Cement', 'Sulphate Resistant', 'Ready-Mix Mortar'] },
+  // cat-1: Cement
+  ...makeSchemas('cat-1', 'cement', [
+    { key: 'cementType', label: 'Cement Type', type: 'dropdown', required: true, options: ['OPC 53 Grade', 'OPC 43 Grade', 'PPC (IS 1489)', 'White Portland Cement', 'Waterproof Cement', 'Sulphate Resistant', 'Ready-Mix Mortar'] },
     { key: 'grade', label: 'Grade', type: 'dropdown', required: true, options: ['Grade 53', 'Grade 43', 'PPC (IS 1489 Part 1)', 'White Cement 53 Grade', 'Super High Strength'] },
-    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['50 Kg Bag', '40 Kg Bag', '25 Kg Bag', '5 Kg Pouch', '1 Kg Pouch'], group: 'Dimensions & Packaging' },
+    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['50 Kg', '50 Kilograms', '40 Kg Bag', '25 Kg Bag', '5 Kg', '1 Kg'], group: 'Dimensions & Packaging' },
     { key: 'weightKg', label: 'Weight (Kg)', type: 'number', required: true, placeholder: 'e.g. 50', unitSuffix: 'Kg', group: 'Dimensions & Packaging', validation: { min: 0.5, max: 5000 } },
-    { key: 'colour', label: 'Colour', type: 'text', required: false, placeholder: 'e.g. Grey / Super White' },
+    { key: 'colour', label: 'Color', type: 'dropdown', required: false, options: ['Grey', 'Super White', 'Off White'] },
     { key: 'compressiveStrength', label: 'Compressive Strength (28 Days)', type: 'text', required: false, placeholder: 'e.g. Min 53 MPa', group: 'Performance & Compliance' },
     { key: 'standard', label: 'IS / Compliance Standard', type: 'text', required: false, placeholder: 'e.g. IS 1489 Part 1 / IS 269', group: 'Performance & Compliance' },
   ]),
 
-  // cat-2: Tiling & Tile Adhesives
-  ...makeSchemas('cat-2', 'tiling-tile-adhesives', [
-    { key: 'productCategoryType', label: 'Tiling Product Type', type: 'dropdown', required: true, options: ['Vitrified Floor Tile', 'Ceramic Wall Tile', 'Polymer Tile Adhesive', 'Epoxy Grout & Spacers'] },
-    { key: 'adhesiveOrFinish', label: 'Adhesive Type / Surface Finish', type: 'dropdown', required: true, options: ['Type 1 Polymer-Modified (Floor)', 'Type 2 Wall & Vitrified', 'Type 3 Granite & Outdoor', 'High Gloss / Polished', 'Matt / Satin', 'Epoxy 2-Part Grout'] },
-    { key: 'dimensionsOrCoverage', label: 'Tile Dimensions / Spread Coverage', type: 'text', required: true, placeholder: 'e.g. 600 x 600 mm or 35-40 sq.ft / 20kg bag', group: 'Dimensions & Packaging' },
-    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['20 Kg Bag', '25 Kg Bag', '50 Kg Bag', '5 Kg Bucket', '4 Pcs Box (15.5 sq.ft)'], group: 'Dimensions & Packaging' },
-    { key: 'colour', label: 'Colour', type: 'text', required: false, placeholder: 'e.g. Grey / White / Statuario' },
+  // cat-2: Tiling
+  ...makeSchemas('cat-2', 'tiling', [
+    { key: 'application', label: 'Application', type: 'multiselect', required: true, options: ['Floor', 'Wall', 'Drywall & Wood', 'Swimming Pool & Wet Area', 'Outdoor Facade', 'Stone & Marble'] },
+    { key: 'adhesiveType', label: 'Adhesive Type', type: 'dropdown', required: true, options: ['Polymer-modified', 'Polymer-modified Paste', 'Epoxy 2-Part', 'Type 1 Standard', 'Type 2 High Strength', 'Cementitious Grout'] },
+    { key: 'material', label: 'Material', type: 'dropdown', required: false, options: ['Ceramic', 'Double Charge Vitrified', 'Porcelain', 'Cementitious Polymer', 'Epoxy Resin'] },
+    { key: 'size', label: 'Size', type: 'text', required: false, placeholder: 'e.g. 600 mm x 600 mm (2 ft x 2 ft) or 2mm Spacer', group: 'Dimensions & Packaging' },
+    { key: 'finish', label: 'Surface Finish', type: 'dropdown', required: false, options: ['Nano Polished Ultra Gloss', 'Matt', 'Satin', 'Rustic Anti-Skid', 'Smooth Grey'] },
+    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['4 Tiles per Box', '30 kg', '20 kg', '10 kg', '5 Kg Bucket', '1 Kg'], group: 'Dimensions & Packaging' },
+    { key: 'colour', label: 'Color', type: 'text', required: false, placeholder: 'e.g. Grey / White / Statuario' },
     { key: 'waterResistant', label: 'Water & Frost Resistant', type: 'checkbox', required: false, group: 'Performance & Compliance' },
   ]),
 
   // cat-3: Plywood, MDF & HDHMR
   ...makeSchemas('cat-3', 'plywood-mdf-hdhmr', [
-    { key: 'materialType', label: 'Material Type', type: 'dropdown', required: true, options: ['BWP Marine Plywood', 'BWR Commercial Plywood', 'HDHMR Board', 'Interior MDF', 'Blockboard'] },
-    { key: 'thickness', label: 'Thickness', type: 'dropdown', required: true, options: ['6mm', '8mm', '12mm', '16mm', '18mm', '19mm', '25mm'], group: 'Dimensions & Packaging' },
-    { key: 'sheetSize', label: 'Sheet Size (Length x Width)', type: 'dropdown', required: true, options: ["8' x 4' (2440 x 1220 mm)", "7' x 4' (2135 x 1220 mm)", "8' x 3'", "7' x 3'"], group: 'Dimensions & Packaging' },
-    { key: 'grade', label: 'Grade', type: 'dropdown', required: true, options: ['BWP IS:710 Marine', 'BWR IS:303 Moisture Resistant', 'MR Commercial IS:303', 'High Density 850 kg/m3', 'Fire Retardant IS:5509'], group: 'Performance & Compliance' },
-    { key: 'finish', label: 'Surface Finish / Treatment', type: 'text', required: false, placeholder: 'e.g. Calibrated Double-Side Sanded, Termite Proof' },
+    { key: 'materialType', label: 'Material Type', type: 'dropdown', required: true, options: ['BWP Marine Plywood', 'BWR Commercial Plywood', 'HDHMR Moisture Resistant Board', 'Interior MDF', 'Blockboard', 'WPC Board'] },
+    { key: 'thickness', label: 'Thickness', type: 'dropdown', required: true, options: ['6mm', '8mm', '9mm', '12mm', '16mm', '18mm', '19mm', '25mm'], group: 'Dimensions & Packaging' },
+    { key: 'size', label: 'Sheet Size (Length x Width)', type: 'dropdown', required: true, options: ["8' X 4'", "7' X 4'", "8' X 3'", "7' X 3'"], group: 'Dimensions & Packaging' },
+    { key: 'grade', label: 'Grade', type: 'dropdown', required: true, options: ['IS 710 BWP', 'IS 303 MR Grade', 'BWR IS 303', 'HDHMR High Density', 'IS 1659 Blockboard'], group: 'Performance & Compliance' },
+    { key: 'waterproofRating', label: 'Waterproof Rating', type: 'dropdown', required: false, options: ['Boiling Water Proof (BWP)', 'Moisture Resistant (BWR/MR)', 'High Moisture Proof (HDHMR)', '100% Termite & Waterproof (WPC)'] },
+    { key: 'finish', label: 'Surface Finish / Treatment', type: 'text', required: false, placeholder: 'e.g. Calibrated Double Sanded, Termite Proof' },
   ]),
 
-  // cat-4: Adhesives
-  ...makeSchemas('cat-4', 'adhesives', [
-    { key: 'adhesiveType', label: 'Adhesive Type', type: 'dropdown', required: true, options: ['Synthetic Resin Wood Adhesive (PVA)', 'Fast Setting Marine Adhesive', 'Contact Neoprene Rubber', 'Epoxy Polyfix / Anchor'] },
-    { key: 'applications', label: 'Recommended Substrates', type: 'multiselect', required: true, options: ['Wood to Wood', 'Laminate to Plywood', 'MDF & Veneer', 'Metal & PVC', 'Wet / Bathroom Area'] },
-    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['500g Pouch', '1 Kg Container', '2 Kg Container', '5 Kg Bucket', '10 Kg Bucket', '20 Kg Drum', '50 Kg Barrel'], group: 'Dimensions & Packaging' },
-    { key: 'settingTime', label: 'Setting / Handling Time', type: 'text', required: false, placeholder: 'e.g. 2 - 4 Hours Initial Set', group: 'Performance & Compliance' },
-    { key: 'spreadCoverage', label: 'Spread Coverage', type: 'text', required: false, placeholder: 'e.g. 40 - 45 sq.ft / Kg', group: 'Performance & Compliance' },
+  // cat-4: Fevicol
+  ...makeSchemas('cat-4', 'fevicol', [
+    { key: 'adhesiveType', label: 'Adhesive Type', type: 'dropdown', required: true, options: ['Synthetic Resin Wood Adhesive', 'Boiling Water Proof Marine Adhesive', 'Epoxy 2-Part Structural', 'Silicone & Hybrid Sealant', 'Contact Rubber Adhesive'] },
+    { key: 'bondingApplication', label: 'Bonding Application', type: 'multiselect', required: true, options: ['Woodworking & Veneer', 'Marine Plywood & Wet Areas', 'Acrylic & Laminates', 'Glass, Metal & Ceramic', 'Marble & Stone Crack Repair'] },
+    { key: 'waterResistance', label: 'Water Resistance', type: 'dropdown', required: false, options: ['Boiling water proof (IS 4835)', 'D3 Water Resistant', 'Standard Interior Bond', 'Marine Grade Waterproof'], group: 'Performance & Compliance' },
+    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['500 g', '1 Kg', '2 Kg', '5 Kilograms', '10 Kg', '20 Kg', '50 Kg Drum'], group: 'Dimensions & Packaging' },
+    { key: 'settingTime', label: 'Drying / Setting Time', type: 'text', required: false, placeholder: 'e.g. 4 to 6 hours', group: 'Performance & Compliance' },
+    { key: 'spreadCoverage', label: 'Spread Coverage', type: 'text', required: false, placeholder: 'e.g. Approx 45 sq.ft per kg', group: 'Performance & Compliance' },
   ]),
 
   // cat-5: Waterproofing
   ...makeSchemas('cat-5', 'waterproofing', [
-    { key: 'waterproofingType', label: 'Product Type', type: 'dropdown', required: true, options: ['Integral Liquid Compound (LW+)', 'Acrylic Polymer Elastomeric Coating', '2K Cementitious Slurry', 'EPDM / Bitumen Membrane'] },
-    { key: 'packVolume', label: 'Pack Size / Volume', type: 'dropdown', required: true, options: ['1 Litre Bottle', '5 Litre Can', '10 Litre Bucket', '20 Litre Drum', '200 Litre Barrel'], group: 'Dimensions & Packaging' },
-    { key: 'dosageOrCoverage', label: 'Dosage / Coverage Area', type: 'text', required: true, placeholder: 'e.g. 200 ml per 50 kg Cement Bag or 1.4 sq.m / Litre', group: 'Performance & Compliance' },
-    { key: 'applicationAreas', label: 'Application Zones', type: 'multiselect', required: true, options: ['Terrace & Roof Slab', 'Bathrooms & Wet Areas', 'Water Tanks & Sumps', 'Exterior Walls', 'Basement & Foundation'] },
-    { key: 'standard', label: 'IS Standard', type: 'text', required: false, placeholder: 'e.g. IS 2645 Compliant', group: 'Performance & Compliance' },
+    { key: 'waterproofingType', label: 'Product Type', type: 'dropdown', required: true, options: ['Integral Liquid Admixture (LW+)', 'Acrylic Elastomeric Coating', '2K Cementitious Slurry Membrane', 'PU Waterproof Coating', 'Crack Seal & Injection Grout'] },
+    { key: 'applicationArea', label: 'Application Area', type: 'multiselect', required: true, options: ['Roof & Terrace Slab', 'Bathroom & Wet Zone', 'Water Tank & Sump', 'Foundation & Retaining Wall', 'Exterior Damp Walls'] },
+    { key: 'materialBase', label: 'Material Base', type: 'dropdown', required: false, options: ['Polymer-Modified Plasticiser', '100% Acrylic Elastomeric', 'Two-Component Cementitious', 'Polyurethane Resin'] },
+    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['1 Litre', '5 Litres', '10 Litres', '20 Litres', '25 Kg Bag'], group: 'Dimensions & Packaging' },
+    { key: 'coverage', label: 'Coverage / Dosage', type: 'text', required: true, placeholder: 'e.g. 200 ml per 50 kg bag of cement', group: 'Performance & Compliance' },
+    { key: 'standard', label: 'IS Standard', type: 'text', required: false, placeholder: 'e.g. IS 2645 : 2003', group: 'Performance & Compliance' },
   ]),
 
-  // cat-6: Painting & Finishes
-  ...makeSchemas('cat-6', 'painting-finishes', [
-    { key: 'paintType', label: 'Paint Type', type: 'dropdown', required: true, options: ['Exterior Weatherproof Emulsion', 'Interior Luxury Emulsion', 'Wall Primer / Putty', 'Synthetic Enamel & Wood Coat'] },
-    { key: 'finish', label: 'Finish', type: 'dropdown', required: true, options: ['Ultra Matt', 'Smooth Satin', 'Soft Sheen', 'High Gloss', 'Matte Silk'] },
-    { key: 'colour', label: 'Colour / Base Shade', type: 'text', required: true, placeholder: 'e.g. Brilliant White / Morning Mist Grey' },
-    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['1 Litre Tin', '4 Litre Bucket', '10 Litre Bucket', '20 Litre Drum', '40 Kg Putty Bag'], group: 'Dimensions & Packaging' },
-    { key: 'coverage', label: 'Coverage (2 Coats)', type: 'text', required: true, placeholder: 'e.g. 55 - 65 sq.ft / Litre (2 coats)', group: 'Performance & Compliance' },
-    { key: 'dryingTime', label: 'Drying Time', type: 'text', required: false, placeholder: 'e.g. Surface dry 30 mins, Recoat 4 hrs', group: 'Performance & Compliance' },
+  // cat-6: Painting
+  ...makeSchemas('cat-6', 'painting', [
+    { key: 'paintType', label: 'Paint Type', type: 'dropdown', required: true, options: ['Exterior Emulsion', 'Interior Emulsion', 'Enamel & Wood Polish', 'Wall Primer & Putty', 'Elastomeric Waterproof Paint'] },
+    { key: 'finish', label: 'Finish', type: 'dropdown', required: true, options: ['Rich Sheen', 'Matt Finish', 'Satin Silk', 'Ultra Gloss Enamel', 'Dead Flat Primer'] },
+    { key: 'applicationSurface', label: 'Application Surface', type: 'multiselect', required: true, options: ['Exterior Walls & Facades', 'Interior Living Walls', 'Metal & Wood Trim', 'Plaster & Ceiling'] },
+    { key: 'colour', label: 'Color', type: 'text', required: false, placeholder: 'e.g. Brilliant White / Morning Mist Grey' },
+    { key: 'packSize', label: 'Pack Size', type: 'dropdown', required: true, options: ['1 Litre Can', '4 Litre Can', '10 Litre Bucket', '20 Litre Bucket', '20 Litres'], group: 'Dimensions & Packaging' },
+    { key: 'coverage', label: 'Coverage (2 Coats)', type: 'text', required: true, placeholder: 'e.g. 55 - 60 sq.ft / Litre for 2 coats', group: 'Performance & Compliance' },
+    { key: 'dryingTime', label: 'Drying Time', type: 'text', required: false, placeholder: 'e.g. 30 minutes to touch', group: 'Performance & Compliance' },
   ]),
 
   // cat-7: Hinges, Channels & Handles

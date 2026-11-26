@@ -73,10 +73,12 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     setOpenDropdownId((prev) => (prev === id ? null : id));
   };
 
-  const handleCategoryToggle = (catValue: string) => {
+  const handleCategoryToggle = (catValue: string, selectionMode?: 'SINGLE' | 'MULTI') => {
     const current = activeFilters.categories || [];
     const updated = current.includes(catValue)
       ? current.filter((c) => c !== catValue)
+      : selectionMode === 'SINGLE'
+      ? [catValue]
       : [...current, catValue];
 
     onChangeFilters({
@@ -85,10 +87,12 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     });
   };
 
-  const handleChildCategoryToggle = (childValue: string) => {
+  const handleChildCategoryToggle = (childValue: string, selectionMode?: 'SINGLE' | 'MULTI') => {
     const current = activeFilters.childCategories || [];
     const updated = current.includes(childValue)
       ? current.filter((c) => c !== childValue)
+      : selectionMode === 'SINGLE'
+      ? [childValue]
       : [...current, childValue];
 
     onChangeFilters({
@@ -97,10 +101,12 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     });
   };
 
-  const handleBrandToggle = (brandValue: string) => {
+  const handleBrandToggle = (brandValue: string, selectionMode?: 'SINGLE' | 'MULTI') => {
     const current = activeFilters.brands || [];
     const updated = current.includes(brandValue)
       ? current.filter((b) => b !== brandValue)
+      : selectionMode === 'SINGLE'
+      ? [brandValue]
       : [...current, brandValue];
 
     onChangeFilters({
@@ -109,10 +115,12 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     });
   };
 
-  const handleSubcategoryToggle = (subValue: string) => {
+  const handleSubcategoryToggle = (subValue: string, selectionMode?: 'SINGLE' | 'MULTI') => {
     const current = activeFilters.subcategories || [];
     const updated = current.includes(subValue)
       ? current.filter((s) => s !== subValue)
+      : selectionMode === 'SINGLE'
+      ? [subValue]
       : [...current, subValue];
 
     onChangeFilters({
@@ -121,12 +129,14 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     });
   };
 
-  const handleSpecToggle = (dimensionId: string, val: string) => {
+  const handleSpecToggle = (dimensionId: string, val: string, selectionMode?: 'SINGLE' | 'MULTI') => {
     const currentSpecs = { ...activeFilters.specifications };
     const currentList = currentSpecs[dimensionId] || [];
 
     const updatedList = currentList.includes(val)
       ? currentList.filter((v) => v !== val)
+      : selectionMode === 'SINGLE'
+      ? [val]
       : [...currentList, val];
 
     if (updatedList.length === 0) {
@@ -338,32 +348,35 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                                 ).includes(opt.value);
                               }
 
-                              const onToggle = () => {
-                                if (filter.id === 'category') {
-                                  handleCategoryToggle(opt.value);
-                                } else if (filter.id === 'childCategory') {
-                                  handleChildCategoryToggle(opt.value);
-                                } else if (filter.id === 'brand') {
-                                  handleBrandToggle(opt.value);
-                                } else if (filter.id === 'subcategory') {
-                                  handleSubcategoryToggle(opt.value);
-                                } else {
-                                  handleSpecToggle(filter.id, opt.value);
-                                }
-                              };
+                               const onToggle = () => {
+                                 if (filter.id === 'category') {
+                                   handleCategoryToggle(opt.value, filter.selectionMode);
+                                 } else if (filter.id === 'childCategory') {
+                                   handleChildCategoryToggle(opt.value, filter.selectionMode);
+                                 } else if (filter.id === 'brand') {
+                                   handleBrandToggle(opt.value, filter.selectionMode);
+                                 } else if (filter.id === 'subcategory') {
+                                   handleSubcategoryToggle(opt.value, filter.selectionMode);
+                                 } else {
+                                   handleSpecToggle(filter.id, opt.value, filter.selectionMode);
+                                 }
+                               };
 
-                              return (
-                                <label
-                                  key={opt.value}
-                                  className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 text-xs text-slate-700 cursor-pointer select-none transition-colors"
-                                >
-                                  <div className="flex items-center gap-2 min-w-0 pr-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={onToggle}
-                                      className="w-3.5 h-3.5 rounded text-brand-blue-900 focus:ring-brand-blue-500 border-slate-300 cursor-pointer"
-                                    />
+                               return (
+                                 <label
+                                   key={opt.value}
+                                   className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 text-xs text-slate-700 cursor-pointer select-none transition-colors"
+                                 >
+                                   <div className="flex items-center gap-2 min-w-0 pr-2">
+                                     <input
+                                       type={filter.selectionMode === 'SINGLE' ? 'radio' : 'checkbox'}
+                                       name={filter.selectionMode === 'SINGLE' ? `filter-${filter.id}` : undefined}
+                                       checked={isChecked}
+                                       onChange={onToggle}
+                                       className={`w-3.5 h-3.5 text-brand-blue-900 focus:ring-brand-blue-500 border-slate-300 cursor-pointer ${
+                                         filter.selectionMode === 'SINGLE' ? 'rounded-full' : 'rounded'
+                                       }`}
+                                     />
                                     <span className="truncate" title={opt.label}>
                                       {opt.label}
                                     </span>

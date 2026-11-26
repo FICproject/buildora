@@ -1300,7 +1300,12 @@ export class CompanyAdminController {
         childCategories: sortedChildren.map((c) => ({
           ...c,
           productCount: childCounts.get(c.id) || 0,
-          fieldCount: taxonomyService.getTenantFieldSchemas(tenantId, c.id, false).length,
+          fieldCount: taxonomyService.getVendorCombinedCategoryFields(tenantId, c.id).length,
+          filterCount: taxonomyService.getCategoryFilterConfigs(tenantId, {
+            childCategoryId: c.id,
+            useDraft: true,
+            includeInactive: true,
+          }).length,
         })),
         productTypes: sortedTypes.map((pt) => ({
           ...pt,
@@ -1313,11 +1318,17 @@ export class CompanyAdminController {
           childCount: publishedPool.childCategories.length,
           typeCount: publishedPool.productTypes.length,
           navCount: taxonomyService.getPublishedDesktopNavigation(tenantId, true).length,
+          filterCount: taxonomyService.getCategoryFilterConfigs(tenantId, { useDraft: false }).length,
         },
         fieldSchemas: taxonomyService.getTenantFieldSchemas(tenantId, undefined, true),
+        filterConfigs: taxonomyService.getCategoryFilterConfigs(tenantId, {
+          useDraft: true,
+          includeInactive: true,
+        }),
         brands: dbStore.brands,
         attributes: companyAdminDataService.attributes,
         newLaunchCollections: taxonomyService.getNewLaunchCollections(tenantId, false),
+        civilMigrationReport: taxonomyService.civilMigrationReport,
         migrationSummary: {
           totalRecords: report.length,
           migrated: report.filter((r) => r.status === 'MIGRATED').length,
@@ -1462,11 +1473,13 @@ export class CompanyAdminController {
       'taxonomy.published',
       {
         taxonomyUpdated: true,
+        filtersUpdated: true,
         publishedVersion: result.metadata.publishedVersion,
         publishedAt: result.metadata.lastPublishedAt,
       },
       tenantId
     );
+    realtimeBus.emitPublic('filters.updated', { publishedVersion: result.metadata.publishedVersion }, tenantId);
     realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     realtimeBus.emitToAdmin('taxonomy.published', result, tenantId);
 
@@ -1730,6 +1743,160 @@ export class CompanyAdminController {
     realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, fieldsUpdated: true }, tenantId);
     realtimeBus.emitPublic('filters.updated', { deletedFieldId: id }, tenantId);
     return { success: true, data: result };
+  }
+
+  @Get('catalog/filters')
+  listCategoryFilterConfigs(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('childCategoryId') childCategoryId?: string,
+    @Query('useDraft') useDraft?: string,
+    @Query('includeInactive') includeInactive?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:read', headerTenantId);
+    const configs = taxonomyService.getCategoryFilterConfigs(tenantId, {
+      childCategoryId,
+      useDraft: useDraft !== 'false',
+      includeInactive: includeInactive !== 'false',
+    });
+    return {
+      success: true,
+      data: configs,
+      metadata: taxonomyService.getPublishMetadata(tenantId),
+      civilMigrationReport: taxonomyService.civilMigrationReport,
+    };
+  }
+
+  @Post('catalog/filters')
+  async createCategoryFilterConfig(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const created = await taxonomyService.createCategoryFilterConfig(tenantId, body || {});
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: body?.saveAsDraft ? 'CATEGORY_FILTER_DRAFT_CREATED' : 'CATEGORY_FILTER_CREATED',
+      module: 'Catalog',
+      entityType: 'CategoryFilterConfiguration',
+      entityId: created.id,
+      details: `${body?.saveAsDraft ? 'Staged draft' : 'Created & published'} filter "${created.filterName}" for ${created.childCategoryName}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { filterId: created.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, filtersUpdated: true }, tenantId);
+      realtimeBus.emitPublic('filters.updated', { childCategoryId: created.childCategoryId, filterId: created.id }, tenantId);
+    }
+    return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Patch('catalog/filters/:id')
+  async updateCategoryFilterConfig(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const updated = await taxonomyService.updateCategoryFilterConfig(tenantId, id, body || {});
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: body?.saveAsDraft ? 'CATEGORY_FILTER_DRAFT_UPDATED' : 'CATEGORY_FILTER_UPDATED',
+      module: 'Catalog',
+      entityType: 'CategoryFilterConfiguration',
+      entityId: updated.id,
+      details: `${body?.saveAsDraft ? 'Updated draft' : 'Updated & published'} filter "${updated.filterName}" for ${updated.childCategoryName}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { filterId: updated.id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, filtersUpdated: true }, tenantId);
+      realtimeBus.emitPublic('filters.updated', { childCategoryId: updated.childCategoryId, filterId: updated.id }, tenantId);
+    }
+    return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Delete('catalog/filters/:id')
+  async deleteCategoryFilterConfig(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('saveAsDraft') saveAsDraft?: string,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const isDraft = saveAsDraft === 'true';
+    const result = await taxonomyService.deleteCategoryFilterConfig(tenantId, id, { saveAsDraft: isDraft });
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: isDraft ? 'CATEGORY_FILTER_DRAFT_DELETED' : 'CATEGORY_FILTER_DELETED',
+      module: 'Catalog',
+      entityType: 'CategoryFilterConfiguration',
+      entityId: id,
+      details: `${isDraft ? 'Staged draft deletion' : 'Deleted'} filter configuration ${id}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    if (isDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedFilterId: id }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, filtersUpdated: true }, tenantId);
+      realtimeBus.emitPublic('filters.updated', { deletedFilterId: id }, tenantId);
+    }
+    return { success: true, data: result, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Get('catalog/categories/:id/products')
+  listProductsForCategoryNode(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:read', headerTenantId);
+    const needle = id.trim().toLowerCase();
+    const tenantProducts = companyAdminDataService.getTenantProducts(tenantId);
+    const matched = tenantProducts.filter(
+      (p: any) =>
+        p.mainCategoryId?.toLowerCase() === needle ||
+        p.mainCategorySlug?.toLowerCase() === needle ||
+        p.childCategoryId?.toLowerCase() === needle ||
+        p.childCategorySlug?.toLowerCase() === needle ||
+        p.categoryId?.toLowerCase() === needle ||
+        p.categorySlug?.toLowerCase() === needle ||
+        p.productTypeId?.toLowerCase() === needle ||
+        p.subcategoryId?.toLowerCase() === needle
+    );
+    return {
+      success: true,
+      data: matched,
+      total: matched.length,
+    };
+  }
+
+  @Post('catalog/reconcile-civil')
+  reconcileCivilTaxonomy(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const report = taxonomyService.reconcileCivilAndInteriorsTaxonomySync(tenantId);
+    taxonomyService.syncDbStoreCategories(tenantId);
+    realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: report };
   }
 
   @Post('catalog/product-types')

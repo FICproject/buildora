@@ -7,35 +7,73 @@ export const SUPPORT_EMAIL = 'support@buildora.com';
 export const SUPPORT_PHONE = '1800-60-BUILD (1800-60-28453)';
 
 // The 28 Master Categories required for Buildora 60
+export const LEGACY_CATEGORY_SLUG_ALIASES: Record<string, string> = {
+  'cement-concrete': 'cement',
+  'tiling-tile-adhesives': 'tiling',
+  adhesives: 'fevicol',
+  'painting-finishes': 'painting',
+};
+
+export const LEGACY_PRODUCT_TYPE_SLUG_ALIASES: Record<string, { childId: string; productTypeId: string; slug: string }> = {
+  'opc-53-grade': { childId: 'cat-1', productTypeId: 'sub-civ-cem-cement', slug: 'cement' },
+  'ppc-cement': { childId: 'cat-1', productTypeId: 'sub-civ-cem-cement', slug: 'cement' },
+  'white-cement-putty': { childId: 'cat-1', productTypeId: 'sub-civ-cem-civil-works', slug: 'cement-civil-works' },
+  'ready-mix-mortar': { childId: 'cat-1', productTypeId: 'sub-civ-cem-sand-plaster', slug: 'sand-plaster-mortars' },
+  'vitrified-floor-tiles': { childId: 'cat-2', productTypeId: 'sub-civ-til-stone', slug: 'tile-stone-installation' },
+  'ceramic-wall-tiles': { childId: 'cat-2', productTypeId: 'sub-civ-til-stone', slug: 'tile-stone-installation' },
+  'tile-adhesives': { childId: 'cat-2', productTypeId: 'sub-civ-til-adhesives', slug: 'tile-adhesives' },
+  'epoxy-grouts': { childId: 'cat-2', productTypeId: 'sub-civ-til-grouts', slug: 'grouts-cleaners' },
+  'bwp-marine-plywood': { childId: 'cat-3', productTypeId: 'sub-civ-ply-plywood', slug: 'plywood-blockboard' },
+  'bwr-commercial-plywood': { childId: 'cat-3', productTypeId: 'sub-civ-ply-plywood', slug: 'plywood-blockboard' },
+  'hdhmr-boards': { childId: 'cat-3', productTypeId: 'sub-civ-ply-hdhmr', slug: 'hdhmr-mdf-boilo' },
+  'interior-mdf-sheets': { childId: 'cat-3', productTypeId: 'sub-civ-ply-hdhmr', slug: 'hdhmr-mdf-boilo' },
+  'wood-adhesives': { childId: 'cat-4', productTypeId: 'sub-civ-fev-wood-adh', slug: 'wood-adhesives' },
+  'fast-setting-marine': { childId: 'cat-4', productTypeId: 'sub-civ-fev-sealants', slug: 'fevicol-adhesives-sealants' },
+  'contact-rubber-adhesives': { childId: 'cat-4', productTypeId: 'sub-civ-fev-special-adh', slug: 'special-adhesives' },
+  'integral-cement-waterproofing': { childId: 'cat-5', productTypeId: 'sub-civ-wp-admixtures', slug: 'admixtures' },
+  'terrace-roof-coatings': { childId: 'cat-5', productTypeId: 'sub-civ-wp-coatings', slug: 'coatings-membranes' },
+  'bathroom-sump-polymers': { childId: 'cat-5', productTypeId: 'sub-civ-wp-repairing', slug: 'waterproofing-repairing' },
+  'interior-emulsions': { childId: 'cat-6', productTypeId: 'sub-civ-pnt-interior', slug: 'interior-emulsions' },
+  'exterior-weatherproof': { childId: 'cat-6', productTypeId: 'sub-civ-pnt-exterior', slug: 'exterior-emulsions' },
+  'primers-putty': { childId: 'cat-6', productTypeId: 'sub-civ-pnt-putty', slug: 'putty-primer' },
+  'painting-tools': { childId: 'cat-6', productTypeId: 'sub-civ-pnt-tools', slug: 'painting-tools-hardware' },
+};
+
 export const MASTER_CATEGORIES = [
   {
     id: 'cat-1',
-    name: 'Cement & Concrete',
-    slug: 'cement-concrete',
+    name: 'Cement',
+    slug: 'cement',
+    legacySlugs: ['cement-concrete'],
     icon: 'Package',
     image: 'https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=600&q=80',
-    description: 'High-grade OPC 53, PPC, white cement, ready-mix concrete, and aggregates.',
+    description: 'High-grade OPC 53, PPC, white cement, ready-mix concrete, sand, plaster and civil mortars.',
     featured: true,
     subcategories: [
-      { id: 'sub-1-1', name: 'OPC 53 Grade Cement', slug: 'opc-53-grade', categorySlug: 'cement-concrete' },
-      { id: 'sub-1-2', name: 'PPC Portland Pozzolana', slug: 'ppc-cement', categorySlug: 'cement-concrete' },
-      { id: 'sub-1-3', name: 'White Cement & Putty', slug: 'white-cement-putty', categorySlug: 'cement-concrete' },
-      { id: 'sub-1-4', name: 'Ready-Mix Concrete Mortar', slug: 'ready-mix-mortar', categorySlug: 'cement-concrete' }
+      { id: 'sub-civ-cem-cement', name: 'Cement', slug: 'cement', categorySlug: 'cement' },
+      { id: 'sub-civ-cem-civil-works', name: 'Cement & Civil Works', slug: 'cement-civil-works', categorySlug: 'cement' },
+      { id: 'sub-civ-cem-sand-plaster', name: 'Sand, Plaster & Mortars', slug: 'sand-plaster-mortars', categorySlug: 'cement' }
     ]
   },
   {
     id: 'cat-2',
-    name: 'Tiling & Tile Adhesives',
-    slug: 'tiling-tile-adhesives',
+    name: 'Tiling',
+    slug: 'tiling',
+    legacySlugs: ['tiling-tile-adhesives'],
     icon: 'Grid',
     image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
-    description: 'Vitrified tiles, ceramic wall tiles, heavy-duty tile adhesives, and epoxy grouts.',
+    description: 'Vitrified & stone installation materials, tile adhesives, epoxy adhesives, grouts, spacers and masonry tools.',
     featured: true,
     subcategories: [
-      { id: 'sub-2-1', name: 'Vitrified Floor Tiles', slug: 'vitrified-floor-tiles', categorySlug: 'tiling-tile-adhesives' },
-      { id: 'sub-2-2', name: 'Ceramic Wall Tiles', slug: 'ceramic-wall-tiles', categorySlug: 'tiling-tile-adhesives' },
-      { id: 'sub-2-3', name: 'Polymer Tile Adhesives', slug: 'tile-adhesives', categorySlug: 'tiling-tile-adhesives' },
-      { id: 'sub-2-4', name: 'Epoxy Tile Grouts & Spacers', slug: 'epoxy-grouts', categorySlug: 'tiling-tile-adhesives' }
+      { id: 'sub-civ-til-cement', name: 'Cement', slug: 'cement', categorySlug: 'tiling' },
+      { id: 'sub-civ-til-chemicals', name: 'Chemicals', slug: 'chemicals', categorySlug: 'tiling' },
+      { id: 'sub-civ-til-epoxy', name: 'Epoxy & Special Adhesives', slug: 'epoxy-special-adhesives', categorySlug: 'tiling' },
+      { id: 'sub-civ-til-grouts', name: 'Grouts & Cleaners', slug: 'grouts-cleaners', categorySlug: 'tiling' },
+      { id: 'sub-civ-til-masonry', name: 'Masonry Tools & Hardware', slug: 'masonry-tools-hardware', categorySlug: 'tiling' },
+      { id: 'sub-civ-til-spacers', name: 'Spacers & Tools', slug: 'spacers-tools', categorySlug: 'tiling' },
+      { id: 'sub-civ-til-special-adh', name: 'Special Adhesives', slug: 'special-adhesives', categorySlug: 'tiling' },
+      { id: 'sub-civ-til-stone', name: 'Tile & Stone Installation', slug: 'tile-stone-installation', categorySlug: 'tiling' },
+      { id: 'sub-civ-til-adhesives', name: 'Tile Adhesives', slug: 'tile-adhesives', categorySlug: 'tiling' }
     ]
   },
   {
@@ -44,27 +82,29 @@ export const MASTER_CATEGORIES = [
     slug: 'plywood-mdf-hdhmr',
     icon: 'Layers',
     image: 'https://images.unsplash.com/photo-1546484396-fb3fc6f95f98?auto=format&fit=crop&w=600&q=80',
-    description: 'Calibrated BWP waterproof marine plywood, BWR, HDHMR moisture-resistant boards, and MDF.',
+    description: 'Calibrated BWP waterproof marine plywood, BWR, blockboards, HDHMR, MDF, Boilo, WPC and flush doors.',
     featured: true,
     subcategories: [
-      { id: 'sub-3-1', name: 'BWP Marine Grade Plywood', slug: 'bwp-marine-plywood', categorySlug: 'plywood-mdf-hdhmr' },
-      { id: 'sub-3-2', name: 'BWR Commercial Plywood', slug: 'bwr-commercial-plywood', categorySlug: 'plywood-mdf-hdhmr' },
-      { id: 'sub-3-3', name: 'HDHMR Moisture Proof Boards', slug: 'hdhmr-boards', categorySlug: 'plywood-mdf-hdhmr' },
-      { id: 'sub-3-4', name: 'Interior MDF Sheets', slug: 'interior-mdf-sheets', categorySlug: 'plywood-mdf-hdhmr' }
+      { id: 'sub-civ-ply-hdhmr', name: 'HDHMR, MDF, Boilo', slug: 'hdhmr-mdf-boilo', categorySlug: 'plywood-mdf-hdhmr' },
+      { id: 'sub-civ-ply-plywood', name: 'Plywood & Blockboard', slug: 'plywood-blockboard', categorySlug: 'plywood-mdf-hdhmr' },
+      { id: 'sub-civ-ply-wpc', name: 'WPC & Flush Doors', slug: 'wpc-flush-doors', categorySlug: 'plywood-mdf-hdhmr' }
     ]
   },
   {
     id: 'cat-4',
-    name: 'Adhesives',
-    slug: 'adhesives',
+    name: 'Fevicol',
+    slug: 'fevicol',
+    legacySlugs: ['adhesives'],
     icon: 'Flame',
     image: 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=600&q=80',
-    description: 'Woodworking adhesives, instant cyanoacrylate glues, PU sealants, and contact adhesives.',
+    description: 'Fevicol woodworking adhesives, epoxy & special adhesives, sealants, waterproof repairs and bonding solutions.',
     featured: true,
     subcategories: [
-      { id: 'sub-4-1', name: 'Synthetic Resin Wood Adhesives', slug: 'wood-adhesives', categorySlug: 'adhesives' },
-      { id: 'sub-4-2', name: 'Fast Setting Marine Adhesives', slug: 'fast-setting-marine', categorySlug: 'adhesives' },
-      { id: 'sub-4-3', name: 'Contact Rubber Adhesives', slug: 'contact-rubber-adhesives', categorySlug: 'adhesives' }
+      { id: 'sub-civ-fev-epoxy', name: 'Epoxy & Special Adhesives', slug: 'epoxy-special-adhesives', categorySlug: 'fevicol' },
+      { id: 'sub-civ-fev-sealants', name: 'Fevicol, Adhesives & Sealants', slug: 'fevicol-adhesives-sealants', categorySlug: 'fevicol' },
+      { id: 'sub-civ-fev-special-adh', name: 'Special Adhesives', slug: 'special-adhesives', categorySlug: 'fevicol' },
+      { id: 'sub-civ-fev-wp-repairs', name: 'Waterproof Repairs', slug: 'waterproof-repairs', categorySlug: 'fevicol' },
+      { id: 'sub-civ-fev-wood-adh', name: 'Wood Adhesives', slug: 'wood-adhesives', categorySlug: 'fevicol' }
     ]
   },
   {
@@ -73,27 +113,37 @@ export const MASTER_CATEGORIES = [
     slug: 'waterproofing',
     icon: 'Droplets',
     image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80',
-    description: 'Integral liquid waterproofing compounds, acrylic polymer coatings, and terrace membrane systems.',
+    description: 'Integral admixtures, civil waterproofing chemicals, elastomeric coatings, membranes and structural repair systems.',
     featured: true,
     subcategories: [
-      { id: 'sub-5-1', name: 'Integral Cement Waterproofing', slug: 'integral-cement-waterproofing', categorySlug: 'waterproofing' },
-      { id: 'sub-5-2', name: 'Terrace & Roof Coatings', slug: 'terrace-roof-coatings', categorySlug: 'waterproofing' },
-      { id: 'sub-5-3', name: 'Bathroom & Sump Polymers', slug: 'bathroom-sump-polymers', categorySlug: 'waterproofing' }
+      { id: 'sub-civ-wp-admixtures', name: 'Admixtures', slug: 'admixtures', categorySlug: 'waterproofing' },
+      { id: 'sub-civ-wp-civil-works', name: 'Cement & Civil Works', slug: 'cement-civil-works', categorySlug: 'waterproofing' },
+      { id: 'sub-civ-wp-chemicals', name: 'Chemicals', slug: 'chemicals', categorySlug: 'waterproofing' },
+      { id: 'sub-civ-wp-coatings', name: 'Coatings & Membranes', slug: 'coatings-membranes', categorySlug: 'waterproofing' },
+      { id: 'sub-civ-wp-wp-repairs', name: 'Waterproof Repairs', slug: 'waterproof-repairs', categorySlug: 'waterproofing' },
+      { id: 'sub-civ-wp-repairing', name: 'Waterproofing & Repairing', slug: 'waterproofing-repairing', categorySlug: 'waterproofing' }
     ]
   },
   {
     id: 'cat-6',
-    name: 'Painting & Finishes',
-    slug: 'painting-finishes',
+    name: 'Painting',
+    slug: 'painting',
+    legacySlugs: ['painting-finishes'],
     icon: 'Paintbrush',
     image: 'https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=600&q=80',
-    description: 'Interior emulsions, exterior weather-guard coatings, enamel paints, primers, and rollers.',
+    description: 'Interior & exterior emulsions, enamels, polish, putty, primers, protective coatings and painting hardware.',
     featured: true,
     subcategories: [
-      { id: 'sub-6-1', name: 'Interior Emulsion Paints', slug: 'interior-emulsions', categorySlug: 'painting-finishes' },
-      { id: 'sub-6-2', name: 'Exterior Weatherproof Paints', slug: 'exterior-weatherproof', categorySlug: 'painting-finishes' },
-      { id: 'sub-6-3', name: 'Wall Primers & Putty', slug: 'primers-putty', categorySlug: 'painting-finishes' },
-      { id: 'sub-6-4', name: 'Brushes, Rollers & Trays', slug: 'painting-tools', categorySlug: 'painting-finishes' }
+      { id: 'sub-civ-pnt-admixtures', name: 'Admixtures', slug: 'admixtures', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-coatings', name: 'Coatings & Membranes', slug: 'coatings-membranes', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-enamels', name: 'Enamels & Polish', slug: 'enamels-polish', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-exterior', name: 'Exterior Emulsions', slug: 'exterior-emulsions', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-interior', name: 'Interior Emulsions', slug: 'interior-emulsions', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-painting', name: 'Painting', slug: 'painting', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-tools', name: 'Painting Tools & Hardware', slug: 'painting-tools-hardware', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-putty', name: 'Putty & Primer', slug: 'putty-primer', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-wp-repairs', name: 'Waterproof Repairs', slug: 'waterproof-repairs', categorySlug: 'painting' },
+      { id: 'sub-civ-pnt-repairing', name: 'Waterproofing & Repairing', slug: 'waterproofing-repairing', categorySlug: 'painting' }
     ]
   },
   {
@@ -385,16 +435,14 @@ export const CONSTRUCTION_DEPARTMENTS = [
     name: 'Civil & Interiors',
     slug: 'civil-interiors',
     icon: 'Building2',
-    description: 'Cement, waterproof plaster, plywood, decorative boards, paints, tiles and structural adhesives.',
+    description: 'Cement, tiling, plywood, MDF, HDHMR, Fevicol adhesives, waterproofing and painting.',
     categorySlugs: [
-      'cement-concrete',
-      'tiling-tile-adhesives',
+      'cement',
+      'tiling',
       'plywood-mdf-hdhmr',
-      'adhesives',
+      'fevicol',
       'waterproofing',
-      'painting-finishes',
-      'bathroom-renovation-materials',
-      'ceiling-flooring'
+      'painting'
     ]
   },
   {
@@ -402,13 +450,14 @@ export const CONSTRUCTION_DEPARTMENTS = [
     name: 'Furniture & Architectural Hardware',
     slug: 'furniture-hardware',
     icon: 'Layers',
-    description: 'Concealed auto-hinges, telescopic channels, handles, mortise locks, sliding systems and glass fittings.',
+    description: 'Concealed auto-hinges, telescopic channels, handles, mortise locks, sliding systems and ceiling & flooring.',
     categorySlugs: [
       'hinges-channels-handles',
       'kitchen-systems-accessories',
       'wardrobe-bed-fittings',
       'door-locks-hardware',
-      'glass-door-hardware'
+      'glass-door-hardware',
+      'ceiling-flooring'
     ]
   },
   {
@@ -431,12 +480,13 @@ export const CONSTRUCTION_DEPARTMENTS = [
     name: 'Plumbing, Sanitary & Bath',
     slug: 'plumbing-sanitary',
     icon: 'Compass',
-    description: 'CPVC hot & cold pipes, overhead tanks, sanitary ceramics, chrome brass faucets and handmade sinks.',
+    description: 'CPVC hot & cold pipes, overhead tanks, sanitary ceramics, chrome brass faucets and bathroom renovation.',
     categorySlugs: [
       'cpvc-pipes-overhead-tanks',
       'sanitary-bath-fittings',
       'kitchen-sinks-faucets',
-      'water-storage-tanks'
+      'water-storage-tanks',
+      'bathroom-renovation-materials'
     ]
   },
   {
@@ -636,8 +686,11 @@ export function resolveFullTaxonomy(
   pool: TaxonomyPool = DEFAULT_TAXONOMY_POOL
 ) {
   const cleanMain = (inputs.mainInput || '').trim().toLowerCase();
-  const cleanChild = (inputs.childInput || '').trim().toLowerCase();
-  const cleanType = (inputs.typeInput || '').trim().toLowerCase();
+  const rawChild = (inputs.childInput || '').trim().toLowerCase();
+  const cleanChild = LEGACY_CATEGORY_SLUG_ALIASES[rawChild] || rawChild;
+  const rawType = (inputs.typeInput || '').trim().toLowerCase();
+  const aliasType = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[rawType];
+  const cleanType = aliasType ? aliasType.slug : rawType;
 
   let mainCategory = cleanMain
     ? pool.mainCategories.find(
@@ -654,6 +707,7 @@ export function resolveFullTaxonomy(
           (!mainCategory || c.mainCategoryId === mainCategory.id) &&
           (c.id.toLowerCase() === cleanChild ||
             c.slug.toLowerCase() === cleanChild ||
+            c.slug.toLowerCase() === rawChild ||
             c.name.toLowerCase() === cleanChild)
       ) || null
     : null;
@@ -665,6 +719,7 @@ export function resolveFullTaxonomy(
         (c) =>
           c.id.toLowerCase() === cleanChild ||
           c.slug.toLowerCase() === cleanChild ||
+          c.slug.toLowerCase() === rawChild ||
           c.name.toLowerCase() === cleanChild
       ) || null;
   }
@@ -673,24 +728,28 @@ export function resolveFullTaxonomy(
     mainCategory = pool.mainCategories.find((m) => m.id === childCategory!.mainCategoryId) || null;
   }
 
-  let productType = cleanType
+  let productType = rawType
     ? pool.productTypes.find(
         (pt) =>
           (!childCategory || pt.childCategoryId === childCategory.id) &&
           (!mainCategory || pt.mainCategoryId === mainCategory.id) &&
-          (pt.id.toLowerCase() === cleanType ||
+          (pt.id.toLowerCase() === rawType ||
+            (aliasType && pt.id.toLowerCase() === aliasType.productTypeId) ||
+            pt.slug.toLowerCase() === rawType ||
             pt.slug.toLowerCase() === cleanType ||
-            pt.name.toLowerCase() === cleanType)
+            pt.name.toLowerCase() === rawType)
       ) || null
     : null;
 
-  if (!productType && cleanType && !childCategory && !mainCategory) {
+  if (!productType && rawType && !childCategory && !mainCategory) {
     productType =
       pool.productTypes.find(
         (pt) =>
-          pt.id.toLowerCase() === cleanType ||
+          pt.id.toLowerCase() === rawType ||
+          (aliasType && pt.id.toLowerCase() === aliasType.productTypeId) ||
+          pt.slug.toLowerCase() === rawType ||
           pt.slug.toLowerCase() === cleanType ||
-          pt.name.toLowerCase() === cleanType
+          pt.name.toLowerCase() === rawType
       ) || null;
     if (productType) {
       childCategory = pool.childCategories.find((c) => c.id === productType!.childCategoryId) || null;

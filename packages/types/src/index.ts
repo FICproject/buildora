@@ -187,6 +187,57 @@ export interface CategoryFieldSchema {
   validation?: CategoryFieldValidation;
   displayOrder: number;
   isActive: boolean;
+  showInVendor?: boolean;
+  showInCustomer?: boolean;
+  selectionMode?: 'SINGLE' | 'MULTI';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type FilterFieldType =
+  | 'CHECKBOX'
+  | 'MULTISELECT'
+  | 'DROPDOWN'
+  | 'RANGE'
+  | 'TEXT'
+  | 'NUMBER'
+  | 'BOOLEAN';
+
+export type FilterSelectionMode = 'SINGLE' | 'MULTI';
+
+export interface CategoryFilterConfiguration {
+  id: string;
+  tenantId?: string;
+  mainCategoryId: string;
+  mainCategoryName?: string;
+  childCategoryId: string;
+  childCategorySlug?: string;
+  childCategoryName?: string;
+  productTypeId?: string;
+  productTypeSlug?: string;
+  filterName: string;
+  fieldKey: string;
+  fieldType: FilterFieldType;
+  options: string[];
+  specKeys?: string[];
+  catAttrKeys?: string[];
+  isStandardField?:
+    | 'category'
+    | 'brand'
+    | 'subcategory'
+    | 'price'
+    | 'packSize'
+    | 'rating'
+    | 'inStock'
+    | 'asap';
+  selectionMode: FilterSelectionMode;
+  isRequired: boolean;
+  showInVendor: boolean;
+  showInCustomer: boolean;
+  hideEmptyOptions?: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  publishedStatus: 'DRAFT' | 'PUBLISHED';
   createdAt?: string;
   updatedAt?: string;
 }

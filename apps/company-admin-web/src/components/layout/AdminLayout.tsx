@@ -57,6 +57,7 @@ const NAV_ITEMS: NavItem[] = [
       { path: '/catalog/main-categories', label: 'Main Categories' },
       { path: '/catalog/child-categories', label: 'Child Categories' },
       { path: '/catalog/product-types', label: 'Product Type Management' },
+      { path: '/catalog/filters', label: 'Filter Configuration' },
     ],
   },
   { path: '/inventory', label: 'Inventory', icon: <Boxes className="w-4 h-4" />, permission: 'inventory:read', group: 'Supply & Orders' },

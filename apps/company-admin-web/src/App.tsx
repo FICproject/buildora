@@ -44,6 +44,7 @@ export function App() {
           <Route path="catalog/main-categories" element={<CatalogProductsPage initialSection="MAIN_CATEGORIES" />} />
           <Route path="catalog/child-categories" element={<CatalogProductsPage initialSection="CHILD_CATEGORIES" />} />
           <Route path="catalog/product-types" element={<CatalogProductsPage initialSection="PRODUCT_TYPES" />} />
+          <Route path="catalog/filters" element={<CatalogProductsPage initialSection="FILTERS" />} />
           <Route path="inventory" element={<InventoryPage defaultTab="INVENTORY" />} />
           <Route path="warehouses" element={<InventoryPage defaultTab="WAREHOUSES" />} />
           <Route path="orders" element={<OrdersPage />} />

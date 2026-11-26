@@ -4,6 +4,11 @@ import {
   CHILD_CATEGORIES_SEED,
   PRODUCT_TYPES_SEED,
   CATEGORY_FIELD_SCHEMAS_SEED,
+  CATEGORY_FILTER_CONFIGS_SEED,
+  LEGACY_CATEGORY_SLUG_ALIASES,
+  LEGACY_PRODUCT_TYPE_SLUG_ALIASES,
+  filterConfigsToDimensions,
+  getAvailableFiltersForCategory,
   MASTER_BRANDS,
   resolveFullTaxonomy,
 } from '@buildora/constants';
@@ -14,6 +19,9 @@ import {
   NewLaunchCollection,
   CategoryFieldSchema,
   CategoryFieldType,
+  CategoryFilterConfiguration,
+  FilterFieldType,
+  FilterSelectionMode,
   DesktopNavItem,
   DesktopNavItemType,
   CatalogPublishMetadata,
@@ -25,6 +33,7 @@ import {
   ProductTypeModel,
   NewLaunchCollectionModel,
   CategoryFieldSchemaModel,
+  CategoryFilterConfigModel,
   DesktopNavItemModel,
   CatalogPublishSnapshotModel,
   platformPersistenceService,
@@ -36,16 +45,33 @@ interface TenantCatalogDraft {
   childCategories: ChildCategory[];
   productTypes: ProductTypeNode[];
   desktopNavigation: DesktopNavItem[];
+  categoryFilterConfigs?: CategoryFilterConfiguration[];
   deletedMainIds: string[];
   deletedChildIds: string[];
   deletedProductTypeIds: string[];
   deletedNavIds: string[];
+  deletedFilterConfigIds?: string[];
   hasUnpublishedChanges: boolean;
   publishedVersion: number;
   draftVersion: number;
   lastPublishedAt?: string;
   lastPublishedBy?: string;
   lastDraftSavedAt?: string;
+}
+
+export interface CivilMigrationReport {
+  executedAt: string;
+  idempotentRun: boolean;
+  matchedExistingCategories: number;
+  updatedCategories: number;
+  createdCategories: number;
+  matchedSubcategories: number;
+  createdSubcategories: number;
+  migratedLegacySubcategories: number;
+  reassignedExtraCategories: number;
+  productsPreserved: number;
+  productsRemapped: number;
+  filterConfigsSeeded: number;
 }
 
 const DEFAULT_TENANT = 'tenant-buildora-blr';
@@ -80,8 +106,10 @@ export class TaxonomyService implements OnModuleInit {
   public productTypes: ProductTypeNode[] = [];
   public desktopNavigation: DesktopNavItem[] = [];
   public categoryFieldSchemas: CategoryFieldSchema[] = [];
+  public categoryFilterConfigs: CategoryFilterConfiguration[] = [];
   public newLaunchCollections: NewLaunchCollection[] = [];
   public migrationRecords: TaxonomyMigrationRecord[] = [];
+  public civilMigrationReport: CivilMigrationReport | null = null;
   private drafts = new Map<string, TenantCatalogDraft>();
   private publishMeta = new Map<string, CatalogPublishMetadata>();
 
@@ -152,10 +180,210 @@ export class TaxonomyService implements OnModuleInit {
         updatedAt: now,
       }));
     }
+    if (this.categoryFilterConfigs.length === 0) {
+      const now = new Date().toISOString();
+      this.categoryFilterConfigs = CATEGORY_FILTER_CONFIGS_SEED.map((fc) => ({
+        ...fc,
+        tenantId,
+        createdAt: now,
+        updatedAt: now,
+      }));
+    }
     if (this.desktopNavigation.length === 0) {
       this.desktopNavigation = this.buildDefaultDesktopNav(tenantId);
     }
+    this.reconcileCivilAndInteriorsTaxonomySync(tenantId);
     this.migrateLegacyCatalogRecords();
+  }
+
+  /**
+   * Idempotently reconciles the exact Civil & Interiors 6 categories (cat-1..cat-6)
+   * and their 34 supplied child categories (ProductTypeNode records), reusing IDs and
+   * preserving 100% of existing products, images, variants, pricing, and stock.
+   */
+  public reconcileCivilAndInteriorsTaxonomySync(tenantId = GLOBAL_TENANT): CivilMigrationReport {
+    const now = new Date().toISOString();
+    const report: CivilMigrationReport = {
+      executedAt: now,
+      idempotentRun: Boolean(this.civilMigrationReport),
+      matchedExistingCategories: 0,
+      updatedCategories: 0,
+      createdCategories: 0,
+      matchedSubcategories: 0,
+      createdSubcategories: 0,
+      migratedLegacySubcategories: 0,
+      reassignedExtraCategories: 0,
+      productsPreserved: dbStore.products.length,
+      productsRemapped: 0,
+      filterConfigsSeeded: 0,
+    };
+
+    const civilSeedMain = MAIN_CATEGORIES_SEED.find((m) => m.id === 'mc-1');
+    if (civilSeedMain) {
+      const existingMain = this.mainCategories.find((m) => m.id === 'mc-1' || m.slug === 'civil-interiors');
+      if (!existingMain) {
+        this.mainCategories.unshift({ ...civilSeedMain, tenantId, createdAt: now, updatedAt: now });
+      }
+    }
+
+    const civilSeedChildren = CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === 'mc-1');
+    const civilChildIds = new Set(civilSeedChildren.map((c) => c.id));
+
+    // Move cat-27 (Bathroom Renovation Materials -> mc-4) & cat-28 (Ceiling & Flooring -> mc-2) out of mc-1 cleanly
+    for (const cc of this.childCategories) {
+      if (cc.mainCategoryId === 'mc-1' && !civilChildIds.has(cc.id)) {
+        if (cc.id === 'cat-27' || cc.slug === 'bathroom-renovation-materials') {
+          cc.mainCategoryId = 'mc-4';
+          cc.mainCategorySlug = 'plumbing-sanitary';
+          cc.updatedAt = now;
+          report.reassignedExtraCategories += 1;
+        } else if (cc.id === 'cat-28' || cc.slug === 'ceiling-flooring') {
+          cc.mainCategoryId = 'mc-2';
+          cc.mainCategorySlug = 'furniture-hardware';
+          cc.updatedAt = now;
+          report.reassignedExtraCategories += 1;
+        }
+      }
+    }
+
+    // Reconcile the 6 exact categories under Civil & Interiors (reusing cat-1..cat-6)
+    for (const seedChild of civilSeedChildren) {
+      const existing = this.childCategories.find(
+        (c) =>
+          c.id === seedChild.id ||
+          (c.mainCategoryId === 'mc-1' &&
+            (c.slug === seedChild.slug || c.name.toLowerCase() === seedChild.name.toLowerCase()))
+      );
+      if (existing) {
+        report.matchedExistingCategories += 1;
+        if (
+          existing.name !== seedChild.name ||
+          existing.slug !== seedChild.slug ||
+          existing.sortOrder !== seedChild.sortOrder ||
+          existing.mainCategoryId !== 'mc-1'
+        ) {
+          existing.name = seedChild.name;
+          existing.slug = seedChild.slug;
+          existing.mainCategoryId = 'mc-1';
+          existing.mainCategorySlug = 'civil-interiors';
+          existing.description = seedChild.description;
+          existing.sortOrder = seedChild.sortOrder;
+          existing.isActive = true;
+          existing.updatedAt = now;
+          report.updatedCategories += 1;
+        }
+      } else {
+        this.childCategories.push({ ...seedChild, tenantId, createdAt: now, updatedAt: now });
+        report.createdCategories += 1;
+      }
+    }
+
+    // Migrate stale legacy sub-1-* .. sub-6-* entries under cat-1..cat-6 and insert missing 34 supplied child categories
+    const civilSeedTypes = PRODUCT_TYPES_SEED.filter((pt) => civilChildIds.has(pt.childCategoryId));
+    const seedTypeIdSet = new Set(civilSeedTypes.map((pt) => pt.id));
+
+    for (const pt of [...this.productTypes]) {
+      if (civilChildIds.has(pt.childCategoryId) && !seedTypeIdSet.has(pt.id)) {
+        const mapped = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[pt.slug?.toLowerCase() || ''];
+        if (mapped) {
+          report.migratedLegacySubcategories += 1;
+          this.productTypes = this.productTypes.filter((x) => x.id !== pt.id);
+        }
+      }
+    }
+
+    for (const seedType of civilSeedTypes) {
+      const existing = this.productTypes.find(
+        (pt) =>
+          pt.id === seedType.id ||
+          (pt.childCategoryId === seedType.childCategoryId &&
+            (pt.slug.toLowerCase() === seedType.slug.toLowerCase() ||
+              pt.name.trim().toLowerCase() === seedType.name.trim().toLowerCase()))
+      );
+      if (existing) {
+        report.matchedSubcategories += 1;
+        existing.mainCategoryId = 'mc-1';
+        existing.childCategoryId = seedType.childCategoryId;
+        existing.childCategorySlug = seedType.childCategorySlug;
+        existing.name = seedType.name;
+        existing.slug = seedType.slug;
+        existing.sortOrder = seedType.sortOrder;
+        existing.isActive = true;
+        existing.updatedAt = now;
+      } else {
+        this.productTypes.push({ ...seedType, tenantId, createdAt: now, updatedAt: now });
+        report.createdSubcategories += 1;
+      }
+    }
+
+    // Reconcile Civil & Interiors CategoryFieldSchemas slugs/defaults without losing Admin custom fields
+    for (const seedSchema of CATEGORY_FIELD_SCHEMAS_SEED.filter((f) => civilChildIds.has(f.childCategoryId))) {
+      const match = this.categoryFieldSchemas.find((f) => f.id === seedSchema.id);
+      if (match) {
+        match.childCategorySlug = seedSchema.childCategorySlug;
+      } else if (
+        !this.categoryFieldSchemas.some(
+          (f) => f.childCategoryId === seedSchema.childCategoryId && f.fieldKey === seedSchema.fieldKey
+        )
+      ) {
+        this.categoryFieldSchemas.push({ ...seedSchema, tenantId, createdAt: now, updatedAt: now });
+      }
+    }
+
+    // Seed missing CategoryFilterConfiguration defaults for Civil & Interiors without overwriting customized rows
+    for (const seedCfg of CATEGORY_FILTER_CONFIGS_SEED) {
+      const match = this.categoryFilterConfigs.find(
+        (c) =>
+          c.id === seedCfg.id ||
+          (c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
+      );
+      if (match) {
+        match.childCategorySlug = seedCfg.childCategorySlug;
+        match.childCategoryName = seedCfg.childCategoryName;
+      } else {
+        this.categoryFilterConfigs.push({ ...seedCfg, tenantId, createdAt: now, updatedAt: now });
+        report.filterConfigsSeeded += 1;
+      }
+    }
+
+    // Upgrade existing products' legacy Civil & Interiors slugs/names while preserving all product fields
+    const childById = new Map(this.childCategories.map((c) => [c.id, c]));
+    const ptById = new Map(this.productTypes.map((t) => [t.id, t]));
+    for (const p of dbStore.products as any[]) {
+      const rawCatSlug = (p.categorySlug || p.childCategorySlug || '').toLowerCase();
+      const rawSubSlug = (p.subcategorySlug || p.productTypeSlug || '').toLowerCase();
+      const aliasCatSlug = LEGACY_CATEGORY_SLUG_ALIASES[rawCatSlug];
+      const aliasSub = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[rawSubSlug];
+
+      if (aliasCatSlug || aliasSub || civilChildIds.has(p.childCategoryId || p.categoryId)) {
+        const targetChildId = aliasSub?.childId || (aliasCatSlug ? this.childCategories.find((c) => c.slug === aliasCatSlug)?.id : undefined) || p.childCategoryId || p.categoryId;
+        const cc = targetChildId ? childById.get(targetChildId) : undefined;
+        if (cc) {
+          p.mainCategoryId = cc.mainCategoryId;
+          p.mainCategorySlug = cc.mainCategorySlug || 'civil-interiors';
+          p.mainCategoryName = 'Civil & Interiors';
+          p.childCategoryId = cc.id;
+          p.childCategorySlug = cc.slug;
+          p.childCategoryName = cc.name;
+          p.categoryId = cc.id;
+          p.categorySlug = cc.slug;
+          p.category = cc.name;
+          report.productsRemapped += 1;
+        }
+        const pt = aliasSub ? ptById.get(aliasSub.productTypeId) : ptById.get(p.productTypeId || p.subcategoryId);
+        if (pt) {
+          p.productTypeId = pt.id;
+          p.productTypeSlug = pt.slug;
+          p.productTypeName = pt.name;
+          p.subcategoryId = pt.id;
+          p.subcategorySlug = pt.slug;
+          p.subcategory = pt.name;
+        }
+      }
+    }
+
+    this.civilMigrationReport = report;
+    return report;
   }
 
   private buildDefaultDesktopNav(tenantId = GLOBAL_TENANT): DesktopNavItem[] {
@@ -235,12 +463,13 @@ export class TaxonomyService implements OnModuleInit {
   }
 
   async hydrateFromDatabase() {
-    const [dbMains, dbChildren, dbTypes, dbCollections, dbFields, dbNavs, dbSnapshots] = await Promise.all([
+    const [dbMains, dbChildren, dbTypes, dbCollections, dbFields, dbFilters, dbNavs, dbSnapshots] = await Promise.all([
       platformPersistenceService.loadAll<MainCategory>(MainCategoryModel),
       platformPersistenceService.loadAll<ChildCategory>(ChildCategoryModel),
       platformPersistenceService.loadAll<ProductTypeNode>(ProductTypeModel),
       platformPersistenceService.loadAll<NewLaunchCollection>(NewLaunchCollectionModel),
       platformPersistenceService.loadAll<CategoryFieldSchema>(CategoryFieldSchemaModel),
+      platformPersistenceService.loadAll<CategoryFilterConfiguration>(CategoryFilterConfigModel),
       platformPersistenceService.loadAll<DesktopNavItem>(DesktopNavItemModel),
       platformPersistenceService.loadAll<any>(CatalogPublishSnapshotModel),
     ]);
@@ -280,6 +509,13 @@ export class TaxonomyService implements OnModuleInit {
       }
     }
 
+    if (dbFilters.length > 0) this.categoryFilterConfigs = dbFilters;
+    else {
+      for (const fc of this.categoryFilterConfigs) {
+        await platformPersistenceService.upsert(CategoryFilterConfigModel, fc);
+      }
+    }
+
     if (dbNavs.length > 0) this.desktopNavigation = dbNavs;
     else {
       for (const nav of this.desktopNavigation) {
@@ -287,19 +523,44 @@ export class TaxonomyService implements OnModuleInit {
       }
     }
 
+    this.reconcileCivilAndInteriorsTaxonomySync(GLOBAL_TENANT);
+
+    // Persist reconciled Civil & Interiors taxonomy changes idempotently if MongoDB is connected
+    if (platformPersistenceService.isDbConnected()) {
+      for (const c of this.childCategories.filter((x) => ['mc-1', 'mc-2', 'mc-4'].includes(x.mainCategoryId))) {
+        await platformPersistenceService.upsert(ChildCategoryModel, c);
+      }
+      for (const pt of this.productTypes.filter((x) => x.mainCategoryId === 'mc-1')) {
+        await platformPersistenceService.upsert(ProductTypeModel, pt);
+      }
+      for (const fc of this.categoryFilterConfigs) {
+        await platformPersistenceService.upsert(CategoryFilterConfigModel, fc);
+      }
+    }
+
     if (dbSnapshots.length > 0) {
       for (const snap of dbSnapshots) {
         if (snap?.tenantId) {
-          this.drafts.set(snap.tenantId, snap);
-          this.publishMeta.set(snap.tenantId, {
-            tenantId: snap.tenantId,
-            hasUnpublishedChanges: Boolean(snap.hasUnpublishedChanges),
-            publishedVersion: Number(snap.publishedVersion || 1),
-            draftVersion: Number(snap.draftVersion || 1),
-            lastPublishedAt: snap.lastPublishedAt,
-            lastPublishedBy: snap.lastPublishedBy,
-            lastDraftSavedAt: snap.lastDraftSavedAt,
-          });
+          // If an old persisted draft still has pre-migration cement-concrete / legacy slugs, refresh cleanly
+          const hasLegacyCement = Array.isArray(snap.childCategories) && snap.childCategories.some((c: any) => c.id === 'cat-1' && c.slug === 'cement-concrete');
+          if (!hasLegacyCement) {
+            if (!Array.isArray(snap.categoryFilterConfigs)) {
+              snap.categoryFilterConfigs = this.cloneRecord(this.categoryFilterConfigs);
+            }
+            if (!Array.isArray(snap.deletedFilterConfigIds)) {
+              snap.deletedFilterConfigIds = [];
+            }
+            this.drafts.set(snap.tenantId, snap);
+            this.publishMeta.set(snap.tenantId, {
+              tenantId: snap.tenantId,
+              hasUnpublishedChanges: Boolean(snap.hasUnpublishedChanges),
+              publishedVersion: Number(snap.publishedVersion || 1),
+              draftVersion: Number(snap.draftVersion || 1),
+              lastPublishedAt: snap.lastPublishedAt,
+              lastPublishedBy: snap.lastPublishedBy,
+              lastDraftSavedAt: snap.lastDraftSavedAt,
+            });
+          }
         }
       }
     }
@@ -308,7 +569,7 @@ export class TaxonomyService implements OnModuleInit {
     this.migrateLegacyCatalogRecords();
     this.syncDbStoreCategories();
     this.logger.log(
-      `Taxonomy ready: ${this.mainCategories.length} Main, ${this.childCategories.length} Child, ${this.productTypes.length} Product Types, ${this.desktopNavigation.length} Desktop Nav items.`
+      `Taxonomy ready: ${this.mainCategories.length} Main, ${this.childCategories.length} Child, ${this.productTypes.length} Product Types, ${this.categoryFilterConfigs.length} Filter Configs.`
     );
   }
 
@@ -403,6 +664,9 @@ export class TaxonomyService implements OnModuleInit {
 
     const pool = this.getTenantPool(cleanTenant);
     const navs = this.getPublishedDesktopNavigation(cleanTenant, true);
+    const filterCfgs = this.categoryFilterConfigs.filter(
+      (fc) => !fc.tenantId || fc.tenantId === GLOBAL_TENANT || fc.tenantId === cleanTenant
+    );
     const meta = this.getPublishMetadata(cleanTenant);
     const draft: TenantCatalogDraft = {
       tenantId: cleanTenant,
@@ -410,10 +674,12 @@ export class TaxonomyService implements OnModuleInit {
       childCategories: this.cloneRecord(pool.childCategories),
       productTypes: this.cloneRecord(pool.productTypes),
       desktopNavigation: this.cloneRecord(navs),
+      categoryFilterConfigs: this.cloneRecord(filterCfgs),
       deletedMainIds: [],
       deletedChildIds: [],
       deletedProductTypeIds: [],
       deletedNavIds: [],
+      deletedFilterConfigIds: [],
       hasUnpublishedChanges: meta.hasUnpublishedChanges,
       publishedVersion: meta.publishedVersion,
       draftVersion: meta.draftVersion,
@@ -1000,10 +1266,10 @@ export class TaxonomyService implements OnModuleInit {
       if (!parentMain) {
         throw new BadRequestException(`Child Category "${c.name}" references missing Main Category.`);
       }
-      const slugKey = c.slug.toLowerCase();
-      const nameKey = c.name.trim().toLowerCase();
-      if (childSlugs.has(slugKey)) throw new BadRequestException(`Duplicate Child Category slug "${c.slug}".`);
-      if (childNames.has(nameKey)) throw new BadRequestException(`Duplicate Child Category name "${c.name}".`);
+      const slugKey = `${c.mainCategoryId}::${c.slug.toLowerCase()}`;
+      const nameKey = `${c.mainCategoryId}::${c.name.trim().toLowerCase()}`;
+      if (childSlugs.has(slugKey)) throw new BadRequestException(`Duplicate Child Category slug "${c.slug}" under ${parentMain.name}.`);
+      if (childNames.has(nameKey)) throw new BadRequestException(`Duplicate Child Category name "${c.name}" under ${parentMain.name}.`);
       childSlugs.add(slugKey);
       childNames.add(nameKey);
       c.mainCategorySlug = parentMain.slug;
@@ -1060,6 +1326,13 @@ export class TaxonomyService implements OnModuleInit {
         await platformPersistenceService.remove(DesktopNavItemModel, removed.id);
       }
     }
+    for (const delFilterId of draft.deletedFilterConfigIds || []) {
+      const idx = this.categoryFilterConfigs.findIndex((fc) => fc.id === delFilterId);
+      if (idx >= 0) {
+        this.categoryFilterConfigs.splice(idx, 1);
+        await platformPersistenceService.remove(CategoryFilterConfigModel, delFilterId);
+      }
+    }
 
     // 3. Promote Upserts cleanly into Live Pools
     for (const mc of draft.mainCategories) {
@@ -1073,6 +1346,12 @@ export class TaxonomyService implements OnModuleInit {
     for (const pt of draft.productTypes) {
       this.upsertArrayById(this.productTypes, pt);
       await platformPersistenceService.upsert(ProductTypeModel, pt);
+    }
+    for (const fc of draft.categoryFilterConfigs || []) {
+      fc.publishedStatus = 'PUBLISHED';
+      fc.updatedAt = now;
+      this.upsertArrayById(this.categoryFilterConfigs, fc);
+      await platformPersistenceService.upsert(CategoryFilterConfigModel, fc);
     }
     this.ensureTenantScopedNavItemsPublished(cleanTenant);
     for (const nav of draft.desktopNavigation) {
@@ -1130,6 +1409,7 @@ export class TaxonomyService implements OnModuleInit {
     draft.deletedChildIds = [];
     draft.deletedProductTypeIds = [];
     draft.deletedNavIds = [];
+    draft.deletedFilterConfigIds = [];
     draft.hasUnpublishedChanges = false;
     draft.publishedVersion = Number(draft.publishedVersion || 1) + 1;
     draft.draftVersion = draft.publishedVersion;
@@ -1473,10 +1753,12 @@ export class TaxonomyService implements OnModuleInit {
     if (!slug) throw new BadRequestException('Valid slug is required.');
     if (
       draft.childCategories.some(
-        (c) => c.slug.toLowerCase() === slug || c.name.trim().toLowerCase() === name.toLowerCase()
+        (c) =>
+          c.mainCategoryId === parent.id &&
+          (c.slug.toLowerCase() === slug || c.name.trim().toLowerCase() === name.toLowerCase())
       )
     ) {
-      throw new BadRequestException(`Child category "${name}" (${slug}) already exists.`);
+      throw new BadRequestException(`Child category "${name}" (${slug}) already exists under ${parent.name}.`);
     }
 
     const now = new Date().toISOString();
@@ -1568,16 +1850,30 @@ export class TaxonomyService implements OnModuleInit {
     if (updates.name !== undefined) {
       const nextName = updates.name.trim();
       if (!nextName) throw new BadRequestException('Child category name cannot be empty.');
-      if (draft.childCategories.some((c) => c.id !== existing.id && c.name.trim().toLowerCase() === nextName.toLowerCase())) {
-        throw new BadRequestException(`Child category "${nextName}" already exists.`);
+      if (
+        draft.childCategories.some(
+          (c) =>
+            c.id !== existing.id &&
+            c.mainCategoryId === existing.mainCategoryId &&
+            c.name.trim().toLowerCase() === nextName.toLowerCase()
+        )
+      ) {
+        throw new BadRequestException(`Child category "${nextName}" already exists under this parent category.`);
       }
       existing.name = nextName;
     }
     if (updates.slug !== undefined) {
       const nextSlug = this.toSlug(updates.slug);
       if (!nextSlug) throw new BadRequestException('Child category slug cannot be empty.');
-      if (draft.childCategories.some((c) => c.id !== existing.id && c.slug.toLowerCase() === nextSlug.toLowerCase())) {
-        throw new BadRequestException(`Child category slug "${nextSlug}" already exists.`);
+      if (
+        draft.childCategories.some(
+          (c) =>
+            c.id !== existing.id &&
+            c.mainCategoryId === existing.mainCategoryId &&
+            c.slug.toLowerCase() === nextSlug.toLowerCase()
+        )
+      ) {
+        throw new BadRequestException(`Child category slug "${nextSlug}" already exists under this parent category.`);
       }
       existing.slug = nextSlug;
     }
@@ -2132,7 +2428,7 @@ export class TaxonomyService implements OnModuleInit {
     specificationEntries: Record<string, string>;
     fieldErrors: Record<string, string>;
   } {
-    const schemas = this.getTenantFieldSchemas(tenantId, childCategoryIdOrSlug, false);
+    const schemas = this.getVendorCombinedCategoryFields(tenantId, childCategoryIdOrSlug);
     const input = rawAttributes && typeof rawAttributes === 'object' ? rawAttributes : {};
     const validatedAttributes: Record<string, any> = {};
     const specificationEntries: Record<string, string> = {};
@@ -2228,6 +2524,360 @@ export class TaxonomyService implements OnModuleInit {
     }
 
     return { validatedAttributes, specificationEntries, fieldErrors };
+  }
+
+  // ==================== CENTRALIZED FILTER CONFIGURATIONS ====================
+
+  private deriveFieldKey(raw: string): string {
+    return String(raw || '')
+      .trim()
+      .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase())
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .replace(/^(.)/, (m) => m.toLowerCase());
+  }
+
+  getCategoryFilterConfigs(
+    tenantId = DEFAULT_TENANT,
+    options: {
+      childCategoryId?: string;
+      useDraft?: boolean;
+      showInCustomer?: boolean;
+      showInVendor?: boolean;
+      includeInactive?: boolean;
+    } = {}
+  ): CategoryFilterConfiguration[] {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const source = options.useDraft
+      ? this.getDraftState(cleanTenant).categoryFilterConfigs || this.categoryFilterConfigs
+      : this.categoryFilterConfigs;
+
+    let targetChildId = '';
+    let targetChildSlug = '';
+    if (options.childCategoryId) {
+      const rawNeedle = options.childCategoryId.trim().toLowerCase();
+      const needle = LEGACY_CATEGORY_SLUG_ALIASES[rawNeedle] || rawNeedle;
+      const pool = options.useDraft
+        ? this.getDraftState(cleanTenant).childCategories
+        : this.childCategories;
+      const child = pool.find(
+        (c) =>
+          (c.id.toLowerCase() === needle || c.slug.toLowerCase() === needle || c.name.trim().toLowerCase() === needle) &&
+          (!c.tenantId || c.tenantId === GLOBAL_TENANT || c.tenantId === cleanTenant)
+      );
+      targetChildId = child?.id || options.childCategoryId;
+      targetChildSlug = child?.slug || needle;
+    }
+
+    return [...source]
+      .filter((fc) => !fc.tenantId || fc.tenantId === GLOBAL_TENANT || fc.tenantId === cleanTenant)
+      .filter((fc) => options.useDraft || fc.publishedStatus === 'PUBLISHED')
+      .filter((fc) => options.includeInactive || fc.isActive !== false)
+      .filter((fc) => options.showInCustomer === undefined || fc.showInCustomer === options.showInCustomer)
+      .filter((fc) => options.showInVendor === undefined || fc.showInVendor === options.showInVendor)
+      .filter((fc) => {
+        if (!options.childCategoryId) return true;
+        return (
+          fc.childCategoryId.toLowerCase() === targetChildId.toLowerCase() ||
+          (fc.childCategorySlug && fc.childCategorySlug.toLowerCase() === targetChildSlug.toLowerCase())
+        );
+      })
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
+
+  async createCategoryFilterConfig(
+    tenantId: string,
+    payload: Partial<CategoryFilterConfiguration> & { saveAsDraft?: boolean }
+  ): Promise<CategoryFilterConfiguration> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const draft = this.getDraftState(cleanTenant);
+    draft.categoryFilterConfigs = draft.categoryFilterConfigs || this.cloneRecord(this.categoryFilterConfigs);
+    draft.deletedFilterConfigIds = draft.deletedFilterConfigIds || [];
+
+    const childNeedle = String(payload.childCategoryId || payload.childCategorySlug || '').trim().toLowerCase();
+    if (!childNeedle) throw new BadRequestException('Child Category is required for filter configuration.');
+    const child = draft.childCategories.find(
+      (c) => c.id.toLowerCase() === childNeedle || c.slug.toLowerCase() === childNeedle
+    );
+    if (!child) throw new BadRequestException(`Category "${childNeedle}" not found.`);
+
+    const filterName = String(payload.filterName || '').trim();
+    if (!filterName) throw new BadRequestException('Filter name is required.');
+    const fieldKey = this.deriveFieldKey(payload.fieldKey || filterName);
+    if (!fieldKey) throw new BadRequestException('Valid field key could not be derived.');
+
+    const existingForCat = draft.categoryFilterConfigs.filter((f) => f.childCategoryId === child.id);
+    if (existingForCat.some((f) => f.fieldKey.toLowerCase() === fieldKey.toLowerCase())) {
+      throw new BadRequestException(`Filter "${filterName}" (${fieldKey}) already exists for ${child.name}.`);
+    }
+
+    const validFieldTypes: FilterFieldType[] = ['CHECKBOX', 'MULTISELECT', 'DROPDOWN', 'RANGE', 'TEXT', 'NUMBER', 'BOOLEAN'];
+    const fieldType: FilterFieldType = validFieldTypes.includes(payload.fieldType as FilterFieldType)
+      ? (payload.fieldType as FilterFieldType)
+      : 'DROPDOWN';
+
+    const optionsList = Array.isArray(payload.options)
+      ? payload.options.map((o) => String(o).trim()).filter(Boolean)
+      : [];
+    if (
+      ['DROPDOWN', 'MULTISELECT', 'CHECKBOX'].includes(fieldType) &&
+      !payload.isStandardField &&
+      optionsList.length === 0
+    ) {
+      throw new BadRequestException('Dropdown, Multi-Select, and Checkbox filter configurations require at least one option.');
+    }
+
+    const parentMain = draft.mainCategories.find((m) => m.id === child.mainCategoryId);
+    const now = new Date().toISOString();
+    const saveAsDraft = payload.saveAsDraft === true;
+
+    const record: CategoryFilterConfiguration = {
+      id: `cfc-${child.id}-${fieldKey}-${Date.now()}`,
+      tenantId: cleanTenant,
+      mainCategoryId: child.mainCategoryId,
+      mainCategoryName: parentMain?.name || 'Civil & Interiors',
+      childCategoryId: child.id,
+      childCategorySlug: child.slug,
+      childCategoryName: child.name,
+      productTypeId: payload.productTypeId || undefined,
+      productTypeSlug: payload.productTypeSlug || undefined,
+      filterName,
+      fieldKey,
+      fieldType,
+      options: optionsList,
+      specKeys: Array.isArray(payload.specKeys) && payload.specKeys.length > 0 ? payload.specKeys : [filterName],
+      catAttrKeys: Array.isArray(payload.catAttrKeys) && payload.catAttrKeys.length > 0 ? payload.catAttrKeys : [fieldKey],
+      isStandardField: payload.isStandardField,
+      selectionMode: payload.selectionMode === 'SINGLE' ? 'SINGLE' : 'MULTI',
+      isRequired: Boolean(payload.isRequired),
+      showInVendor: payload.showInVendor !== false,
+      showInCustomer: payload.showInCustomer !== false,
+      hideEmptyOptions: payload.hideEmptyOptions !== false,
+      sortOrder: Number(payload.sortOrder ?? existingForCat.length + 1),
+      isActive: payload.isActive !== false,
+      publishedStatus: saveAsDraft ? 'DRAFT' : 'PUBLISHED',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    draft.categoryFilterConfigs.push(record);
+    draft.draftVersion += 1;
+    draft.lastDraftSavedAt = now;
+
+    if (saveAsDraft) {
+      draft.hasUnpublishedChanges = true;
+      await this.persistDraftSnapshot(draft);
+      return this.cloneRecord(record);
+    }
+
+    this.upsertArrayById(this.categoryFilterConfigs, record);
+    await platformPersistenceService.upsert(CategoryFilterConfigModel, record);
+    draft.publishedVersion += 1;
+    draft.lastPublishedAt = now;
+    await this.persistDraftSnapshot(draft);
+    return this.cloneRecord(record);
+  }
+
+  async updateCategoryFilterConfig(
+    tenantId: string,
+    id: string,
+    updates: Partial<CategoryFilterConfiguration> & { saveAsDraft?: boolean }
+  ): Promise<CategoryFilterConfiguration> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const draft = this.getDraftState(cleanTenant);
+    draft.categoryFilterConfigs = draft.categoryFilterConfigs || this.cloneRecord(this.categoryFilterConfigs);
+    const existing = draft.categoryFilterConfigs.find((f) => f.id === id);
+    if (!existing) throw new BadRequestException(`Filter configuration ${id} not found.`);
+
+    if (updates.filterName !== undefined) {
+      const nextName = String(updates.filterName).trim();
+      if (!nextName) throw new BadRequestException('Filter name cannot be empty.');
+      existing.filterName = nextName;
+      if (!existing.isStandardField) {
+        existing.specKeys = Array.isArray(updates.specKeys) && updates.specKeys.length > 0 ? updates.specKeys : [nextName];
+      }
+    }
+    if (updates.fieldType !== undefined) existing.fieldType = updates.fieldType;
+    if (updates.options !== undefined) {
+      existing.options = Array.isArray(updates.options)
+        ? updates.options.map((o) => String(o).trim()).filter(Boolean)
+        : [];
+    }
+    if (
+      ['DROPDOWN', 'MULTISELECT', 'CHECKBOX'].includes(existing.fieldType) &&
+      !existing.isStandardField &&
+      existing.options.length === 0
+    ) {
+      throw new BadRequestException('Options list cannot be empty for selection filters.');
+    }
+    if (updates.selectionMode !== undefined) {
+      existing.selectionMode = updates.selectionMode === 'SINGLE' ? 'SINGLE' : 'MULTI';
+    }
+    if (updates.isRequired !== undefined) existing.isRequired = Boolean(updates.isRequired);
+    if (updates.showInVendor !== undefined) existing.showInVendor = Boolean(updates.showInVendor);
+    if (updates.showInCustomer !== undefined) existing.showInCustomer = Boolean(updates.showInCustomer);
+    if (updates.hideEmptyOptions !== undefined) existing.hideEmptyOptions = Boolean(updates.hideEmptyOptions);
+    if (updates.sortOrder !== undefined) existing.sortOrder = Number(updates.sortOrder);
+    if (updates.isActive !== undefined) existing.isActive = Boolean(updates.isActive);
+
+    const now = new Date().toISOString();
+    existing.updatedAt = now;
+    const saveAsDraft = updates.saveAsDraft === true;
+    existing.publishedStatus = saveAsDraft ? 'DRAFT' : 'PUBLISHED';
+
+    draft.draftVersion += 1;
+    draft.lastDraftSavedAt = now;
+
+    if (saveAsDraft) {
+      draft.hasUnpublishedChanges = true;
+      await this.persistDraftSnapshot(draft);
+      return this.cloneRecord(existing);
+    }
+
+    this.upsertArrayById(this.categoryFilterConfigs, existing);
+    await platformPersistenceService.upsert(CategoryFilterConfigModel, existing);
+    draft.publishedVersion += 1;
+    draft.lastPublishedAt = now;
+    await this.persistDraftSnapshot(draft);
+    return this.cloneRecord(existing);
+  }
+
+  async deleteCategoryFilterConfig(
+    tenantId: string,
+    id: string,
+    options: { saveAsDraft?: boolean } = {}
+  ): Promise<{ id: string; deleted: boolean }> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const draft = this.getDraftState(cleanTenant);
+    draft.categoryFilterConfigs = draft.categoryFilterConfigs || this.cloneRecord(this.categoryFilterConfigs);
+    draft.deletedFilterConfigIds = draft.deletedFilterConfigIds || [];
+    const idx = draft.categoryFilterConfigs.findIndex((f) => f.id === id);
+    if (idx < 0) throw new BadRequestException(`Filter configuration ${id} not found.`);
+
+    draft.categoryFilterConfigs.splice(idx, 1);
+    if (!draft.deletedFilterConfigIds.includes(id)) draft.deletedFilterConfigIds.push(id);
+    const now = new Date().toISOString();
+    draft.draftVersion += 1;
+    draft.lastDraftSavedAt = now;
+
+    if (options.saveAsDraft) {
+      draft.hasUnpublishedChanges = true;
+      await this.persistDraftSnapshot(draft);
+      return { id, deleted: true };
+    }
+
+    this.categoryFilterConfigs = this.categoryFilterConfigs.filter((f) => f.id !== id);
+    await platformPersistenceService.remove(CategoryFilterConfigModel, id);
+    draft.publishedVersion += 1;
+    draft.lastPublishedAt = now;
+    await this.persistDraftSnapshot(draft);
+    return { id, deleted: true };
+  }
+
+  /**
+   * Merges published CategoryFieldSchema definitions with Admin-published CategoryFilterConfiguration
+   * items where showInVendor === true so Vendor forms & product validators always reflect Admin filter config.
+   */
+  getVendorCombinedCategoryFields(
+    tenantId = DEFAULT_TENANT,
+    childCategoryIdOrSlug?: string
+  ): CategoryFieldSchema[] {
+    const baseSchemas = this.getTenantFieldSchemas(tenantId, childCategoryIdOrSlug, false);
+    const filterConfigs = this.getCategoryFilterConfigs(tenantId, {
+      childCategoryId: childCategoryIdOrSlug,
+      useDraft: false,
+      showInVendor: true,
+      includeInactive: false,
+    });
+
+    const mapFilterType = (ft: FilterFieldType, mode: FilterSelectionMode): CategoryFieldType => {
+      if (ft === 'NUMBER' || ft === 'RANGE') return 'number';
+      if (ft === 'BOOLEAN') return 'checkbox';
+      if (ft === 'MULTISELECT' || (ft === 'CHECKBOX' && mode === 'MULTI')) return 'multiselect';
+      if (ft === 'DROPDOWN' || ft === 'CHECKBOX') return 'dropdown';
+      return 'text';
+    };
+
+    const byKey = new Map<string, CategoryFieldSchema>();
+    for (const bs of baseSchemas) {
+      byKey.set(`${bs.childCategoryId}::${bs.fieldKey.toLowerCase()}`, { ...bs });
+    }
+
+    for (const fc of filterConfigs) {
+      if (fc.isStandardField === 'brand' || fc.isStandardField === 'price' || fc.isStandardField === 'rating') {
+        continue;
+      }
+      const key = `${fc.childCategoryId}::${fc.fieldKey.toLowerCase()}`;
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.required = fc.isRequired || existing.required;
+        existing.selectionMode = fc.selectionMode;
+        if (Array.isArray(fc.options) && fc.options.length > 0 && (!existing.options || existing.options.length === 0)) {
+          existing.options = fc.options;
+        }
+        existing.label = fc.filterName || existing.label;
+      } else {
+        byKey.set(key, {
+          id: fc.id,
+          tenantId: fc.tenantId,
+          childCategoryId: fc.childCategoryId,
+          childCategorySlug: fc.childCategorySlug || '',
+          fieldKey: fc.fieldKey,
+          label: fc.filterName,
+          fieldType: mapFilterType(fc.fieldType, fc.selectionMode),
+          options: fc.options && fc.options.length > 0 ? fc.options : undefined,
+          required: Boolean(fc.isRequired),
+          selectionMode: fc.selectionMode,
+          showInVendor: true,
+          showInCustomer: fc.showInCustomer,
+          group: 'Filter & Specification Attributes',
+          displayOrder: fc.sortOrder + 50,
+          isActive: fc.isActive,
+          createdAt: fc.createdAt,
+          updatedAt: fc.updatedAt,
+        });
+      }
+    }
+
+    return Array.from(byKey.values()).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  }
+
+  /**
+   * Computes dynamic Customer PLP filters from Admin-published CategoryFilterConfiguration
+   * paired with live approved/published product counts.
+   */
+  getCustomerAvailableFilters(
+    tenantId = DEFAULT_TENANT,
+    categorySlugOrId: string,
+    matchingProducts: any[],
+    childCategories: any[] = [],
+    mainChildCategories: any[] = []
+  ) {
+    const rawNeedle = (categorySlugOrId || '').trim().toLowerCase();
+    const canonicalSlug = LEGACY_CATEGORY_SLUG_ALIASES[rawNeedle] || rawNeedle;
+    const pool = this.getTenantPool(tenantId);
+    const matchedChild = pool.childCategories.find(
+      (c) => c.id.toLowerCase() === rawNeedle || c.slug.toLowerCase() === canonicalSlug
+    );
+    const configs = matchedChild
+      ? this.getCategoryFilterConfigs(tenantId, {
+          childCategoryId: matchedChild.id,
+          useDraft: false,
+          showInCustomer: true,
+          includeInactive: false,
+        })
+      : [];
+    const dimensions = filterConfigsToDimensions(configs);
+    const computedFilters = getAvailableFiltersForCategory(
+      matchedChild?.slug || canonicalSlug,
+      matchingProducts,
+      childCategories,
+      mainChildCategories,
+      dimensions
+    );
+    return {
+      filterConfigs: configs,
+      availableFilters: computedFilters,
+    };
   }
 }
 

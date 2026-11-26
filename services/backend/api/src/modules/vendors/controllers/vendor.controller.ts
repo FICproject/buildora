@@ -3618,7 +3618,12 @@ export class VendorController implements OnModuleInit {
         mainCategories: activeMains,
         childCategories: activeChildren,
         productTypes: activeTypes,
-        fieldSchemas: taxonomyService.getTenantFieldSchemas(tenantId, undefined, false),
+        fieldSchemas: taxonomyService.getVendorCombinedCategoryFields(tenantId, undefined),
+        filterConfigs: taxonomyService.getCategoryFilterConfigs(tenantId, {
+          useDraft: false,
+          showInVendor: true,
+          includeInactive: false,
+        }),
         publishMetadata: taxonomyService.getPublishMetadata(tenantId),
         warehouses: myWarehouses,
         brands,
@@ -3642,7 +3647,7 @@ export class VendorController implements OnModuleInit {
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
-    const fields = taxonomyService.getTenantFieldSchemas(tenantId, childCategoryId, false);
+    const fields = taxonomyService.getVendorCombinedCategoryFields(tenantId, childCategoryId);
     return { success: true, data: fields };
   }
 

@@ -11,6 +11,7 @@ import {
 import { dbStore } from '../../../database/store';
 import {
   CATEGORY_ATTRIBUTE_TEMPLATES,
+  LEGACY_CATEGORY_SLUG_ALIASES,
   getAttributeTemplatesForCategory,
 } from '@buildora/constants';
 import { vendorRecords, vendorProducts } from '../../vendors/controllers/vendor.controller';
@@ -181,7 +182,10 @@ export class ProductsController {
     }
 
     if (childCategory) {
-      const children = childCategory.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+      const rawChildren = childCategory.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+      const children = Array.from(
+        new Set(rawChildren.flatMap((c) => [c, LEGACY_CATEGORY_SLUG_ALIASES[c] || c]))
+      );
       result = result.filter(
         (p) =>
           children.includes(String(p.childCategorySlug || p.categorySlug || '').toLowerCase()) ||
@@ -191,7 +195,10 @@ export class ProductsController {
     }
 
     if (category) {
-      const cats = category.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+      const rawCats = category.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+      const cats = Array.from(
+        new Set(rawCats.flatMap((c) => [c, LEGACY_CATEGORY_SLUG_ALIASES[c] || c]))
+      );
       result = result.filter(
         (p) =>
           cats.includes((p.categorySlug || '').toLowerCase()) ||

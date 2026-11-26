@@ -118,9 +118,12 @@ export const api = {
     return request<any>('/deals', { cache: 'no-store' }, { coupons: [], promotions: [], dealsContent: [], products: [] });
   },
 
-  async getFilters(category?: string): Promise<any> {
-    const qs = category ? `?category=${encodeURIComponent(category)}` : '';
-    return request<any>(`/filters${qs}`, { cache: 'no-store' }, { attributes: [], brands: [], priceRange: null });
+  async getFilters(category?: string, subcategory?: string): Promise<any> {
+    const q = new URLSearchParams();
+    if (category) q.set('category', category);
+    if (subcategory) q.set('subcategory', subcategory);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request<any>(`/filters${qs}`, { cache: 'no-store' }, { filterConfigs: [], availableFilters: [], attributes: [], brands: [], priceRange: null });
   },
 
   async getCoupons(): Promise<any[]> {
