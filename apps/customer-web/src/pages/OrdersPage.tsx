@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useOrderStore } from '../store/useOrderStore';
 import { useCartStore } from '../store/useCartStore';
+import { api } from '../services/api';
 import { formatCurrency } from '@buildora/utils';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -86,15 +87,47 @@ export const OrdersPage: React.FC = () => {
   };
 
   const handleDownloadInvoice = (orderNumber: string) => {
+    const order = orders.find((o) => o.orderNumber === orderNumber);
+    if (order) {
+      const lines = [
+        `BUILDORA 60 - TAX INVOICE`,
+        `Order Number: ${order.orderNumber}`,
+        `Date: ${new Date(order.createdAt).toLocaleString()}`,
+        `Customer: ${order.deliveryAddress?.recipientName || 'Customer'} (${order.deliveryAddress?.mobile || ''})`,
+        order.gstin ? `GSTIN: ${order.gstin} (${order.companyName || ''})` : '',
+        `----------------------------------------`,
+        ...order.items.map((it) => `${it.name} (${it.quantity} ${it.unit}) - ₹${it.totalAmount}`),
+        `----------------------------------------`,
+        `Subtotal: ₹${order.subtotal}`,
+        `GST Total: ₹${order.gstTotal}`,
+        `Delivery Fee: ₹${order.deliveryFee}`,
+        `Grand Total: ₹${order.grandTotal}`,
+      ].filter(Boolean);
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice-${orderNumber}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
     setInvoiceDownloadToast(orderNumber);
     setTimeout(() => setInvoiceDownloadToast(null), 3000);
   };
 
-  const handleSubmitReturn = (e: React.FormEvent) => {
+  const handleSubmitReturn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!returnModalOrder) return;
+    await api.requestReturn(returnModalOrder.id, {
+      reason: returnReason,
+      comments: returnComments,
+    });
+    await syncWithBackend();
     setReturnSuccessToast(true);
     setReturnModalOrder(null);
+    setReturnComments('');
     setTimeout(() => setReturnSuccessToast(false), 4000);
   };
 

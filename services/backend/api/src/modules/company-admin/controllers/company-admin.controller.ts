@@ -31,6 +31,18 @@ import {
 import { vendorPersistenceService } from '../../vendors/services/vendor-persistence.service';
 import { vendorNotificationService } from '../../vendors/services/vendor-notification.service';
 import {
+  PlatformProductModel,
+  PlatformStockMovementModel,
+  PlatformOrderModel,
+  PlatformReturnModel,
+  PlatformSettlementModel,
+  PlatformSupportTicketModel,
+  platformPersistenceService,
+} from '../../../database/platform-persistence.service';
+import { realtimeBus } from '../../realtime/realtime-bus';
+import { platformNotificationService } from '../../notifications/platform-notification.service';
+import { orderSyncService } from '../../orders/services/order-sync.service';
+import {
   companyAdminSecurityService,
   CompanyAdminRole,
   CompanyAdminTokenPayload,
@@ -394,6 +406,26 @@ export class CompanyAdminController {
       ipAddress: req?.ip || '127.0.0.1',
     });
 
+    await platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'VENDOR',
+      recipientId: vendor.id,
+      type: 'VENDOR_ONBOARDING',
+      title: 'Vendor Application Approved',
+      message: body?.notes || `Congratulations ${normalized.businessName}! Your account is approved.`,
+      severity: 'SUCCESS',
+      actionUrl: '/overview',
+      metadata: { vendorId: vendor.id, status: 'APPROVED' },
+      email: normalized.email,
+      phone: normalized.phone,
+    });
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'vendor.application.approved',
+      { vendor: normalized, notes: body?.notes },
+      tenantId
+    );
+
     return { success: true, data: normalized, message: 'Vendor approved and activated.' };
   }
 
@@ -443,6 +475,26 @@ export class CompanyAdminController {
       details: `Rejected vendor ${normalized.businessName}: ${body.reason.trim()}`,
       ipAddress: req?.ip || '127.0.0.1',
     });
+
+    await platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'VENDOR',
+      recipientId: vendor.id,
+      type: 'VENDOR_ONBOARDING',
+      title: 'Vendor Application Rejected',
+      message: body.reason.trim(),
+      severity: 'WARNING',
+      actionUrl: '/application-status',
+      metadata: { vendorId: vendor.id, status: 'REJECTED', reason: body.reason.trim() },
+      email: normalized.email,
+      phone: normalized.phone,
+    });
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'vendor.application.rejected',
+      { vendor: normalized, reason: body.reason.trim() },
+      tenantId
+    );
 
     return { success: true, data: normalized, message: 'Vendor application rejected.' };
   }
@@ -495,6 +547,26 @@ export class CompanyAdminController {
       ipAddress: req?.ip || '127.0.0.1',
     });
 
+    await platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'VENDOR',
+      recipientId: vendor.id,
+      type: 'VENDOR_ONBOARDING',
+      title: 'Action Required: Profile/KYC Corrections Needed',
+      message: body.reason.trim(),
+      severity: 'WARNING',
+      actionUrl: '/application-status',
+      metadata: { vendorId: vendor.id, status: 'RESUBMISSION_REQUIRED', reason: body.reason.trim() },
+      email: normalized.email,
+      phone: normalized.phone,
+    });
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'vendor.application.rejected',
+      { vendor: normalized, reason: body.reason.trim(), action: 'CORRECTION_REQUESTED' },
+      tenantId
+    );
+
     return { success: true, data: normalized, message: 'Correction request sent to vendor.' };
   }
 
@@ -523,6 +595,8 @@ export class CompanyAdminController {
       if (vp.vendorId === id) {
         vp.isActive = false;
         companyAdminDataService.syncCustomerPortalProduct(vp);
+        await platformPersistenceService.upsert(PlatformProductModel, vp);
+        realtimeBus.emitPublic('product.suspended', { productId: vp.id, vendorId: id }, tenantId);
       }
     }
 
@@ -540,6 +614,26 @@ export class CompanyAdminController {
       details: `Suspended vendor ${normalized.businessName}. Products hidden from storefront.`,
       ipAddress: req?.ip || '127.0.0.1',
     });
+
+    await platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'VENDOR',
+      recipientId: vendor.id,
+      type: 'VENDOR_ONBOARDING',
+      title: 'Vendor Account Suspended',
+      message: vendor.suspendedReason,
+      severity: 'CRITICAL',
+      actionUrl: '/account-restricted',
+      metadata: { vendorId: vendor.id, status: 'SUSPENDED' },
+      email: normalized.email,
+      phone: normalized.phone,
+    });
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'vendor.application.rejected',
+      { vendor: normalized, reason: vendor.suspendedReason, action: 'SUSPENDED' },
+      tenantId
+    );
 
     return { success: true, data: normalized };
   }
@@ -563,9 +657,11 @@ export class CompanyAdminController {
     await vendorPersistenceService.saveVendorRecord(vendor);
 
     for (const vp of vendorProducts) {
-      if (vp.vendorId === id && vp.approvalStatus === 'APPROVED') {
+      if (vp.vendorId === id && vp.approvalStatus === 'APPROVED' && !(vp as any).isSuspended) {
         vp.isActive = true;
         companyAdminDataService.syncCustomerPortalProduct(vp);
+        await platformPersistenceService.upsert(PlatformProductModel, vp);
+        realtimeBus.emitPublic('product.updated', { product: vp }, tenantId);
       }
     }
 
@@ -583,6 +679,26 @@ export class CompanyAdminController {
       details: `Re-activated vendor ${normalized.businessName}.`,
       ipAddress: req?.ip || '127.0.0.1',
     });
+
+    await platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'VENDOR',
+      recipientId: vendor.id,
+      type: 'VENDOR_ONBOARDING',
+      title: 'Vendor Account Re-activated',
+      message: `${normalized.businessName} has been re-activated. Approved catalog items are live.`,
+      severity: 'SUCCESS',
+      actionUrl: '/overview',
+      metadata: { vendorId: vendor.id, status: 'APPROVED' },
+      email: normalized.email,
+      phone: normalized.phone,
+    });
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'vendor.application.approved',
+      { vendor: normalized, action: 'ACTIVATED' },
+      tenantId
+    );
 
     return { success: true, data: normalized };
   }
@@ -683,19 +799,52 @@ export class CompanyAdminController {
   }
 
   @Patch('products/:id/approve')
-  approveProduct(
+  async approveProduct(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { notes?: string },
     @Req() req?: any
   ) {
     const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const { product } = this.findTenantProduct(tenantId, id);
 
+    // Apply staged pending revision changes upon approval
+    if (product.pendingRevision && typeof product.pendingRevision === 'object') {
+      Object.assign(product, product.pendingRevision);
+      if (product.mrp && product.price) {
+        product.discount = Math.max(0, Math.round(((Number(product.mrp) - Number(product.price)) / Number(product.mrp)) * 100));
+        product.sellingPrice = Number(product.price);
+      }
+      delete product.pendingRevision;
+      product.revisionStatus = 'APPROVED';
+      product.hasPendingChanges = false;
+    }
+
     product.approvalStatus = 'APPROVED';
     product.isActive = true;
+    product.isSuspended = false;
+    product.rejectionReason = undefined;
+    product.approvedBy = admin.email;
+    product.approvedAt = new Date().toISOString();
+    product.version = (Number(product.version) || 1) + 1;
+    if (!Array.isArray(product.versionHistory)) product.versionHistory = [];
+    product.versionHistory.unshift({
+      version: product.version,
+      action: 'APPROVED',
+      actor: admin.email,
+      notes: body?.notes || 'Approved for Customer Storefront',
+      timestamp: new Date().toISOString(),
+      snapshot: {
+        name: product.name,
+        price: product.price ?? product.sellingPrice,
+        mrp: product.mrp,
+        stockCount: product.stockCount ?? product.stock,
+      },
+    });
     product.updatedAt = new Date().toISOString();
     companyAdminDataService.syncCustomerPortalProduct(product);
+    await platformPersistenceService.upsert(PlatformProductModel, product);
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -710,6 +859,22 @@ export class CompanyAdminController {
       ipAddress: req?.ip || '127.0.0.1',
     });
 
+    if (product.vendorId) {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: product.vendorId,
+        type: 'PRODUCT',
+        title: `Product Approved: ${product.name}`,
+        message: body?.notes || `SKU ${product.sku} is now live on the BUILDORA 60 customer website.`,
+        severity: 'SUCCESS',
+        actionUrl: '/products',
+        metadata: { productId: product.id, sku: product.sku, approvalStatus: 'APPROVED' },
+      });
+      realtimeBus.emitVendorAndAdmin(product.vendorId, 'product.approved', { product }, tenantId);
+    }
+    realtimeBus.emitPublic('product.approved', { product }, tenantId);
+
     return {
       success: true,
       data: product,
@@ -718,7 +883,7 @@ export class CompanyAdminController {
   }
 
   @Patch('products/:id/reject')
-  rejectProduct(
+  async rejectProduct(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
@@ -729,11 +894,29 @@ export class CompanyAdminController {
     if (!body?.reason?.trim()) throw new BadRequestException('Rejection reason is required.');
     const { product } = this.findTenantProduct(tenantId, id);
 
+    // Clear pending revision without overwriting public snapshot if already approved
+    if (product.pendingRevision) {
+      delete product.pendingRevision;
+      product.revisionStatus = 'REJECTED';
+      product.hasPendingChanges = false;
+    }
+
     product.approvalStatus = 'REJECTED';
     product.isActive = false;
     product.rejectionReason = body.reason.trim();
+    product.rejectedBy = admin.email;
+    product.rejectedAt = new Date().toISOString();
+    if (!Array.isArray(product.versionHistory)) product.versionHistory = [];
+    product.versionHistory.unshift({
+      version: product.version || 1,
+      action: 'REJECTED',
+      actor: admin.email,
+      notes: body.reason.trim(),
+      timestamp: new Date().toISOString(),
+    });
     product.updatedAt = new Date().toISOString();
     companyAdminDataService.syncCustomerPortalProduct(product);
+    await platformPersistenceService.upsert(PlatformProductModel, product);
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -748,11 +931,124 @@ export class CompanyAdminController {
       ipAddress: req?.ip || '127.0.0.1',
     });
 
+    if (product.vendorId) {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: product.vendorId,
+        type: 'PRODUCT',
+        title: `Product Rejected: ${product.name}`,
+        message: `Reason: ${body.reason.trim()}`,
+        severity: 'WARNING',
+        actionUrl: '/products',
+        metadata: { productId: product.id, sku: product.sku, reason: body.reason.trim() },
+      });
+      realtimeBus.emitVendorAndAdmin(
+        product.vendorId,
+        'product.rejected',
+        { product, reason: body.reason.trim() },
+        tenantId
+      );
+    }
+
     return { success: true, data: product };
   }
 
+  @Patch('products/:id/suspend')
+  async suspendProduct(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { reason?: string },
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const { product } = this.findTenantProduct(tenantId, id);
+
+    product.isSuspended = true;
+    product.isActive = false;
+    product.suspendedReason = body?.reason || 'Suspended by Company Admin';
+    product.suspendedAt = new Date().toISOString();
+    product.updatedAt = new Date().toISOString();
+    companyAdminDataService.syncCustomerPortalProduct(product);
+    await platformPersistenceService.upsert(PlatformProductModel, product);
+
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'PRODUCT_SUSPENDED',
+      module: 'Catalog',
+      entityType: 'Product',
+      entityId: product.id,
+      details: `Suspended SKU ${product.sku}: ${product.suspendedReason}`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+
+    if (product.vendorId) {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: product.vendorId,
+        type: 'PRODUCT',
+        title: `Product Suspended: ${product.name}`,
+        message: product.suspendedReason,
+        severity: 'CRITICAL',
+        actionUrl: '/products',
+        metadata: { productId: product.id, sku: product.sku },
+      });
+      realtimeBus.emitVendorAndAdmin(product.vendorId, 'product.suspended', { product }, tenantId);
+    }
+    realtimeBus.emitPublic('product.suspended', { productId: product.id, sku: product.sku }, tenantId);
+
+    return { success: true, data: product, message: 'Product suspended and hidden from customers.' };
+  }
+
+  @Patch('products/:id/unsuspend')
+  async unsuspendProduct(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const { product } = this.findTenantProduct(tenantId, id);
+
+    product.isSuspended = false;
+    product.suspendedReason = undefined;
+    if (product.approvalStatus === 'APPROVED') {
+      product.isActive = true;
+    }
+    product.updatedAt = new Date().toISOString();
+    companyAdminDataService.syncCustomerPortalProduct(product);
+    await platformPersistenceService.upsert(PlatformProductModel, product);
+
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'PRODUCT_UNSUSPENDED',
+      module: 'Catalog',
+      entityType: 'Product',
+      entityId: product.id,
+      details: `Unsuspended SKU ${product.sku}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+
+    if (product.vendorId) {
+      realtimeBus.emitVendorAndAdmin(product.vendorId, 'product.updated', { product }, tenantId);
+    }
+    if (product.approvalStatus === 'APPROVED' && product.isActive) {
+      realtimeBus.emitPublic('product.updated', { product }, tenantId);
+    }
+
+    return { success: true, data: product, message: 'Product suspension lifted.' };
+  }
+
   @Post('products/bulk-approve')
-  bulkApproveProducts(
+  async bulkApproveProducts(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
     @Body() body?: { productIds?: string[] },
@@ -769,8 +1065,14 @@ export class CompanyAdminController {
       const { product } = this.findTenantProduct(tenantId, id);
       product.approvalStatus = 'APPROVED';
       product.isActive = true;
+      product.isSuspended = false;
       product.updatedAt = new Date().toISOString();
       companyAdminDataService.syncCustomerPortalProduct(product);
+      await platformPersistenceService.upsert(PlatformProductModel, product);
+      if (product.vendorId) {
+        realtimeBus.emitVendorAndAdmin(product.vendorId, 'product.approved', { product }, tenantId);
+      }
+      realtimeBus.emitPublic('product.approved', { product }, tenantId);
       updated.push(product);
     }
 
@@ -791,7 +1093,7 @@ export class CompanyAdminController {
   }
 
   @Patch('products/:id')
-  updateProduct(
+  async updateProduct(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
@@ -831,6 +1133,7 @@ export class CompanyAdminController {
     }
     product.updatedAt = new Date().toISOString();
     companyAdminDataService.syncCustomerPortalProduct(product);
+    await platformPersistenceService.upsert(PlatformProductModel, product);
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -845,11 +1148,18 @@ export class CompanyAdminController {
       ipAddress: req?.ip || '127.0.0.1',
     });
 
+    if (product.vendorId) {
+      realtimeBus.emitVendorAndAdmin(product.vendorId, 'product.updated', { product }, tenantId);
+    }
+    if (product.approvalStatus === 'APPROVED' && product.isActive !== false) {
+      realtimeBus.emitPublic('product.updated', { product }, tenantId);
+    }
+
     return { success: true, data: product };
   }
 
   @Patch('products/:id/visibility')
-  toggleProductVisibility(
+  async toggleProductVisibility(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
@@ -862,6 +1172,7 @@ export class CompanyAdminController {
     product.isActive = Boolean(body?.isActive);
     product.updatedAt = new Date().toISOString();
     companyAdminDataService.syncCustomerPortalProduct(product);
+    await platformPersistenceService.upsert(PlatformProductModel, product);
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -875,6 +1186,15 @@ export class CompanyAdminController {
       details: `${product.name} visibility set to ${body?.isActive ? 'VISIBLE' : 'HIDDEN'}.`,
       ipAddress: req?.ip || '127.0.0.1',
     });
+
+    if (product.vendorId) {
+      realtimeBus.emitVendorAndAdmin(product.vendorId, 'product.updated', { product }, tenantId);
+    }
+    realtimeBus.emitPublic(
+      product.isActive && product.approvalStatus === 'APPROVED' ? 'product.updated' : 'product.suspended',
+      { productId: product.id, product },
+      tenantId
+    );
 
     return { success: true, data: product };
   }
@@ -1028,7 +1348,7 @@ export class CompanyAdminController {
   }
 
   @Post('inventory/adjust')
-  adjustInventory(
+  async adjustInventory(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
     @Body()
@@ -1057,6 +1377,7 @@ export class CompanyAdminController {
     product.inStock = nextStock > 0;
     product.updatedAt = new Date().toISOString();
     companyAdminDataService.syncCustomerPortalProduct(product);
+    await platformPersistenceService.upsert(PlatformProductModel, product);
 
     const cp = dbStore.products.find((p) => p.id === product.id || p.sku === product.sku);
     if (cp) {
@@ -1081,6 +1402,36 @@ export class CompanyAdminController {
       createdAt: new Date().toISOString(),
     };
     vendorStockMovements.unshift(movement);
+    await platformPersistenceService.upsert(PlatformStockMovementModel, movement);
+
+    const threshold = Number(product.lowStockThreshold ?? 15);
+    if (nextStock <= threshold && product.vendorId) {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: product.vendorId,
+        type: 'STOCK',
+        title: nextStock === 0 ? `Out of Stock: ${product.name}` : `Low Stock Alert: ${product.name}`,
+        message: `Available stock is ${nextStock} units (threshold: ${threshold}).`,
+        severity: nextStock === 0 ? 'CRITICAL' : 'WARNING',
+        actionUrl: '/inventory',
+        metadata: { productId: product.id, stockCount: nextStock },
+      });
+    }
+
+    realtimeBus.emitPublic(
+      'inventory.updated',
+      { productId: product.id, sku: product.sku, stockCount: nextStock, inStock: nextStock > 0 },
+      tenantId
+    );
+    if (product.vendorId) {
+      realtimeBus.emitVendorAndAdmin(
+        product.vendorId,
+        'inventory.updated',
+        { productId: product.id, sku: product.sku, stockCount: nextStock, movement },
+        tenantId
+      );
+    }
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -1219,7 +1570,7 @@ export class CompanyAdminController {
   }
 
   @Patch('orders/:id/status')
-  updateOrderStatus(
+  async updateOrderStatus(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
@@ -1238,21 +1589,70 @@ export class CompanyAdminController {
     const nowIso = new Date().toISOString();
 
     for (const o of dbStore.orders) {
-      if ((o.id === id || o.orderNumber === id) && tenantId === DEFAULT_TENANT_ID) {
+      if ((o.id === id || o.orderNumber === id || o.orderNumber === target.orderNumber) && tenantId === DEFAULT_TENANT_ID) {
         (o as any).status = nextStatus;
         (o as any).updatedAt = nowIso;
+        if (!Array.isArray(o.timeline)) o.timeline = [];
+        o.timeline.push({
+          status: nextStatus as any,
+          title: `Admin updated: ${nextStatus.replace(/_/g, ' ')}`,
+          description: body.note || `Order marked ${nextStatus} by ${admin.name}`,
+          timestamp: nowIso,
+          completed: true,
+        });
+        await platformPersistenceService.upsert(PlatformOrderModel, o);
+        if ((o as any).customerId) {
+          await platformNotificationService.dispatch({
+            tenantId,
+            recipientRole: 'CUSTOMER',
+            recipientId: (o as any).customerId,
+            type: 'ORDER',
+            title: `Order #${o.orderNumber} Updated`,
+            message: body.note || `Your order is now ${nextStatus.replace(/_/g, ' ')}.`,
+            severity: 'INFO',
+            actionUrl: `/orders/${o.orderNumber}`,
+          });
+          realtimeBus.emitToCustomer(
+            (o as any).customerId,
+            'order.status.updated',
+            { orderNumber: o.orderNumber, status: nextStatus, order: o },
+            tenantId
+          );
+        }
       }
     }
     for (const vo of vendorOrders) {
-      if ((vo.id === id || vo.orderNumber === id) && tenantId === DEFAULT_TENANT_ID) {
+      if ((vo.id === id || vo.orderNumber === id || vo.orderNumber === target.orderNumber) && tenantId === DEFAULT_TENANT_ID) {
         (vo as any).status = nextStatus;
         (vo as any).updatedAt = nowIso;
+        if (!Array.isArray(vo.timeline)) vo.timeline = [];
+        vo.timeline.push({
+          status: nextStatus as any,
+          title: `Admin override: ${nextStatus}`,
+          description: body.note || `Updated by Company Admin (${admin.email})`,
+          timestamp: nowIso,
+        });
+        await platformPersistenceService.upsert(PlatformOrderModel, vo);
+        realtimeBus.emitToVendor(vo.vendorId, 'order.status.updated', {
+          orderId: vo.id,
+          orderNumber: vo.orderNumber,
+          status: nextStatus,
+        }, tenantId);
       }
     }
     for (const to of companyAdminDataService.tenantOrders) {
       if (to.tenantId === tenantId && (to.id === id || to.orderNumber === id)) {
         to.status = nextStatus;
         to.updatedAt = nowIso;
+      }
+    }
+
+    if (nextStatus === 'CANCELLED') {
+      const custOrd = dbStore.orders.find(
+        (o) => o.id === id || o.orderNumber === id || o.orderNumber === target.orderNumber
+      );
+      if (custOrd) {
+        await orderSyncService.releaseOrderStock(custOrd, `Cancelled by Admin (${admin.email})`);
       }
     }
 
@@ -1269,6 +1669,8 @@ export class CompanyAdminController {
       ipAddress: req?.ip || '127.0.0.1',
     });
 
+    realtimeBus.emitToAdmin('order.status.updated', { orderNumber: target.orderNumber || target.id, status: nextStatus }, tenantId);
+
     return { success: true, data: { ...target, status: nextStatus } };
   }
 
@@ -1282,11 +1684,11 @@ export class CompanyAdminController {
   }
 
   @Patch('returns/:id')
-  reviewReturn(
+  async reviewReturn(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
-    @Body() body?: { status: 'APPROVED' | 'REJECTED' | 'REFUNDED'; resolutionNote?: string },
+    @Body() body?: { status: 'APPROVED' | 'REJECTED' | 'REFUNDED'; resolutionNote?: string; restockDecision?: boolean },
     @Req() req?: any
   ) {
     const { admin, tenantId } = this.requireAdmin(authHeader, 'orders:manage', headerTenantId);
@@ -1300,6 +1702,31 @@ export class CompanyAdminController {
     ret.status = body?.status || 'APPROVED';
     ret.adminNote = body?.resolutionNote || '';
     ret.resolvedAt = new Date().toISOString();
+    await platformPersistenceService.upsert(PlatformReturnModel, ret);
+
+    await platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'VENDOR',
+      recipientId: ret.vendorId,
+      type: 'ORDER',
+      title: `Return #${ret.id} ${ret.status}`,
+      message: body?.resolutionNote || `Company Admin marked return for order #${ret.orderNumber} as ${ret.status}.`,
+      severity: ret.status === 'REJECTED' ? 'WARNING' : 'INFO',
+      actionUrl: '/returns',
+    });
+    if (ret.customerId) {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'CUSTOMER',
+        recipientId: ret.customerId,
+        type: 'ORDER',
+        title: `Return ${ret.status}: #${ret.orderNumber}`,
+        message: body?.resolutionNote || `Your return request status was updated to ${ret.status}.`,
+        severity: 'INFO',
+        actionUrl: `/orders/${ret.orderNumber}`,
+      });
+    }
+    realtimeBus.emitVendorAndAdmin(ret.vendorId, 'order.status.updated', { returnId: ret.id, status: ret.status }, tenantId);
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -2318,17 +2745,25 @@ export class CompanyAdminController {
       id: `stl-${Date.now()}`,
       settlementNumber: `STL-${Math.floor(10000 + Math.random() * 90000)}`,
       vendorId: vendor.id,
+      period: 'Admin Weekly Settlement',
       periodStart: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0],
       periodEnd: new Date().toISOString().split('T')[0],
       grossAmount: gross,
+      grossRevenue: gross,
       commissionAmount: commission,
+      platformCommission: commission,
       tdsAmount,
+      taxDeductions: tdsAmount,
       netAmount,
+      netPayable: netAmount,
       ordersCount: orders.length || 1,
+      orderCount: orders.length || 1,
       status: 'PENDING',
       createdAt: new Date().toISOString(),
     };
     vendorSettlements.unshift(batch);
+    void platformPersistenceService.upsert(PlatformSettlementModel, batch);
+    realtimeBus.emitVendorAndAdmin(vendor.id, 'settlement.status.updated', { settlement: batch }, tenantId);
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -2380,10 +2815,14 @@ export class CompanyAdminController {
 
     settlement.status = 'PAID';
     settlement.utrNumber = utr;
+    settlement.paymentReference = utr;
     settlement.paymentMode = body?.paymentMode || 'NEFT';
     settlement.paidAt = new Date().toISOString();
     settlement.settledBy = admin.email;
     settlement.remarks = body?.remarks || 'Settled via Company Admin Finance Desk';
+    if (settlement.netAmount === undefined) settlement.netAmount = settlement.netPayable ?? 0;
+    if (settlement.netPayable === undefined) settlement.netPayable = settlement.netAmount ?? 0;
+    void platformPersistenceService.upsert(PlatformSettlementModel, settlement);
 
     vendorNotifications.unshift({
       id: `vnotif-${Date.now()}`,
@@ -2394,6 +2833,24 @@ export class CompanyAdminController {
       read: false,
       createdAt: new Date().toISOString(),
     } as any);
+
+    void platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'VENDOR',
+      recipientId: settlement.vendorId,
+      type: 'SETTLEMENT',
+      title: `Settlement Paid: ${settlement.settlementNumber || settlement.id}`,
+      message: `₹${Number(settlement.netAmount || 0).toLocaleString()} credited via ${settlement.paymentMode} (UTR: ${utr}).`,
+      severity: 'SUCCESS',
+      actionUrl: '/payments',
+      metadata: { settlementId: settlement.id, utrNumber: utr },
+    });
+    realtimeBus.emitVendorAndAdmin(
+      settlement.vendorId,
+      'settlement.status.updated',
+      { settlement },
+      tenantId
+    );
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -2680,6 +3137,31 @@ export class CompanyAdminController {
     ticket.status = body?.status || 'IN_PROGRESS';
     ticket.resolutionNote = body?.resolutionNote || '';
     ticket.updatedAt = new Date().toISOString();
+    void platformPersistenceService.upsert(PlatformSupportTicketModel, ticket);
+
+    if (vndTicket) {
+      void platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: vndTicket.vendorId,
+        type: 'SUPPORT',
+        title: `Ticket ${ticket.ticketNumber || ticket.id}: ${ticket.status}`,
+        message: ticket.resolutionNote || `Support ticket updated to ${ticket.status}.`,
+        severity: 'INFO',
+        actionUrl: '/support',
+      });
+    } else if (custTicket?.customerId) {
+      void platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'CUSTOMER',
+        recipientId: custTicket.customerId,
+        type: 'SUPPORT',
+        title: `Support Ticket ${ticket.ticketNumber}: ${ticket.status}`,
+        message: ticket.resolutionNote || `Your ticket was updated to ${ticket.status}.`,
+        severity: 'INFO',
+        actionUrl: '/support',
+      });
+    }
 
     companyAdminDataService.recordAuditLog({
       tenantId,

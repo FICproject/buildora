@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, CheckCheck, ShoppingCart, Boxes, IndianRupee, Info } from 'lucide-react';
 import { useVendorNotificationStore } from '../../store/useVendorNotificationStore';
 import { PageHeader, Card, Button, Badge, EmptyState } from '../../components/common';
 
 export const VendorNotificationsPage: React.FC = () => {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } =
+  const { notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead } =
     useVendorNotificationStore();
+
+  useEffect(() => {
+    void fetchNotifications();
+  }, [fetchNotifications]);
 
   const [filterType, setFilterType] = useState('ALL');
 

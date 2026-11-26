@@ -1,7 +1,7 @@
 import { useAdminAuthStore } from '../store/useAdminAuthStore';
+import { ADMIN_APP_CONFIG } from '../config';
 
-const API_BASE =
-  (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE = ADMIN_APP_CONFIG.apiBaseUrl;
 
 export const formatINR = (val: number | string | undefined) => {
   const n = Number(val || 0);
@@ -45,10 +45,18 @@ async function rawRequest<T = any>(
     headers['x-tenant-id'] = store.tenant.id;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ADMIN_APP_CONFIG.requestTimeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (res.status === 401 && retryRefresh && store.refreshToken) {
     try {
@@ -180,6 +188,15 @@ export const adminApi = {
     rawRequest<any>(`/company-admin/products/${id}/visibility`, {
       method: 'PATCH',
       body: JSON.stringify({ isActive }),
+    }),
+  suspendProduct: (id: string, reason?: string) =>
+    rawRequest<any>(`/company-admin/products/${id}/suspend`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  unsuspendProduct: (id: string) =>
+    rawRequest<any>(`/company-admin/products/${id}/unsuspend`, {
+      method: 'PATCH',
     }),
   getCatalogTaxonomy: () => rawRequest<any>('/company-admin/catalog/categories'),
   createCategory: (payload: any) =>

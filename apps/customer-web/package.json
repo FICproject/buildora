@@ -11,10 +11,10 @@
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@buildora/config": "workspace:*",
     "@buildora/constants": "workspace:*",
     "@buildora/types": "workspace:*",
     "@buildora/utils": "workspace:*",
-    "@buildora/config": "workspace:*",
     "@tanstack/react-query": "^5.45.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.2.10",
@@ -22,6 +22,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.23.1",
+    "socket.io-client": "^4.8.4",
     "tailwind-merge": "^2.3.0",
     "zustand": "^4.5.2"
   },

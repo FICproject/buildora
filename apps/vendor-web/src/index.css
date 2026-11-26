@@ -45,6 +45,37 @@
   }
 }
 
+/* Dynamic onboarding hero image transitions */
+@keyframes heroSlideForward {
+  0% {
+    opacity: 0;
+    transform: translate3d(20px, 0, 0) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes heroSlideBackward {
+  0% {
+    opacity: 0;
+    transform: translate3d(-20px, 0, 0) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.animate-hero-forward {
+  animation: heroSlideForward 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-hero-backward {
+  animation: heroSlideBackward 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* Clean scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

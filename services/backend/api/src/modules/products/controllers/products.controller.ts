@@ -1,6 +1,58 @@
-import { Controller, Get, Post, Body, Param, Query, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  BadRequestException,
+  NotFoundException
+} from '@nestjs/common';
 import { dbStore } from '../../../database/store';
 import { CATEGORY_ATTRIBUTE_TEMPLATES, getAttributeTemplatesForCategory } from '@buildora/constants';
+import { vendorRecords, vendorProducts } from '../../vendors/controllers/vendor.controller';
+
+export function isProductCustomerVisible(p: any): boolean {
+  if (!p) return false;
+  if (p.isActive === false) return false;
+  if (p.isSuspended === true) return false;
+  if (p.approvalStatus && p.approvalStatus !== 'APPROVED') return false;
+
+  const vp = vendorProducts.find((v) => v.id === p.id || v.sku === p.sku) as any;
+  if (vp) {
+    if (vp.isActive === false || vp.isSuspended === true) return false;
+    if (vp.approvalStatus && vp.approvalStatus !== 'APPROVED') return false;
+  }
+
+  const vendorId = p.vendorId || vp?.vendorId;
+  if (vendorId) {
+    const vendor = vendorRecords.get(vendorId);
+    if (vendor && vendor.status !== 'APPROVED' && (vendor.status as string) !== 'ACTIVE') {
+      return false;
+    }
+  }
+  return true;
+}
+
+function enrichStorefrontProduct(p: any) {
+  const vp = vendorProducts.find((v) => v.id === p.id || v.sku === p.sku) as any;
+  const vendorId = p.vendorId || vp?.vendorId || 'vnd-apex-01';
+  const vendor = vendorRecords.get(vendorId);
+  const totalStock = Number(p.stockCount ?? vp?.stockCount ?? 0);
+  const reserved = Number(p.reservedStock ?? vp?.reservedStock ?? 0);
+  const availableStock = Math.max(0, totalStock - reserved);
+
+  return {
+    ...p,
+    vendorId,
+    vendorName: p.vendorName || vendor?.storeName || vendor?.businessInfo?.businessName || 'Buildora Verified Supplier',
+    vendorCity: vendor?.businessInfo?.address?.city || 'Bengaluru',
+    vendorVerified: vendor ? vendor.status === 'APPROVED' || (vendor.status as string) === 'ACTIVE' : true,
+    reservedStock: reserved,
+    availableStock,
+    inStock: availableStock > 0 && p.isActive !== false
+  };
+}
 
 @Controller('api/v1')
 export class ProductsController {
@@ -46,7 +98,7 @@ export class ProductsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string
   ) {
-    let result = [...dbStore.products];
+    let result = dbStore.products.filter(isProductCustomerVisible).map(enrichStorefrontProduct);
 
     if (category) {
       result = result.filter((p) => p.categorySlug === category || p.category === category);
@@ -164,10 +216,13 @@ export class ProductsController {
 
   @Get('products/:slug')
   getProductBySlug(@Param('slug') slug: string) {
-    const product = dbStore.products.find((p) => p.slug === slug);
+    const raw = dbStore.products.find((p) => p.slug === slug || p.id === slug);
+    if (!raw || !isProductCustomerVisible(raw)) {
+      throw new NotFoundException('Product not found or currently unavailable.');
+    }
     return {
-      success: !!product,
-      data: product
+      success: true,
+      data: enrichStorefrontProduct(raw)
     };
   }
 
@@ -179,12 +234,16 @@ export class ProductsController {
 
     const needle = q.toLowerCase().trim();
 
-    const matchedProducts = dbStore.products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(needle) ||
-        p.brand.toLowerCase().includes(needle) ||
-        p.category.toLowerCase().includes(needle)
-    ).slice(0, 6);
+    const matchedProducts = dbStore.products
+      .filter(isProductCustomerVisible)
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(needle) ||
+          p.brand.toLowerCase().includes(needle) ||
+          p.category.toLowerCase().includes(needle)
+      )
+      .slice(0, 6)
+      .map(enrichStorefrontProduct);
 
     const matchedCategories = dbStore.categories.filter((c) =>
       c.name.toLowerCase().includes(needle)
@@ -224,18 +283,21 @@ export class ProductsController {
     const validatedItems: any[] = [];
 
     for (const item of body.items) {
-      const prod = dbStore.products.find((p) => p.id === item.productId || p.sku === item.productId);
-      if (!prod) {
+      const rawProd = dbStore.products.find(
+        (p) => p.id === item.productId || p.sku === item.productId || `vp-${p.id}` === item.productId
+      );
+      if (!rawProd || !isProductCustomerVisible(rawProd)) {
         issues.push({
           productId: item.productId,
           variantId: item.variantId,
           code: 'PRODUCT_NOT_FOUND',
-          message: `Product is no longer available in the catalog.`
+          message: `Product is no longer available or is currently suspended.`
         });
         continue;
       }
 
-      if (!prod.inStock || prod.stockCount <= 0) {
+      const prod = enrichStorefrontProduct(rawProd);
+      if (!prod.inStock || prod.availableStock <= 0) {
         issues.push({
           productId: prod.id,
           variantId: item.variantId,
@@ -246,7 +308,7 @@ export class ProductsController {
       }
 
       let currentPrice = prod.price;
-      let availableStock = prod.stockCount;
+      let availableStock = prod.availableStock;
 
       if (item.variantId && prod.variants) {
         const variant = prod.variants.find((v) => v.id === item.variantId || v.sku === item.variantId);

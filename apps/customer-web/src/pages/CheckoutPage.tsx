@@ -321,12 +321,7 @@ export const CheckoutPage: React.FC = () => {
       } else {
         // Online Payment Flow (Razorpay Gateway Integration)
         // 1. Create order session on backend
-        const rzpOrderRes = await fetch('http://localhost:3000/api/v1/payments/razorpay/order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: finalPayable })
-        });
-        const rzpData = await rzpOrderRes.json();
+        const rzpData = await api.createRazorpayOrder(finalPayable);
         const rzpOrderId = rzpData?.data?.id || 'order_mock_' + Date.now();
         const rzpKeyId = rzpData?.data?.keyId || 'rzp_test_buildora_mock';
 
@@ -346,16 +341,11 @@ export const CheckoutPage: React.FC = () => {
             theme: { color: '#0f172a' },
             handler: async function (response: any) {
               // Server-side payment verification
-              const verifyRes = await fetch('http://localhost:3000/api/v1/payments/razorpay/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  razorpayOrderId: response.razorpay_order_id,
-                  razorpayPaymentId: response.razorpay_payment_id,
-                  razorpaySignature: response.razorpay_signature
-                })
+              const verifyJson = await api.verifyRazorpayPayment({
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature
               });
-              const verifyJson = await verifyRes.json();
 
               if (verifyJson.success) {
                 // Confirm order
@@ -410,6 +400,7 @@ export const CheckoutPage: React.FC = () => {
             },
             modal: {
               ondismiss: function () {
+                void api.failRazorpayPayment({ razorpayOrderId: rzpOrderId, reason: 'User cancelled payment' });
                 setIsProcessingPayment(false);
                 setPaymentError('Online payment was cancelled. Your cart and selected address have been preserved. You can retry or switch to COD.');
               }
@@ -421,15 +412,10 @@ export const CheckoutPage: React.FC = () => {
         } else {
           // Direct fallback verification for dev/demo mode
           const simulatedPaymentId = 'pay_sim_' + Math.random().toString(36).substring(2, 10);
-          const verifyRes = await fetch('http://localhost:3000/api/v1/payments/razorpay/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpayOrderId: rzpOrderId,
-              razorpayPaymentId: simulatedPaymentId
-            })
+          const verifyJson = await api.verifyRazorpayPayment({
+            razorpayOrderId: rzpOrderId,
+            razorpayPaymentId: simulatedPaymentId
           });
-          const verifyJson = await verifyRes.json();
 
           if (verifyJson.success) {
             const order = await placeOrder({

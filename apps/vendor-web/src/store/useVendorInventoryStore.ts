@@ -53,16 +53,17 @@ export const useVendorInventoryStore = create<VendorInventoryState>((set, get) =
     set({ isLoading: true, error: null });
     try {
       const updated = await vendorApi.adjustInventory(productId, adjustmentType, quantity, reason);
+      const nextStock = Number(updated?.newStock ?? updated?.stock ?? 0);
       set((state) => ({
         inventory: state.inventory.map((item) =>
           item.id === productId
             ? {
                 ...item,
-                stock: updated.stock,
+                stock: nextStock,
                 status:
-                  updated.stock <= 0
+                  nextStock <= 0
                     ? 'OUT_OF_STOCK'
-                    : updated.stock <= item.lowStockThreshold
+                    : nextStock <= item.lowStockThreshold
                     ? 'LOW_STOCK'
                     : 'IN_STOCK',
               }

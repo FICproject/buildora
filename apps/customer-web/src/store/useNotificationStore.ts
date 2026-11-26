@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { api } from '../services/api';
 
 export interface NotificationItem {
   id: string;
@@ -14,6 +15,7 @@ export interface NotificationItem {
 
 interface NotificationStoreState {
   notifications: NotificationItem[];
+  syncNotifications: () => Promise<void>;
   unreadCount: (isAuthenticated: boolean) => number;
   getVisibleNotifications: (isAuthenticated: boolean) => NotificationItem[];
   markAsRead: (id: string) => void;
@@ -69,6 +71,23 @@ export const useNotificationStore = create<NotificationStoreState>()(
   persist(
     (set, get) => ({
       notifications: DEFAULT_NOTIFICATIONS,
+
+      syncNotifications: async () => {
+        const res = await api.getNotifications();
+        if (res?.items && res.items.length > 0) {
+          const mapped: NotificationItem[] = res.items.map((n: any) => ({
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            time: new Date(n.createdAt).toLocaleString(),
+            read: Boolean(n.read),
+            type: n.type === 'PAYMENT' ? 'WALLET' : n.type === 'ORDER' ? 'DISPATCH' : 'ANNOUNCEMENT',
+            link: n.actionUrl || '/notifications',
+            isGuestVisible: false,
+          }));
+          set({ notifications: mapped });
+        }
+      },
 
       unreadCount: (isAuthenticated: boolean) => {
         const visible = get().getVisibleNotifications(isAuthenticated);

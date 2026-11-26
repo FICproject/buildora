@@ -141,16 +141,22 @@ export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
     },
 
     fetchProfile: async () => {
-      set({ isLoading: true });
+      set({ isLoading: true, error: null });
       try {
-        const profile = await vendorApi.getProfile();
-        if (profile) {
+        const raw: any = await vendorApi.getProfile();
+        const profile: VendorProfile | null = raw?.vendor || raw;
+        if (profile && profile.id) {
           localStorage.setItem(SAVED_VENDOR_KEY, JSON.stringify(profile));
-          set({ vendor: profile, isLoading: false });
+          set({ vendor: profile, isLoading: false, error: null });
+          return profile;
         }
-        return profile;
-      } catch (err: any) {
         set({ isLoading: false });
+        return null;
+      } catch (err: any) {
+        set({
+          isLoading: false,
+          error: err?.message || 'Unable to load business profile.'
+        });
         return null;
       }
     },

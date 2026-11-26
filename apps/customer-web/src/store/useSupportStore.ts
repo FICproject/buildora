@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { SupportTicket } from '@buildora/types';
+import { api } from '../services/api';
 
 interface SupportStoreState {
   tickets: SupportTicket[];
+  syncTickets: () => Promise<void>;
   createTicket: (data: {
     category: SupportTicket['category'];
     priority: SupportTicket['priority'];
@@ -47,6 +49,13 @@ export const useSupportStore = create<SupportStoreState>()(
     (set, get) => ({
       tickets: INITIAL_DEMO_TICKETS,
 
+      syncTickets: async () => {
+        const list = await api.getSupportTickets();
+        if (Array.isArray(list) && list.length > 0) {
+          set({ tickets: list });
+        }
+      },
+
       createTicket: (data) => {
         const id = 'tkt-' + Date.now();
         const ticketNumber = 'TKT-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
@@ -69,10 +78,18 @@ export const useSupportStore = create<SupportStoreState>()(
         };
 
         set((state) => ({ tickets: [newTicket, ...state.tickets] }));
+        void api.createSupportTicket(data).then((res) => {
+          if (res?.data) {
+            set((state) => ({
+              tickets: state.tickets.map((t) => (t.id === id ? res.data : t))
+            }));
+          }
+        });
         return newTicket;
       },
 
       addMessage: (ticketId, message) => {
+        void api.addSupportMessage(ticketId, message);
         set((state) => ({
           tickets: state.tickets.map((t) => {
             if (t.id !== ticketId) return t;

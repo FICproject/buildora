@@ -1,4 +1,18 @@
-import { Controller, Post, Get, Body, Headers, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Headers,
+  UnauthorizedException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { signCustomerToken, verifyCustomerToken } from '../../../common/customer-auth.util';
+import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
+import {
+  companyAdminPersistenceService,
+  CompanyCustomerModel,
+} from '../../company-admin/services/company-admin-persistence.service';
 
 @Controller('api/v1/auth')
 export class AuthController {
@@ -8,19 +22,19 @@ export class AuthController {
     if (cleanPhone.length !== 10) {
       return {
         success: false,
-        message: 'Please provide a valid 10-digit Indian mobile number.'
+        message: 'Please provide a valid 10-digit Indian mobile number.',
       };
     }
 
     return {
       success: true,
       message: 'OTP sent successfully to +91 ' + cleanPhone,
-      devOtpHint: '6060'
+      devOtpHint: '6060',
     };
   }
 
   @Post('verify-otp')
-  verifyOtp(@Body() body: { phone: string; otp: string }) {
+  async verifyOtp(@Body() body: { phone: string; otp: string; name?: string; email?: string }) {
     const { phone, otp } = body;
     if (!phone || !otp) {
       throw new UnauthorizedException('Phone and OTP are required');
@@ -31,29 +45,75 @@ export class AuthController {
     }
 
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length !== 10) {
+      throw new UnauthorizedException('Invalid 10-digit phone number.');
+    }
 
-    const user = {
-      id: 'cust-' + cleanPhone,
-      name: 'Arjun Verma',
+    const existing = Array.from(companyAdminDataService.customers.values()).find(
+      (c) => c.phone === cleanPhone || c.id === `cust-${cleanPhone}`
+    );
+
+    if (existing && (existing.status === 'BLOCKED' || (existing.status as string) === 'SUSPENDED')) {
+      throw new ForbiddenException(
+        'Your account has been suspended by Buildora Compliance. Please contact support.'
+      );
+    }
+
+    const customerId = existing?.id || `cust-${cleanPhone}`;
+    const customerRecord: any = existing || {
+      id: customerId,
+      tenantId: 'tenant-buildora-blr',
+      name: body.name || 'Arjun Verma',
       phone: cleanPhone,
-      email: 'arjun.verma@buildora.com',
-      isPhoneVerified: true,
-      isEmailVerified: true,
-      gstin: '29AABCB1234F1Z8',
-      businessName: 'Apex Infra Construction Ltd',
+      email: body.email || `customer.${cleanPhone}@buildora.com`,
+      customerType: 'CONTRACTOR' as const,
+      gstin: cleanPhone === '9876543210' ? '29AABCB1234F1Z8' : undefined,
+      businessName: cleanPhone === '9876543210' ? 'Apex Infra Construction Ltd' : undefined,
+      totalOrders: 0,
+      totalSpent: 0,
       walletBalance: 1250,
-      rewardPoints: 480,
-      role: 'CONTRACTOR',
-      createdAt: new Date().toISOString()
+      status: 'ACTIVE' as const,
+      city: 'Bengaluru',
+      pincode: '560001',
+      recentActivity: [],
+      createdAt: new Date().toISOString(),
     };
 
-    const token = 'jwt-buildora-token-' + cleanPhone + '-' + Date.now();
+    if (!existing) {
+      companyAdminDataService.customers.set(customerId, customerRecord);
+      await companyAdminPersistenceService.upsert(CompanyCustomerModel, customerRecord);
+    }
+
+    const { accessToken } = signCustomerToken({
+      id: customerRecord.id,
+      phone: customerRecord.phone,
+      email: customerRecord.email,
+      name: customerRecord.name,
+      tenantId: customerRecord.tenantId,
+      role: customerRecord.customerType === 'BUILDER' ? 'BUILDER' : 'CONTRACTOR',
+    });
+
+    const user = {
+      id: customerRecord.id,
+      name: customerRecord.name,
+      phone: customerRecord.phone,
+      email: customerRecord.email,
+      isPhoneVerified: true,
+      isEmailVerified: true,
+      gstin: customerRecord.gstin || '',
+      businessName: customerRecord.businessName || '',
+      walletBalance: customerRecord.walletBalance ?? 0,
+      rewardPoints: 480,
+      status: customerRecord.status,
+      role: customerRecord.customerType,
+      createdAt: customerRecord.createdAt,
+    };
 
     return {
       success: true,
       message: 'Authentication successful',
-      token,
-      user
+      token: accessToken,
+      user,
     };
   }
 
@@ -62,23 +122,52 @@ export class AuthController {
     if (!authHeader) {
       return {
         authenticated: false,
-        user: null
+        user: null,
+      };
+    }
+
+    const verified = verifyCustomerToken(authHeader);
+    if (!verified) {
+      return {
+        authenticated: false,
+        user: null,
+      };
+    }
+
+    const customer = companyAdminDataService.customers.get(verified.sub) as any;
+    if (customer && (customer.status === 'BLOCKED' || (customer.status as string) === 'SUSPENDED')) {
+      return {
+        authenticated: false,
+        suspended: true,
+        user: null,
       };
     }
 
     return {
       authenticated: true,
-      user: {
-        id: 'cust-demo-1',
-        name: 'Arjun Verma',
-        phone: '9876543210',
-        email: 'arjun.verma@buildora.com',
-        isPhoneVerified: true,
-        gstin: '29AABCB1234F1Z8',
-        businessName: 'Apex Infra Construction Ltd',
-        walletBalance: 1250,
-        rewardPoints: 480
-      }
+      user: customer
+        ? {
+            id: customer.id,
+            name: customer.name,
+            phone: customer.phone,
+            email: customer.email,
+            isPhoneVerified: true,
+            gstin: customer.gstin || '',
+            businessName: customer.businessName || '',
+            walletBalance: customer.walletBalance ?? 0,
+            rewardPoints: 480,
+            status: customer.status,
+          }
+        : {
+            id: verified.sub,
+            name: verified.name || 'Buildora Customer',
+            phone: verified.phone,
+            email: verified.email || '',
+            isPhoneVerified: true,
+            walletBalance: 0,
+            rewardPoints: 0,
+            status: 'ACTIVE',
+          },
     };
   }
 
@@ -86,7 +175,7 @@ export class AuthController {
   logout() {
     return {
       success: true,
-      message: 'Logged out successfully'
+      message: 'Logged out successfully',
     };
   }
 }

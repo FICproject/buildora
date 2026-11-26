@@ -102,6 +102,27 @@ class VendorPersistenceService {
       return 0;
     }
   }
+
+  /**
+   * Loads a single vendor record by ID directly from MongoDB and hydrates the in-memory map if found.
+   */
+  async loadVendorById(vendorId: string, targetMap?: Map<string, any>): Promise<any | null> {
+    if (!this.isDbConnected() || !vendorId) return null;
+    try {
+      const doc = await VendorMongoModel.findOne({ id: vendorId }).lean().exec();
+      if (!doc) return null;
+      const clean = { ...doc };
+      delete (clean as any)._id;
+      delete (clean as any).__v;
+      if (targetMap && clean.id) {
+        targetMap.set(clean.id, clean);
+      }
+      return clean;
+    } catch (err: any) {
+      this.logger.warn(`MongoDB loadVendorById failed for ${vendorId}: ${err.message}`);
+      return null;
+    }
+  }
 }
 
 export const vendorPersistenceService = new VendorPersistenceService();

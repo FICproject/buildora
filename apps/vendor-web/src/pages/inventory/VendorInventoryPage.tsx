@@ -56,7 +56,7 @@ export const VendorInventoryPage: React.FC = () => {
         vendorApi.getWarehouses(),
       ]);
       setMovements(mvs || []);
-      setWarehouses(whRes.data || []);
+      setWarehouses(Array.isArray(whRes) ? whRes : whRes?.data || []);
     } catch {}
   };
 

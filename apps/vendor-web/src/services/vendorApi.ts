@@ -430,37 +430,8 @@ async function request<T>(path: string, options: RequestInit = {}, fallbackData?
   throw new Error('Unable to connect to the server. Please try again.');
 }
 
-function broadcastProductChange(prod: any) {
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const bc = new BroadcastChannel('buildora_product_sync');
-      bc.postMessage({
-        type: 'PRODUCT_UPDATED',
-        productId: prod.id,
-        sku: prod.sku,
-        slug: prod.slug,
-        timestamp: Date.now()
-      });
-      bc.close();
-    }
-    const raw = localStorage.getItem('buildora_vendor_product_overrides');
-    const overrides = raw ? JSON.parse(raw) : {};
-    const key = prod.id.replace(/^vp-/, '');
-    overrides[key] = {
-      price: prod.price,
-      mrp: prod.mrp,
-      discount: prod.discount,
-      stockCount: prod.stockCount || prod.stock,
-      inStock: prod.inStock,
-      variants: prod.variants,
-      attributes: prod.attributes,
-      bulkPricing: prod.bulkPricing,
-      isBulkEligible: prod.isBulkEligible
-    };
-    if (prod.sku) overrides[prod.sku] = overrides[key];
-    if (prod.slug) overrides[prod.slug] = overrides[key];
-    localStorage.setItem('buildora_vendor_product_overrides', JSON.stringify(overrides));
-  } catch {}
+function broadcastProductChange(_prod: any) {
+  // Handled server-side via NestJS -> MongoDB/Storefront & Socket.IO /realtime
 }
 
 export const vendorApi = {
@@ -825,7 +796,16 @@ export const vendorApi = {
   },
 
   async getProfile(): Promise<VendorProfile> {
-    return request<VendorProfile>('/vendor/auth/me', {}, localVendor);
+    const res = await apiRequest<any>('/vendor/auth/me', {
+      method: 'GET',
+      retryOnTransient: true,
+      fallbackErrorMessage: 'Unable to load vendor business profile.'
+    });
+    const profile = res?.vendor || res?.data || res;
+    if (!profile || !profile.id) {
+      throw new Error('Unable to load vendor business profile.');
+    }
+    return profile as VendorProfile;
   },
 
   // Onboarding
@@ -873,47 +853,13 @@ export const vendorApi = {
     const q = period ? `?period=${encodeURIComponent(period)}` : '';
     return request<VendorDashboardMetrics & Record<string, any>>(
       `/vendor/dashboard/metrics${q}`,
-      {},
-      {
-        totalProducts: localProducts.length,
-        activeProducts: localProducts.filter((p) => p.isActive).length,
-        pendingApprovalProducts: localProducts.filter((p) => p.approvalStatus === 'PENDING_APPROVAL').length,
-        lowStockCount: localProducts.filter((p) => p.stockCount <= p.lowStockThreshold && p.stockCount > 0).length,
-        outOfStockCount: localProducts.filter((p) => p.stockCount === 0).length,
-        totalOrders: localOrders.length + 46,
-        newOrders: localOrders.filter((o) => o.status === 'NEW').length,
-        pendingOrders: localOrders.filter((o) => o.status === 'NEW' || o.status === 'ACCEPTED').length,
-        processingOrders: localOrders.filter((o) => o.status === 'PROCESSING' || o.status === 'READY_FOR_DISPATCH').length,
-        dispatchedOrders: localOrders.filter((o) => o.status === 'DISPATCHED').length,
-        deliveredOrders: 46,
-        grossRevenue: 156650,
-        netEarnings: 147290,
-        pendingSettlement: 50948,
-        completedPayouts: 92590,
-      }
+      {}
     );
   },
 
   async getDashboardCharts(period?: string) {
     const q = period ? `?period=${encodeURIComponent(period)}` : '';
-    const fallbackTrends = [
-      { date: '18 Nov', revenue: 18500, orders: 6 },
-      { date: '19 Nov', revenue: 16800, orders: 5 },
-      { date: '20 Nov', revenue: 22400, orders: 8 },
-      { date: '21 Nov', revenue: 26900, orders: 9 },
-      { date: '22 Nov', revenue: 31200, orders: 11 },
-      { date: '23 Nov', revenue: 22700, orders: 7 },
-      { date: '24 Nov', revenue: 34100, orders: 12 },
-    ];
-    return request(
-      `/vendor/dashboard/charts${q}`,
-      {},
-      {
-        revenueTrends: fallbackTrends,
-        salesTrend: fallbackTrends,
-        recentOrders: localOrders,
-      }
-    );
+    return request<any>(`/vendor/dashboard/charts${q}`, {});
   },
 
   // Products
@@ -928,152 +874,65 @@ export const vendorApi = {
   },
 
   async createProduct(product: Partial<VendorProduct>): Promise<VendorProduct> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/products`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(product),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        broadcastProductChange(json.data);
-        return json.data;
-      }
-    } catch {}
-
-    const id = `vp-${Date.now()}`;
-    const newP: VendorProduct = {
-      ...(product as any),
-      id,
-      vendorId: 'vnd-apex-01',
-      tenantId: 'tenant-buildora-blr',
-      approvalStatus: 'APPROVED',
-      isActive: true,
-      rating: 5.0,
-      reviewCount: 0,
-      stockCount: (product as any).stock || 100,
-      stock: (product as any).stock || 100,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    localProducts.unshift(newP);
-    broadcastProductChange(newP);
-    return newP;
+    const created = await apiRequest<any>('/vendor/products', {
+      method: 'POST',
+      body: product,
+      fallbackErrorMessage: 'Failed to submit product.'
+    });
+    return created?.data || created;
   },
 
   async updateProduct(id: string, updates: Partial<VendorProduct>): Promise<VendorProduct> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/products/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        broadcastProductChange(json.data);
-        return json.data;
-      }
-    } catch {}
-
-    const idx = localProducts.findIndex((p) => p.id === id);
-    if (idx !== -1) {
-      localProducts[idx] = {
-        ...localProducts[idx],
-        ...updates,
-        stockCount: updates.stock !== undefined ? updates.stock : localProducts[idx].stockCount,
-        updatedAt: new Date().toISOString(),
-      };
-      broadcastProductChange(localProducts[idx]);
-      return localProducts[idx];
-    }
-    throw new Error('Product not found');
+    const updated = await apiRequest<any>(`/vendor/products/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: updates,
+      fallbackErrorMessage: 'Failed to update product.'
+    });
+    return updated?.data || updated;
   },
 
   async deleteProduct(id: string): Promise<boolean> {
-    try {
-      await fetch(`${API_BASE_URL}/vendor/products/${id}`, { method: 'DELETE' });
-    } catch {}
-    localProducts = localProducts.filter((p) => p.id !== id);
+    await apiRequest(`/vendor/products/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      fallbackErrorMessage: 'Failed to remove product.'
+    });
     return true;
   },
 
   // Bulk Pricing
   async updateBulkPricing(productId: string, bulkPricing: BulkPriceTier[]): Promise<VendorProduct> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/products/${productId}/bulk-pricing`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bulkPricing }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        broadcastProductChange(json.data);
-        return json.data;
-      }
-    } catch {}
-
-    const prod = localProducts.find((p) => p.id === productId);
-    if (prod) {
-      prod.bulkPricing = bulkPricing;
-      prod.isBulkEligible = bulkPricing.length > 0;
-      broadcastProductChange(prod);
-      return prod;
-    }
-    throw new Error('Product not found');
+    const res = await apiRequest<any>(`/vendor/products/${encodeURIComponent(productId)}/bulk-pricing`, {
+      method: 'PUT',
+      body: { bulkPricing },
+      fallbackErrorMessage: 'Failed to update bulk pricing.'
+    });
+    return res?.data || res;
   },
 
   // Inventory
   async getInventory() {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/inventory`, {
-        headers: { ...getAuthHeaders() },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const items = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
-        if (items.length > 0) {
-          return items.map((item: any, idx: number) => {
-            const stock = Number(item.stockCount ?? item.stock ?? 0);
-            const threshold = Number(item.lowStockThreshold ?? 30);
-            return {
-              id: item.productId || item.id,
-              name: item.name,
-              sku: item.sku,
-              category: item.category,
-              stock,
-              reservedStock: Number(item.reservedStock ?? (idx % 3 === 0 ? 10 : 4)),
-              lowStockThreshold: threshold,
-              reorderPoint: threshold * 1.5,
-              warehouseLocation: item.warehouse || item.warehouseLocation || 'WH-BLR-04 Peenya Hub',
-              status:
-                stock <= 0
-                  ? ('OUT_OF_STOCK' as const)
-                  : stock <= threshold
-                  ? ('LOW_STOCK' as const)
-                  : ('IN_STOCK' as const),
-            };
-          });
-        }
-      }
-    } catch {}
-
-    return localProducts.map((p, idx) => ({
-      id: p.id,
-      name: p.name,
-      sku: p.sku,
-      category: p.category,
-      stock: p.stockCount || 0,
-      reservedStock: idx % 3 === 0 ? 10 : 4,
-      lowStockThreshold: p.lowStockThreshold || 30,
-      reorderPoint: (p.lowStockThreshold || 30) * 1.5,
-      warehouseLocation: p.warehouseLocation || 'WH-BLR-04 Peenya Hub',
-      status:
-        (p.stockCount || 0) <= 0
-          ? ('OUT_OF_STOCK' as const)
-          : (p.stockCount || 0) <= (p.lowStockThreshold || 30)
-          ? ('LOW_STOCK' as const)
-          : ('IN_STOCK' as const),
-    }));
+    const items = await request<any[]>('/vendor/inventory', {}, []);
+    return items.map((item: any) => {
+      const stock = Number(item.stockCount ?? item.stock ?? 0);
+      const threshold = Number(item.lowStockThreshold ?? 30);
+      return {
+        id: item.productId || item.id,
+        name: item.name,
+        sku: item.sku,
+        category: item.category,
+        stock,
+        reservedStock: Number(item.reservedStock ?? 0),
+        lowStockThreshold: threshold,
+        reorderPoint: threshold * 1.5,
+        warehouseLocation: item.warehouse || item.warehouseLocation || 'Primary Depot',
+        status:
+          stock <= 0
+            ? ('OUT_OF_STOCK' as const)
+            : stock <= threshold
+            ? ('LOW_STOCK' as const)
+            : ('IN_STOCK' as const),
+      };
+    });
   },
 
   async adjustInventory(
@@ -1086,103 +945,56 @@ export const vendorApi = {
   },
 
   async adjustStock(productId: string, adjustmentType: 'ADD' | 'SUBTRACT' | 'SET', quantity: number, reason: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/inventory/adjust`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId, adjustmentType, quantity, reason }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-
-    const prod = localProducts.find((p) => p.id === productId);
-    if (prod) {
-      if (adjustmentType === 'ADD') prod.stockCount += quantity;
-      else if (adjustmentType === 'SUBTRACT') prod.stockCount = Math.max(0, prod.stockCount - quantity);
-      else prod.stockCount = quantity;
-      prod.stock = prod.stockCount;
-      prod.inStock = prod.stockCount > 0;
-    }
-    return { success: true, stock: prod?.stockCount || 0 };
+    const res = await apiRequest<any>('/vendor/inventory/adjust', {
+      method: 'POST',
+      body: { productId, adjustmentType, quantity, reason },
+      fallbackErrorMessage: 'Failed to adjust inventory.'
+    });
+    return res?.data || res;
   },
 
   // Orders
   async getOrders(status?: string): Promise<VendorOrder[]> {
     const q = status ? `?status=${status}` : '';
-    return request<VendorOrder[]>(`/vendor/orders${q}`, {}, localOrders);
+    return request<VendorOrder[]>(`/vendor/orders${q}`, {}, []);
   },
 
   async updateOrderStatus(orderId: string, status: VendorOrder['status'], note?: string): Promise<VendorOrder> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, note }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json.data;
-      }
-    } catch {}
-
-    const ord = localOrders.find((o) => o.id === orderId);
-    if (ord) {
-      ord.status = status;
-      ord.timeline.push({
-        status,
-        title: `Order marked as ${status}`,
-        description: note,
-        timestamp: new Date().toISOString(),
-      });
-      return ord;
-    }
-    throw new Error('Order not found');
+    const res = await apiRequest<any>(`/vendor/orders/${encodeURIComponent(orderId)}/status`, {
+      method: 'PUT',
+      body: { status, note },
+      fallbackErrorMessage: 'Failed to update order status.'
+    });
+    return res?.data || res;
   },
 
   // Settlements
   async getSettlements(): Promise<VendorSettlement[]> {
-    return request<VendorSettlement[]>('/vendor/settlements', {}, localSettlements);
+    return request<VendorSettlement[]>('/vendor/settlements', {}, []);
   },
 
   async getSettlementSummary() {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/settlements/summary`, {
-        headers: { ...getAuthHeaders() },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return {
-          totalGrossRevenue: json.grossSales ?? json.totalGrossRevenue ?? 312500,
-          totalCommissionPaid: json.platformCommission ?? json.totalCommissionPaid ?? 25000,
-          totalGstDeductions: json.taxDeducted ?? json.totalGstDeductions ?? 3125,
-          totalNetPayout: json.netEarnings ?? json.totalNetPayout ?? 284375,
-          pendingPayout: json.pendingPayout ?? 74200,
-          nextPayoutDate: json.nextPayoutDate ?? 'Friday 27 Nov 2026',
-        };
-      }
-    } catch {}
-
+    const json = await request<any>('/vendor/settlements/summary', {});
     return {
-      totalGrossRevenue: 312500,
-      totalCommissionPaid: 25000,
-      totalGstDeductions: 3125,
-      totalNetPayout: 284375,
-      pendingPayout: 74200,
-      nextPayoutDate: 'Friday 27 Nov 2026',
+      totalGrossRevenue: json.grossSales ?? json.totalGrossRevenue ?? 0,
+      totalCommissionPaid: json.platformCommission ?? json.totalCommissionPaid ?? 0,
+      totalGstDeductions: json.taxDeducted ?? json.totalGstDeductions ?? 0,
+      totalNetPayout: json.netEarnings ?? json.totalNetPayout ?? 0,
+      pendingPayout: json.pendingPayout ?? 0,
+      nextPayoutDate: json.nextPayoutDate ?? 'Weekly Cycle',
     };
   },
 
   // Notifications
   async getNotifications(): Promise<VendorNotification[]> {
-    return request<VendorNotification[]>('/vendor/notifications', {}, localNotifications);
+    return request<VendorNotification[]>('/vendor/notifications', {}, []);
   },
 
   async markNotificationRead(id: string): Promise<boolean> {
-    try {
-      await fetch(`${API_BASE_URL}/vendor/notifications/${id}/read`, { method: 'PUT' });
-    } catch {}
-    const notif = localNotifications.find((n) => n.id === id);
-    if (notif) notif.read = true;
+    await apiRequest(`/vendor/notifications/${encodeURIComponent(id)}/read`, {
+      method: 'PUT',
+      fallbackErrorMessage: 'Failed to mark notification read.'
+    });
     return true;
   },
 
@@ -1191,10 +1003,10 @@ export const vendorApi = {
   },
 
   async markAllNotificationsRead(): Promise<boolean> {
-    try {
-      await fetch(`${API_BASE_URL}/vendor/notifications/read-all`, { method: 'PUT' });
-    } catch {}
-    localNotifications.forEach((n) => (n.read = true));
+    await apiRequest('/vendor/notifications/read-all', {
+      method: 'PUT',
+      fallbackErrorMessage: 'Failed to mark notifications read.'
+    });
     return true;
   },
 
@@ -1205,392 +1017,163 @@ export const vendorApi = {
   // Category Dynamic Attributes
   async getCategoryAttributes(category?: string) {
     const q = category ? `?category=${category}` : '';
-    return request<any>(`/vendor/categories/attributes${q}`, {}, {
-      attributes: [
-        { name: 'Grade / Specification', uiType: 'pills', options: ['53 Grade IS 12269', 'PPC IS 1489', 'Premium Structural'] },
-        { name: 'Package Unit', uiType: 'cards', options: ['50kg Bag', '1000kg Jumbo Bag'] }
-      ]
-    });
+    return request<any>(`/vendor/categories/attributes${q}`, {}, { attributes: [] });
   },
 
   // Bulk Product Import & Export
   async bulkImportProducts(products: Partial<VendorProduct>[]) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/products/bulk-import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return json;
-      }
-    } catch {}
-    return { success: true, importedCount: products.length };
+    return apiRequest('/vendor/products/bulk-import', {
+      method: 'POST',
+      body: { products },
+      fallbackErrorMessage: 'Bulk import failed.'
+    });
   },
 
   async exportProducts() {
-    return request<any>('/vendor/products/export', {}, { count: localProducts.length, data: localProducts });
+    return request<any>('/vendor/products/export', {}, { count: 0, data: [] });
   },
 
   async updateProductVariants(id: string, variants: any[], attributes?: any[]) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/products/${id}/variants`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variants, attributes }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    const p = localProducts.find((item) => item.id === id);
-    if (p) {
-      p.variants = variants;
-      if (attributes) p.attributes = attributes;
-      broadcastProductChange(p);
-    }
-    return { success: true, variants, attributes };
+    return apiRequest(`/vendor/products/${encodeURIComponent(id)}/variants`, {
+      method: 'PUT',
+      body: { variants, attributes },
+      fallbackErrorMessage: 'Failed to update product variants.'
+    });
   },
 
   async getAllBulkPricing() {
-    return request<any>('/vendor/bulk-pricing/all', {}, {
-      count: 3,
-      data: localProducts.filter((p) => p.isBulkEligible).map((p) => ({
-        id: p.id,
-        name: p.name,
-        sku: p.sku,
-        category: p.category,
-        basePrice: p.price,
-        mrp: p.mrp,
-        bulkPricing: p.bulkPricing
-      }))
-    });
+    return request<any>('/vendor/bulk-pricing/all', {}, { count: 0, data: [] });
   },
 
   // Stock Movements & Warehouses
   async getStockMovements(productId?: string): Promise<VendorStockMovement[]> {
     const q = productId ? `?productId=${productId}` : '';
-    return request<VendorStockMovement[]>(`/vendor/inventory/movements${q}`, {}, [
-      {
-        id: 'sm-1',
-        productId: 'vp-prod-cem-1',
-        productName: 'UltraTech Super Cement (PPC)',
-        sku: 'CEM-ULT-PPC-50KG',
-        warehouseId: 'wh-1',
-        warehouseName: 'Peenya Central Dispatch Depot',
-        type: 'INWARD',
-        quantityDelta: 200,
-        quantityBefore: 50,
-        quantityAfter: 250,
-        reason: 'Direct plant consignment receipt from Rajashree Cement Works',
-        referenceNumber: 'GRN-2026-0819',
-        performedBy: 'Ramesh Gowda',
-        createdAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString()
-      },
-      {
-        id: 'sm-2',
-        productId: 'vp-prod-cem-1',
-        productName: 'UltraTech Super Cement (PPC)',
-        sku: 'CEM-ULT-PPC-50KG',
-        warehouseId: 'wh-1',
-        warehouseName: 'Peenya Central Dispatch Depot',
-        type: 'DISPATCH',
-        quantityDelta: -10,
-        quantityBefore: 250,
-        quantityAfter: 240,
-        reason: '60-Min express site dispatch for Order #BLD-2026-8941',
-        referenceNumber: 'DSP-2026-4410',
-        performedBy: 'Mohan Reddy',
-        createdAt: new Date(Date.now() - 35 * 60 * 1000).toISOString()
-      }
-    ]);
+    return request<VendorStockMovement[]>(`/vendor/inventory/movements${q}`, {}, []);
   },
 
   async getWarehouses(): Promise<{ data: VendorWarehouse[]; darkStores: any[] }> {
-    return request<any>('/vendor/warehouses', {}, {
-      data: [
-        {
-          id: 'wh-1',
-          name: 'Peenya Central Dispatch Depot',
-          address: 'Plot 88, Peenya 2nd Stage, Industrial Area',
-          city: 'Bengaluru',
-          state: 'Karnataka',
-          pincode: '560058',
-          contactPerson: 'Ramesh Gowda',
-          phone: '9845012348',
-          isPrimary: true
-        },
-        {
-          id: 'wh-blr-02',
-          name: 'Whitefield Dark Store Hub',
-          address: 'Survey No. 42, ITPL Main Road, Hoodi',
-          city: 'Bengaluru',
-          state: 'Karnataka',
-          pincode: '560066',
-          contactPerson: 'Anand Murthy',
-          phone: '9845099881',
-          isPrimary: false
-        }
-      ],
-      darkStores: Object.values(BENGALURU_WAREHOUSES)
-    });
+    const raw = await apiRequest<any>('/vendor/warehouses', { method: 'GET' });
+    return {
+      data: Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [],
+      darkStores: raw?.darkStores || Object.values(BENGALURU_WAREHOUSES),
+    };
   },
 
   async createWarehouse(wh: Partial<VendorWarehouse>) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/warehouses`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(wh),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, data: { ...wh, id: `wh-${Date.now()}` } };
+    return apiRequest('/vendor/warehouses', {
+      method: 'POST',
+      body: wh,
+      fallbackErrorMessage: 'Failed to create warehouse.'
+    });
   },
 
   async updateWarehouse(id: string, wh: Partial<VendorWarehouse>) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/warehouses/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(wh),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, data: { ...wh, id } };
+    return apiRequest(`/vendor/warehouses/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: wh,
+      fallbackErrorMessage: 'Failed to update warehouse.'
+    });
   },
 
   async deleteWarehouse(id: string) {
-    try {
-      await fetch(`${API_BASE_URL}/vendor/warehouses/${id}`, { method: 'DELETE' });
-    } catch {}
-    return { success: true };
+    return apiRequest(`/vendor/warehouses/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      fallbackErrorMessage: 'Failed to delete warehouse.'
+    });
   },
 
   // Order Actions & Packing Slip
   async acceptOrder(id: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/orders/${id}/accept`, { method: 'POST' });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true };
+    return apiRequest(`/vendor/orders/${encodeURIComponent(id)}/accept`, {
+      method: 'POST',
+      fallbackErrorMessage: 'Failed to accept order.'
+    });
   },
 
   async rejectOrder(id: string, reason: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/orders/${id}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true };
+    return apiRequest(`/vendor/orders/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      body: { reason },
+      fallbackErrorMessage: 'Failed to reject order.'
+    });
   },
 
   async getOrderPackingSlip(id: string) {
-    return request<any>(`/vendor/orders/${id}/packing-slip`, {}, {
-      slipNumber: `PS-${id}`,
-      generatedAt: new Date().toISOString(),
-      vendor: localVendor.businessInfo,
-      assignedDarkStore: BENGALURU_WAREHOUSES['WH-BLR-04']
-    });
+    return request<any>(`/vendor/orders/${encodeURIComponent(id)}/packing-slip`, {});
   },
 
   // Returns & Refunds
   async getReturns(status?: string): Promise<VendorReturnRequest[]> {
     const q = status ? `?status=${status}` : '';
-    return request<VendorReturnRequest[]>(`/vendor/returns${q}`, {}, [
-      {
-        id: 'ret-101',
-        orderId: 'vo-100',
-        orderNumber: 'BLD-2026-8940',
-        vendorId: 'vnd-apex-01',
-        customerId: 'cust-8821',
-        customerName: 'Suresh Kumar',
-        customerPhone: '9845099887',
-        items: [
-          {
-            productId: 'prod-ele-1',
-            name: 'Finolex Flame Retardant 2.5 sq mm Copper Wire',
-            sku: 'ELE-FIN-25-RED',
-            quantity: 2,
-            price: 1725,
-            returnReason: 'Wrong wire gauge ordered by electrician',
-            productCondition: 'SEALED'
-          }
-        ],
-        totalRefundAmount: 3450,
-        status: 'REFUNDED',
-        pickupAddress: 'Villa 18, Palm Meadows, Whitefield, Bengaluru 560066',
-        requestedAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-        resolvedAt: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
-        restockDecision: true
-      }
-    ]);
+    return request<VendorReturnRequest[]>(`/vendor/returns${q}`, {}, []);
   },
 
   async updateReturnStatus(id: string, status: string, restockDecision?: boolean, rejectionReason?: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/returns/${id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, restockDecision, rejectionReason }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, status };
+    return apiRequest(`/vendor/returns/${encodeURIComponent(id)}/status`, {
+      method: 'PUT',
+      body: { status, restockDecision, rejectionReason },
+      fallbackErrorMessage: 'Failed to update return status.'
+    });
   },
 
   // Promotions & Deals
   async getPromotions(): Promise<VendorPromotion[]> {
-    return request<VendorPromotion[]>('/vendor/promotions', {}, [
-      {
-        id: 'promo-01',
-        vendorId: 'vnd-apex-01',
-        title: 'Monsoon Foundation & Structural Cement Sale',
-        description: 'Flat 8% instant discount on orders above 25 bags of UltraTech & ACC Cement.',
-        discountType: 'PERCENTAGE',
-        discountValue: 8,
-        startDate: '2026-11-01T00:00:00Z',
-        endDate: '2026-11-30T23:59:59Z',
-        applicableProductIds: ['vp-prod-cem-1'],
-        status: 'ACTIVE',
-        bannerText: 'EXTRA 8% OFF ON 25+ BAGS',
-        usageCount: 42,
-        salesGenerated: 184500
-      }
-    ]);
+    return request<VendorPromotion[]>('/vendor/promotions', {}, []);
   },
 
   async createPromotion(promo: Partial<VendorPromotion>) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/promotions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(promo),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, data: { ...promo, id: `promo-${Date.now()}` } };
+    return apiRequest('/vendor/promotions', {
+      method: 'POST',
+      body: promo,
+      fallbackErrorMessage: 'Failed to create promotion.'
+    });
   },
 
   async updatePromotionStatus(id: string, status: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/promotions/${id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, status };
+    return apiRequest(`/vendor/promotions/${encodeURIComponent(id)}/status`, {
+      method: 'PUT',
+      body: { status },
+      fallbackErrorMessage: 'Failed to update promotion status.'
+    });
   },
 
   // New Launches Spotlight
   async getNewLaunches(): Promise<VendorProduct[]> {
-    return request<VendorProduct[]>('/vendor/new-launches', {}, localProducts.filter((p) => p.isNewLaunch));
+    return request<VendorProduct[]>('/vendor/new-launches', {}, []);
   },
 
   async addNewLaunch(id: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/new-launches/${id}`, { method: 'POST' });
-      if (res.ok) return await res.json();
-    } catch {}
-    const p = localProducts.find((item) => item.id === id);
-    if (p) {
-      p.isNewLaunch = true;
-      broadcastProductChange(p);
-    }
-    return { success: true };
+    return apiRequest(`/vendor/new-launches/${encodeURIComponent(id)}`, { method: 'POST' });
   },
 
   async removeNewLaunch(id: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/new-launches/${id}`, { method: 'DELETE' });
-      if (res.ok) return await res.json();
-    } catch {}
-    const p = localProducts.find((item) => item.id === id);
-    if (p) {
-      p.isNewLaunch = false;
-      broadcastProductChange(p);
-    }
-    return { success: true };
+    return apiRequest(`/vendor/new-launches/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
 
   // Customer Reviews
   async getReviews(): Promise<{ averageRating: number; totalCount: number; data: VendorProductReview[] }> {
-    return request<any>('/vendor/reviews', {}, {
-      averageRating: 4.8,
-      totalCount: 3,
-      data: [
-        {
-          id: 'rev-01',
-          productId: 'vp-prod-cem-1',
-          productName: 'UltraTech Super Cement (PPC)',
-          sku: 'CEM-ULT-PPC-50KG',
-          customerName: 'Arjun Sharma (Site Engineer)',
-          rating: 5,
-          title: 'Fresh mill stock delivered in under 45 minutes',
-          comment: 'Cement bags arrived completely dry with zero clumps or moisture damage. Initial setting time test was exactly 42 minutes.',
-          verifiedPurchase: true,
-          createdAt: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-          vendorReply: {
-            message: 'Thank you Arjun! All our cement consignments are directly dispatched from authorized depot.',
-            repliedAt: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),
-            repliedBy: 'Vikramaditya Rao'
-          }
-        }
-      ]
-    });
+    return apiRequest<any>('/vendor/reviews', { method: 'GET' });
   },
 
   async replyToReview(id: string, message: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/reviews/${id}/reply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, message };
+    return apiRequest(`/vendor/reviews/${encodeURIComponent(id)}/reply`, {
+      method: 'POST',
+      body: { message },
+      fallbackErrorMessage: 'Failed to reply to review.'
+    });
   },
 
   // Invoices & GST Documents
   async getInvoices(): Promise<VendorInvoice[]> {
-    return request<VendorInvoice[]>('/vendor/invoices', {}, [
-      {
-        id: 'inv-1001',
-        invoiceNumber: 'INV-BLD-2026-1001',
-        orderId: 'vo-101',
-        orderNumber: 'BLD-2026-8941',
-        vendorId: 'vnd-apex-01',
-        customerName: 'Arjun Sharma',
-        customerGstin: '29AAFCS8291K1Z5',
-        invoiceDate: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        subtotal: 3950,
-        discount: 0,
-        taxableAmount: 3950,
-        cgstAmount: 355.5,
-        sgstAmount: 355.5,
-        igstAmount: 0,
-        totalAmount: 4661,
-        pdfUrl: '/docs/invoice-sample.pdf',
-        status: 'GENERATED'
-      }
-    ]);
+    return request<VendorInvoice[]>('/vendor/invoices', {}, []);
   },
 
   async requestSettlementPayout(amount?: number) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/settlements/request-payout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, message: 'On-demand bank payout requested.' };
+    return apiRequest('/vendor/settlements/request-payout', {
+      method: 'POST',
+      body: { amount },
+      fallbackErrorMessage: 'Failed to request settlement payout.'
+    });
   },
 
   // Sales Analytics & Reports
@@ -1598,171 +1181,80 @@ export const vendorApi = {
     const q = new URLSearchParams();
     if (period) q.set('period', period);
     if (category) q.set('category', category);
-    return request<any>(`/vendor/reports/sales?${q.toString()}`, {}, {
-      period: period || 'Last 30 Days',
-      totalRevenue: 168400,
-      totalOrders: 52,
-      averageOrderValue: 3238,
-      topCategories: [
-        { name: 'Civil & Interiors', revenue: 78500, percentage: 46.6 },
-        { name: 'Plumbing & Pipes', revenue: 42300, percentage: 25.1 },
-        { name: 'Electrical & Lighting', revenue: 32600, percentage: 19.3 },
-        { name: 'Plywood & Hardware', revenue: 15000, percentage: 9.0 }
-      ],
-      dailySummary: [
-        { date: '2026-11-20', sales: 22400, orders: 8 },
-        { date: '2026-11-21', sales: 26900, orders: 9 },
-        { date: '2026-11-22', sales: 31200, orders: 11 },
-        { date: '2026-11-23', sales: 22700, orders: 7 },
-        { date: '2026-11-24', sales: 34100, orders: 12 }
-      ]
-    });
+    return request<any>(`/vendor/reports/sales?${q.toString()}`, {});
   },
 
   // Team & RBAC
   async getTeam(): Promise<VendorEmployee[]> {
-    return request<VendorEmployee[]>('/vendor/team', {}, [
-      {
-        id: 'emp-01',
-        vendorId: 'vnd-apex-01',
-        name: 'Vikramaditya Rao',
-        email: 'vendor@buildora.in',
-        phone: '9845012345',
-        role: 'VENDOR_OWNER',
-        status: 'ACTIVE',
-        permissions: ['ALL_PERMISSIONS'],
-        invitedAt: '2026-01-10T09:00:00Z',
-        lastLoginAt: new Date().toISOString()
-      },
-      {
-        id: 'emp-02',
-        vendorId: 'vnd-apex-01',
-        name: 'Ramesh Gowda',
-        email: 'ramesh.gowda@supremebuild.com',
-        phone: '9845012348',
-        role: 'VENDOR_ADMIN',
-        status: 'ACTIVE',
-        permissions: ['CATALOG_EDIT', 'INVENTORY_MANAGE', 'ORDERS_MANAGE'],
-        invitedAt: '2026-01-12T10:00:00Z'
-      }
-    ]);
+    return request<VendorEmployee[]>('/vendor/team', {}, []);
   },
 
   async inviteTeamMember(data: any) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/team/invite`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, data: { ...data, id: `emp-${Date.now()}` } };
+    return apiRequest('/vendor/team/invite', {
+      method: 'POST',
+      body: data,
+      fallbackErrorMessage: 'Failed to invite team member.'
+    });
   },
 
   async updateTeamRole(id: string, role: string, permissions?: string[]) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/team/${id}/role`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, permissions }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, role };
+    return apiRequest(`/vendor/team/${encodeURIComponent(id)}/role`, {
+      method: 'PUT',
+      body: { role, permissions },
+      fallbackErrorMessage: 'Failed to update team role.'
+    });
   },
 
   async removeTeamMember(id: string) {
-    try {
-      await fetch(`${API_BASE_URL}/vendor/team/${id}`, { method: 'DELETE' });
-    } catch {}
-    return { success: true };
+    return apiRequest(`/vendor/team/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
 
   async getTeamAuditLogs() {
-    return request<any>('/vendor/team/audit-logs', {}, localVendor.auditLogs || []);
+    return request<any>('/vendor/team/audit-logs', {}, []);
   },
 
   // Support Tickets
   async getSupportTickets(): Promise<VendorSupportTicket[]> {
-    return request<VendorSupportTicket[]>('/vendor/support/tickets', {}, [
-      {
-        id: 'tkt-01',
-        ticketNumber: 'TKT-2026-891',
-        vendorId: 'vnd-apex-01',
-        subject: 'Express dispatch bay access card for Whitefield Dark Store WH-BLR-02',
-        category: 'DARK_STORE_LOGISTICS',
-        priority: 'HIGH',
-        description: 'Our EV mini-truck driver was delayed at gate 2 security check due to missing RFID delivery badge.',
-        status: 'IN_PROGRESS',
-        createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-        updatedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-        messages: [
-          {
-            id: 'msg-1',
-            sender: 'Mohan Reddy',
-            senderRole: 'VENDOR',
-            text: 'Driver vehicle KA-04-MB-4819 needs fast-lane RFID tag for Whitefield depot intake.',
-            timestamp: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
-          }
-        ]
-      }
-    ]);
+    return request<VendorSupportTicket[]>('/vendor/support/tickets', {}, []);
   },
 
   async createSupportTicket(data: any) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/support/tickets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, data: { ...data, id: `tkt-${Date.now()}` } };
+    return apiRequest('/vendor/support/tickets', {
+      method: 'POST',
+      body: data,
+      fallbackErrorMessage: 'Failed to submit support ticket.'
+    });
   },
 
   async addSupportTicketMessage(id: string, text: string) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/support/tickets/${id}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return { success: true, text };
+    return apiRequest(`/vendor/support/tickets/${encodeURIComponent(id)}/messages`, {
+      method: 'POST',
+      body: { text },
+      fallbackErrorMessage: 'Failed to send message.'
+    });
   },
 
   // Vendor Profile, Bank & Settings
   async updateProfile(payload: any) {
-    const token = localStorage.getItem('buildora_vendor_token');
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload?.businessInfo || payload?.storeName || payload?.logoUrl !== undefined ? payload : { businessInfo: payload }),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    localVendor.businessInfo = { ...localVendor.businessInfo, ...(payload?.businessInfo || payload) };
-    return { success: true, data: localVendor };
+    const res = await apiRequest<any>('/vendor/profile', {
+      method: 'PUT',
+      body:
+        payload?.businessInfo ||
+        payload?.storeName ||
+        payload?.logoUrl !== undefined
+          ? payload
+          : { businessInfo: payload },
+      fallbackErrorMessage: 'Failed to update business profile.'
+    });
+    return res;
   },
 
   async updateBankDetails(bankDetails: any) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/vendor/profile/bank`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bankDetails),
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    localVendor.businessInfo.bankDetails = { ...localVendor.businessInfo.bankDetails, ...bankDetails };
-    return { success: true, data: localVendor.businessInfo.bankDetails };
+    return apiRequest<any>('/vendor/profile/bank', {
+      method: 'PUT',
+      body: bankDetails,
+      fallbackErrorMessage: 'Failed to update bank account details.'
+    });
   },
 
   async updateSecuritySettings(data: { currentPassword?: string; newPassword?: string; enable2FA?: boolean }) {

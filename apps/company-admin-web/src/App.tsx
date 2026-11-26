@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { initAdminRealtime, disconnectAdminRealtime } from './services/realtime';
 import { AdminLayout, ProtectedRoute } from './components/layout/AdminLayout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -19,6 +20,11 @@ import {
 } from './pages/TeamSupportSettingsPage';
 
 export function App() {
+  useEffect(() => {
+    initAdminRealtime();
+    return () => disconnectAdminRealtime();
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>

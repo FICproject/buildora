@@ -54,6 +54,21 @@ import { postalLookupService } from '../services/postal-lookup.service';
 import { storageService } from '../services/storage.service';
 import { vendorPersistenceService } from '../services/vendor-persistence.service';
 import {
+  PlatformProductModel,
+  PlatformOrderModel,
+  PlatformReturnModel,
+  PlatformSettlementModel,
+  PlatformStockMovementModel,
+  PlatformWarehouseModel,
+  PlatformSupportTicketModel,
+  PlatformWalletTxnModel,
+  platformPersistenceService
+} from '../../../database/platform-persistence.service';
+import { realtimeBus } from '../../realtime/realtime-bus';
+import { platformNotificationService } from '../../notifications/platform-notification.service';
+import { companyAdminSecurityService } from '../../company-admin/services/company-admin-security.service';
+import { orderSyncService } from '../../orders/services/order-sync.service';
+import {
   validateName,
   validateBusinessName,
   validateLegalBusinessName,
@@ -162,6 +177,7 @@ function initSeedVendors() {
         city: 'Bengaluru',
         state: 'Karnataka',
         pincode: '560058',
+        country: 'India',
         lat: 13.0285,
         lng: 77.5195
       },
@@ -170,6 +186,7 @@ function initSeedVendors() {
         bankName: 'HDFC Bank',
         accountNumber: '50200049182341',
         ifsc: 'HDFC0000053',
+        accountType: 'CURRENT',
         branch: 'Peenya Industrial Branch, Bengaluru',
         isVerified: true
       },
@@ -524,17 +541,11 @@ export function findVendorByIdentifier(identifier: string): BackendVendorRecord 
   return undefined;
 }
 
-// Helper to resolve vendor from Authorization Header
+// Helper to resolve vendor from Authorization Header (verifies signed JWT first)
 export function getVendorFromAuthHeader(authHeader?: string): BackendVendorRecord {
-  if (!authHeader) {
-    return vendorRecords.get(DEFAULT_VENDOR_ID)!;
-  }
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  // Check if token contains sub/id
-  for (const v of vendorRecords.values()) {
-    if (token.includes(v.id) || token.includes(v.email)) {
-      return v;
-    }
+  const authenticated = getAuthenticatedVendor(authHeader);
+  if (authenticated) {
+    return authenticated;
   }
   return vendorRecords.get(DEFAULT_VENDOR_ID)!;
 }
@@ -554,6 +565,154 @@ export function getAuthenticatedVendor(authHeader?: string): BackendVendorRecord
     }
   }
   return null;
+}
+
+// Async strict resolver: checks in-memory map and hydrates from MongoDB on demand if needed
+export async function resolveStrictAuthenticatedVendor(authHeader?: string): Promise<BackendVendorRecord> {
+  if (!authHeader) {
+    throw new UnauthorizedException('Authentication token is required.');
+  }
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  if (!token) {
+    throw new UnauthorizedException('Invalid authorization token.');
+  }
+  const verified = vendorSecurityService.verifyToken(token);
+  if (verified?.vendorId) {
+    const cached = vendorRecords.get(verified.vendorId);
+    if (cached) return cached;
+    const fromDb = await vendorPersistenceService.loadVendorById(verified.vendorId, vendorRecords);
+    if (fromDb) return fromDb as BackendVendorRecord;
+    throw new UnauthorizedException('Authenticated vendor account not found. Please sign in again.');
+  }
+  const fallbackMatch = getAuthenticatedVendor(authHeader);
+  if (fallbackMatch) return fallbackMatch;
+  throw new UnauthorizedException('Session expired or invalid token. Please sign in again.');
+}
+
+// Normalizes and merges registrationData + businessInfo + top-level fields without leaking secrets
+export function serializeVendorProfile(vendor: BackendVendorRecord): VendorProfile {
+  const reg = (vendor.registrationData || {}) as Partial<VendorRegistrationWizardData>;
+  const biz = (vendor.businessInfo || {}) as any;
+  const bizAddr = biz.address || {};
+  const regBank = reg.bankDetails || ({} as any);
+  const bizBank = biz.bankDetails || {};
+
+  const resolvedAddress = {
+    building: bizAddr.building || reg.completeAddress || '',
+    street: bizAddr.street || reg.area || '',
+    area: bizAddr.area || reg.area || '',
+    city: bizAddr.city || reg.city || '',
+    state: bizAddr.state || reg.state || '',
+    pincode: bizAddr.pincode || reg.pincode || '',
+    country: bizAddr.country || reg.country || 'India',
+    lat: bizAddr.lat,
+    lng: bizAddr.lng
+  };
+
+  const resolvedBank = {
+    accountHolderName: bizBank.accountHolderName || regBank.accountHolderName || '',
+    bankName: bizBank.bankName || regBank.bankName || '',
+    accountNumber: bizBank.accountNumber || regBank.accountNumber || '',
+    ifsc: bizBank.ifsc || regBank.ifsc || '',
+    accountType: bizBank.accountType || regBank.accountType || 'CURRENT',
+    branch: bizBank.branch || (bizBank.bankName ? `${bizBank.bankName} Branch` : ''),
+    isVerified: Boolean(bizBank.isVerified ?? regBank.isVerified ?? false)
+  };
+
+  const resolvedLogo = vendor.logoUrl || biz.logo || reg.logoUrl || undefined;
+  const resolvedLogoMeta = vendor.logoMetadata || biz.logoMetadata || reg.logoMetadata || undefined;
+  const resolvedDocs =
+    (vendor.kycDocuments && vendor.kycDocuments.length > 0
+      ? vendor.kycDocuments
+      : reg.documents && reg.documents.length > 0
+        ? reg.documents
+        : biz.documents) || [];
+  const resolvedWarehouses =
+    (vendor.warehouses && vendor.warehouses.length > 0
+      ? vendor.warehouses
+      : reg.warehouses) || [];
+
+  return {
+    id: vendor.id,
+    tenantId: vendor.tenantId,
+    storeName: vendor.storeName || biz.storeName || reg.storeName || '',
+    name: vendor.name || biz.contactPerson || reg.ownerName || '',
+    email: vendor.email || biz.email || reg.email || '',
+    phone: vendor.phone || biz.phone || reg.phone || '',
+    status: vendor.status,
+    applicationId: vendor.applicationId,
+    submittedAt: vendor.submittedAt,
+    logoUrl: resolvedLogo,
+    logoMetadata: resolvedLogoMeta,
+    rating: vendor.rating || 0,
+    productCount: vendor.productCount || 0,
+    orderCount: vendor.orderCount || 0,
+    categories: vendor.categories || biz.categories || reg.productCategories || [],
+    isEmailVerified: vendor.isEmailVerified,
+    isPhoneVerified: vendor.isPhoneVerified,
+    rejectionReason: vendor.rejectionReason,
+    resubmissionReason: vendor.resubmissionReason,
+    suspendedReason: vendor.suspendedReason,
+    approvedBy: vendor.approvedBy,
+    approvedAt: vendor.approvedAt,
+    rejectedBy: vendor.rejectedBy,
+    rejectedAt: vendor.rejectedAt,
+    suspendedAt: vendor.suspendedAt,
+    registrationStep: vendor.registrationStep || 1,
+    createdAt: vendor.createdAt,
+    updatedAt: vendor.updatedAt,
+    businessInfo: {
+      ...biz,
+      businessName: biz.businessName || reg.legalBusinessName || vendor.storeName || '',
+      storeName: biz.storeName || vendor.storeName || reg.storeName || '',
+      contactPerson: biz.contactPerson || vendor.name || reg.ownerName || '',
+      email: biz.email || vendor.email || reg.email || '',
+      phone: biz.phone || vendor.phone || reg.phone || '',
+      businessType: biz.businessType || reg.businessType || 'PROPRIETORSHIP',
+      businessRegistrationType: biz.businessRegistrationType || reg.businessRegistrationType || '',
+      yearOfEstablishment: biz.yearOfEstablishment || reg.yearOfEstablishment || '',
+      website: biz.website || reg.website || '',
+      description: biz.description || reg.description || '',
+      logo: resolvedLogo,
+      logoMetadata: resolvedLogoMeta,
+      gstin: biz.gstin || reg.gstin || '',
+      pan: biz.pan || reg.pan || '',
+      categories: biz.categories || vendor.categories || reg.productCategories || [],
+      address: resolvedAddress,
+      bankDetails: resolvedBank
+    },
+    registrationData: {
+      ...reg,
+      ownerName: reg.ownerName || vendor.name || biz.contactPerson || '',
+      email: reg.email || vendor.email || biz.email || '',
+      phone: reg.phone || vendor.phone || biz.phone || '',
+      legalBusinessName: reg.legalBusinessName || biz.businessName || '',
+      storeName: reg.storeName || vendor.storeName || biz.storeName || '',
+      businessType: (reg.businessType || biz.businessType || 'OTHER') as any,
+      businessRegistrationType: reg.businessRegistrationType || biz.businessRegistrationType || '',
+      yearOfEstablishment: reg.yearOfEstablishment || biz.yearOfEstablishment || '',
+      website: reg.website || biz.website || '',
+      description: reg.description || biz.description || '',
+      logoUrl: resolvedLogo,
+      logoMetadata: resolvedLogoMeta,
+      country: resolvedAddress.country,
+      state: resolvedAddress.state,
+      city: resolvedAddress.city,
+      pincode: resolvedAddress.pincode,
+      completeAddress: reg.completeAddress || resolvedAddress.building || resolvedAddress.street || '',
+      gstin: reg.gstin || biz.gstin || '',
+      pan: reg.pan || biz.pan || '',
+      documents: resolvedDocs as any,
+      warehouses: resolvedWarehouses,
+      bankDetails: {
+        ...resolvedBank,
+        accountType: resolvedBank.accountType as any
+      }
+    },
+    warehouses: resolvedWarehouses,
+    kycDocuments: resolvedDocs as any,
+    auditLogs: vendor.auditLogs || []
+  };
 }
 
 // Seed Vendor Products derived from SEED_PRODUCTS
@@ -1261,16 +1420,44 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
   const targetSlug = vp.slug;
   const targetId = vp.id.replace(/^vp-/, '');
 
+  const vendor = vp.vendorId ? vendorRecords.get(vp.vendorId) : undefined;
+  const vendorActive = !vendor || vendor.status === 'APPROVED' || (vendor.status as string) === 'ACTIVE';
+  const anyVp = vp as any;
+  const isApproved = vp.approvalStatus === 'APPROVED';
+  const isPublic = isApproved && vp.isActive !== false && anyVp.isSuspended !== true && vendorActive;
+
   let custProd = dbStore.products.find(
     (p) => p.sku === targetSku || p.slug === targetSlug || p.id === targetId || p.id === vp.id
-  );
+  ) as any;
+
+  if (!isPublic) {
+    if (custProd) {
+      custProd.isActive = false;
+      custProd.inStock = false;
+      custProd.isSuspended = Boolean(anyVp.isSuspended);
+      custProd.approvalStatus = vp.approvalStatus;
+      custProd.stockCount = vp.stockCount;
+    }
+    return;
+  }
+
+  const effectiveAvailable = Math.max(0, Number(vp.stockCount || 0) - Number(anyVp.reservedStock || 0));
 
   if (custProd) {
+    custProd.name = vp.name;
+    custProd.description = vp.description;
+    custProd.images = vp.images;
     custProd.price = vp.price;
     custProd.mrp = vp.mrp;
     custProd.discount = vp.discount;
     custProd.stockCount = vp.stockCount;
-    custProd.inStock = vp.inStock;
+    custProd.reservedStock = anyVp.reservedStock || 0;
+    custProd.inStock = effectiveAvailable > 0;
+    custProd.isActive = true;
+    custProd.isSuspended = false;
+    custProd.approvalStatus = 'APPROVED';
+    custProd.vendorId = vp.vendorId;
+    custProd.vendorName = vendor?.storeName || vendor?.businessInfo?.businessName || 'Buildora Verified Supplier';
     if (vp.brand) {
       custProd.brand = vp.brand;
       custProd.brandSlug = (vp.brandSlug || vp.brand).toLowerCase().replace(/\s+/g, '-');
@@ -1292,14 +1479,14 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
         'Type': vp.productType,
         'Product Type': vp.productType
       };
-      (custProd as any).productType = vp.productType;
+      custProd.productType = vp.productType;
     }
     if (vp.size) {
       custProd.specifications = {
         ...custProd.specifications,
         'Size': vp.size
       };
-      (custProd as any).size = vp.size;
+      custProd.size = vp.size;
     }
     if (vp.variants && vp.variants.length > 0) {
       custProd.variants = vp.variants;
@@ -1313,7 +1500,7 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
     if (vp.isBulkEligible !== undefined) {
       custProd.isBulkEligible = vp.isBulkEligible;
     }
-  } else if (vp.approvalStatus === 'APPROVED' || vp.isActive) {
+  } else {
     const specs: Record<string, string> = { ...(vp.specifications || {}) };
     if (vp.productType) {
       specs['Type'] = vp.productType;
@@ -1322,8 +1509,14 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
     if (vp.size) {
       specs['Size'] = vp.size;
     }
-    const newCustomerProd: Product = {
+    const newCustomerProd: Product & Record<string, any> = {
       id: targetId,
+      vendorId: vp.vendorId,
+      vendorName: vendor?.storeName || vendor?.businessInfo?.businessName || 'Buildora Verified Supplier',
+      approvalStatus: 'APPROVED',
+      isActive: true,
+      isSuspended: false,
+      reservedStock: anyVp.reservedStock || 0,
       name: vp.name,
       slug: vp.slug,
       sku: vp.sku,
@@ -1344,7 +1537,7 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
       gstRate: vp.gstRate,
       rating: vp.rating,
       reviewCount: vp.reviewCount,
-      inStock: vp.inStock,
+      inStock: effectiveAvailable > 0,
       stockCount: vp.stockCount,
       isBulkEligible: vp.isBulkEligible,
       isNewLaunch: Boolean(vp.isNewLaunch),
@@ -1357,8 +1550,8 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
       installationTips: [],
       safetyInstructions: []
     };
-    if (vp.productType) (newCustomerProd as any).productType = vp.productType;
-    if (vp.size) (newCustomerProd as any).size = vp.size;
+    if (vp.productType) newCustomerProd.productType = vp.productType;
+    if (vp.size) newCustomerProd.size = vp.size;
     dbStore.products.unshift(newCustomerProd);
   }
 }
@@ -1366,8 +1559,43 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
 @Controller('api/v1/vendor')
 export class VendorController implements OnModuleInit {
   async onModuleInit() {
-    // Hydrate persisted vendor applications/accounts from MongoDB if connected
     await vendorPersistenceService.loadAllVendorsIntoMap(vendorRecords);
+
+    const mergeById = <T extends { id: string }>(target: T[], loaded: T[]) => {
+      if (!loaded.length) return;
+      const seen = new Set(target.map((x) => x.id));
+      for (const item of loaded) {
+        if (!seen.has(item.id)) {
+          target.unshift(item);
+        } else {
+          const idx = target.findIndex((x) => x.id === item.id);
+          if (idx >= 0) target[idx] = { ...target[idx], ...item };
+        }
+      }
+    };
+
+    const [pProducts, pMovements, pWarehouses, pOrders, pReturns, pSettlements, pTickets] =
+      await Promise.all([
+        platformPersistenceService.loadAll<VendorProduct>(PlatformProductModel),
+        platformPersistenceService.loadAll<VendorStockMovement>(PlatformStockMovementModel),
+        platformPersistenceService.loadAll<VendorWarehouse>(PlatformWarehouseModel),
+        platformPersistenceService.loadAll<VendorOrder>(PlatformOrderModel),
+        platformPersistenceService.loadAll<VendorReturnRequest>(PlatformReturnModel),
+        platformPersistenceService.loadAll<VendorSettlement>(PlatformSettlementModel),
+        platformPersistenceService.loadAll<VendorSupportTicket>(PlatformSupportTicketModel),
+      ]);
+
+    mergeById(vendorProducts, pProducts);
+    mergeById(vendorStockMovements, pMovements);
+    mergeById(vendorWarehouses, pWarehouses);
+    mergeById(vendorOrders, pOrders.filter((o: any) => o.vendorId));
+    mergeById(vendorReturns, pReturns);
+    mergeById(vendorSettlements, pSettlements);
+    mergeById(vendorSupportTickets, pTickets);
+
+    for (const vp of vendorProducts) {
+      syncVendorProductToCustomerCatalog(vp);
+    }
   }
 
   // ==========================================
@@ -1558,25 +1786,7 @@ export class VendorController implements OnModuleInit {
       expiresIn: tokens.expiresIn,
       status: vendor.status,
       redirectTo,
-      vendor: {
-        id: vendor.id,
-        tenantId: vendor.tenantId,
-        storeName: vendor.storeName,
-        name: vendor.name,
-        email: vendor.email,
-        phone: vendor.phone,
-        status: vendor.status,
-        applicationId: vendor.applicationId,
-        submittedAt: vendor.submittedAt,
-        logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
-        logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
-        rejectionReason: vendor.rejectionReason,
-        resubmissionReason: vendor.resubmissionReason,
-        suspendedReason: vendor.suspendedReason,
-        registrationStep: vendor.registrationStep,
-        businessInfo: vendor.businessInfo,
-        registrationData: vendor.registrationData
-      }
+      vendor: serializeVendorProfile(vendor)
     };
   }
 
@@ -1619,25 +1829,7 @@ export class VendorController implements OnModuleInit {
       refreshToken: tokens.refreshToken,
       status: vendor.status,
       redirectTo,
-      vendor: {
-        id: vendor.id,
-        tenantId: vendor.tenantId,
-        storeName: vendor.storeName,
-        name: vendor.name,
-        email: vendor.email,
-        phone: vendor.phone,
-        status: vendor.status,
-        applicationId: vendor.applicationId,
-        submittedAt: vendor.submittedAt,
-        logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
-        logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
-        rejectionReason: vendor.rejectionReason,
-        resubmissionReason: vendor.resubmissionReason,
-        suspendedReason: vendor.suspendedReason,
-        registrationStep: vendor.registrationStep,
-        businessInfo: vendor.businessInfo,
-        registrationData: vendor.registrationData
-      }
+      vendor: serializeVendorProfile(vendor)
     };
   }
 
@@ -1748,36 +1940,13 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('auth/me')
-  getProfile(@Headers('authorization') authHeader?: string) {
-    const vendor = getVendorFromAuthHeader(authHeader);
+  async getProfile(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     return {
       success: true,
       status: vendor.status,
       redirectTo: getVendorRedirectUrl(vendor.status, vendor.applicationId),
-      vendor: {
-        id: vendor.id,
-        tenantId: vendor.tenantId,
-        storeName: vendor.storeName,
-        name: vendor.name,
-        email: vendor.email,
-        phone: vendor.phone,
-        status: vendor.status,
-        applicationId: vendor.applicationId,
-        submittedAt: vendor.submittedAt,
-        logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
-        logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
-        rejectionReason: vendor.rejectionReason,
-        resubmissionReason: vendor.resubmissionReason,
-        suspendedReason: vendor.suspendedReason,
-        approvedBy: vendor.approvedBy,
-        approvedAt: vendor.approvedAt,
-        registrationStep: vendor.registrationStep || 1,
-        businessInfo: vendor.businessInfo,
-        registrationData: vendor.registrationData,
-        warehouses: vendor.warehouses || [],
-        kycDocuments: vendor.kycDocuments || [],
-        auditLogs: vendor.auditLogs || []
-      }
+      vendor: serializeVendorProfile(vendor)
     };
   }
 
@@ -1912,7 +2081,7 @@ export class VendorController implements OnModuleInit {
   }
 
   @Put('registration/save-draft')
-  saveRegistrationDraft(
+  async saveRegistrationDraft(
     @Body() body: { vendorId?: string; wizardData: Partial<VendorRegistrationWizardData>; currentStep: number },
     @Headers('authorization') authHeader?: string
   ) {
@@ -2032,12 +2201,25 @@ export class VendorController implements OnModuleInit {
       };
 
       if (wizardData.legalBusinessName) vendor.businessInfo.businessName = wizardData.legalBusinessName;
+      if (wizardData.ownerName) {
+        vendor.name = wizardData.ownerName.trim();
+        vendor.businessInfo.contactPerson = wizardData.ownerName.trim();
+      }
       if (wizardData.storeName) {
         vendor.storeName = wizardData.storeName;
         vendor.businessInfo.storeName = wizardData.storeName;
       }
       if (wizardData.businessType) vendor.businessInfo.businessType = wizardData.businessType as any;
-      if (wizardData.description) vendor.businessInfo.description = wizardData.description;
+      if (wizardData.businessRegistrationType) {
+        vendor.businessInfo.businessRegistrationType = wizardData.businessRegistrationType;
+      }
+      if (wizardData.yearOfEstablishment !== undefined) {
+        vendor.businessInfo.yearOfEstablishment = wizardData.yearOfEstablishment;
+      }
+      if (wizardData.website !== undefined) {
+        vendor.businessInfo.website = wizardData.website;
+      }
+      if (wizardData.description !== undefined) vendor.businessInfo.description = wizardData.description;
       if (wizardData.logoUrl !== undefined) {
         vendor.logoUrl = wizardData.logoUrl || undefined;
         vendor.businessInfo.logo = wizardData.logoUrl || undefined;
@@ -2048,23 +2230,15 @@ export class VendorController implements OnModuleInit {
       }
       if (wizardData.gstin) vendor.businessInfo.gstin = wizardData.gstin;
       if (wizardData.pan) vendor.businessInfo.pan = wizardData.pan;
-      if (wizardData.pincode) {
+      if (wizardData.pincode || wizardData.city || wizardData.state || wizardData.country || wizardData.completeAddress) {
         vendor.businessInfo.address = {
           ...vendor.businessInfo.address,
-          pincode: wizardData.pincode,
-          city: wizardData.city || vendor.businessInfo.address?.city || '',
-          state: wizardData.state || vendor.businessInfo.address?.state || '',
-          country: wizardData.country || 'India'
-        };
-      }
-      if (wizardData.completeAddress) {
-        vendor.businessInfo.address = {
-          ...vendor.businessInfo.address,
-          building: wizardData.completeAddress,
-          city: wizardData.city || vendor.businessInfo.address?.city || '',
-          state: wizardData.state || vendor.businessInfo.address?.state || '',
-          pincode: wizardData.pincode || vendor.businessInfo.address?.pincode || '',
-          country: wizardData.country || 'India'
+          ...(wizardData.completeAddress ? { building: wizardData.completeAddress } : {}),
+          ...(wizardData.area ? { street: wizardData.area, area: wizardData.area } : {}),
+          ...(wizardData.city ? { city: wizardData.city } : {}),
+          ...(wizardData.state ? { state: wizardData.state } : {}),
+          ...(wizardData.pincode ? { pincode: wizardData.pincode } : {}),
+          country: wizardData.country || vendor.businessInfo.address?.country || 'India'
         };
       }
       if (wizardData.bankDetails) {
@@ -2073,7 +2247,8 @@ export class VendorController implements OnModuleInit {
           bankName: wizardData.bankDetails.bankName || '',
           accountNumber: wizardData.bankDetails.accountNumber || '',
           ifsc: wizardData.bankDetails.ifsc || '',
-          branch: wizardData.bankDetails.bankName || 'Bengaluru Branch',
+          accountType: wizardData.bankDetails.accountType || 'CURRENT',
+          branch: wizardData.bankDetails.bankName || 'Main Branch',
           isVerified: false
         };
       }
@@ -2083,19 +2258,24 @@ export class VendorController implements OnModuleInit {
       }
       if (wizardData.warehouses) {
         vendor.warehouses = wizardData.warehouses;
+        const primaryWh = wizardData.warehouses.find((w: any) => w.isPrimary) || wizardData.warehouses[0];
+        if (primaryWh) {
+          vendor.businessInfo.warehouseAddress = `${primaryWh.address}, ${primaryWh.city}, ${primaryWh.state} ${primaryWh.pincode}`.replace(/^,\s*/, '');
+          vendor.businessInfo.pickupPincode = primaryWh.pincode || vendor.businessInfo.pickupPincode;
+        }
       }
       if (wizardData.documents) {
         vendor.kycDocuments = wizardData.documents;
       }
     }
 
-    void vendorPersistenceService.saveVendorRecord(vendor);
+    await vendorPersistenceService.saveVendorRecord(vendor);
 
     return {
       success: true,
       message: 'Registration progress saved successfully.',
       currentStep: vendor.registrationStep,
-      vendor
+      vendor: serializeVendorProfile(vendor)
     };
   }
 
@@ -2122,21 +2302,7 @@ export class VendorController implements OnModuleInit {
         refreshToken: tokens.refreshToken,
         expiresIn: tokens.expiresIn,
         redirectTo: `/application-status/${vendor.applicationId || `APP-BLR-2026-${vendor.id.slice(-6)}`}`,
-        vendor: {
-          id: vendor.id,
-          tenantId: vendor.tenantId,
-          storeName: vendor.storeName,
-          name: vendor.name,
-          email: vendor.email,
-          phone: vendor.phone,
-          status: vendor.status,
-          applicationId: vendor.applicationId,
-          submittedAt: vendor.submittedAt,
-          logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
-          logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
-          registrationStep: vendor.registrationStep,
-          businessInfo: vendor.businessInfo
-        }
+        vendor: serializeVendorProfile(vendor)
       };
     }
 
@@ -2214,7 +2380,10 @@ export class VendorController implements OnModuleInit {
       contactPerson: data.ownerName?.trim() || vendor.name,
       phone: vendor.phone,
       email: vendor.email,
-      businessType: (data.businessRegistrationType || vendor.businessInfo?.businessType || 'PRIVATE_LIMITED') as any,
+      businessType: (data.businessType || vendor.businessInfo?.businessType || 'PRIVATE_LIMITED') as any,
+      businessRegistrationType: data.businessRegistrationType || vendor.businessInfo?.businessRegistrationType,
+      yearOfEstablishment: data.yearOfEstablishment || vendor.businessInfo?.yearOfEstablishment,
+      website: data.website || vendor.businessInfo?.website,
       description: data.description || vendor.businessInfo?.description,
       logo: data.logoUrl || vendor.logoUrl || vendor.businessInfo?.logo,
       logoMetadata: data.logoMetadata || vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
@@ -2235,10 +2404,23 @@ export class VendorController implements OnModuleInit {
         bankName: data.bankDetails.bankName.trim(),
         accountNumber: data.bankDetails.accountNumber.replace(/\D/g, ''),
         ifsc: data.bankDetails.ifsc.trim().toUpperCase(),
+        accountType: data.bankDetails.accountType || 'CURRENT',
         branch: data.bankDetails.bankName ? `${data.bankDetails.bankName.trim()} Branch` : 'Main Branch',
         isVerified: false
       }
     };
+
+    if (data.warehouses && data.warehouses.length > 0) {
+      vendor.warehouses = data.warehouses;
+      const primaryWh = data.warehouses.find((w) => w.isPrimary) || data.warehouses[0];
+      if (primaryWh) {
+        vendor.businessInfo.warehouseAddress = `${primaryWh.address}, ${primaryWh.city}, ${primaryWh.state} ${primaryWh.pincode}`.replace(/^,\s*/, '');
+        vendor.businessInfo.pickupPincode = primaryWh.pincode || data.pincode.trim();
+      }
+    } else if (!vendor.businessInfo.warehouseAddress) {
+      vendor.businessInfo.warehouseAddress = `${data.completeAddress.trim()}, ${data.city.trim()}, ${data.state.trim()} ${data.pincode.trim()}`;
+      vendor.businessInfo.pickupPincode = data.pincode.trim();
+    }
 
     // Record audit log
     if (!vendor.auditLogs) vendor.auditLogs = [];
@@ -2265,6 +2447,29 @@ export class VendorController implements OnModuleInit {
       { email: vendor.email, phone: vendor.phone }
     );
 
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    void platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'ADMIN',
+      recipientId: 'TENANT_ADMIN',
+      type: 'VENDOR_ONBOARDING',
+      title: `New Vendor Application: ${vendor.storeName}`,
+      message: `${vendor.businessInfo?.businessName || vendor.storeName} (${vendor.applicationId}) submitted onboarding & KYC for approval.`,
+      severity: 'INFO',
+      actionUrl: '/vendor-approvals',
+      metadata: { vendorId: vendor.id, applicationId: vendor.applicationId },
+    });
+    realtimeBus.emitToAdmin(
+      'vendor.application.submitted',
+      {
+        vendorId: vendor.id,
+        applicationId: vendor.applicationId,
+        storeName: vendor.storeName,
+        status: vendor.status,
+      },
+      tenantId
+    );
+
     // Issue JWT token immediately so vendor is authenticated without having to log in again
     const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
     vendor.refreshToken = tokens.refreshToken;
@@ -2280,21 +2485,7 @@ export class VendorController implements OnModuleInit {
       refreshToken: tokens.refreshToken,
       expiresIn: tokens.expiresIn,
       redirectTo,
-      vendor: {
-        id: vendor.id,
-        tenantId: vendor.tenantId,
-        storeName: vendor.storeName,
-        name: vendor.name,
-        email: vendor.email,
-        phone: vendor.phone,
-        status: vendor.status,
-        applicationId: vendor.applicationId,
-        submittedAt: vendor.submittedAt,
-        logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
-        logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
-        registrationStep: vendor.registrationStep,
-        businessInfo: vendor.businessInfo
-      }
+      vendor: serializeVendorProfile(vendor)
     };
   }
 
@@ -2570,7 +2761,7 @@ export class VendorController implements OnModuleInit {
     @Headers('authorization') authHeader?: string,
     @Req() req?: Request
   ) {
-    const vendor = getVendorFromAuthHeader(authHeader);
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     if (!file) {
       throw new BadRequestException('Please attach an image file (JPG, JPEG, PNG, or WEBP).');
     }
@@ -2593,15 +2784,22 @@ export class VendorController implements OnModuleInit {
       logo: logoMetadata.url,
       logoMetadata
     };
+    if (vendor.registrationData) {
+      vendor.registrationData = {
+        ...vendor.registrationData,
+        logoUrl: logoMetadata.url,
+        logoMetadata
+      };
+    }
     vendor.updatedAt = new Date().toISOString();
-    void vendorPersistenceService.saveVendorRecord(vendor);
+    await vendorPersistenceService.saveVendorRecord(vendor);
 
     return {
       success: true,
       message: 'Business logo updated.',
       logoUrl: logoMetadata.url,
       logoMetadata,
-      vendor
+      vendor: serializeVendorProfile(vendor)
     };
   }
 
@@ -2687,36 +2885,67 @@ export class VendorController implements OnModuleInit {
       { email: vendor.email, phone: vendor.phone }
     );
 
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    void platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'ADMIN',
+      recipientId: 'TENANT_ADMIN',
+      type: 'VENDOR_ONBOARDING',
+      title: `Vendor Application Resubmitted: ${vendor.storeName}`,
+      message: body.notes || `${vendor.storeName} resubmitted corrected onboarding details for review.`,
+      severity: 'INFO',
+      actionUrl: '/vendor-approvals',
+      metadata: { vendorId: vendor.id, applicationId: vendor.applicationId },
+    });
+    realtimeBus.emitToAdmin(
+      'vendor.application.submitted',
+      {
+        vendorId: vendor.id,
+        applicationId: vendor.applicationId,
+        storeName: vendor.storeName,
+        status: vendor.status,
+        resubmitted: true,
+      },
+      tenantId
+    );
+
     return {
       success: true,
       message: 'Application resubmitted successfully. Compliance team will review within 24-48 business hours.',
       status: vendor.status,
       redirectTo: '/application-status',
-      vendor
+      vendor: serializeVendorProfile(vendor)
     };
   }
 
   // ==========================================
-  // 3. ADMIN APPLICATION MANAGEMENT & APPROVALS
+  // 3. ADMIN APPLICATION MANAGEMENT & APPROVALS (COMPANY ADMIN RBAC)
   // ==========================================
 
   @Get('admin/applications')
-  getAdminApplications(@Query('status') status?: string) {
-    const list = Array.from(vendorRecords.values()).map((v) => ({
-      id: v.id,
-      storeName: v.storeName,
-      legalName: v.businessInfo?.businessName,
-      contactPerson: v.name,
-      email: v.email,
-      phone: v.phone,
-      businessType: v.businessInfo?.businessType,
-      status: v.status,
-      rejectionReason: v.rejectionReason,
-      categories: v.categories || v.businessInfo?.categories || [],
-      documentsCount: v.kycDocuments?.length || 0,
-      createdAt: v.createdAt,
-      updatedAt: v.updatedAt
-    }));
+  getAdminApplications(
+    @Headers('authorization') authHeader?: string,
+    @Query('status') status?: string
+  ) {
+    const admin = companyAdminSecurityService.verifyAccessToken(authHeader);
+    companyAdminSecurityService.assertPermission(admin, 'vendors:read');
+    const list = Array.from(vendorRecords.values())
+      .filter((v) => (v.tenantId || DEFAULT_TENANT_ID) === admin.tenantId)
+      .map((v) => ({
+        id: v.id,
+        storeName: v.storeName,
+        legalName: v.businessInfo?.businessName,
+        contactPerson: v.name,
+        email: v.email,
+        phone: v.phone,
+        businessType: v.businessInfo?.businessType,
+        status: v.status,
+        rejectionReason: v.rejectionReason,
+        categories: v.categories || v.businessInfo?.categories || [],
+        documentsCount: v.kycDocuments?.length || 0,
+        createdAt: v.createdAt,
+        updatedAt: v.updatedAt
+      }));
 
     if (status) {
       return {
@@ -2732,34 +2961,49 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('admin/applications/:id')
-  getAdminApplicationById(@Param('id') id: string) {
+  getAdminApplicationById(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const admin = companyAdminSecurityService.verifyAccessToken(authHeader);
+    companyAdminSecurityService.assertPermission(admin, 'vendors:read');
     const vendor = vendorRecords.get(id);
     if (!vendor) {
       throw new NotFoundException(`Vendor application #${id} not found.`);
     }
+    companyAdminSecurityService.assertTenantAccess(admin, vendor.tenantId || DEFAULT_TENANT_ID);
 
     return {
       success: true,
-      data: vendor
+      data: serializeVendorProfile(vendor)
     };
   }
 
   @Put('admin/applications/:id/status')
-  updateVendorApplicationStatus(
+  async updateVendorApplicationStatus(
     @Param('id') id: string,
     @Body()
     body: {
       status: 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'ACTIVE';
       reason?: string;
       adminName?: string;
-    }
+    },
+    @Headers('authorization') authHeader?: string
   ) {
+    const admin = companyAdminSecurityService.verifyAccessToken(authHeader);
+    companyAdminSecurityService.assertPermission(admin, 'vendors:manage');
+
     const vendor = vendorRecords.get(id);
     if (!vendor) {
       throw new NotFoundException(`Vendor application #${id} not found.`);
     }
+    const tenantId = companyAdminSecurityService.assertTenantAccess(
+      admin,
+      vendor.tenantId || DEFAULT_TENANT_ID
+    );
 
-    const { status, reason, adminName = 'Buildora Compliance Admin' } = body;
+    const { status, reason } = body;
+    const adminName = admin.name || body.adminName || admin.email;
     const oldStatus = vendor.status;
 
     if (status === 'REJECTED' && !reason) {
@@ -2771,8 +3015,21 @@ export class VendorController implements OnModuleInit {
     }
 
     vendor.status = status;
-    vendor.rejectionReason = reason;
+    vendor.rejectionReason = status === 'REJECTED' ? reason : undefined;
+    vendor.suspendedReason = status === 'SUSPENDED' ? reason : undefined;
     vendor.updatedAt = new Date().toISOString();
+    await vendorPersistenceService.saveVendorRecord(vendor);
+
+    for (const vp of vendorProducts) {
+      if (vp.vendorId === vendor.id) {
+        if (status === 'SUSPENDED' || status === 'REJECTED') {
+          vp.isActive = false;
+        } else if ((status === 'APPROVED' || status === 'ACTIVE') && vp.approvalStatus === 'APPROVED' && !(vp as any).isSuspended) {
+          vp.isActive = true;
+        }
+        syncVendorProductToCustomerCatalog(vp);
+      }
+    }
 
     if (!vendor.auditLogs) vendor.auditLogs = [];
     vendor.auditLogs.unshift({
@@ -2785,41 +3042,41 @@ export class VendorController implements OnModuleInit {
       newStatus: status
     });
 
-    // Fire notification to vendor
     if (status === 'APPROVED' || status === 'ACTIVE') {
-      vendorNotificationService.notify(
-        vendor.id,
-        'APPLICATION_APPROVED',
-        'Vendor Partnership Approved!',
-        'Congratulations! Your vendor partner application has been approved. You now have full access to the supplier dashboard, inventory, and order dispatch hubs.',
-        '/dashboard',
-        { email: vendor.email, phone: vendor.phone }
-      );
-    } else if (status === 'REJECTED') {
-      vendorNotificationService.notify(
-        vendor.id,
-        'APPLICATION_REJECTED',
-        'Action Required: Application Returned',
-        `Your application could not be approved at this time. Reason: ${reason}. Please update your submission on the portal.`,
-        '/rejection-details',
-        { email: vendor.email, phone: vendor.phone }
-      );
-    } else if (status === 'SUSPENDED') {
-      vendorNotificationService.notify(
-        vendor.id,
-        'ACCOUNT_SUSPENDED',
-        'Urgent: Vendor Account Suspended',
-        `Your supplier access has been temporarily restricted. Reason: ${reason}. Please contact compliance support.`,
-        '/account-restricted',
-        { email: vendor.email, phone: vendor.phone }
-      );
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: vendor.id,
+        type: 'VENDOR_ONBOARDING',
+        title: 'Vendor Partnership Approved!',
+        message: 'Congratulations! Your vendor partner application has been approved.',
+        severity: 'SUCCESS',
+        actionUrl: '/overview',
+        email: vendor.email,
+        phone: vendor.phone,
+      });
+      realtimeBus.emitVendorAndAdmin(vendor.id, 'vendor.application.approved', { vendor: serializeVendorProfile(vendor) }, tenantId);
+    } else if (status === 'REJECTED' || status === 'SUSPENDED') {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: vendor.id,
+        type: 'VENDOR_ONBOARDING',
+        title: status === 'SUSPENDED' ? 'Urgent: Vendor Account Suspended' : 'Action Required: Application Returned',
+        message: reason || 'Please contact compliance support.',
+        severity: status === 'SUSPENDED' ? 'CRITICAL' : 'WARNING',
+        actionUrl: '/application-status',
+        email: vendor.email,
+        phone: vendor.phone,
+      });
+      realtimeBus.emitVendorAndAdmin(vendor.id, 'vendor.application.rejected', { vendor: serializeVendorProfile(vendor), reason }, tenantId);
     }
 
     return {
       success: true,
       message: `Vendor #${vendor.id} status updated to ${status}.`,
       status: vendor.status,
-      vendor
+      vendor: serializeVendorProfile(vendor)
     };
   }
 
@@ -2827,125 +3084,160 @@ export class VendorController implements OnModuleInit {
   // 3. MASTER DASHBOARD METRICS & CHARTS (17 KPIs)
   // ==========================================
   @Get('dashboard/metrics')
-  getDashboardMetrics(@Query('period') period?: string): { success: boolean; data: any } {
-    const totalProducts = vendorProducts.length;
-    const activeProducts = vendorProducts.filter((p) => p.isActive && p.approvalStatus === 'APPROVED').length;
-    const pendingApprovalProducts = vendorProducts.filter((p) => p.approvalStatus === 'PENDING_APPROVAL').length;
-    const rejectedProducts = vendorProducts.filter((p) => p.approvalStatus === 'REJECTED').length;
-    const lowStockCount = vendorProducts.filter((p) => p.stockCount <= p.lowStockThreshold && p.stockCount > 0).length;
-    const outOfStockCount = vendorProducts.filter((p) => p.stockCount === 0 || !p.inStock).length;
+  async getDashboardMetrics(
+    @Headers('authorization') authHeader?: string,
+    @Query('period') period?: string
+  ): Promise<{ success: boolean; data: any }> {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const myProducts = vendorProducts.filter((p) => p.vendorId === vendor.id);
+    const myOrders = vendorOrders.filter((o) => o.vendorId === vendor.id);
+    const mySettlements = vendorSettlements.filter((s) => s.vendorId === vendor.id);
+    const myReturns = vendorReturns.filter((r) => r.vendorId === vendor.id);
+    const myReviews = vendorReviews.filter((r: any) => !r.vendorId || r.vendorId === vendor.id);
 
-    const baseOrders = vendorOrders.length;
-    const totalOrders = baseOrders + 48;
-    const newOrders = vendorOrders.filter((o) => o.status === 'NEW').length + 1;
-    const processingOrders = vendorOrders.filter((o) => o.status === 'PROCESSING' || o.status === 'READY_FOR_DISPATCH' || o.status === 'ACCEPTED').length;
-    const shippedOrders = vendorOrders.filter((o) => o.status === 'DISPATCHED').length + 2;
-    const deliveredOrders = vendorOrders.filter((o) => o.status === 'DELIVERED').length + 44;
-    const cancelledOrders = vendorOrders.filter((o) => o.status === 'CANCELLED').length + 1;
+    const nowMs = Date.now();
+    const periodOrders = myOrders.filter((o) => {
+      if (!period || period === 'all' || period === '30d') return true;
+      const created = new Date(o.createdAt || 0).getTime();
+      if (period === 'today') return nowMs - created <= 24 * 3600 * 1000;
+      if (period === 'yesterday') return nowMs - created <= 48 * 3600 * 1000 && nowMs - created > 24 * 3600 * 1000;
+      if (period === '7d') return nowMs - created <= 7 * 24 * 3600 * 1000;
+      return true;
+    });
 
-    let revenueMultiplier = 1;
-    if (period === 'today') revenueMultiplier = 0.22;
-    else if (period === 'yesterday') revenueMultiplier = 0.18;
-    else if (period === '7d') revenueMultiplier = 0.65;
-    else if (period === '30d') revenueMultiplier = 1.0;
-    else if (period === 'month') revenueMultiplier = 0.85;
+    const totalProducts = myProducts.length;
+    const activeProducts = myProducts.filter((p) => p.isActive && p.approvalStatus === 'APPROVED').length;
+    const pendingApprovalProducts = myProducts.filter(
+      (p) => p.approvalStatus === 'PENDING_APPROVAL' || (p as any).revisionStatus === 'PENDING_APPROVAL'
+    ).length;
+    const rejectedProducts = myProducts.filter((p) => p.approvalStatus === 'REJECTED').length;
+    const lowStockCount = myProducts.filter((p) => p.stockCount <= p.lowStockThreshold && p.stockCount > 0).length;
+    const outOfStockCount = myProducts.filter((p) => p.stockCount === 0 || !p.inStock).length;
 
-    const grossRevenue = Math.round((vendorOrders.reduce((sum, o) => sum + o.subtotal, 0) + 168400) * revenueMultiplier);
-    const netEarnings = Math.round((vendorOrders.reduce((sum, o) => sum + o.netPayout, 0) + 158296) * revenueMultiplier);
-    const pendingSettlement = vendorSettlements.filter((s) => s.status === 'PENDING').reduce((sum, s) => sum + s.netPayable, 0);
-    const completedPayouts = vendorSettlements.filter((s) => s.status === 'PAID').reduce((sum, s) => sum + s.netPayable, 0);
+    const totalOrders = periodOrders.length;
+    const newOrders = periodOrders.filter((o) => o.status === 'NEW').length;
+    const processingOrders = periodOrders.filter((o) =>
+      ['ACCEPTED', 'PROCESSING', 'PACKED', 'READY_FOR_DISPATCH'].includes(o.status)
+    ).length;
+    const shippedOrders = periodOrders.filter((o) => o.status === 'DISPATCHED').length;
+    const deliveredOrders = periodOrders.filter((o) => o.status === 'DELIVERED').length;
+    const cancelledOrders = periodOrders.filter((o) => o.status === 'CANCELLED' || o.status === 'REJECTED').length;
 
-    const returnRequests = vendorReturns.filter((r) => r.status === 'REQUESTED' || r.status === 'INSPECTION_PENDING').length + 1;
-    const customerRating = 4.8;
-    const reviewCount = vendorReviews.length + 25;
+    const validOrders = periodOrders.filter((o) => o.status !== 'CANCELLED' && o.status !== 'REJECTED');
+    const grossRevenue = Math.round(validOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0));
+    const netEarnings = Math.round(validOrders.reduce((sum, o) => sum + Number(o.netPayout || 0), 0));
+    const pendingSettlement = mySettlements
+      .filter((s) => s.status !== 'PAID')
+      .reduce((sum, s: any) => sum + Number(s.netPayable ?? s.netAmount ?? 0), 0);
+    const completedPayouts = mySettlements
+      .filter((s) => s.status === 'PAID')
+      .reduce((sum, s: any) => sum + Number(s.netPayable ?? s.netAmount ?? 0), 0);
+
+    const returnRequests = myReturns.filter((r) =>
+      ['REQUESTED', 'INSPECTION_PENDING', 'APPROVED'].includes(r.status)
+    ).length;
+    const customerRating =
+      myReviews.length > 0
+        ? Number((myReviews.reduce((s, r) => s + Number(r.rating || 5), 0) / myReviews.length).toFixed(1))
+        : 0;
+    const reviewCount = myReviews.length;
 
     return {
       success: true,
       data: {
-        // Products Group
         totalProducts,
         activeProducts,
         pendingApprovalProducts,
         rejectedProducts,
-
-        // Orders Group
-        totalOrders: Math.round(totalOrders * (period === 'today' ? 0.15 : period === '7d' ? 0.45 : 1)),
+        totalOrders,
         newOrders,
         processingOrders,
         shippedOrders,
         dispatchedOrders: shippedOrders,
-        deliveredOrders: Math.round(deliveredOrders * (period === 'today' ? 0.1 : period === '7d' ? 0.4 : 1)),
+        deliveredOrders,
         cancelledOrders,
-
-        // Revenue Group
         grossRevenue,
         netEarnings,
         pendingSettlement,
         completedPayouts,
-
-        // Stock Group
         lowStockCount,
         outOfStockCount,
-
-        // Operations Group
         returnRequests,
         customerRating,
-        reviewCount
-      }
+        reviewCount,
+      },
     };
   }
 
   @Get('dashboard/charts')
-  getDashboardCharts(@Query('period') period?: string) {
-    let revenueTrends = [
-      { date: '18 Nov', revenue: 18500, orders: 6 },
-      { date: '19 Nov', revenue: 16800, orders: 5 },
-      { date: '20 Nov', revenue: 22400, orders: 8 },
-      { date: '21 Nov', revenue: 26900, orders: 9 },
-      { date: '22 Nov', revenue: 31200, orders: 11 },
-      { date: '23 Nov', revenue: 22700, orders: 7 },
-      { date: '24 Nov', revenue: 34100, orders: 12 }
-    ];
+  async getDashboardCharts(
+    @Headers('authorization') authHeader?: string,
+    @Query('period') period?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const myOrders = vendorOrders.filter((o) => o.vendorId === vendor.id);
+    const myProducts = vendorProducts.filter((p) => p.vendorId === vendor.id);
 
-    if (period === 'today') {
-      revenueTrends = [
-        { date: '08:00', revenue: 4200, orders: 1 },
-        { date: '10:00', revenue: 8900, orders: 3 },
-        { date: '12:00', revenue: 14200, orders: 5 },
-        { date: '14:00', revenue: 7800, orders: 2 },
-        { date: '16:00', revenue: 11500, orders: 4 }
-      ];
-    } else if (period === '30d') {
-      revenueTrends = [
-        { date: 'Week 1', revenue: 112000, orders: 38 },
-        { date: 'Week 2', revenue: 145000, orders: 49 },
-        { date: 'Week 3', revenue: 168000, orders: 55 },
-        { date: 'Week 4', revenue: 139000, orders: 46 }
-      ];
+    // Group real orders by day label
+    const bucketMap = new Map<string, { revenue: number; orders: number }>();
+    for (const o of myOrders) {
+      const d = new Date(o.createdAt || Date.now());
+      const label = period === 'today'
+        ? `${String(d.getHours()).padStart(2, '0')}:00`
+        : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+      const prev = bucketMap.get(label) || { revenue: 0, orders: 0 };
+      if (o.status !== 'CANCELLED' && o.status !== 'REJECTED') {
+        prev.revenue += Number(o.subtotal || 0);
+      }
+      prev.orders += 1;
+      bucketMap.set(label, prev);
     }
 
+    const revenueTrends = Array.from(bucketMap.entries())
+      .slice(-7)
+      .map(([date, val]) => ({ date, revenue: Math.round(val.revenue), orders: val.orders }));
+
     const statusDistribution = [
-      { status: 'NEW', label: 'New Orders', count: 3, color: '#FF7417' },
-      { status: 'PROCESSING', label: 'Processing & Packed', count: 4, color: '#F59E0B' },
-      { status: 'DISPATCHED', label: '60-Min Express Dispatch', count: 2, color: '#203D91' },
-      { status: 'DELIVERED', label: 'Delivered to Site', count: 44, color: '#10B981' },
-      { status: 'CANCELLED', label: 'Cancelled / Returned', count: 2, color: '#EF4444' }
+      { status: 'NEW', label: 'New Orders', count: myOrders.filter((o) => o.status === 'NEW').length, color: '#FF7417' },
+      { status: 'PROCESSING', label: 'Processing & Packed', count: myOrders.filter((o) => ['ACCEPTED', 'PROCESSING', 'PACKED', 'READY_FOR_DISPATCH'].includes(o.status)).length, color: '#F59E0B' },
+      { status: 'DISPATCHED', label: 'Dispatched', count: myOrders.filter((o) => o.status === 'DISPATCHED').length, color: '#203D91' },
+      { status: 'DELIVERED', label: 'Delivered to Site', count: myOrders.filter((o) => o.status === 'DELIVERED').length, color: '#10B981' },
+      { status: 'CANCELLED', label: 'Cancelled / Rejected', count: myOrders.filter((o) => ['CANCELLED', 'REJECTED'].includes(o.status)).length, color: '#EF4444' },
     ];
 
-    const topProducts = [
-      { id: 'vp-prod-cem-1', name: 'UltraTech Super Cement (PPC)', sku: 'CEM-ULT-PPC-50KG', unitsSold: 420, revenue: 165900, stock: 240 },
-      { id: 'vp-prod-plumb-1', name: 'Astral CPVC PRO Class 1 Pipe 1"', sku: 'PLM-AST-CPVC-1IN', unitsSold: 180, revenue: 79200, stock: 70 },
-      { id: 'vp-prod-ele-1', name: 'Finolex FR 2.5 sq mm Wire (90m)', sku: 'ELE-FIN-25-RED', unitsSold: 95, revenue: 163875, stock: 30 },
-      { id: 'vp-prod-ply-1', name: 'Greenply Marine 710 Plywood 18mm', sku: 'PLY-GRN-BWP-18', unitsSold: 64, revenue: 147200, stock: 44 },
-      { id: 'vp-prod-pnt-1', name: 'Asian Paints Apex Ultima White 20L', sku: 'PNT-APX-ULT-20L', unitsSold: 48, revenue: 196800, stock: 22 }
-    ];
+    const salesByProduct = new Map<string, { id: string; name: string; sku: string; unitsSold: number; revenue: number; stock: number }>();
+    for (const p of myProducts) {
+      salesByProduct.set(p.id, {
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        unitsSold: 0,
+        revenue: 0,
+        stock: p.stockCount,
+      });
+    }
+    for (const o of myOrders) {
+      if (o.status === 'CANCELLED' || o.status === 'REJECTED') continue;
+      for (const it of (o.items as any[]) || []) {
+        const entry = salesByProduct.get(it.productId) ||
+          Array.from(salesByProduct.values()).find((x) => x.sku === it.sku || x.id.replace(/^vp-/, '') === it.productId);
+        if (entry) {
+          entry.unitsSold += Number(it.quantity || 0);
+          entry.revenue += Number(it.totalPrice ?? it.totalAmount ?? (it.unitPrice || 0) * (it.quantity || 0));
+        }
+      }
+    }
+
+    const topProducts = Array.from(salesByProduct.values())
+      .sort((a, b) => b.revenue - a.revenue || b.stock - a.stock)
+      .slice(0, 5);
 
     return {
       success: true,
       revenueTrends,
       statusDistribution,
       topProducts,
-      recentOrders: vendorOrders.slice(0, 5)
+      recentOrders: myOrders.slice(0, 5),
     };
   }
 
@@ -3015,23 +3307,31 @@ export class VendorController implements OnModuleInit {
   // ==========================================
   // 5. PRODUCTS & VARIANTS MANAGEMENT
   // ==========================================
+  // 5. PRODUCTS MANAGEMENT (VENDOR-SCOPED + VERSIONING + APPROVAL SYNC)
+  // ==========================================
   @Get('products')
-  getProducts(
+  async getProducts(
+    @Headers('authorization') authHeader?: string,
     @Query('category') category?: string,
     @Query('status') status?: string,
     @Query('search') search?: string
   ) {
-    let prods = [...vendorProducts];
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    let prods = vendorProducts.filter((p) => p.vendorId === vendor.id);
 
     if (category) {
       prods = prods.filter((p) => p.categorySlug === category || p.category === category);
     }
     if (status === 'ACTIVE') {
       prods = prods.filter((p) => p.isActive && p.approvalStatus === 'APPROVED');
+    } else if (status === 'DRAFT') {
+      prods = prods.filter((p) => p.approvalStatus === 'DRAFT');
     } else if (status === 'PENDING_APPROVAL') {
-      prods = prods.filter((p) => p.approvalStatus === 'PENDING_APPROVAL');
+      prods = prods.filter((p) => p.approvalStatus === 'PENDING_APPROVAL' || (p as any).revisionStatus === 'PENDING_APPROVAL');
     } else if (status === 'REJECTED') {
       prods = prods.filter((p) => p.approvalStatus === 'REJECTED');
+    } else if (status === 'SUSPENDED') {
+      prods = prods.filter((p) => (p as any).isSuspended === true);
     } else if (status === 'LOW_STOCK') {
       prods = prods.filter((p) => p.stockCount <= p.lowStockThreshold && p.stockCount > 0);
     } else if (status === 'OUT_OF_STOCK') {
@@ -3040,7 +3340,12 @@ export class VendorController implements OnModuleInit {
 
     if (search) {
       const q = search.toLowerCase();
-      prods = prods.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q));
+      prods = prods.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.sku.toLowerCase().includes(q) ||
+          p.brand.toLowerCase().includes(q)
+      );
     }
 
     return {
@@ -3051,10 +3356,14 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('products/:id')
-  getProductById(@Param('id') id: string) {
-    const prod = vendorProducts.find((p) => p.id === id || p.sku === id);
+  async getProductById(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const prod = vendorProducts.find((p) => (p.id === id || p.sku === id) && p.vendorId === vendor.id);
     if (!prod) {
-      throw new NotFoundException(`Product ${id} not found in vendor catalog.`);
+      throw new NotFoundException(`Product ${id} not found in your vendor catalog.`);
     }
     return {
       success: true,
@@ -3063,34 +3372,56 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('products')
-  createProduct(@Body() body: Partial<VendorProduct>) {
+  async createProduct(
+    @Body() body: Partial<VendorProduct> & Record<string, any>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const isDraft = body.isDraft === true || body.approvalStatus === 'DRAFT' || body.status === 'DRAFT';
+
+    if (!isDraft && vendor.status !== 'APPROVED' && (vendor.status as string) !== 'ACTIVE') {
+      throw new ForbiddenException(
+        `Your vendor account status (${vendor.status}) does not permit submitting live products yet. Save as DRAFT or await Company Admin approval.`
+      );
+    }
+
     if (!body.name || !body.sku || !body.categorySlug || !body.price || !body.mrp) {
       throw new BadRequestException('Product name, SKU, category, price, and MRP are required.');
     }
-    if (body.price > body.mrp) {
+    if (Number(body.price) > Number(body.mrp)) {
       throw new BadRequestException('Selling price cannot exceed MRP.');
     }
 
-    const id = `vp-prod-${Date.now()}`;
-    const slug = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const id = `vp-prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const slugBase = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const slug = `${slugBase}-${id.slice(-4)}`;
+    const stockCount = Math.max(0, Number(body.stockCount ?? body.stock ?? 0));
+    const approvalStatus = isDraft ? 'DRAFT' : 'PENDING_APPROVAL';
 
-    const newProd: VendorProduct = {
+    const newProd: VendorProduct & Record<string, any> = {
       id,
-      vendorId: DEFAULT_VENDOR_ID,
-      tenantId: DEFAULT_TENANT_ID,
+      vendorId: vendor.id,
+      tenantId,
       name: body.name,
       slug,
       sku: body.sku,
-      brand: body.brand || 'Apex Certified',
-      brandSlug: (body.brand || 'Apex Certified').toLowerCase().replace(/\s+/g, '-'),
+      brand: body.brand || vendor.storeName || 'Buildora Verified',
+      brandSlug: (body.brand || vendor.storeName || 'buildora').toLowerCase().replace(/\s+/g, '-'),
       category: body.category || 'Civil & Interiors',
       categorySlug: body.categorySlug,
+      categoryId: body.categorySlug,
+      categoryName: body.category || body.categorySlug,
       subcategory: body.subcategory || body.categorySlug,
       subcategorySlug: body.subcategorySlug || body.categorySlug,
       description: body.description || '',
       shortDescription: body.shortDescription || '',
-      images: body.images && body.images.length > 0 ? body.images : ['https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=400&q=80'],
+      images:
+        body.images && body.images.length > 0
+          ? body.images
+          : ['https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=400&q=80'],
       price: Number(body.price),
+      sellingPrice: Number(body.price),
       mrp: Number(body.mrp),
       discount: Math.round(((Number(body.mrp) - Number(body.price)) / Number(body.mrp)) * 100),
       unit: body.unit || 'Piece',
@@ -3098,8 +3429,10 @@ export class VendorController implements OnModuleInit {
       gstRate: Number(body.gstRate) || 18,
       rating: 5.0,
       reviewCount: 0,
-      inStock: (body.stockCount || 0) > 0,
-      stockCount: Number(body.stockCount) || 50,
+      inStock: stockCount > 0,
+      stockCount,
+      stock: stockCount,
+      reservedStock: 0,
       lowStockThreshold: Number(body.lowStockThreshold) || 10,
       isBulkEligible: Boolean(body.isBulkEligible),
       isNewLaunch: Boolean(body.isNewLaunch),
@@ -3112,78 +3445,286 @@ export class VendorController implements OnModuleInit {
       attributes: body.attributes || [],
       specifications: body.specifications || {},
       deliverySpeedAvailable: body.deliverySpeedAvailable || ['ASAP_60', 'STANDARD'],
-      approvalStatus: 'APPROVED',
-      isActive: true,
+      approvalStatus,
+      isActive: false,
+      isSuspended: false,
+      version: 1,
+      versionHistory: [
+        {
+          version: 1,
+          action: isDraft ? 'CREATED_DRAFT' : 'SUBMITTED_FOR_APPROVAL',
+          actor: vendor.email,
+          timestamp: new Date().toISOString(),
+          snapshot: {
+            name: body.name,
+            price: Number(body.price),
+            mrp: Number(body.mrp),
+            stockCount,
+          },
+        },
+      ],
+      auditLogs: [
+        {
+          id: `paud-${Date.now()}`,
+          action: isDraft ? 'PRODUCT_DRAFT_CREATED' : 'PRODUCT_SUBMITTED',
+          actor: vendor.email,
+          timestamp: new Date().toISOString(),
+        },
+      ],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     vendorProducts.unshift(newProd);
+    // Explicitly enforce non-publication for DRAFT / PENDING_APPROVAL
     syncVendorProductToCustomerCatalog(newProd);
+    await platformPersistenceService.upsert(PlatformProductModel, newProd);
 
-    // Record Inward Movement
-    if (newProd.stockCount > 0) {
-      vendorStockMovements.unshift({
+    if (stockCount > 0) {
+      const vendorPrimaryWh = vendorWarehouses.find((w: any) => w.vendorId === vendor.id) || vendorWarehouses[0];
+      const movement: VendorStockMovement = {
         id: `sm-${Date.now()}`,
+        vendorId: vendor.id,
         productId: newProd.id,
         productName: newProd.name,
         sku: newProd.sku,
-        warehouseId: 'wh-1',
-        warehouseName: 'Peenya Central Dispatch Depot',
+        warehouseId: vendorPrimaryWh?.id || 'wh-1',
+        warehouseName: vendorPrimaryWh?.name || 'Primary Depot',
         type: 'INWARD',
-        quantityDelta: newProd.stockCount,
+        quantityDelta: stockCount,
         quantityBefore: 0,
-        quantityAfter: newProd.stockCount,
+        quantityAfter: stockCount,
         reason: 'Initial stock intake upon product catalog listing',
-        performedBy: 'Vendor Admin',
+        performedBy: vendor.name || vendor.email,
         createdAt: new Date().toISOString()
+      } as any;
+      vendorStockMovements.unshift(movement);
+      await platformPersistenceService.upsert(PlatformStockMovementModel, movement);
+    }
+
+    if (!isDraft) {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'ADMIN',
+        recipientId: 'TENANT_ADMIN',
+        type: 'PRODUCT',
+        title: `New Product Submitted: ${newProd.name}`,
+        message: `${vendor.storeName} submitted SKU ${newProd.sku} for quality & catalog approval.`,
+        severity: 'INFO',
+        actionUrl: '/products',
+        metadata: { productId: newProd.id, vendorId: vendor.id, sku: newProd.sku },
       });
+      realtimeBus.emitVendorAndAdmin(vendor.id, 'product.submitted', { product: newProd }, tenantId);
     }
 
     return {
       success: true,
-      message: 'Product listed and approved successfully.',
+      message: isDraft
+        ? 'Product saved as draft (hidden from customers).'
+        : 'Product submitted for Company Admin approval.',
       data: newProd
     };
   }
 
   @Put('products/:id')
-  updateProduct(@Param('id') id: string, @Body() body: Partial<VendorProduct>) {
-    const idx = vendorProducts.findIndex((p) => p.id === id);
+  async updateProduct(
+    @Param('id') id: string,
+    @Body() body: Partial<VendorProduct> & Record<string, any>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const idx = vendorProducts.findIndex((p) => p.id === id || p.sku === id);
     if (idx === -1) {
       throw new NotFoundException(`Product ${id} not found.`);
     }
+    const existing = vendorProducts[idx] as VendorProduct & Record<string, any>;
+    if (existing.vendorId !== vendor.id) {
+      throw new ForbiddenException('Ownership violation: You cannot modify another vendor product.');
+    }
 
-    if (body.price && body.mrp && body.price > body.mrp) {
+    const nextPrice = body.price !== undefined ? Number(body.price) : existing.price;
+    const nextMrp = body.mrp !== undefined ? Number(body.mrp) : existing.mrp;
+    if (nextPrice > nextMrp) {
       throw new BadRequestException('Selling price cannot exceed MRP.');
     }
 
-    vendorProducts[idx] = {
-      ...vendorProducts[idx],
-      ...body,
-      id,
-      updatedAt: new Date().toISOString()
-    };
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const catalogFieldsChanged = [
+      'name',
+      'description',
+      'price',
+      'mrp',
+      'images',
+      'specifications',
+      'variants',
+      'categorySlug',
+      'bulkPricing',
+    ].some((k) => body[k] !== undefined);
 
-    syncVendorProductToCustomerCatalog(vendorProducts[idx]);
+    const nextVersion = (Number(existing.version) || 1) + 1;
+    if (!Array.isArray(existing.versionHistory)) existing.versionHistory = [];
+    if (!Array.isArray(existing.auditLogs)) existing.auditLogs = [];
+
+    // Stock/availability updates synchronize immediately without hiding approved SKU
+    if (body.stockCount !== undefined) {
+      const nextStock = Math.max(0, Number(body.stockCount));
+      existing.stockCount = nextStock;
+      existing.stock = nextStock;
+      existing.inStock = nextStock > 0;
+    }
+
+    if (existing.approvalStatus === 'APPROVED' && catalogFieldsChanged && body.requiresApproval !== false) {
+      // Stage revision changes so public storefront keeps showing approved version until Admin approves
+      const staged: Record<string, any> = {};
+      for (const k of [
+        'name',
+        'description',
+        'shortDescription',
+        'price',
+        'mrp',
+        'images',
+        'specifications',
+        'variants',
+        'attributes',
+        'bulkPricing',
+        'categorySlug',
+        'category',
+        'subcategory',
+        'unit',
+        'packSize',
+        'gstRate',
+        'deliverySpeedAvailable',
+      ]) {
+        if (body[k] !== undefined) staged[k] = body[k];
+      }
+      existing.pendingRevision = { ...(existing.pendingRevision || {}), ...staged };
+      existing.revisionStatus = 'PENDING_APPROVAL';
+      existing.hasPendingChanges = true;
+      existing.version = nextVersion;
+      existing.versionHistory.unshift({
+        version: nextVersion,
+        action: 'REVISION_PENDING_APPROVAL',
+        actor: vendor.email,
+        timestamp: new Date().toISOString(),
+        snapshot: staged,
+      });
+      existing.auditLogs.unshift({
+        id: `paud-${Date.now()}`,
+        action: 'PRODUCT_REVISION_SUBMITTED',
+        actor: vendor.email,
+        timestamp: new Date().toISOString(),
+      });
+      existing.updatedAt = new Date().toISOString();
+      syncVendorProductToCustomerCatalog(existing);
+      await platformPersistenceService.upsert(PlatformProductModel, existing);
+
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'ADMIN',
+        recipientId: 'TENANT_ADMIN',
+        type: 'PRODUCT',
+        title: `Product Revision Pending Review: ${existing.name}`,
+        message: `${vendor.storeName} updated SKU ${existing.sku}. Changes await approval before going live.`,
+        severity: 'INFO',
+        actionUrl: '/products',
+        metadata: { productId: existing.id, vendorId: vendor.id },
+      });
+      realtimeBus.emitVendorAndAdmin(vendor.id, 'product.submitted', { product: existing, isRevision: true }, tenantId);
+
+      return {
+        success: true,
+        pendingApproval: true,
+        message: 'Catalog changes submitted for Company Admin approval. Previous approved version stays live until approved.',
+        data: existing
+      };
+    }
+
+    // Apply direct update (e.g., DRAFT/REJECTED resubmission or stock-only update)
+    const { vendorId: _ignoreVendor, approvalStatus: requestedStatus, isDraft, ...safeBody } = body;
+    Object.assign(existing, safeBody);
+    existing.vendorId = vendor.id;
+    existing.sellingPrice = Number(existing.price);
+    existing.discount = existing.mrp > existing.price
+      ? Math.round(((existing.mrp - existing.price) / existing.mrp) * 100)
+      : 0;
+
+    if ((existing.approvalStatus === 'DRAFT' || existing.approvalStatus === 'REJECTED') && !isDraft && body.submitForApproval !== false) {
+      existing.approvalStatus = 'PENDING_APPROVAL';
+      existing.isActive = false;
+      existing.rejectionReason = undefined;
+    }
+
+    existing.version = nextVersion;
+    existing.versionHistory.unshift({
+      version: nextVersion,
+      action: 'UPDATED',
+      actor: vendor.email,
+      timestamp: new Date().toISOString(),
+      snapshot: { name: existing.name, price: existing.price, mrp: existing.mrp, stockCount: existing.stockCount },
+    });
+    existing.auditLogs.unshift({
+      id: `paud-${Date.now()}`,
+      action: 'PRODUCT_UPDATED',
+      actor: vendor.email,
+      timestamp: new Date().toISOString(),
+    });
+    existing.updatedAt = new Date().toISOString();
+
+    syncVendorProductToCustomerCatalog(existing);
+    await platformPersistenceService.upsert(PlatformProductModel, existing);
+
+    if (existing.approvalStatus === 'PENDING_APPROVAL') {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'ADMIN',
+        recipientId: 'TENANT_ADMIN',
+        type: 'PRODUCT',
+        title: `Product Submitted for Approval: ${existing.name}`,
+        message: `${vendor.storeName} submitted SKU ${existing.sku} for review.`,
+        severity: 'INFO',
+        actionUrl: '/products',
+        metadata: { productId: existing.id, vendorId: vendor.id },
+      });
+      realtimeBus.emitVendorAndAdmin(vendor.id, 'product.submitted', { product: existing }, tenantId);
+    } else if (existing.approvalStatus === 'APPROVED' && existing.isActive) {
+      realtimeBus.emitPublic(
+        'inventory.updated',
+        { productId: existing.id, sku: existing.sku, stockCount: existing.stockCount, inStock: existing.inStock },
+        tenantId
+      );
+    }
 
     return {
       success: true,
-      message: 'Product updated and synchronized with customer catalog.',
-      data: vendorProducts[idx]
+      message: existing.approvalStatus === 'PENDING_APPROVAL'
+        ? 'Product updated and submitted for Company Admin approval.'
+        : 'Product updated and synchronized.',
+      data: existing
     };
   }
 
   @Delete('products/:id')
-  deleteProduct(@Param('id') id: string) {
+  async deleteProduct(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     const prod = vendorProducts.find((p) => p.id === id);
-    vendorProducts = vendorProducts.filter((p) => p.id !== id);
-    if (prod) {
-      const custIdx = dbStore.products.findIndex((p) => p.sku === prod.sku || p.slug === prod.slug || p.id === prod.id);
-      if (custIdx !== -1) {
-        dbStore.products.splice(custIdx, 1);
-      }
+    if (!prod) {
+      throw new NotFoundException(`Product ${id} not found.`);
     }
+    if (prod.vendorId !== vendor.id) {
+      throw new ForbiddenException('Ownership violation: Cannot delete another vendor product.');
+    }
+
+    vendorProducts = vendorProducts.filter((p) => p.id !== id);
+    const custIdx = dbStore.products.findIndex((p) => p.sku === prod.sku || p.slug === prod.slug || p.id === prod.id);
+    if (custIdx !== -1) {
+      dbStore.products.splice(custIdx, 1);
+    }
+    await platformPersistenceService.remove(PlatformProductModel, prod.id);
+    realtimeBus.emitPublic('product.suspended', { productId: prod.id, sku: prod.sku }, vendor.tenantId || DEFAULT_TENANT_ID);
+
     return {
       success: true,
       message: 'Product removed from vendor catalog and customer catalog.'
@@ -3191,31 +3732,43 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('products/bulk-import')
-  bulkImportProducts(@Body() body: { products: Partial<VendorProduct>[] }) {
+  async bulkImportProducts(
+    @Body() body: { products: Partial<VendorProduct>[]; isDraft?: boolean },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     if (!body.products || !Array.isArray(body.products) || body.products.length === 0) {
       throw new BadRequestException('Array of products required for bulk import.');
     }
 
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const isDraft = Boolean(body.isDraft);
+    const approvalStatus = isDraft ? 'DRAFT' : 'PENDING_APPROVAL';
     const imported: VendorProduct[] = [];
+
     for (const item of body.products) {
       if (!item.name || !item.sku || !item.price) continue;
       const id = `vp-prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const prod: VendorProduct = {
+      const stockCount = Math.max(0, Number(item.stockCount ?? 50));
+      const prod: VendorProduct & Record<string, any> = {
         id,
-        vendorId: DEFAULT_VENDOR_ID,
-        tenantId: DEFAULT_TENANT_ID,
+        vendorId: vendor.id,
+        tenantId,
         name: item.name,
-        slug: item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        slug: `${item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${id.slice(-4)}`,
         sku: item.sku,
-        brand: item.brand || 'Apex Certified',
-        brandSlug: (item.brand || 'Apex Certified').toLowerCase().replace(/\s+/g, '-'),
+        brand: item.brand || vendor.storeName || 'Buildora Verified',
+        brandSlug: (item.brand || vendor.storeName || 'buildora').toLowerCase().replace(/\s+/g, '-'),
         category: item.category || 'Civil & Interiors',
         categorySlug: item.categorySlug || 'civil-concrete',
+        categoryId: item.categorySlug || 'civil-concrete',
+        categoryName: item.category || 'Civil & Interiors',
         subcategory: item.subcategory || 'General',
         subcategorySlug: item.subcategorySlug || 'general',
         description: item.description || '',
         images: item.images && item.images.length > 0 ? item.images : ['https://images.unsplash.com/photo-1590069261209-f8e9b8642343?auto=format&fit=crop&w=400&q=80'],
         price: Number(item.price),
+        sellingPrice: Number(item.price),
         mrp: Number(item.mrp || item.price),
         discount: item.mrp && item.price ? Math.round(((Number(item.mrp) - Number(item.price)) / Number(item.mrp)) * 100) : 0,
         unit: item.unit || 'Piece',
@@ -3223,8 +3776,10 @@ export class VendorController implements OnModuleInit {
         gstRate: Number(item.gstRate) || 18,
         rating: 5.0,
         reviewCount: 0,
-        inStock: (Number(item.stockCount) || 50) > 0,
-        stockCount: Number(item.stockCount) || 50,
+        inStock: stockCount > 0,
+        stockCount,
+        stock: stockCount,
+        reservedStock: 0,
         lowStockThreshold: 10,
         isBulkEligible: Boolean(item.isBulkEligible),
         isNewLaunch: Boolean(item.isNewLaunch),
@@ -3232,15 +3787,30 @@ export class VendorController implements OnModuleInit {
         variants: item.variants || [],
         specifications: item.specifications || {},
         deliverySpeedAvailable: ['ASAP_60', 'STANDARD'],
-        approvalStatus: 'APPROVED',
-        isActive: true,
+        approvalStatus,
+        isActive: false,
+        version: 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
       vendorProducts.unshift(prod);
       syncVendorProductToCustomerCatalog(prod);
+      await platformPersistenceService.upsert(PlatformProductModel, prod);
       imported.push(prod);
+    }
+
+    if (!isDraft && imported.length > 0) {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'ADMIN',
+        recipientId: 'TENANT_ADMIN',
+        type: 'PRODUCT',
+        title: `Bulk Import: ${imported.length} Products Awaiting Review`,
+        message: `${vendor.storeName} imported ${imported.length} catalog SKUs pending admin approval.`,
+        severity: 'INFO',
+        actionUrl: '/products',
+      });
     }
 
     return {
@@ -3251,17 +3821,26 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('products/export')
-  exportProducts() {
+  async exportProducts(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const mine = vendorProducts.filter((p) => p.vendorId === vendor.id);
     return {
       success: true,
-      count: vendorProducts.length,
-      data: vendorProducts
+      count: mine.length,
+      data: mine
     };
   }
 
   @Put('products/:id/variants')
-  updateProductVariants(@Param('id') id: string, @Body() body: { variants: any[]; attributes?: any[] }) {
-    const prod = vendorProducts.find((p) => p.id === id || p.id === `vp-${id}` || p.sku === id);
+  async updateProductVariants(
+    @Param('id') id: string,
+    @Body() body: { variants: any[]; attributes?: any[] },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const prod = vendorProducts.find(
+      (p) => (p.id === id || p.id === `vp-${id}` || p.sku === id) && p.vendorId === vendor.id
+    );
     if (!prod) throw new NotFoundException('Product not found');
 
     prod.variants = body.variants || [];
@@ -3269,6 +3848,10 @@ export class VendorController implements OnModuleInit {
     prod.updatedAt = new Date().toISOString();
 
     syncVendorProductToCustomerCatalog(prod);
+    await platformPersistenceService.upsert(PlatformProductModel, prod);
+    if (prod.approvalStatus === 'APPROVED' && prod.isActive) {
+      realtimeBus.emitPublic('product.updated', { product: prod }, vendor.tenantId || DEFAULT_TENANT_ID);
+    }
 
     return {
       success: true,
@@ -3282,8 +3865,12 @@ export class VendorController implements OnModuleInit {
   // 6. BULK PRICING TIERS
   // ==========================================
   @Get('products/:id/bulk-pricing')
-  getBulkPricing(@Param('id') id: string) {
-    const prod = vendorProducts.find((p) => p.id === id);
+  async getBulkPricing(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const prod = vendorProducts.find((p) => p.id === id && p.vendorId === vendor.id);
     if (!prod) throw new NotFoundException('Product not found');
     return {
       success: true,
@@ -3294,11 +3881,13 @@ export class VendorController implements OnModuleInit {
   }
 
   @Put('products/:id/bulk-pricing')
-  updateBulkPricing(
+  async updateBulkPricing(
     @Param('id') id: string,
-    @Body() body: { bulkPricing: BulkPriceTier[]; isBulkEligible?: boolean }
+    @Body() body: { bulkPricing: BulkPriceTier[]; isBulkEligible?: boolean },
+    @Headers('authorization') authHeader?: string
   ) {
-    const prod = vendorProducts.find((p) => p.id === id);
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const prod = vendorProducts.find((p) => p.id === id && p.vendorId === vendor.id);
     if (!prod) throw new NotFoundException('Product not found');
 
     for (const tier of body.bulkPricing || []) {
@@ -3316,17 +3905,21 @@ export class VendorController implements OnModuleInit {
     }
     prod.updatedAt = new Date().toISOString();
     syncVendorProductToCustomerCatalog(prod);
+    await platformPersistenceService.upsert(PlatformProductModel, prod);
 
     return {
       success: true,
-      message: 'Bulk pricing tiers updated and synchronized with customer website.',
+      message: 'Bulk pricing tiers updated and synchronized.',
       data: prod.bulkPricing
     };
   }
 
   @Get('bulk-pricing/all')
-  getAllBulkPricing() {
-    const bulkProducts = vendorProducts.filter((p) => p.isBulkEligible && p.bulkPricing && p.bulkPricing.length > 0);
+  async getAllBulkPricing(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const bulkProducts = vendorProducts.filter(
+      (p) => p.vendorId === vendor.id && p.isBulkEligible && p.bulkPricing && p.bulkPricing.length > 0
+    );
     return {
       success: true,
       count: bulkProducts.length,
@@ -3346,19 +3939,30 @@ export class VendorController implements OnModuleInit {
   // 7. INVENTORY, WAREHOUSES & ATOMIC MOVEMENTS
   // ==========================================
   @Get('inventory')
-  getInventory() {
-    const items = vendorProducts.map((p) => ({
-      productId: p.id,
-      name: p.name,
-      sku: p.sku,
-      category: p.category,
-      unit: p.unit,
-      stockCount: p.stockCount,
-      lowStockThreshold: p.lowStockThreshold,
-      status: p.stockCount === 0 ? 'OUT_OF_STOCK' : p.stockCount <= p.lowStockThreshold ? 'LOW_STOCK' : 'IN_STOCK',
-      warehouse: currentVendor.businessInfo.warehouseAddress || 'Peenya Central Hub',
-      warehouseId: 'wh-1'
-    }));
+  async getInventory(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const mine = vendorProducts.filter((p) => p.vendorId === vendor.id);
+    const vendorPrimaryWh = vendorWarehouses.find((w: any) => w.vendorId === vendor.id);
+
+    const items = mine.map((p: any) => {
+      const reserved = Number(p.reservedStock || 0);
+      const available = Math.max(0, Number(p.stockCount || 0) - reserved);
+      return {
+        productId: p.id,
+        name: p.name,
+        sku: p.sku,
+        category: p.category,
+        unit: p.unit,
+        stockCount: p.stockCount,
+        reservedStock: reserved,
+        availableStock: available,
+        lowStockThreshold: p.lowStockThreshold,
+        status:
+          available === 0 ? 'OUT_OF_STOCK' : available <= p.lowStockThreshold ? 'LOW_STOCK' : 'IN_STOCK',
+        warehouse: vendorPrimaryWh?.name || vendor.businessInfo?.warehouseAddress || 'Primary Depot',
+        warehouseId: vendorPrimaryWh?.id || 'wh-1'
+      };
+    });
 
     return {
       success: true,
@@ -3368,24 +3972,29 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('inventory/adjust')
-  adjustStock(@Body() body: {
-    productId: string;
-    adjustmentType: 'ADD' | 'SUBTRACT' | 'SET';
-    quantity: number;
-    reason: string;
-    warehouseId?: string;
-    movementType?: 'INWARD' | 'DISPATCH' | 'ADJUSTMENT' | 'RETURN' | 'DAMAGED';
-    referenceNumber?: string;
-  }) {
-    const prod = vendorProducts.find((p) => p.id === body.productId);
-    if (!prod) throw new NotFoundException('Product not found');
+  async adjustStock(
+    @Body()
+    body: {
+      productId: string;
+      adjustmentType: 'ADD' | 'SUBTRACT' | 'SET';
+      quantity: number;
+      reason: string;
+      warehouseId?: string;
+      movementType?: 'INWARD' | 'DISPATCH' | 'ADJUSTMENT' | 'RETURN' | 'DAMAGED';
+      referenceNumber?: string;
+    },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const prod = vendorProducts.find((p) => p.id === body.productId && p.vendorId === vendor.id) as any;
+    if (!prod) throw new NotFoundException('Product not found in your vendor catalog');
 
     const qty = Number(body.quantity);
     if (isNaN(qty) || qty < 0) {
       throw new BadRequestException('Valid adjustment quantity is required.');
     }
 
-    const before = prod.stockCount;
+    const before = Number(prod.stockCount || 0);
     let after = before;
     let delta = qty;
 
@@ -3401,32 +4010,69 @@ export class VendorController implements OnModuleInit {
     }
 
     prod.stockCount = after;
-    prod.inStock = prod.stockCount > 0;
+    prod.stock = after;
+    prod.inStock = Math.max(0, after - Number(prod.reservedStock || 0)) > 0;
     prod.updatedAt = new Date().toISOString();
-    syncVendorProductToCustomerCatalog(prod);
 
-    // Record in Stock Movement Log
-    const movement: VendorStockMovement = {
+    if (body.warehouseId) {
+      prod.warehouseStocks = prod.warehouseStocks || {};
+      prod.warehouseStocks[body.warehouseId] = after;
+    }
+
+    syncVendorProductToCustomerCatalog(prod);
+    await platformPersistenceService.upsert(PlatformProductModel, prod);
+
+    const wh = vendorWarehouses.find((w: any) => w.id === body.warehouseId) || vendorWarehouses[0];
+    const movement: VendorStockMovement & Record<string, any> = {
       id: `sm-${Date.now()}`,
+      vendorId: vendor.id,
       productId: prod.id,
       productName: prod.name,
       sku: prod.sku,
-      warehouseId: body.warehouseId || 'wh-1',
-      warehouseName: 'Peenya Central Dispatch Depot',
+      warehouseId: wh?.id || body.warehouseId || 'wh-1',
+      warehouseName: wh?.name || 'Primary Dispatch Depot',
       type: body.movementType || (delta > 0 ? 'INWARD' : 'ADJUSTMENT'),
       quantityDelta: delta,
       quantityBefore: before,
       quantityAfter: after,
       reason: body.reason || 'Inventory stock manual adjustment',
       referenceNumber: body.referenceNumber || `ADJ-${Date.now()}`,
-      performedBy: 'Vikramaditya Rao',
+      performedBy: vendor.name || vendor.email,
       createdAt: new Date().toISOString()
     };
     vendorStockMovements.unshift(movement);
+    await platformPersistenceService.upsert(PlatformStockMovementModel, movement);
+
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    realtimeBus.emitPublic(
+      'inventory.updated',
+      { productId: prod.id, sku: prod.sku, stockCount: after, inStock: prod.inStock },
+      tenantId
+    );
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'inventory.updated',
+      { productId: prod.id, sku: prod.sku, stockCount: after, movement },
+      tenantId
+    );
+
+    if (after <= Number(prod.lowStockThreshold || 10)) {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: vendor.id,
+        type: 'STOCK',
+        title: after === 0 ? `Out of Stock: ${prod.name}` : `Low Stock Alert: ${prod.name}`,
+        message: `${prod.name} (${prod.sku}) now has ${after} units available.`,
+        severity: after === 0 ? 'CRITICAL' : 'WARNING',
+        actionUrl: '/inventory',
+        metadata: { productId: prod.id, stockCount: after },
+      });
+    }
 
     return {
       success: true,
-      message: `Stock updated for ${prod.name}. New count: ${prod.stockCount}. Inward/dispatch logged.`,
+      message: `Stock updated for ${prod.name}. New count: ${prod.stockCount}.`,
       data: {
         productId: prod.id,
         newStock: prod.stockCount,
@@ -3437,8 +4083,14 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('inventory/movements')
-  getStockMovements(@Query('productId') productId?: string) {
-    let movements = [...vendorStockMovements];
+  async getStockMovements(
+    @Headers('authorization') authHeader?: string,
+    @Query('productId') productId?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    let movements = vendorStockMovements.filter(
+      (m: any) => !m.vendorId || m.vendorId === vendor.id
+    );
     if (productId) {
       movements = movements.filter((m) => m.productId === productId);
     }
@@ -3450,21 +4102,31 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('warehouses')
-  getWarehouses() {
+  async getWarehouses(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const mine = vendorWarehouses.filter(
+      (w: any) => !w.vendorId || w.vendorId === vendor.id
+    );
     return {
       success: true,
-      data: vendorWarehouses,
+      data: mine,
       darkStores: Object.values(BENGALURU_WAREHOUSES)
     };
   }
 
   @Post('warehouses')
-  createWarehouse(@Body() body: Partial<VendorWarehouse>) {
+  async createWarehouse(
+    @Body() body: Partial<VendorWarehouse>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     if (!body.name || !body.address || !body.pincode) {
       throw new BadRequestException('Warehouse name, address, and pincode are required.');
     }
-    const newWh: VendorWarehouse = {
+    const newWh: VendorWarehouse & Record<string, any> = {
       id: `wh-${Date.now()}`,
+      vendorId: vendor.id,
+      tenantId: vendor.tenantId || DEFAULT_TENANT_ID,
       name: body.name,
       address: body.address,
       city: body.city || 'Bengaluru',
@@ -3476,9 +4138,12 @@ export class VendorController implements OnModuleInit {
     };
 
     if (newWh.isPrimary) {
-      vendorWarehouses.forEach((w) => (w.isPrimary = false));
+      vendorWarehouses.forEach((w: any) => {
+        if (!w.vendorId || w.vendorId === vendor.id) w.isPrimary = false;
+      });
     }
     vendorWarehouses.push(newWh);
+    await platformPersistenceService.upsert(PlatformWarehouseModel, newWh);
 
     return {
       success: true,
@@ -3488,14 +4153,24 @@ export class VendorController implements OnModuleInit {
   }
 
   @Put('warehouses/:id')
-  updateWarehouse(@Param('id') id: string, @Body() body: Partial<VendorWarehouse>) {
-    const wh = vendorWarehouses.find((w) => w.id === id);
+  async updateWarehouse(
+    @Param('id') id: string,
+    @Body() body: Partial<VendorWarehouse>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const wh = vendorWarehouses.find(
+      (w: any) => w.id === id && (!w.vendorId || w.vendorId === vendor.id)
+    ) as any;
     if (!wh) throw new NotFoundException('Warehouse not found');
 
     if (body.isPrimary) {
-      vendorWarehouses.forEach((w) => (w.isPrimary = false));
+      vendorWarehouses.forEach((w: any) => {
+        if (!w.vendorId || w.vendorId === vendor.id) w.isPrimary = false;
+      });
     }
-    Object.assign(wh, body);
+    Object.assign(wh, body, { vendorId: vendor.id });
+    await platformPersistenceService.upsert(PlatformWarehouseModel, wh);
 
     return {
       success: true,
@@ -3505,8 +4180,18 @@ export class VendorController implements OnModuleInit {
   }
 
   @Delete('warehouses/:id')
-  deleteWarehouse(@Param('id') id: string) {
+  async deleteWarehouse(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const target = vendorWarehouses.find((w: any) => w.id === id) as any;
+    if (!target) throw new NotFoundException('Warehouse not found');
+    if (target.vendorId && target.vendorId !== vendor.id) {
+      throw new ForbiddenException('Ownership violation: Cannot delete another vendor warehouse.');
+    }
     vendorWarehouses = vendorWarehouses.filter((w) => w.id !== id);
+    await platformPersistenceService.remove(PlatformWarehouseModel, id);
     return { success: true, message: 'Warehouse removed successfully.' };
   }
 
@@ -3514,8 +4199,12 @@ export class VendorController implements OnModuleInit {
   // 8. ORDERS & 60-MIN SITE DISPATCH WORKFLOW
   // ==========================================
   @Get('orders')
-  getOrders(@Query('status') status?: string) {
-    let orders = [...vendorOrders];
+  async getOrders(
+    @Headers('authorization') authHeader?: string,
+    @Query('status') status?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    let orders = vendorOrders.filter((o) => o.vendorId === vendor.id);
     if (status) {
       orders = orders.filter((o) => o.status === status);
     }
@@ -3527,9 +4216,15 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('orders/:id')
-  getOrderById(@Param('id') id: string) {
-    const order = vendorOrders.find((o) => o.id === id || o.orderNumber === id);
-    if (!order) throw new NotFoundException('Order not found');
+  async getOrderById(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const order = vendorOrders.find(
+      (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
+    );
+    if (!order) throw new NotFoundException('Order not found for your vendor account');
     return {
       success: true,
       data: order
@@ -3537,40 +4232,42 @@ export class VendorController implements OnModuleInit {
   }
 
   @Put('orders/:id/status')
-  updateOrderStatus(
+  async updateOrderStatus(
     @Param('id') id: string,
-    @Body() body: { status: VendorOrder['status']; note?: string }
+    @Body() body: { status: VendorOrder['status']; note?: string },
+    @Headers('authorization') authHeader?: string
   ) {
-    const order = vendorOrders.find((o) => o.id === id || o.orderNumber === id);
-    if (!order) throw new NotFoundException('Order not found');
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const order = vendorOrders.find(
+      (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
+    ) as any;
+    if (!order) throw new NotFoundException('Order not found for your vendor account');
 
-    order.status = body.status;
-    order.timeline.push({
-      status: body.status,
-      title: `Status updated to ${body.status}`,
-      description: body.note || `Order marked as ${body.status} by depot manager`,
-      timestamp: new Date().toISOString()
-    });
+    await orderSyncService.syncVendorOrderStatusToCustomer(order, body.status, body.note);
 
     return {
       success: true,
-      message: `Order status updated to ${body.status}`,
+      message: `Order status updated to ${body.status} and synchronized with customer`,
       data: order
     };
   }
 
   @Post('orders/:id/accept')
-  acceptOrder(@Param('id') id: string) {
-    const order = vendorOrders.find((o) => o.id === id || o.orderNumber === id);
-    if (!order) throw new NotFoundException('Order not found');
+  async acceptOrder(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const order = vendorOrders.find(
+      (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
+    ) as any;
+    if (!order) throw new NotFoundException('Order not found for your vendor account');
 
-    order.status = 'ACCEPTED';
-    order.timeline.push({
-      status: 'ACCEPTED',
-      title: 'Order Accepted by Vendor Depot',
-      description: 'Inventory allocated and materials sent to packing bay.',
-      timestamp: new Date().toISOString()
-    });
+    await orderSyncService.syncVendorOrderStatusToCustomer(
+      order,
+      'ACCEPTED',
+      'Order accepted by Vendor Depot and queued for picking.'
+    );
 
     return {
       success: true,
@@ -3580,37 +4277,48 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('orders/:id/reject')
-  rejectOrder(@Param('id') id: string, @Body() body: { reason: string }) {
-    const order = vendorOrders.find((o) => o.id === id || o.orderNumber === id);
-    if (!order) throw new NotFoundException('Order not found');
+  async rejectOrder(
+    @Param('id') id: string,
+    @Body() body: { reason: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const order = vendorOrders.find(
+      (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
+    ) as any;
+    if (!order) throw new NotFoundException('Order not found for your vendor account');
 
-    order.status = 'CANCELLED';
-    order.timeline.push({
-      status: 'CANCELLED',
-      title: 'Order Rejected by Vendor Depot',
-      description: body.reason || 'Depot capacity full or out-of-stock batch',
-      timestamp: new Date().toISOString()
-    });
+    await orderSyncService.syncVendorOrderStatusToCustomer(
+      order,
+      'REJECTED',
+      body.reason || 'Depot capacity full or batch unavailable'
+    );
 
     return {
       success: true,
-      message: 'Order marked as cancelled.',
+      message: 'Order rejected and reserved stock released.',
       data: order
     };
   }
 
   @Get('orders/:id/packing-slip')
-  getOrderPackingSlip(@Param('id') id: string) {
-    const order = vendorOrders.find((o) => o.id === id || o.orderNumber === id);
-    if (!order) throw new NotFoundException('Order not found');
+  async getOrderPackingSlip(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const order = vendorOrders.find(
+      (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
+    );
+    if (!order) throw new NotFoundException('Order not found for your vendor account');
 
     return {
       success: true,
       slipNumber: `PS-${order.orderNumber}`,
       generatedAt: new Date().toISOString(),
       order,
-      vendor: currentVendor.businessInfo,
-      assignedDarkStore: BENGALURU_WAREHOUSES[currentVendor.businessInfo.assignedDarkStoreId || 'WH-BLR-04']
+      vendor: vendor.businessInfo,
+      assignedDarkStore: BENGALURU_WAREHOUSES[vendor.businessInfo?.assignedDarkStoreId || 'WH-BLR-04']
     };
   }
 
@@ -3618,8 +4326,12 @@ export class VendorController implements OnModuleInit {
   // 9. RETURNS & REFUNDS WORKFLOW
   // ==========================================
   @Get('returns')
-  getReturns(@Query('status') status?: string) {
-    let list = [...vendorReturns];
+  async getReturns(
+    @Headers('authorization') authHeader?: string,
+    @Query('status') status?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    let list = vendorReturns.filter((r) => r.vendorId === vendor.id);
     if (status) {
       list = list.filter((r) => r.status === status);
     }
@@ -3631,18 +4343,26 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('returns/:id')
-  getReturnById(@Param('id') id: string) {
-    const ret = vendorReturns.find((r) => r.id === id || r.orderNumber === id);
+  async getReturnById(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const ret = vendorReturns.find(
+      (r) => (r.id === id || r.orderNumber === id) && r.vendorId === vendor.id
+    );
     if (!ret) throw new NotFoundException('Return request not found');
     return { success: true, data: ret };
   }
 
   @Put('returns/:id/status')
-  updateReturnStatus(
+  async updateReturnStatus(
     @Param('id') id: string,
-    @Body() body: { status: VendorReturnRequest['status']; restockDecision?: boolean; rejectionReason?: string }
+    @Body() body: { status: VendorReturnRequest['status']; restockDecision?: boolean; rejectionReason?: string },
+    @Headers('authorization') authHeader?: string
   ) {
-    const ret = vendorReturns.find((r) => r.id === id);
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const ret = vendorReturns.find((r) => r.id === id && r.vendorId === vendor.id) as any;
     if (!ret) throw new NotFoundException('Return request not found');
 
     ret.status = body.status;
@@ -3650,35 +4370,103 @@ export class VendorController implements OnModuleInit {
     if (body.restockDecision !== undefined) ret.restockDecision = body.restockDecision;
     if (body.status === 'REFUNDED') ret.resolvedAt = new Date().toISOString();
 
-    // If approved for restocking, automatically inward into warehouse inventory
-    if (ret.status === 'REFUNDED' && ret.restockDecision) {
-      for (const item of ret.items) {
-        const prod = vendorProducts.find((p) => p.sku === item.sku || p.id === item.productId);
-        if (prod) {
-          const before = prod.stockCount;
-          prod.stockCount += item.quantity;
-          prod.inStock = true;
-          syncVendorProductToCustomerCatalog(prod);
+    if (ret.status === 'REFUNDED') {
+      if (ret.restockDecision) {
+        for (const item of ret.items || []) {
+          const prod = vendorProducts.find(
+            (p) => (p.sku === item.sku || p.id === item.productId || p.id.replace(/^vp-/, '') === item.productId) && p.vendorId === vendor.id
+          ) as any;
+          if (prod) {
+            const before = Number(prod.stockCount || 0);
+            prod.stockCount = before + Number(item.quantity || 1);
+            prod.stock = prod.stockCount;
+            prod.inStock = true;
+            syncVendorProductToCustomerCatalog(prod);
+            await platformPersistenceService.upsert(PlatformProductModel, prod);
 
-          vendorStockMovements.unshift({
-            id: `sm-${Date.now()}`,
-            productId: prod.id,
-            productName: prod.name,
-            sku: prod.sku,
-            warehouseId: 'wh-1',
-            warehouseName: 'Peenya Central Dispatch Depot',
-            type: 'RETURN',
-            quantityDelta: item.quantity,
-            quantityBefore: before,
-            quantityAfter: prod.stockCount,
-            reason: `Return restocked from Request #${ret.id}`,
-            referenceNumber: ret.orderNumber,
-            performedBy: 'Compliance Lead',
-            createdAt: new Date().toISOString()
+            const movement: any = {
+              id: `sm-${Date.now()}`,
+              vendorId: vendor.id,
+              productId: prod.id,
+              productName: prod.name,
+              sku: prod.sku,
+              warehouseId: 'wh-1',
+              warehouseName: 'Primary Dispatch Depot',
+              type: 'RETURN',
+              quantityDelta: Number(item.quantity || 1),
+              quantityBefore: before,
+              quantityAfter: prod.stockCount,
+              reason: `Return restocked from Request #${ret.id}`,
+              referenceNumber: ret.orderNumber,
+              performedBy: vendor.name || vendor.email,
+              createdAt: new Date().toISOString()
+            };
+            vendorStockMovements.unshift(movement);
+            await platformPersistenceService.upsert(PlatformStockMovementModel, movement);
+            realtimeBus.emitPublic('inventory.updated', {
+              productId: prod.id,
+              sku: prod.sku,
+              stockCount: prod.stockCount,
+              inStock: true,
+            });
+          }
+        }
+      }
+
+      // Credit refund to customer wallet & sync order status
+      const custOrder = dbStore.orders.find(
+        (o) => o.orderNumber === ret.orderNumber || o.id === ret.orderId
+      ) as any;
+      if (custOrder && !ret.refundCredited) {
+        ret.refundCredited = true;
+        custOrder.status = 'RETURNED';
+        custOrder.paymentStatus = 'REFUNDED';
+        custOrder.timeline.push({
+          status: 'RETURNED',
+          title: 'Return Completed & Refund Credited',
+          description: `₹${ret.totalRefundAmount || 0} credited to customer wallet.`,
+          timestamp: new Date().toISOString(),
+          completed: true,
+        });
+        dbStore.walletBalance += Number(ret.totalRefundAmount || 0);
+        const refundTx: any = {
+          id: `tx-ret-${Date.now()}`,
+          customerId: custOrder.customerId,
+          referenceNumber: `WRF-${Date.now().toString().slice(-6)}`,
+          type: 'CREDIT',
+          amount: Number(ret.totalRefundAmount || 0),
+          category: 'REFUND',
+          status: 'COMPLETED',
+          orderId: custOrder.orderNumber,
+          description: `Return refund for Order #${custOrder.orderNumber}`,
+          createdAt: new Date().toISOString(),
+          balanceAfter: dbStore.walletBalance,
+        };
+        dbStore.walletTransactions.unshift(refundTx);
+        await platformPersistenceService.upsert(PlatformWalletTxnModel, refundTx);
+        await platformPersistenceService.upsert(PlatformOrderModel, custOrder);
+        if (custOrder.customerId) {
+          await platformNotificationService.dispatch({
+            tenantId: vendor.tenantId || DEFAULT_TENANT_ID,
+            recipientRole: 'CUSTOMER',
+            recipientId: custOrder.customerId,
+            type: 'PAYMENT',
+            title: `Return Refunded for #${custOrder.orderNumber}`,
+            message: `₹${ret.totalRefundAmount || 0} credited to your Buildora Wallet.`,
+            severity: 'SUCCESS',
+            actionUrl: `/orders/${custOrder.orderNumber}`,
+          });
+          realtimeBus.emitToCustomer(custOrder.customerId, 'order.status.updated', {
+            orderNumber: custOrder.orderNumber,
+            status: 'RETURNED',
+            refundAmount: ret.totalRefundAmount,
           });
         }
       }
     }
+
+    await platformPersistenceService.upsert(PlatformReturnModel, ret);
+    realtimeBus.emitToAdmin('order.status.updated', { returnId: ret.id, status: ret.status });
 
     return {
       success: true,
@@ -3819,44 +4607,96 @@ export class VendorController implements OnModuleInit {
   // 13. SETTLEMENTS & FINANCIAL LEDGER
   // ==========================================
   @Get('settlements')
-  getSettlements() {
+  async getSettlements(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const mine = vendorSettlements.filter((s) => s.vendorId === vendor.id);
     return {
       success: true,
-      data: vendorSettlements
+      data: mine
     };
   }
 
   @Get('settlements/summary')
-  getSettlementsSummary() {
+  async getSettlementsSummary(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const myOrders = vendorOrders.filter(
+      (o) => o.vendorId === vendor.id && o.status !== 'CANCELLED' && o.status !== 'REJECTED'
+    );
+    const mine = vendorSettlements.filter((s) => s.vendorId === vendor.id);
+    const grossSales = Math.round(myOrders.reduce((s, o) => s + Number(o.subtotal || 0), 0));
+    const platformCommission = Math.round(myOrders.reduce((s, o: any) => s + Number(o.platformFee ?? o.commissionTotal ?? 0), 0));
+    const taxDeducted = Math.round(grossSales * 0.01);
+    const netEarnings = Math.max(0, grossSales - platformCommission - taxDeducted);
+    const pendingPayout = mine
+      .filter((s) => s.status !== 'PAID')
+      .reduce((s, x: any) => s + Number(x.netPayable ?? x.netAmount ?? 0), 0);
+    const completedPayout = mine
+      .filter((s) => s.status === 'PAID')
+      .reduce((s, x: any) => s + Number(x.netPayable ?? x.netAmount ?? 0), 0);
+
     return {
       success: true,
-      grossSales: 168400,
-      platformCommission: 8420,
-      taxDeducted: 1684,
-      netEarnings: 158296,
-      pendingPayout: 50948,
-      completedPayout: 92590,
-      bankAccount: currentVendor.businessInfo.bankDetails
+      grossSales,
+      platformCommission,
+      taxDeducted,
+      netEarnings,
+      pendingPayout,
+      completedPayout,
+      bankAccount: vendor.businessInfo?.bankDetails || {}
     };
   }
 
   @Post('settlements/request-payout')
-  requestSettlementPayout(@Body() body: { amount?: number }) {
-    const newSettlement: VendorSettlement = {
+  async requestSettlementPayout(
+    @Body() body: { amount?: number },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const myOrders = vendorOrders.filter((o) => o.vendorId === vendor.id && o.status === 'DELIVERED');
+    const deliveredSum = myOrders.reduce((s, o) => s + Number(o.subtotal || 0), 0);
+    const gross = Number(body.amount || deliveredSum || 0);
+    if (gross <= 0) {
+      throw new BadRequestException('No eligible delivered balance available for payout request.');
+    }
+
+    const commission = Math.round(gross * 0.06);
+    const tds = Math.round(gross * 0.01);
+    const net = Math.max(0, gross - commission - tds);
+    const newSettlement: VendorSettlement & Record<string, any> = {
       id: `stl-${Date.now()}`,
       settlementNumber: `SETTL-BLD-${Math.floor(10000 + Math.random() * 90000)}`,
-      vendorId: DEFAULT_VENDOR_ID,
+      vendorId: vendor.id,
       period: 'Current On-Demand Payout',
-      orderCount: 8,
-      grossRevenue: body.amount || 50948,
-      platformCommission: Math.round((body.amount || 50948) * 0.05),
-      taxDeductions: Math.round((body.amount || 50948) * 0.01),
-      netPayable: Math.round((body.amount || 50948) * 0.94),
+      orderCount: myOrders.length || 1,
+      ordersCount: myOrders.length || 1,
+      grossRevenue: gross,
+      grossAmount: gross,
+      platformCommission: commission,
+      commissionAmount: commission,
+      taxDeductions: tds,
+      tdsAmount: tds,
+      netPayable: net,
+      netAmount: net,
       status: 'PROCESSING',
       createdAt: new Date().toISOString()
     };
 
     vendorSettlements.unshift(newSettlement);
+    await platformPersistenceService.upsert(PlatformSettlementModel, newSettlement);
+
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    await platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'ADMIN',
+      recipientId: 'TENANT_ADMIN',
+      type: 'SETTLEMENT',
+      title: `Payout Requested: ${newSettlement.settlementNumber}`,
+      message: `${vendor.storeName} requested payout of ₹${net.toLocaleString()}.`,
+      severity: 'INFO',
+      actionUrl: '/finance',
+      metadata: { settlementId: newSettlement.id, vendorId: vendor.id },
+    });
+    realtimeBus.emitVendorAndAdmin(vendor.id, 'settlement.status.updated', { settlement: newSettlement }, tenantId);
 
     return {
       success: true,
@@ -3869,17 +4709,25 @@ export class VendorController implements OnModuleInit {
   // 14. INVOICES & GST DOCUMENTS
   // ==========================================
   @Get('invoices')
-  getInvoices() {
+  async getInvoices(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const mine = vendorInvoices.filter((i) => i.vendorId === vendor.id);
     return {
       success: true,
-      count: vendorInvoices.length,
-      data: vendorInvoices
+      count: mine.length,
+      data: mine
     };
   }
 
   @Get('invoices/:id')
-  getInvoiceById(@Param('id') id: string) {
-    const inv = vendorInvoices.find((i) => i.id === id || i.invoiceNumber === id);
+  async getInvoiceById(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const inv = vendorInvoices.find(
+      (i) => (i.id === id || i.invoiceNumber === id) && i.vendorId === vendor.id
+    );
     if (!inv) throw new NotFoundException('Invoice not found');
     return { success: true, data: inv };
   }
@@ -3888,26 +4736,30 @@ export class VendorController implements OnModuleInit {
   // 15. BUSINESS REPORTS & ANALYTICS
   // ==========================================
   @Get('reports/sales')
-  getSalesReport(@Query('period') period?: string, @Query('category') category?: string) {
+  async getSalesReport(
+    @Headers('authorization') authHeader?: string,
+    @Query('period') period?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const myOrders = vendorOrders.filter(
+      (o) => o.vendorId === vendor.id && o.status !== 'CANCELLED' && o.status !== 'REJECTED'
+    );
+    const totalRevenue = Math.round(myOrders.reduce((s, o) => s + Number(o.subtotal || 0), 0));
+    const totalOrders = myOrders.length;
+    const averageOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+
     return {
       success: true,
       period: period || 'Last 30 Days',
-      totalRevenue: 168400,
-      totalOrders: 52,
-      averageOrderValue: 3238,
-      topCategories: [
-        { name: 'Civil & Interiors', revenue: 78500, percentage: 46.6 },
-        { name: 'Plumbing & Pipes', revenue: 42300, percentage: 25.1 },
-        { name: 'Electrical & Lighting', revenue: 32600, percentage: 19.3 },
-        { name: 'Plywood & Hardware', revenue: 15000, percentage: 9.0 }
-      ],
-      dailySummary: [
-        { date: '2026-11-20', sales: 22400, orders: 8 },
-        { date: '2026-11-21', sales: 26900, orders: 9 },
-        { date: '2026-11-22', sales: 31200, orders: 11 },
-        { date: '2026-11-23', sales: 22700, orders: 7 },
-        { date: '2026-11-24', sales: 34100, orders: 12 }
-      ]
+      totalRevenue,
+      totalOrders,
+      averageOrderValue,
+      topCategories: [],
+      dailySummary: myOrders.slice(0, 10).map((o) => ({
+        date: String(o.createdAt || '').split('T')[0],
+        sales: Number(o.subtotal || 0),
+        orders: 1,
+      }))
     };
   }
 
@@ -3977,16 +4829,22 @@ export class VendorController implements OnModuleInit {
   // 17. SUPPORT TICKETS & HELPDESK
   // ==========================================
   @Get('support/tickets')
-  getSupportTickets() {
+  async getSupportTickets(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const mine = vendorSupportTickets.filter((t) => t.vendorId === vendor.id);
     return {
       success: true,
-      count: vendorSupportTickets.length,
-      data: vendorSupportTickets
+      count: mine.length,
+      data: mine
     };
   }
 
   @Post('support/tickets')
-  createSupportTicket(@Body() body: { subject: string; category: any; priority: any; description: string }) {
+  async createSupportTicket(
+    @Body() body: { subject: string; category: any; priority: any; description: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     if (!body.subject || !body.description) {
       throw new BadRequestException('Ticket subject and description are required.');
     }
@@ -3994,7 +4852,7 @@ export class VendorController implements OnModuleInit {
     const tkt: VendorSupportTicket = {
       id: `tkt-${Date.now()}`,
       ticketNumber: `TKT-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      vendorId: DEFAULT_VENDOR_ID,
+      vendorId: vendor.id,
       subject: body.subject,
       category: body.category || 'TECHNICAL',
       priority: body.priority || 'MEDIUM',
@@ -4005,7 +4863,7 @@ export class VendorController implements OnModuleInit {
       messages: [
         {
           id: `msg-${Date.now()}`,
-          sender: 'Vikramaditya Rao',
+          sender: vendor.name || vendor.storeName,
           senderRole: 'VENDOR',
           text: body.description,
           timestamp: new Date().toISOString()
@@ -4014,6 +4872,19 @@ export class VendorController implements OnModuleInit {
     };
 
     vendorSupportTickets.unshift(tkt);
+    await platformPersistenceService.upsert(PlatformSupportTicketModel, tkt);
+
+    await platformNotificationService.dispatch({
+      tenantId: vendor.tenantId || DEFAULT_TENANT_ID,
+      recipientRole: 'ADMIN',
+      recipientId: 'TENANT_ADMIN',
+      type: 'SUPPORT',
+      title: `Vendor Ticket ${tkt.ticketNumber}: ${vendor.storeName}`,
+      message: tkt.subject,
+      severity: tkt.priority === 'HIGH' ? 'WARNING' : 'INFO',
+      actionUrl: '/notifications',
+      metadata: { ticketId: tkt.id, vendorId: vendor.id },
+    });
 
     return {
       success: true,
@@ -4023,20 +4894,27 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('support/tickets/:id/messages')
-  addSupportTicketMessage(@Param('id') id: string, @Body() body: { text: string }) {
-    const tkt = vendorSupportTickets.find((t) => t.id === id);
+  async addSupportTicketMessage(
+    @Param('id') id: string,
+    @Body() body: { text: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tkt = vendorSupportTickets.find((t) => t.id === id && t.vendorId === vendor.id);
     if (!tkt) throw new NotFoundException('Support ticket not found');
     if (!body.text) throw new BadRequestException('Message cannot be empty');
 
     const msg = {
       id: `msg-${Date.now()}`,
-      sender: 'Vikramaditya Rao',
+      sender: vendor.name || vendor.storeName,
       senderRole: 'VENDOR' as const,
       text: body.text,
       timestamp: new Date().toISOString()
     };
     tkt.messages.push(msg);
     tkt.updatedAt = new Date().toISOString();
+    await platformPersistenceService.upsert(PlatformSupportTicketModel, tkt);
+    realtimeBus.emitToAdmin('notification.created', { ticketId: tkt.id, vendorId: vendor.id }, vendor.tenantId || DEFAULT_TENANT_ID);
 
     return {
       success: true,
@@ -4049,46 +4927,205 @@ export class VendorController implements OnModuleInit {
   // 18. VENDOR PROFILE, BANK & SETTINGS
   // ==========================================
   @Get('profile')
-  getVendorProfile() {
+  async getVendorProfile(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const serialized = serializeVendorProfile(vendor);
     return {
       success: true,
-      data: currentVendor
+      data: serialized,
+      vendor: serialized
     };
   }
 
   @Put('profile')
-  updateVendorProfile(@Body() body: any, @Headers('authorization') authHeader?: string) {
-    let target: VendorProfile = currentVendor;
-    try {
-      if (authHeader) target = getVendorFromAuthHeader(authHeader);
-    } catch {
-      target = currentVendor;
+  async updateVendorProfile(@Body() body: any, @Headers('authorization') authHeader?: string) {
+    const target = await resolveStrictAuthenticatedVendor(authHeader);
+    const incomingInfo = body?.businessInfo || {};
+
+    if (typeof body?.storeName === 'string' && body.storeName.trim()) {
+      target.storeName = body.storeName.trim();
+    } else if (typeof incomingInfo.storeName === 'string' && incomingInfo.storeName.trim()) {
+      target.storeName = incomingInfo.storeName.trim();
     }
-    if (body.storeName) target.storeName = body.storeName;
-    if (body.logoUrl !== undefined) {
+
+    const updatedOwner =
+      (typeof body?.name === 'string' && body.name.trim()) ||
+      (typeof incomingInfo.contactPerson === 'string' && incomingInfo.contactPerson.trim()) ||
+      undefined;
+    if (updatedOwner) {
+      target.name = updatedOwner;
+    }
+
+    const updatedEmail =
+      (typeof body?.email === 'string' && body.email.trim().toLowerCase()) ||
+      (typeof incomingInfo.email === 'string' && incomingInfo.email.trim().toLowerCase()) ||
+      undefined;
+    if (updatedEmail) {
+      const emailCheck = validateEmail(updatedEmail);
+      if (!emailCheck.isValid) {
+        throw new BadRequestException(emailCheck.error || 'Invalid business email address.');
+      }
+      target.email = updatedEmail;
+    }
+
+    const updatedPhone =
+      (typeof body?.phone === 'string' && body.phone.trim()) ||
+      (typeof incomingInfo.phone === 'string' && incomingInfo.phone.trim()) ||
+      undefined;
+    if (updatedPhone) {
+      const phoneCheck = validateIndianMobile(updatedPhone);
+      if (!phoneCheck.isValid) {
+        throw new BadRequestException(phoneCheck.error || 'Enter a valid 10-digit Indian mobile number.');
+      }
+      target.phone = phoneCheck.normalized || updatedPhone;
+    }
+
+    if (body?.logoUrl !== undefined) {
       target.logoUrl = body.logoUrl || undefined;
       target.businessInfo.logo = body.logoUrl || undefined;
     }
-    if (body.logoMetadata !== undefined) {
+    if (body?.logoMetadata !== undefined) {
       target.logoMetadata = body.logoMetadata || undefined;
       target.businessInfo.logoMetadata = body.logoMetadata || undefined;
     }
-    if (body.businessInfo) {
-      target.businessInfo = { ...target.businessInfo, ...body.businessInfo };
+
+    const existingAddr = target.businessInfo?.address || ({} as any);
+    const incomingAddr = incomingInfo.address || {};
+    const mergedAddress = {
+      ...existingAddr,
+      ...(incomingAddr.building !== undefined && incomingAddr.building !== '' ? { building: String(incomingAddr.building).trim() } : {}),
+      ...(incomingAddr.street !== undefined && incomingAddr.street !== '' ? { street: String(incomingAddr.street).trim() } : {}),
+      ...(incomingAddr.area !== undefined && incomingAddr.area !== '' ? { area: String(incomingAddr.area).trim() } : {}),
+      ...(incomingAddr.city !== undefined && incomingAddr.city !== '' ? { city: String(incomingAddr.city).trim() } : {}),
+      ...(incomingAddr.state !== undefined && incomingAddr.state !== '' ? { state: String(incomingAddr.state).trim() } : {}),
+      ...(incomingAddr.pincode !== undefined && incomingAddr.pincode !== '' ? { pincode: String(incomingAddr.pincode).trim() } : {}),
+      ...(incomingAddr.country !== undefined && incomingAddr.country !== '' ? { country: String(incomingAddr.country).trim() } : {})
+    };
+
+    if (mergedAddress.pincode) {
+      const pinCheck = validatePincode(mergedAddress.pincode);
+      if (!pinCheck.isValid) {
+        throw new BadRequestException(pinCheck.error || 'Enter a valid 6-digit Indian pincode.');
+      }
     }
+
+    target.businessInfo = {
+      ...target.businessInfo,
+      ...(incomingInfo.businessName?.trim() ? { businessName: incomingInfo.businessName.trim() } : {}),
+      storeName: target.storeName,
+      contactPerson: target.name,
+      email: target.email,
+      phone: target.phone,
+      ...(incomingInfo.businessType ? { businessType: incomingInfo.businessType } : {}),
+      ...(incomingInfo.businessRegistrationType !== undefined ? { businessRegistrationType: incomingInfo.businessRegistrationType } : {}),
+      ...(incomingInfo.yearOfEstablishment !== undefined ? { yearOfEstablishment: incomingInfo.yearOfEstablishment } : {}),
+      ...(incomingInfo.website !== undefined ? { website: incomingInfo.website } : {}),
+      ...(incomingInfo.description !== undefined ? { description: incomingInfo.description } : {}),
+      address: mergedAddress
+    };
+
+    target.registrationData = {
+      ...(target.registrationData || {}),
+      ownerName: target.name,
+      email: target.email,
+      phone: target.phone,
+      storeName: target.storeName,
+      legalBusinessName: target.businessInfo.businessName,
+      businessType: (target.businessInfo.businessType as any) || target.registrationData?.businessType,
+      businessRegistrationType:
+        target.businessInfo.businessRegistrationType || target.registrationData?.businessRegistrationType,
+      yearOfEstablishment:
+        target.businessInfo.yearOfEstablishment ?? target.registrationData?.yearOfEstablishment,
+      website: target.businessInfo.website ?? target.registrationData?.website,
+      description: target.businessInfo.description ?? target.registrationData?.description,
+      logoUrl: target.logoUrl,
+      logoMetadata: target.logoMetadata,
+      country: mergedAddress.country || 'India',
+      state: mergedAddress.state || target.registrationData?.state || '',
+      city: mergedAddress.city || target.registrationData?.city || '',
+      pincode: mergedAddress.pincode || target.registrationData?.pincode || '',
+      completeAddress:
+        mergedAddress.building || mergedAddress.street || target.registrationData?.completeAddress || ''
+    };
+
     target.updatedAt = new Date().toISOString();
-    void vendorPersistenceService.saveVendorRecord(target);
-    return { success: true, message: 'Vendor business profile updated.', data: target };
+    await vendorPersistenceService.saveVendorRecord(target);
+
+    const serialized = serializeVendorProfile(target);
+    return {
+      success: true,
+      message: 'Vendor business profile updated.',
+      data: serialized,
+      vendor: serialized
+    };
   }
 
   @Put('profile/bank')
-  updateVendorBankDetails(@Body() body: any) {
-    currentVendor.businessInfo.bankDetails = {
-      ...currentVendor.businessInfo.bankDetails,
-      ...body,
-      isVerified: true
+  async updateVendorBankDetails(@Body() body: any, @Headers('authorization') authHeader?: string) {
+    const target = await resolveStrictAuthenticatedVendor(authHeader);
+
+    const holder = String(body?.accountHolderName || '').trim();
+    const bankName = String(body?.bankName || '').trim();
+    const accNo = String(body?.accountNumber || '').replace(/\D/g, '');
+    const ifsc = String(body?.ifsc || '').trim().toUpperCase();
+    const accType: 'CURRENT' | 'SAVINGS' = body?.accountType === 'SAVINGS' ? 'SAVINGS' : 'CURRENT';
+
+    if (holder) {
+      const nameCheck = validateName(holder, 'Account Beneficiary Name');
+      if (!nameCheck.isValid) throw new BadRequestException(nameCheck.error);
+    }
+    if (bankName) {
+      const bankCheck = validateBankName(bankName);
+      if (!bankCheck.isValid) throw new BadRequestException(bankCheck.error);
+    }
+    if (accNo) {
+      const accCheck = validateBankAccount(accNo);
+      if (!accCheck.isValid) throw new BadRequestException(accCheck.error);
+    }
+    if (ifsc) {
+      const ifscCheck = validateIFSC(ifsc);
+      if (!ifscCheck.isValid) throw new BadRequestException(ifscCheck.error);
+    }
+
+    const updatedBank = {
+      ...target.businessInfo?.bankDetails,
+      ...(holder ? { accountHolderName: holder } : {}),
+      ...(bankName ? { bankName } : {}),
+      ...(accNo ? { accountNumber: accNo } : {}),
+      ...(ifsc ? { ifsc } : {}),
+      accountType: accType,
+      branch: bankName ? `${bankName} Branch` : target.businessInfo?.bankDetails?.branch || 'Main Branch',
+      isVerified: Boolean(target.businessInfo?.bankDetails?.isVerified)
     };
-    return { success: true, message: 'Bank account updated and verified with penny-drop check.', data: currentVendor.businessInfo.bankDetails };
+
+    target.businessInfo = {
+      ...target.businessInfo,
+      bankDetails: updatedBank
+    };
+
+    if (target.registrationData) {
+      target.registrationData = {
+        ...target.registrationData,
+        bankDetails: {
+          ...(target.registrationData.bankDetails || ({} as any)),
+          accountHolderName: updatedBank.accountHolderName,
+          bankName: updatedBank.bankName,
+          accountNumber: updatedBank.accountNumber,
+          ifsc: updatedBank.ifsc,
+          accountType: accType as any
+        }
+      };
+    }
+
+    target.updatedAt = new Date().toISOString();
+    await vendorPersistenceService.saveVendorRecord(target);
+
+    return {
+      success: true,
+      message: 'Bank account details updated.',
+      data: updatedBank,
+      vendor: serializeVendorProfile(target)
+    };
   }
 
   @Put('settings/security')
@@ -4136,27 +5173,46 @@ export class VendorController implements OnModuleInit {
   }
 
   // ==========================================
-  // 19. NOTIFICATIONS
+  // 19. NOTIFICATIONS (UNIFIED + REALTIME)
   // ==========================================
   @Get('notifications')
-  getNotifications() {
+  async getNotifications(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const unified = platformNotificationService.listForRecipient(tenantId, 'VENDOR', vendor.id);
+    const legacy = vendorNotifications.filter((n) => n.vendorId === vendor.id);
+    const seen = new Set(unified.items.map((n) => n.id));
+    const combined = [
+      ...unified.items,
+      ...legacy.filter((n) => !seen.has(n.id)),
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
     return {
       success: true,
-      unreadCount: vendorNotifications.filter((n) => !n.read).length,
-      data: vendorNotifications
+      unreadCount: combined.filter((n) => !n.read).length,
+      data: combined
     };
   }
 
   @Put('notifications/:id/read')
-  markNotificationRead(@Param('id') id: string) {
-    const notif = vendorNotifications.find((n) => n.id === id);
+  async markNotificationRead(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    await platformNotificationService.markRead(id, vendor.tenantId || DEFAULT_TENANT_ID, 'VENDOR', vendor.id);
+    const notif = vendorNotifications.find((n) => n.id === id && n.vendorId === vendor.id);
     if (notif) notif.read = true;
     return { success: true };
   }
 
   @Put('notifications/read-all')
-  markAllNotificationsRead() {
-    vendorNotifications.forEach((n) => (n.read = true));
+  async markAllNotificationsRead(@Headers('authorization') authHeader?: string) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    await platformNotificationService.markAllRead(vendor.tenantId || DEFAULT_TENANT_ID, 'VENDOR', vendor.id);
+    vendorNotifications.forEach((n) => {
+      if (n.vendorId === vendor.id) n.read = true;
+    });
     return { success: true };
   }
 }

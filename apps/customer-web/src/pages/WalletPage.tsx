@@ -80,11 +80,10 @@ export const WalletPage: React.FC = () => {
   // Fetch backend transactions if available
   useEffect(() => {
     let isMounted = true;
-    fetch('/api/v1/wallet/transactions')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (isMounted && json && json.data && json.data.length > 0) {
-          setTransactions(json.data);
+    api.getWalletTransactions()
+      .then((txList) => {
+        if (isMounted && Array.isArray(txList) && txList.length > 0) {
+          setTransactions(txList);
         }
       })
       .catch(() => {});
@@ -97,16 +96,11 @@ export const WalletPage: React.FC = () => {
     if (amt <= 0) return;
     setIsLoading(true);
 
-    fetch('/api/v1/wallet/topup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: amt, paymentReference: 'UPI Instant Top-Up' })
-    })
-      .then((res) => res.json())
-      .catch(() => null)
-      .finally(() => {
+    api.topupWallet(amt, 'UPI Instant Top-Up')
+      .then((res) => {
         addWalletBalance(amt);
-        const newTx: WalletTransaction = {
+        const createdTx = res?.data?.transaction;
+        const newTx: WalletTransaction = createdTx || {
           id: 'tx-' + Date.now(),
           referenceNumber: 'WTX-' + Date.now().toString().slice(-8),
           type: 'CREDIT',
@@ -118,10 +112,12 @@ export const WalletPage: React.FC = () => {
           balanceAfter: (user?.walletBalance || 0) + amt
         };
         setTransactions((prev) => [newTx, ...prev]);
-        setIsLoading(false);
         setIsTopupModalOpen(false);
         setSuccessToast(`₹${amt} added to your Buildora Wallet!`);
         setTimeout(() => setSuccessToast(null), 3000);
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
   };
 

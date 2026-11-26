@@ -11,7 +11,7 @@ import {
 import { ConstructionCalculatorService } from '../services/construction-calculator.service';
 import { ConstructionCalculatorInput } from '@buildora/types';
 
-@Controller('construction-calculator')
+@Controller(['construction-calculator', 'api/v1/construction-calculator'])
 export class ConstructionCalculatorController {
   constructor(private readonly calculatorService: ConstructionCalculatorService) {}
 

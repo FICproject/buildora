@@ -63,6 +63,12 @@ export const CatalogProductsPage: React.FC = () => {
   useEffect(() => {
     if (sectionTab === 'PRODUCTS') loadProducts();
     else loadTaxonomy();
+
+    const onRealtime = () => {
+      if (sectionTab === 'PRODUCTS') loadProducts();
+    };
+    window.addEventListener('buildora:admin:realtime', onRealtime);
+    return () => window.removeEventListener('buildora:admin:realtime', onRealtime);
   }, [sectionTab, statusFilter]);
 
   const toggleSelect = (id: string) => {
@@ -72,11 +78,27 @@ export const CatalogProductsPage: React.FC = () => {
   const handleBulkApprove = async () => {
     try {
       const res = await adminApi.bulkApproveProducts(selectedIds);
-      pushToast({ title: 'Bulk Approved', message: `${res.count || selectedIds.length} products published to Customer Website.` });
+      const count = Array.isArray(res) ? res.length : res?.count || selectedIds.length;
+      pushToast({ title: 'Bulk Approved', message: `${count} products published to Customer Website.` });
       setSelectedIds([]);
       await loadProducts();
     } catch (err: any) {
       pushToast({ title: 'Bulk Approve Failed', message: err.message, variant: 'error' });
+    }
+  };
+
+  const handleSuspendToggle = async (p: any) => {
+    try {
+      if (p.isSuspended) {
+        await adminApi.unsuspendProduct(p.id);
+        pushToast({ title: 'Product Unsuspended', message: `${p.name} suspension lifted.` });
+      } else {
+        await adminApi.suspendProduct(p.id, 'Suspended by Company Admin moderation');
+        pushToast({ title: 'Product Suspended', message: `${p.name} is now blocked from customer purchases.` });
+      }
+      await loadProducts();
+    } catch (err: any) {
+      pushToast({ title: 'Error', message: err.message, variant: 'error' });
     }
   };
 
@@ -307,6 +329,13 @@ export const CatalogProductsPage: React.FC = () => {
                             title="Toggle Customer Website Visibility"
                           >
                             {p.isActive ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={p.isSuspended ? 'success' : 'danger'}
+                            onClick={() => handleSuspendToggle(p)}
+                          >
+                            {p.isSuspended ? 'Unsuspend' : 'Suspend'}
                           </Button>
                           <Button
                             size="sm"

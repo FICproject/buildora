@@ -12,15 +12,36 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useOrderStore } from '../store/useOrderStore';
+import { api } from '../services/api';
 import { formatCurrency } from '@buildora/utils';
 import { Button } from '../components/ui/Button';
 
 export const OrderTrackingPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const { getOrder } = useOrderStore();
+  const { getOrder, syncWithBackend } = useOrderStore();
+  const [liveTrack, setLiveTrack] = React.useState<any>(null);
 
-  const order = getOrder(orderId || '');
+  React.useEffect(() => {
+    void syncWithBackend();
+    if (orderId) {
+      void api.trackOrder(orderId).then((res) => {
+        if (res) setLiveTrack(res);
+      });
+    }
+    const handleOrderUpdate = () => {
+      if (orderId) {
+        void api.trackOrder(orderId).then((res) => {
+          if (res) setLiveTrack(res);
+        });
+      }
+    };
+    window.addEventListener('buildora:realtime:order', handleOrderUpdate);
+    return () => window.removeEventListener('buildora:realtime:order', handleOrderUpdate);
+  }, [orderId, syncWithBackend]);
+
+  const storeOrder = getOrder(orderId || '');
+  const order = liveTrack && storeOrder ? { ...storeOrder, ...liveTrack } : storeOrder || liveTrack;
 
   if (!order) {
     return (

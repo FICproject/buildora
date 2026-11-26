@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useVendorAuthStore } from '../../store/useVendorAuthStore';
+import { useVendorAuthStore, useRegistrationStepStore } from '../../store';
 import { vendorApi } from '../../services/vendorApi';
 import {
   VendorKycDocument,
@@ -67,6 +67,7 @@ export const VendorRegisterPage: React.FC = () => {
   const returnTo = searchParams.get('returnTo');
   const requestedStep = Number(searchParams.get('step'));
   const { setSession, vendor: activeVendor } = useVendorAuthStore();
+  const { setActiveStep, resetStep } = useRegistrationStepStore();
 
   // Wizard Step: 1 to 5
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -368,7 +369,15 @@ export const VendorRegisterPage: React.FC = () => {
   // Wake up Render backend container while vendor fills out onboarding Step 1
   useEffect(() => {
     vendorApi.warmupBackend();
-  }, []);
+    return () => {
+      resetStep();
+    };
+  }, [resetStep]);
+
+  // Sync current wizard step to VendorAuthLayout left-panel dynamic visuals
+  useEffect(() => {
+    setActiveStep(currentStep);
+  }, [currentStep, setActiveStep]);
 
   // Resume saved draft OR resubmission data
   useEffect(() => {

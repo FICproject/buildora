@@ -622,6 +622,7 @@ export interface VendorBankDetails {
   bankName: string;
   accountNumber: string;
   ifsc: string;
+  accountType?: 'CURRENT' | 'SAVINGS';
   branch: string;
   isVerified: boolean;
 }
@@ -643,7 +644,10 @@ export interface VendorBusinessInfo {
   contactPerson: string;
   phone: string;
   email: string;
-  businessType: 'PROPRIETORSHIP' | 'PARTNERSHIP' | 'LLP' | 'PRIVATE_LIMITED' | 'PUBLIC_LIMITED';
+  businessType: 'PROPRIETORSHIP' | 'PARTNERSHIP' | 'LLP' | 'PRIVATE_LIMITED' | 'PUBLIC_LIMITED' | string;
+  businessRegistrationType?: string;
+  yearOfEstablishment?: string;
+  website?: string;
   description?: string;
   logo?: string;
   logoMetadata?: VendorLogoMetadata;
@@ -840,11 +844,14 @@ export interface VendorProduct {
 export type VendorOrderStatus =
   | 'NEW'
   | 'ACCEPTED'
+  | 'REJECTED'
   | 'PROCESSING'
+  | 'PACKED'
   | 'READY_FOR_DISPATCH'
   | 'DISPATCHED'
   | 'DELIVERED'
   | 'CANCELLED'
+  | 'RETURN_REQUESTED'
   | 'RETURNED';
 
 export interface VendorOrderItem {

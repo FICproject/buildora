@@ -427,6 +427,7 @@ export const VendorProductsPage: React.FC = () => {
         name: name.trim(),
         sku: sku.trim(),
         category,
+        categorySlug: category,
         subCategory: subCategory.trim(),
         subcategory: subCategory.trim(),
         brand: brand.trim(),

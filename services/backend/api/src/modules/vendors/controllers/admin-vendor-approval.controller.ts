@@ -13,11 +13,15 @@ import {
 } from '@nestjs/common';
 import {
   vendorRecords,
+  vendorProducts,
+  syncVendorProductToCustomerCatalog,
   BackendVendorRecord
 } from './vendor.controller';
 import { vendorSecurityService } from '../services/vendor-security.service';
 import { vendorNotificationService } from '../services/vendor-notification.service';
 import { vendorPersistenceService } from '../services/vendor-persistence.service';
+import { realtimeBus } from '../../realtime/realtime-bus';
+import { platformNotificationService } from '../../notifications/platform-notification.service';
 
 const DEV_ADMIN_KEY = process.env.ADMIN_APPROVAL_KEY || 'buildora-dev-admin-2026';
 
@@ -271,6 +275,13 @@ export class AdminVendorApprovalController {
     vendor.rejectedAt = now;
     vendor.updatedAt = now;
 
+    for (const vp of vendorProducts) {
+      if (vp.vendorId === vendor.id) {
+        vp.isActive = false;
+        syncVendorProductToCustomerCatalog(vp);
+      }
+    }
+
     if (!vendor.auditLogs) vendor.auditLogs = [];
     vendor.auditLogs.unshift({
       id: `audit-${Date.now()}`,
@@ -283,6 +294,20 @@ export class AdminVendorApprovalController {
     });
 
     void vendorPersistenceService.saveVendorRecord(vendor);
+    void platformNotificationService.dispatch({
+      tenantId: vendor.tenantId || 'tenant-buildora-blr',
+      recipientRole: 'VENDOR',
+      recipientId: vendor.id,
+      type: 'VENDOR_ONBOARDING',
+      title: 'Application Not Approved',
+      message: `Your vendor application was not approved. Reason: ${vendor.rejectionReason}`,
+      severity: 'WARNING',
+      actionUrl: `/application-status/${vendor.applicationId}`,
+    });
+    realtimeBus.emitVendorAndAdmin(vendor.id, 'vendor.application.rejected', {
+      vendor: this.sanitizeApplicationSummary(vendor),
+      reason: vendor.rejectionReason,
+    });
 
     vendorNotificationService.notify(
       vendor.id,
@@ -371,6 +396,14 @@ export class AdminVendorApprovalController {
     vendor.suspendedAt = now;
     vendor.updatedAt = now;
 
+    for (const vp of vendorProducts) {
+      if (vp.vendorId === vendor.id) {
+        vp.isActive = false;
+        syncVendorProductToCustomerCatalog(vp);
+        realtimeBus.emitPublic('product.suspended', { productId: vp.id, vendorId: vendor.id });
+      }
+    }
+
     if (!vendor.auditLogs) vendor.auditLogs = [];
     vendor.auditLogs.unshift({
       id: `audit-${Date.now()}`,
@@ -383,6 +416,21 @@ export class AdminVendorApprovalController {
     });
 
     void vendorPersistenceService.saveVendorRecord(vendor);
+    void platformNotificationService.dispatch({
+      tenantId: vendor.tenantId || 'tenant-buildora-blr',
+      recipientRole: 'VENDOR',
+      recipientId: vendor.id,
+      type: 'VENDOR_ONBOARDING',
+      title: 'Vendor Account Suspended',
+      message: `Your vendor account has been suspended. Reason: ${vendor.suspendedReason}`,
+      severity: 'CRITICAL',
+      actionUrl: '/account-restricted',
+    });
+    realtimeBus.emitVendorAndAdmin(vendor.id, 'vendor.application.rejected', {
+      vendor: this.sanitizeApplicationSummary(vendor),
+      reason: vendor.suspendedReason,
+      action: 'SUSPENDED',
+    });
 
     vendorNotificationService.notify(
       vendor.id,

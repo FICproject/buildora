@@ -207,7 +207,7 @@ export class VendorNotificationService {
     return result;
   }
 
-  private async sendEmail(payload: EmailMessagePayload): Promise<OtpDeliveryResult> {
+  async sendEmail(payload: EmailMessagePayload): Promise<OtpDeliveryResult> {
     const sendgridKey = process.env.SENDGRID_API_KEY;
     const resendKey = process.env.RESEND_API_KEY;
     const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_FROM;
@@ -287,7 +287,7 @@ export class VendorNotificationService {
     return { delivered: false, provider: 'UNCONFIGURED' };
   }
 
-  private async sendSms(payload: SmsMessagePayload & { otp?: string }): Promise<OtpDeliveryResult> {
+  async sendSms(payload: SmsMessagePayload & { otp?: string }): Promise<OtpDeliveryResult> {
     const twilioSid = process.env.TWILIO_ACCOUNT_SID;
     const twilioToken = process.env.TWILIO_AUTH_TOKEN;
     const twilioFrom = process.env.TWILIO_PHONE_NUMBER;

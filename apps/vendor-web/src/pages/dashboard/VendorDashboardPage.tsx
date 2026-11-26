@@ -40,7 +40,7 @@ export const VendorDashboardPage: React.FC = () => {
 
   const { orders, fetchOrders, updateOrderStatus } = useVendorOrderStore();
   const { inventory, fetchInventory } = useVendorInventoryStore();
-  const { notifications, markAsRead } = useVendorNotificationStore();
+  const { notifications, fetchNotifications, markAsRead } = useVendorNotificationStore();
   const { settlements, fetchSettlements } = useVendorSettlementStore();
 
   const loadData = async (period: PeriodType) => {
@@ -65,6 +65,11 @@ export const VendorDashboardPage: React.FC = () => {
     fetchOrders();
     fetchInventory();
     fetchSettlements();
+    fetchNotifications();
+
+    const onRealtime = () => loadData(selectedPeriod);
+    window.addEventListener('buildora:vendor:realtime', onRealtime);
+    return () => window.removeEventListener('buildora:vendor:realtime', onRealtime);
   }, [selectedPeriod]);
 
   const periods: { id: PeriodType; label: string }[] = [

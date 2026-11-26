@@ -47,7 +47,7 @@ async function request<T>(
   fallbackData: T
 ): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
 
   const token = getStoredToken();
   const headers: Record<string, string> = {
@@ -73,7 +73,6 @@ async function request<T>(
       return json.data !== undefined ? json.data : json;
     }
   } catch (err: any) {
-    // Network failure or backend unreachable -> fallback to rich local data
     console.warn(`[BUILDORA API] Endpoint ${endpoint} fallback triggered:`, err.message);
   }
 
@@ -168,7 +167,6 @@ export const api = {
 
     const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
     let products = await request<Product[]>(`/products${queryStr}`, {}, SEED_PRODUCTS);
-    products = applyLocalOverrides(products);
 
     if (!params) return products;
 
@@ -212,8 +210,32 @@ export const api = {
   },
 
   async getProductBySlug(slug: string): Promise<Product | undefined> {
+    const direct = await request<Product | undefined>(
+      `/products/${encodeURIComponent(slug)}`,
+      {},
+      undefined
+    );
+    if (direct) return direct;
     const products = await api.getProducts();
-    return products.find((p) => p.slug === slug);
+    return products.find((p) => p.slug === slug || p.id === slug);
+  },
+
+  async getProductReviews(idOrSlug: string) {
+    return request<{ averageRating: number; totalCount: number; reviews: any[] }>(
+      `/products/${encodeURIComponent(idOrSlug)}/reviews`,
+      {},
+      { averageRating: 4.8, totalCount: 0, reviews: [] }
+    );
+  },
+
+  async createProductReview(
+    idOrSlug: string,
+    payload: { rating: number; comment: string; title?: string; customerName?: string }
+  ) {
+    return postJson<{ success: boolean; data?: any; message?: string }>(
+      `/products/${encodeURIComponent(idOrSlug)}/reviews`,
+      payload
+    );
   },
 
   // Cart & Calculation
@@ -402,7 +424,35 @@ export const api = {
     );
   },
 
-  // Orders
+  // Orders & Payments
+  async createRazorpayOrder(amount: number, buildoraOrderId?: string) {
+    return postJson<{
+      success: boolean;
+      data?: { id: string; amount: number; currency: string; keyId: string };
+      message?: string;
+    }>('/payments/razorpay/order', { amount, buildoraOrderId });
+  },
+
+  async verifyRazorpayPayment(payload: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature?: string;
+    buildoraOrderId?: string;
+  }) {
+    return postJson<{ success: boolean; data?: any; message?: string }>(
+      '/payments/razorpay/verify',
+      payload
+    );
+  },
+
+  async failRazorpayPayment(payload: {
+    razorpayOrderId?: string;
+    buildoraOrderId?: string;
+    reason?: string;
+  }) {
+    return postJson<{ success: boolean; message?: string }>('/payments/razorpay/fail', payload);
+  },
+
   async getOrders(): Promise<Order[]> {
     return request<Order[]>('/orders', {}, []);
   },
@@ -449,7 +499,60 @@ export const api = {
 
   // Wallet
   async getWallet(): Promise<any> {
-    return request<any>('/wallet', {}, { balance: 1250, pendingBalance: 0, transactions: [] });
+    return request<any>('/wallet', {}, { currentBalance: 1250, availableBalance: 1250, pendingBalance: 0 });
+  },
+
+  async getWalletTransactions(type?: string, category?: string): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (type) qs.set('type', type);
+    if (category) qs.set('category', category);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/wallet/transactions${suffix}`, {}, []);
+  },
+
+  async topupWallet(amount: number, paymentReference = 'UPI Instant Top-Up') {
+    return postJson<{ success: boolean; message?: string; data?: { transaction: any; newBalance: number } }>(
+      '/wallet/topup',
+      { amount, paymentReference }
+    );
+  },
+
+  // Support Tickets
+  async getSupportTickets(): Promise<any[]> {
+    return request<any[]>('/support/tickets', {}, []);
+  },
+
+  async createSupportTicket(payload: {
+    category: string;
+    priority: string;
+    subject: string;
+    description: string;
+    orderId?: string;
+  }) {
+    return postJson<{ success: boolean; data?: any }>('/support/tickets', payload);
+  },
+
+  async addSupportMessage(ticketId: string, message: string) {
+    return postJson<{ success: boolean; data?: any }>(`/support/tickets/${ticketId}/messages`, {
+      message,
+    });
+  },
+
+  // Unified Notifications
+  async getNotifications(): Promise<{ items: any[]; unreadCount: number }> {
+    return request<{ items: any[]; unreadCount: number }>(
+      '/notifications',
+      {},
+      { items: [], unreadCount: 0 }
+    );
+  },
+
+  async markNotificationRead(id: string) {
+    return request<any>(`/notifications/${id}/read`, { method: 'PATCH' }, { success: false });
+  },
+
+  async markAllNotificationsRead() {
+    return postJson<any>('/notifications/mark-all-read', {});
   },
 
   // Knowledge Hub & FAQ

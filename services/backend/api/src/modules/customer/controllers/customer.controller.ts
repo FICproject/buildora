@@ -1,6 +1,12 @@
-import { Controller, Get, Put, Patch, Post, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Put, Patch, Post, Delete, Body, Param, Headers } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { Address, CustomerProfile } from '@buildora/types';
+import { verifyCustomerToken } from '../../../common/customer-auth.util';
+import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
+import {
+  companyAdminPersistenceService,
+  CompanyCustomerModel,
+} from '../../company-admin/services/company-admin-persistence.service';
 
 interface PhoneChangeSession {
   sessionId: string;
@@ -132,26 +138,73 @@ let mockAddresses: Address[] = [
 @Controller('api/v1/customer')
 export class CustomerController {
   @Get('profile')
-  getProfile() {
+  getProfile(@Headers('authorization') authHeader?: string) {
+    const cust = verifyCustomerToken(authHeader);
+    const live = cust?.sub ? (companyAdminDataService.customers.get(cust.sub) as any) : undefined;
+    if (live) {
+      return {
+        success: true,
+        data: {
+          ...mockProfile,
+          id: live.id,
+          name: live.name,
+          phone: live.phone,
+          email: live.email,
+          gstin: live.gstin || '',
+          businessName: live.businessName || '',
+          walletBalance: live.walletBalance ?? mockProfile.walletBalance,
+          status: live.status,
+        },
+      };
+    }
     return {
       success: true,
-      data: mockProfile
+      data: mockProfile,
     };
   }
 
   @Put('profile')
-  updateProfile(@Body() body: Partial<CustomerProfile>) {
+  async updateProfile(
+    @Body() body: Partial<CustomerProfile>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = verifyCustomerToken(authHeader);
+    const live = cust?.sub ? (companyAdminDataService.customers.get(cust.sub) as any) : undefined;
+    if (live) {
+      if (body.name) live.name = body.name;
+      if (body.email) live.email = body.email;
+      if (body.gstin !== undefined) live.gstin = body.gstin;
+      if (body.businessName !== undefined) live.businessName = body.businessName;
+      await companyAdminPersistenceService.upsert(CompanyCustomerModel, live);
+      return {
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          ...mockProfile,
+          id: live.id,
+          name: live.name,
+          phone: live.phone,
+          email: live.email,
+          gstin: live.gstin || '',
+          businessName: live.businessName || '',
+          walletBalance: live.walletBalance ?? mockProfile.walletBalance,
+        },
+      };
+    }
     mockProfile = { ...mockProfile, ...body };
     return {
       success: true,
       message: 'Profile updated successfully',
-      data: mockProfile
+      data: mockProfile,
     };
   }
 
   @Patch('profile')
-  patchProfile(@Body() body: Partial<CustomerProfile>) {
-    return this.updateProfile(body);
+  patchProfile(
+    @Body() body: Partial<CustomerProfile>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    return this.updateProfile(body, authHeader);
   }
 
   @Get('addresses')

@@ -251,9 +251,11 @@ export const useOrderStore = create<OrderStoreState>()(
         return changed;
       },
 
-      updateOrderStatus: (orderId, status) => {
+      updateOrderStatus: (orderIdOrNumber, status) => {
         set((state) => ({
-          orders: state.orders.map((o) => (o.id === orderId ? { ...o, status } : o))
+          orders: state.orders.map((o) =>
+            o.id === orderIdOrNumber || o.orderNumber === orderIdOrNumber ? { ...o, status } : o
+          )
         }));
       }
     }),

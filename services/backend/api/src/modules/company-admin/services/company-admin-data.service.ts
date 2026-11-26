@@ -1510,35 +1510,45 @@ export class CompanyAdminDataService implements OnModuleInit {
   }
 
   syncCustomerPortalProduct(vp: any): void {
-    const idx = dbStore.products.findIndex((p) => p.id === vp.id || p.sku === vp.sku);
+    const cleanId = String(vp.id || '').replace(/^vp-/, '');
+    const idx = dbStore.products.findIndex(
+      (p) => p.id === vp.id || p.id === cleanId || p.sku === vp.sku
+    );
+    const vendor = vp.vendorId ? vendorRecords.get(vp.vendorId) : undefined;
+    const vendorActive = !vendor || vendor.status === 'APPROVED' || (vendor.status as string) === 'ACTIVE';
     const shouldShow =
-      (vp.approvalStatus || 'APPROVED') === 'APPROVED' && vp.isActive !== false;
+      vp.approvalStatus === 'APPROVED' &&
+      vp.isActive !== false &&
+      vp.isSuspended !== true &&
+      vendorActive;
 
     if (!shouldShow) {
       if (idx >= 0) {
         const existing = dbStore.products[idx] as any;
         existing.inStock = false;
         existing.isActive = false;
-        existing.approvalStatus = vp.approvalStatus;
+        existing.isSuspended = Boolean(vp.isSuspended);
+        existing.approvalStatus = vp.approvalStatus || 'PENDING_APPROVAL';
       }
       return;
     }
 
     const sellingPrice = vp.sellingPrice ?? vp.price ?? 0;
     const stockCount = vp.stock ?? vp.stockCount ?? 0;
+    const reservedStock = vp.reservedStock ?? 0;
     const mrp = vp.mrp || sellingPrice;
 
     const mapped: any = {
-      id: vp.id,
+      id: idx >= 0 ? dbStore.products[idx].id : cleanId || vp.id,
       name: vp.name,
       slug: vp.slug || vp.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       sku: vp.sku,
       brand: vp.brand || 'Buildora Verified',
       brandSlug: (vp.brand || 'buildora').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      category: vp.categoryName || vp.category || 'Building Materials',
-      categorySlug: vp.categoryId || vp.categorySlug || 'cement-concrete',
-      subcategory: vp.categoryName || vp.subcategory || 'General',
-      subcategorySlug: vp.categoryId || vp.subcategorySlug || 'general',
+      category: vp.category || vp.categoryName || 'Building Materials',
+      categorySlug: vp.categorySlug || vp.categoryId || 'cement-concrete',
+      subcategory: vp.subcategory || vp.categoryName || 'General',
+      subcategorySlug: vp.subcategorySlug || vp.categoryId || 'general',
       description: vp.description || '',
       unit: vp.unit || 'Unit',
       packSize: vp.packSize || 'Standard',
@@ -1547,18 +1557,21 @@ export class CompanyAdminDataService implements OnModuleInit {
       discount: mrp > sellingPrice ? Math.round(((mrp - sellingPrice) / mrp) * 100) : 0,
       gstRate: vp.gstRate ?? 18,
       stockCount,
-      inStock: stockCount > 0,
-      rating: 4.6,
-      reviewCount: 12,
-      isBulkEligible: true,
+      reservedStock,
+      inStock: Math.max(0, stockCount - reservedStock) > 0,
+      rating: vp.rating ?? 4.6,
+      reviewCount: vp.reviewCount ?? 0,
+      isBulkEligible: vp.isBulkEligible ?? true,
       vendorId: vp.vendorId,
+      vendorName: vendor?.storeName || vendor?.businessInfo?.businessName || 'Buildora Verified Supplier',
       isActive: true,
+      isSuspended: false,
       approvalStatus: 'APPROVED',
       images: vp.images || [],
       specifications: vp.specifications || {},
       bulkPricing: vp.bulkPricing || [],
       variants: vp.variants || [],
-      deliverySpeedAvailable: ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
+      deliverySpeedAvailable: vp.deliverySpeedAvailable || ['ASAP_60', 'EXPRESS_90', 'SCHEDULED'],
       updatedAt: new Date().toISOString(),
     };
 
