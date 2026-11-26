@@ -69,6 +69,10 @@ import { platformNotificationService } from '../../notifications/platform-notifi
 import { companyAdminSecurityService } from '../../company-admin/services/company-admin-security.service';
 import { orderSyncService } from '../../orders/services/order-sync.service';
 import {
+  AnalyticsGranularity,
+  vendorAnalyticsService,
+} from '../services/vendor-analytics.service';
+import {
   validateName,
   validateBusinessName,
   validateLegalBusinessName,
@@ -3238,6 +3242,133 @@ export class VendorController implements OnModuleInit {
       statusDistribution,
       topProducts,
       recentOrders: myOrders.slice(0, 5),
+    };
+  }
+
+  @Get('analytics/overview')
+  async getAnalyticsOverview(
+    @Headers('authorization') authHeader?: string,
+    @Query('ordersFilter') ordersFilter?: AnalyticsGranularity,
+    @Query('salesFilter') salesFilter?: AnalyticsGranularity,
+    @Query('ordersStartDate') ordersStartDate?: string,
+    @Query('ordersEndDate') ordersEndDate?: string,
+    @Query('salesStartDate') salesStartDate?: string,
+    @Query('salesEndDate') salesEndDate?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const dataset = await vendorAnalyticsService.loadVendorDataset(
+      vendor.id,
+      vendorProducts,
+      vendorOrders,
+      vendorSettlements
+    );
+    const overview = vendorAnalyticsService.buildOverview(
+      vendor.id,
+      dataset.products,
+      dataset.orders,
+      dataset.settlements,
+      {
+        ordersFilter,
+        salesFilter,
+        ordersStartDate,
+        ordersEndDate,
+        salesStartDate,
+        salesEndDate,
+      }
+    );
+
+    return {
+      success: true,
+      data: overview,
+    };
+  }
+
+  @Get('analytics/bucket-details')
+  async getAnalyticsBucketDetails(
+    @Headers('authorization') authHeader?: string,
+    @Query('startIso') startIso?: string,
+    @Query('endIso') endIso?: string,
+    @Query('metric') metric: 'orders' | 'sales' = 'orders',
+    @Query('page') page = '1',
+    @Query('limit') limit = '10'
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    if (!startIso || !endIso) {
+      throw new BadRequestException('startIso and endIso query parameters are required.');
+    }
+    const dataset = await vendorAnalyticsService.loadVendorDataset(
+      vendor.id,
+      vendorProducts,
+      vendorOrders,
+      vendorSettlements
+    );
+    const details = vendorAnalyticsService.getBucketOrders(
+      dataset.orders,
+      startIso,
+      endIso,
+      metric,
+      Number(page) || 1,
+      Number(limit) || 10
+    );
+    return {
+      success: true,
+      data: details,
+    };
+  }
+
+  @Get('analytics/brands')
+  async getAnalyticsBrands(
+    @Headers('authorization') authHeader?: string,
+    @Query('status') status: 'ALL' | 'ACTIVE' | 'INACTIVE' = 'ALL',
+    @Query('period') period: AnalyticsGranularity = 'monthly',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('search') search?: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10'
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const dataset = await vendorAnalyticsService.loadVendorDataset(
+      vendor.id,
+      vendorProducts,
+      vendorOrders,
+      vendorSettlements
+    );
+    const overview = vendorAnalyticsService.buildOverview(
+      vendor.id,
+      dataset.products,
+      dataset.orders,
+      dataset.settlements,
+      {
+        salesFilter: period,
+        salesStartDate: startDate,
+        salesEndDate: endDate,
+      }
+    );
+
+    let items = overview.allBrandsRanked;
+    if (status === 'ACTIVE') items = items.filter((b) => b.isActive);
+    else if (status === 'INACTIVE') items = items.filter((b) => !b.isActive);
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      items = items.filter((b) => b.brandName.toLowerCase().includes(q));
+    }
+
+    const safePage = Math.max(1, Number(page) || 1);
+    const safeLimit = Math.min(50, Math.max(1, Number(limit) || 10));
+    const offset = (safePage - 1) * safeLimit;
+
+    return {
+      success: true,
+      data: {
+        total: items.length,
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.max(1, Math.ceil(items.length / safeLimit)),
+        summary: overview.productBrandOverview.brands,
+        items: items.slice(offset, offset + safeLimit),
+      },
     };
   }
 

@@ -207,10 +207,6 @@ export const CategoryPage: React.FC = () => {
           Home
         </Link>
         <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-        <Link to="/products" className="hover:text-brand-blue-900 flex-shrink-0">
-          Categories
-        </Link>
-        <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
         <Link
           to={`/categories/${category.slug}`}
           className="font-semibold text-slate-800 flex-shrink-0 hover:text-brand-blue-900"

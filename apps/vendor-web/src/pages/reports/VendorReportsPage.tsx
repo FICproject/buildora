@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Download, IndianRupee, ShoppingCart, Package, Boxes } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { BarChart3, Download, IndianRupee, ShoppingCart, Boxes, Search } from 'lucide-react';
 import { vendorApi } from '../../services/vendorApi';
 import { useVendorOrderStore } from '../../store/useVendorOrderStore';
 import { useVendorInventoryStore } from '../../store/useVendorInventoryStore';
@@ -12,36 +13,65 @@ import {
   CardContent,
   Button,
   Badge,
+  TablePagination,
 } from '../../components/common';
 
-type ReportTab = 'SALES' | 'ORDERS' | 'PRODUCTS' | 'INVENTORY' | 'SETTLEMENTS';
+type ReportTab = 'SALES' | 'BRANDS' | 'ORDERS' | 'PRODUCTS' | 'INVENTORY' | 'SETTLEMENTS';
 
 export const VendorReportsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<ReportTab>('SALES');
-  const [dateRange, setDateRange] = useState('30d');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as ReportTab) || 'SALES';
+  const initialBrandStatus =
+    (searchParams.get('brandStatus') as 'ALL' | 'ACTIVE' | 'INACTIVE') || 'ALL';
+
+  const [activeTab, setActiveTab] = useState<ReportTab>(initialTab);
+  const [dateRange, setDateRange] = useState('monthly');
   const [salesReport, setSalesReport] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>(null);
+  const [brandStatus, setBrandStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>(initialBrandStatus);
+  const [brandSearch, setBrandSearch] = useState('');
+  const [brandPage, setBrandPage] = useState(1);
+  const [brandsData, setBrandsData] = useState<{ total: number; items: any[] }>({
+    total: 0,
+    items: [],
+  });
 
   const { orders, fetchOrders } = useVendorOrderStore();
   const { inventory, fetchInventory } = useVendorInventoryStore();
   const { settlements, fetchSettlements } = useVendorSettlementStore();
 
   useEffect(() => {
+    const qTab = searchParams.get('tab') as ReportTab | null;
+    const qStatus = searchParams.get('brandStatus') as 'ALL' | 'ACTIVE' | 'INACTIVE' | null;
+    if (qTab) setActiveTab(qTab);
+    if (qStatus) setBrandStatus(qStatus);
+  }, [searchParams]);
+
+  useEffect(() => {
     const load = async () => {
       try {
-        const [sr, m] = await Promise.all([
+        const [sr, m, br] = await Promise.all([
           vendorApi.getSalesReport(dateRange),
           vendorApi.getDashboardMetrics(dateRange),
+          vendorApi.getAnalyticsBrands({
+            status: brandStatus,
+            period: dateRange,
+            search: brandSearch,
+            page: brandPage,
+            limit: 10,
+          }),
         ]);
         setSalesReport(sr);
         setMetrics(m);
+        setBrandsData({ total: br?.total || 0, items: br?.items || [] });
       } catch {}
     };
     load();
     fetchOrders();
     fetchInventory();
     fetchSettlements();
-  }, [dateRange]);
+  }, [dateRange, brandStatus, brandSearch, brandPage]);
 
   const dailySummary: { date: string; sales: number; orders: number }[] =
     salesReport?.dailySummary || [];
@@ -124,6 +154,7 @@ export const VendorReportsPage: React.FC = () => {
       <div className="flex flex-wrap items-center gap-2 border-b border-[#E7E5E4] pb-2">
         {[
           { id: 'SALES', label: 'Sales Reports' },
+          { id: 'BRANDS', label: 'Brand Sales & Overview' },
           { id: 'ORDERS', label: 'Order Reports' },
           { id: 'PRODUCTS', label: 'Product Performance' },
           { id: 'INVENTORY', label: 'Inventory Reports' },
@@ -143,6 +174,127 @@ export const VendorReportsPage: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {activeTab === 'BRANDS' && (
+        <Card>
+          <CardHeader
+            title="Brand Sales & Catalog Overview"
+            subtitle="Sorted by highest vendor sales with active & inactive filtering"
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => {
+                      setBrandStatus(st);
+                      setBrandPage(1);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border cursor-pointer ${
+                      brandStatus === st
+                        ? 'bg-[#943D24] text-white border-[#943D24]'
+                        : 'bg-white text-[#78716C] border-[#E7E5E4]'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-[#78716C] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={brandSearch}
+                    onChange={(e) => {
+                      setBrandSearch(e.target.value);
+                      setBrandPage(1);
+                    }}
+                    placeholder="Filter brands..."
+                    className="pl-7 pr-3 py-1 rounded-lg border border-[#E7E5E4] text-xs"
+                  />
+                </div>
+              </div>
+            }
+          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
+                <tr>
+                  <th className="py-3 px-4">Brand</th>
+                  <th className="py-3 px-4 text-center">Products (Active / Total)</th>
+                  <th className="py-3 px-4 text-center">Orders / Units</th>
+                  <th className="py-3 px-4 text-right">Total Sales</th>
+                  <th className="py-3 px-4 w-44">Contribution</th>
+                  <th className="py-3 px-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E7E5E4] bg-white">
+                {brandsData.items.map((b) => (
+                  <tr
+                    key={b.brandName}
+                    onClick={() =>
+                      navigate(`/products?brand=${encodeURIComponent(b.brandName)}`)
+                    }
+                    className="hover:bg-[#FAF7F5] cursor-pointer transition-colors"
+                  >
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-md border border-[#E7E5E4] bg-[#FAF7F5] overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold text-[#943D24]">
+                          {b.logo ? (
+                            <img src={b.logo} alt={b.brandName} className="w-full h-full object-cover" />
+                          ) : (
+                            b.brandName.slice(0, 2).toUpperCase()
+                          )}
+                        </div>
+                        <span className="font-semibold text-[#292524]">{b.brandName}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-center font-medium text-[#292524]">
+                      {b.activeProducts} / {b.totalProducts}
+                    </td>
+                    <td className="py-3 px-4 text-center text-[#78716C]">
+                      {b.orderCount} orders ({b.unitsSold} units)
+                    </td>
+                    <td className="py-3 px-4 text-right font-bold text-[#292524]">
+                      ₹{Number(b.totalSales || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-[#F2EDE9] rounded-full overflow-hidden">
+                          <div
+                            style={{ width: `${Math.min(100, b.contributionPct || 0)}%` }}
+                            className="h-full rounded-full bg-[#943D24]"
+                          />
+                        </div>
+                        <span className="text-[11px] font-semibold text-[#78716C] w-10 text-right">
+                          {b.contributionPct}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <Badge variant={b.isActive ? 'success' : 'warning'} size="sm">
+                        {b.isActive ? 'ACTIVE' : 'INACTIVE'}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+                {brandsData.items.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-[#78716C]">
+                      No brands match the selected filter.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <TablePagination
+            page={brandPage}
+            pageSize={10}
+            totalItems={brandsData.total}
+            onPageChange={setBrandPage}
+          />
+        </Card>
+      )}
 
       {activeTab === 'SALES' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -202,17 +202,9 @@ export const ProductListingPage: React.FC = () => {
           Home
         </Link>
         <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-        <Link to="/products" className="hover:text-brand-blue-900 flex-shrink-0">
-          Categories
-        </Link>
-        {activeCategory && (
-          <>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <span className="font-semibold text-slate-800 flex-shrink-0">
-              {activeCategory.name}
-            </span>
-          </>
-        )}
+        <span className="font-semibold text-slate-800 flex-shrink-0">
+          {activeCategory ? activeCategory.name : 'All Products'}
+        </span>
       </nav>
 
       {/* 2. Page Title Header */}

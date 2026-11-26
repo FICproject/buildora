@@ -862,6 +862,63 @@ export const vendorApi = {
     return request<any>(`/vendor/dashboard/charts${q}`, {});
   },
 
+  async getAnalyticsOverview(params?: {
+    ordersFilter?: string;
+    salesFilter?: string;
+    ordersStartDate?: string;
+    ordersEndDate?: string;
+    salesStartDate?: string;
+    salesEndDate?: string;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.ordersFilter) q.set('ordersFilter', params.ordersFilter);
+    if (params?.salesFilter) q.set('salesFilter', params.salesFilter);
+    if (params?.ordersStartDate) q.set('ordersStartDate', params.ordersStartDate);
+    if (params?.ordersEndDate) q.set('ordersEndDate', params.ordersEndDate);
+    if (params?.salesStartDate) q.set('salesStartDate', params.salesStartDate);
+    if (params?.salesEndDate) q.set('salesEndDate', params.salesEndDate);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request<any>(`/vendor/analytics/overview${qs}`, {});
+  },
+
+  async getAnalyticsBucketDetails(params: {
+    startIso: string;
+    endIso: string;
+    metric: 'orders' | 'sales';
+    page?: number;
+    limit?: number;
+  }) {
+    const q = new URLSearchParams({
+      startIso: params.startIso,
+      endIso: params.endIso,
+      metric: params.metric,
+      page: String(params.page || 1),
+      limit: String(params.limit || 10),
+    });
+    return request<any>(`/vendor/analytics/bucket-details?${q.toString()}`, {});
+  },
+
+  async getAnalyticsBrands(params?: {
+    status?: 'ALL' | 'ACTIVE' | 'INACTIVE';
+    period?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.period) q.set('period', params.period);
+    if (params?.startDate) q.set('startDate', params.startDate);
+    if (params?.endDate) q.set('endDate', params.endDate);
+    if (params?.search) q.set('search', params.search);
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request<any>(`/vendor/analytics/brands${qs}`, {});
+  },
+
   // Products
   async getProducts(params?: { category?: string; status?: string; search?: string }): Promise<VendorProduct[]> {
     const q = new URLSearchParams();

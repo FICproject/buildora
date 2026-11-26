@@ -78,7 +78,7 @@ export const VendorProductsPage: React.FC = () => {
     isLoading,
   } = useVendorProductStore();
 
-  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [search, setSearch] = useState(searchParams.get('search') || searchParams.get('brand') || '');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState(searchParams.get('status') || 'ALL');
   const [page, setPage] = useState(1);
@@ -493,12 +493,16 @@ export const VendorProductsPage: React.FC = () => {
       !q ||
       p.name.toLowerCase().includes(q) ||
       p.sku.toLowerCase().includes(q) ||
-      p.brand.toLowerCase().includes(q);
+      (p.brand || '').toLowerCase().includes(q);
     const matchesCat = selectedCategory === 'ALL' || p.category === selectedCategory;
+    const isProdActive =
+      p.isActive !== false && p.approvalStatus === 'APPROVED' && !(p as any).isSuspended;
     const resolvedStatus =
       p.status || ((p.stockCount ?? p.stock ?? 0) > 0 ? 'ACTIVE' : 'OUT_OF_STOCK');
     const matchesStatus =
       selectedStatus === 'ALL' ||
+      (selectedStatus === 'ACTIVE' && isProdActive) ||
+      (selectedStatus === 'INACTIVE' && !isProdActive) ||
       resolvedStatus === selectedStatus ||
       p.approvalStatus === selectedStatus;
     return matchesSearch && matchesCat && matchesStatus;

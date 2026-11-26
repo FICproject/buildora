@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ShoppingCart,
-  Clock,
   Package,
   AlertTriangle,
   IndianRupee,
-  Wallet,
   RefreshCw,
   ArrowRight,
   Bell,
+  Layers,
+  CheckCircle2,
+  TrendingUp,
+  TrendingDown,
 } from 'lucide-react';
 import { vendorApi } from '../../services/vendorApi';
 import { useVendorOrderStore } from '../../store/useVendorOrderStore';
@@ -18,7 +20,6 @@ import { useVendorNotificationStore } from '../../store/useVendorNotificationSto
 import { useVendorSettlementStore } from '../../store/useVendorSettlementStore';
 import {
   PageHeader,
-  StatCard,
   Card,
   CardHeader,
   CardContent,
@@ -26,58 +27,116 @@ import {
   Button,
   EmptyState,
 } from '../../components/common';
+import { OrdersOverviewCard, Granularity } from '../../components/analytics/OrdersOverviewCard';
+import { SalesOverviewCard } from '../../components/analytics/SalesOverviewCard';
+import { ProductBrandOverviewCard } from '../../components/analytics/ProductBrandOverviewCard';
+import { TopBrandsCard } from '../../components/analytics/TopBrandsCard';
+import {
+  AnalyticsDrilldownDrawer,
+  BucketTarget,
+} from '../../components/analytics/AnalyticsDrilldownDrawer';
 import { toast } from '../../store/useToastStore';
-
-type PeriodType = 'today' | '7d' | '30d' | 'month';
 
 export const VendorDashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('7d');
-  const [metrics, setMetrics] = useState<any>(null);
-  const [charts, setCharts] = useState<any>(null);
+
+  const [ordersGranularity, setOrdersGranularity] = useState<Granularity>('daily');
+  const [salesGranularity, setSalesGranularity] = useState<Granularity>('daily');
+  const [ordersDateRange, setOrdersDateRange] = useState<{ start: string; end: string }>({
+    start: '',
+    end: '',
+  });
+  const [salesDateRange, setSalesDateRange] = useState<{ start: string; end: string }>({
+    start: '',
+    end: '',
+  });
+
+  const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [drilldown, setDrilldown] = useState<BucketTarget | null>(null);
 
   const { orders, fetchOrders, updateOrderStatus } = useVendorOrderStore();
   const { inventory, fetchInventory } = useVendorInventoryStore();
   const { notifications, fetchNotifications, markAsRead } = useVendorNotificationStore();
   const { settlements, fetchSettlements } = useVendorSettlementStore();
 
-  const loadData = async (period: PeriodType) => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setRefreshing(true);
-      const [m, c] = await Promise.all([
-        vendorApi.getDashboardMetrics(period),
-        vendorApi.getDashboardCharts(period),
-      ]);
-      setMetrics(m);
-      setCharts(c);
-    } catch (err) {
-      console.error('Failed to load dashboard metrics', err);
+      setAnalyticsError(null);
+      const data = await vendorApi.getAnalyticsOverview({
+        ordersFilter: ordersGranularity,
+        salesFilter: salesGranularity,
+        ordersStartDate: ordersDateRange.start || undefined,
+        ordersEndDate: ordersDateRange.end || undefined,
+        salesStartDate: salesDateRange.start || undefined,
+        salesEndDate: salesDateRange.end || undefined,
+      });
+      setAnalytics(data);
+    } catch (err: any) {
+      setAnalyticsError(err?.message || 'Unable to load dashboard analytics.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [
+    ordersGranularity,
+    salesGranularity,
+    ordersDateRange.start,
+    ordersDateRange.end,
+    salesDateRange.start,
+    salesDateRange.end,
+  ]);
 
   useEffect(() => {
-    loadData(selectedPeriod);
+    loadAnalytics();
+  }, [loadAnalytics]);
+
+  useEffect(() => {
     fetchOrders();
     fetchInventory();
     fetchSettlements();
     fetchNotifications();
 
-    const onRealtime = () => loadData(selectedPeriod);
+    const onRealtime = () => loadAnalytics();
     window.addEventListener('buildora:vendor:realtime', onRealtime);
     return () => window.removeEventListener('buildora:vendor:realtime', onRealtime);
-  }, [selectedPeriod]);
+  }, [loadAnalytics]);
 
-  const periods: { id: PeriodType; label: string }[] = [
-    { id: 'today', label: 'Today' },
-    { id: '7d', label: '7 Days' },
-    { id: '30d', label: '30 Days' },
-    { id: 'month', label: 'This Month' },
-  ];
+  const kpis = analytics?.kpis || {
+    totalOrders: orders.length,
+    ordersGrowthPct: 0,
+    totalSales: 0,
+    salesGrowthPct: 0,
+    totalProducts: inventory.length,
+    productsGrowthPct: 0,
+    totalBrands: 0,
+    activeProducts: 0,
+    lowStockCount: 0,
+  };
+
+  const ordersOv = analytics?.ordersOverview || {
+    totalOrders: 0,
+    previousPeriodOrders: 0,
+    growthPct: 0,
+    series: [],
+  };
+
+  const salesOv = analytics?.salesOverview || {
+    totalRevenue: 0,
+    previousPeriodRevenue: 0,
+    growthPct: 0,
+    series: [],
+  };
+
+  const pbOv = analytics?.productBrandOverview || {
+    products: { total: 0, active: 0, inactive: 0, activePct: 0, inactivePct: 0 },
+    brands: { total: 0, active: 0, inactive: 0, activePct: 0, inactivePct: 0 },
+  };
+
+  const topBrands = analytics?.topBrandsBySales || [];
 
   const actionOrders = orders.filter(
     (o) => o.status === 'NEW' || o.status === 'ACCEPTED' || o.status === 'READY_FOR_DISPATCH'
@@ -85,9 +144,6 @@ export const VendorDashboardPage: React.FC = () => {
   const lowStockItems = inventory.filter(
     (i) => i.status === 'LOW_STOCK' || i.status === 'OUT_OF_STOCK'
   );
-  const salesPoints: { date: string; revenue: number; orders?: number }[] =
-    charts?.revenueTrends || charts?.salesTrend || [];
-  const maxRevenue = Math.max(1, ...salesPoints.map((p) => p.revenue || 0));
 
   const getOrderBadgeVariant = (status: string) => {
     switch (status) {
@@ -97,6 +153,7 @@ export const VendorDashboardPage: React.FC = () => {
         return 'accent';
       case 'CANCELLED':
       case 'RETURNED':
+      case 'REJECTED':
         return 'danger';
       case 'ACCEPTED':
       case 'PROCESSING':
@@ -111,95 +168,230 @@ export const VendorDashboardPage: React.FC = () => {
     const ok = await updateOrderStatus(orderId, nextStatus);
     if (ok) {
       toast.success(`Order ${label.toLowerCase()} successfully.`);
-      loadData(selectedPeriod);
+      loadAnalytics();
     }
+  };
+
+  const renderGrowth = (pct?: number | null) => {
+    if (pct === undefined || pct === null) return null;
+    const pos = pct >= 0;
+    return (
+      <span
+        className={`mt-1.5 inline-flex items-center gap-1 text-xs font-semibold ${
+          pos ? 'text-emerald-600' : 'text-red-600'
+        }`}
+      >
+        {pos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+        {pos ? '+' : ''}
+        {pct}%
+      </span>
+    );
   };
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Page Header */}
       <PageHeader
         title="Overview"
-        description="Track your daily orders, stock health, sales performance, and upcoming settlements."
+        description="Real-time vendor analytics for orders, sales revenue, catalog brands, and inventory alerts."
         actions={
-          <>
-            <div className="flex items-center bg-white p-1 rounded-lg border border-[#E7E5E4]">
-              {periods.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelectedPeriod(p.id)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    selectedPeriod === p.id
-                      ? 'bg-[#943D24] text-white'
-                      : 'text-[#78716C] hover:text-[#292524]'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => loadData(selectedPeriod)}
-              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />}
-            >
-              Refresh
-            </Button>
-          </>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={loadAnalytics}
+            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />}
+          >
+            Refresh
+          </Button>
         }
       />
 
-      {/* 6 Essential KPI Cards */}
+      {analyticsError && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between gap-3 text-xs text-red-800">
+          <span>{analyticsError}</span>
+          <Button size="sm" variant="secondary" onClick={loadAnalytics}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Row 1: 6 KPI Cards matching screenshot */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard
-          title="Total Orders"
-          value={loading ? '—' : metrics?.totalOrders ?? orders.length}
-          subtitle="All received orders"
-          icon={<ShoppingCart className="w-4 h-4" />}
+        <div
           onClick={() => navigate('/orders')}
-        />
-        <StatCard
-          title="Pending Orders"
-          value={loading ? '—' : actionOrders.length || metrics?.pendingOrders || 0}
-          subtitle="Need action today"
-          icon={<Clock className="w-4 h-4 text-[#943D24]" />}
-          onClick={() => navigate('/orders?status=NEW')}
-        />
-        <StatCard
-          title="Products"
-          value={loading ? '—' : metrics?.totalProducts ?? inventory.length}
-          subtitle={`${metrics?.activeProducts ?? inventory.length} active in catalog`}
-          icon={<Package className="w-4 h-4" />}
-          onClick={() => navigate('/products')}
-        />
-        <StatCard
-          title="Low Stock Items"
-          value={loading ? '—' : lowStockItems.length || metrics?.lowStockCount || 0}
-          subtitle="Needs replenishment"
-          icon={<AlertTriangle className="w-4 h-4 text-[#D99B16]" />}
-          onClick={() => navigate('/inventory?status=LOW_STOCK')}
-        />
-        <StatCard
-          title="Total Sales"
-          value={loading ? '—' : `₹${(metrics?.grossRevenue || 0).toLocaleString('en-IN')}`}
-          subtitle="Gross order value"
-          icon={<IndianRupee className="w-4 h-4 text-[#943D24]" />}
+          className="bg-white rounded-xl border border-[#E7E5E4] p-4 shadow-card hover:border-[#943D24]/60 cursor-pointer transition-colors"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#FBF3F0] flex items-center justify-center text-[#943D24] shrink-0">
+              <ShoppingCart className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#78716C]">Total Orders</p>
+              <p className="text-xl font-bold text-[#292524] mt-0.5">
+                {loading ? '—' : kpis.totalOrders.toLocaleString('en-IN')}
+              </p>
+              {!loading && renderGrowth(kpis.ordersGrowthPct)}
+            </div>
+          </div>
+        </div>
+
+        <div
           onClick={() => navigate('/reports')}
+          className="bg-white rounded-xl border border-[#E7E5E4] p-4 shadow-card hover:border-[#943D24]/60 cursor-pointer transition-colors"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#FBF3F0] flex items-center justify-center text-[#943D24] shrink-0">
+              <IndianRupee className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#78716C]">Total Sales</p>
+              <p className="text-xl font-bold text-[#292524] mt-0.5 truncate">
+                {loading ? '—' : `₹${Number(kpis.totalSales || 0).toLocaleString('en-IN')}`}
+              </p>
+              {!loading && renderGrowth(kpis.salesGrowthPct)}
+            </div>
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate('/products')}
+          className="bg-white rounded-xl border border-[#E7E5E4] p-4 shadow-card hover:border-[#943D24]/60 cursor-pointer transition-colors"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#FBF3F0] flex items-center justify-center text-[#943D24] shrink-0">
+              <Package className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#78716C]">Total Products</p>
+              <p className="text-xl font-bold text-[#292524] mt-0.5">
+                {loading ? '—' : kpis.totalProducts.toLocaleString('en-IN')}
+              </p>
+              {!loading && renderGrowth(kpis.productsGrowthPct)}
+            </div>
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate('/reports?tab=BRANDS')}
+          className="bg-white rounded-xl border-2 border-[#F6C453] p-4 shadow-card hover:border-[#943D24] cursor-pointer transition-colors"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#FFF7E0] flex items-center justify-center text-[#B45309] shrink-0">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#78716C]">Total Brands</p>
+              <p className="text-xl font-bold text-[#292524] mt-0.5">
+                {loading ? '—' : kpis.totalBrands.toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate('/products?status=ACTIVE')}
+          className="bg-white rounded-xl border border-[#E7E5E4] p-4 shadow-card hover:border-[#943D24]/60 cursor-pointer transition-colors"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-700 shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#78716C]">Active Products</p>
+              <p className="text-xl font-bold text-[#292524] mt-0.5">
+                {loading ? '—' : kpis.activeProducts.toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate('/inventory?status=LOW_STOCK')}
+          className="bg-white rounded-xl border border-[#E7E5E4] p-4 shadow-card hover:border-[#943D24]/60 cursor-pointer transition-colors"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center text-red-600 shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#78716C]">Low Stock</p>
+              <p className="text-xl font-bold text-[#292524] mt-0.5">
+                {loading ? '—' : kpis.lowStockCount.toLocaleString('en-IN')}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Section 1 (Orders Overview) & Section 2 (Sales Overview) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <OrdersOverviewCard
+          loading={loading}
+          totalOrders={ordersOv.totalOrders}
+          previousPeriodOrders={ordersOv.previousPeriodOrders}
+          growthPct={ordersOv.growthPct}
+          series={ordersOv.series || []}
+          granularity={ordersGranularity}
+          onGranularityChange={setOrdersGranularity}
+          startDate={ordersDateRange.start}
+          endDate={ordersDateRange.end}
+          onDateRangeChange={(start, end) => setOrdersDateRange({ start, end })}
+          onBarClick={(b) =>
+            setDrilldown({
+              label: b.label,
+              startIso: b.startIso,
+              endIso: b.endIso,
+              metric: 'orders',
+            })
+          }
         />
-        <StatCard
-          title="Pending Settlements"
-          value={loading ? '—' : `₹${(metrics?.pendingSettlement || 0).toLocaleString('en-IN')}`}
-          subtitle="Next payout cycle"
-          icon={<Wallet className="w-4 h-4" />}
-          onClick={() => navigate('/earnings')}
+
+        <SalesOverviewCard
+          loading={loading}
+          totalRevenue={salesOv.totalRevenue}
+          previousPeriodRevenue={salesOv.previousPeriodRevenue}
+          growthPct={salesOv.growthPct}
+          series={salesOv.series || []}
+          granularity={salesGranularity}
+          onGranularityChange={setSalesGranularity}
+          startDate={salesDateRange.start}
+          endDate={salesDateRange.end}
+          onDateRangeChange={(start, end) => setSalesDateRange({ start, end })}
+          onPointClick={(b) =>
+            setDrilldown({
+              label: b.label,
+              startIso: b.startIso,
+              endIso: b.endIso,
+              metric: 'sales',
+            })
+          }
         />
       </div>
 
-      {/* Row 1: Orders Requiring Action & Low Stock Alerts */}
+      {/* Row 3: Section 3 (Product & Brand Overview) & Section 4 (Top Brands by Sales) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <ProductBrandOverviewCard
+            loading={loading}
+            products={pbOv.products}
+            brands={pbOv.brands}
+            onSelectProductsFilter={(status) => navigate(`/products?status=${status}`)}
+            onSelectBrandsFilter={(status) =>
+              navigate(`/reports?tab=BRANDS&brandStatus=${status}`)
+            }
+          />
+        </div>
+
+        <TopBrandsCard
+          loading={loading}
+          brands={topBrands}
+          onBrandClick={(brandName) =>
+            navigate(`/products?brand=${encodeURIComponent(brandName)}`)
+          }
+        />
+      </div>
+
+      {/* Row 4: Orders Requiring Action & Low Stock Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 2. Orders Requiring Action */}
         <Card>
           <CardHeader
             title="Orders Requiring Action"
@@ -236,7 +428,8 @@ export const VendorDashboardPage: React.FC = () => {
                         </Badge>
                       </div>
                       <p className="text-xs text-[#78716C] truncate mt-0.5">
-                        {ord.customerName} • ₹{(ord.totalAmount || ord.subtotal || 0).toLocaleString('en-IN')}
+                        {ord.customerName} • ₹
+                        {(ord.totalAmount || ord.subtotal || 0).toLocaleString('en-IN')}
                       </p>
                     </div>
                     <div className="shrink-0">
@@ -262,9 +455,7 @@ export const VendorDashboardPage: React.FC = () => {
                         <Button
                           size="sm"
                           variant="primary"
-                          onClick={() =>
-                            handleQuickOrderAction(ord.id, 'DISPATCHED', 'Dispatched')
-                          }
+                          onClick={() => handleQuickOrderAction(ord.id, 'DISPATCHED', 'Dispatched')}
                         >
                           Dispatch
                         </Button>
@@ -277,7 +468,6 @@ export const VendorDashboardPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* 3. Low Stock Alerts */}
         <Card>
           <CardHeader
             title="Low Stock Alerts"
@@ -330,58 +520,112 @@ export const VendorDashboardPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Row 2: Sales Overview & Important Notifications */}
+      {/* Row 5: Recent Orders, Recent Payments & Notifications */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 5. Sales Overview */}
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader
-            title="Sales Overview"
-            subtitle="Revenue trend for the selected period"
+            title="Recent Orders"
             action={
               <Link
-                to="/reports"
+                to="/orders"
                 className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
               >
-                Full Report <ArrowRight className="w-3.5 h-3.5" />
+                View All <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             }
           />
-          <CardContent>
-            {salesPoints.length === 0 ? (
-              <EmptyState title="No sales data yet" description="Sales trend will appear once orders arrive." />
-            ) : (
-              <div className="h-52 flex items-end gap-3 pt-4 pb-1 border-b border-[#E7E5E4]">
-                {salesPoints.map((point, idx) => {
-                  const pct = Math.max(12, Math.round(((point.revenue || 0) / maxRevenue) * 100));
-                  return (
-                    <div
-                      key={idx}
-                      className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group"
-                    >
-                      <span className="text-[11px] font-medium text-[#78716C] group-hover:text-[#943D24]">
-                        ₹{Math.round((point.revenue || 0) / 1000)}k
-                      </span>
-                      <div
-                        style={{ height: `${pct}%` }}
-                        className={`w-full max-w-[44px] rounded-t-md transition-colors ${
-                          idx % 2 === 0
-                            ? 'bg-[#943D24] group-hover:bg-[#7D331E]'
-                            : 'bg-[#F6C453] group-hover:bg-[#E5B342]'
-                        }`}
-                        title={`${point.date}: ₹${(point.revenue || 0).toLocaleString('en-IN')}`}
-                      />
-                      <span className="text-[11px] text-[#78716C] truncate w-full text-center">
-                        {point.date}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-medium border-b border-[#E7E5E4]">
+                <tr>
+                  <th className="py-3 px-4">Order ID</th>
+                  <th className="py-3 px-4 text-right">Amount</th>
+                  <th className="py-3 px-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E7E5E4]">
+                {orders.slice(0, 5).map((ord) => (
+                  <tr
+                    key={ord.id}
+                    onClick={() => navigate(`/orders?search=${encodeURIComponent(ord.orderNumber)}`)}
+                    className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
+                  >
+                    <td className="py-3 px-4 font-semibold text-[#292524]">{ord.orderNumber}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-[#292524]">
+                      ₹{(ord.totalAmount || ord.subtotal || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <Badge variant={getOrderBadgeVariant(ord.status)} size="sm">
+                        {ord.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+                {orders.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="py-8 text-center text-[#78716C]">
+                      No orders found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
-        {/* 6. Important Notifications */}
+        <Card>
+          <CardHeader
+            title="Recent Payments"
+            action={
+              <Link
+                to="/earnings"
+                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
+              >
+                View All <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            }
+          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#F8F7F5] text-[#78716C] font-medium border-b border-[#E7E5E4]">
+                <tr>
+                  <th className="py-3 px-4">Settlement</th>
+                  <th className="py-3 px-4 text-right">Net Payout</th>
+                  <th className="py-3 px-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E7E5E4]">
+                {settlements.slice(0, 5).map((stl) => (
+                  <tr
+                    key={stl.id}
+                    onClick={() => navigate('/earnings')}
+                    className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
+                  >
+                    <td className="py-3 px-4 font-semibold text-[#292524]">
+                      {stl.settlementNumber || stl.id}
+                    </td>
+                    <td className="py-3 px-4 text-right font-semibold text-[#292524]">
+                      ₹{(stl.netPayable || stl.netAmount || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <Badge variant={stl.status === 'PAID' ? 'success' : 'warning'} size="sm">
+                        {stl.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+                {settlements.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="py-8 text-center text-[#78716C]">
+                      No settlement records yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
         <Card>
           <CardHeader
             title="Important Notifications"
@@ -429,123 +673,8 @@ export const VendorDashboardPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Row 3: Recent Orders & Recent Payments */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 1. Recent Orders */}
-        <Card>
-          <CardHeader
-            title="Recent Orders"
-            action={
-              <Link
-                to="/orders"
-                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
-              >
-                View All <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            }
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#F8F7F5] text-[#78716C] font-medium border-b border-[#E7E5E4]">
-                <tr>
-                  <th className="py-3 px-4">Order ID</th>
-                  <th className="py-3 px-4">Customer</th>
-                  <th className="py-3 px-4 text-right">Amount</th>
-                  <th className="py-3 px-4 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E7E5E4]">
-                {orders.slice(0, 5).map((ord) => (
-                  <tr
-                    key={ord.id}
-                    onClick={() => navigate('/orders')}
-                    className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
-                  >
-                    <td className="py-3 px-4 font-semibold text-[#292524]">{ord.orderNumber}</td>
-                    <td className="py-3 px-4 text-[#78716C] truncate max-w-[160px]">
-                      {ord.customerName}
-                    </td>
-                    <td className="py-3 px-4 text-right font-semibold text-[#292524]">
-                      ₹{(ord.totalAmount || ord.subtotal || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Badge variant={getOrderBadgeVariant(ord.status)} size="sm">
-                        {ord.status.replace(/_/g, ' ')}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-                {orders.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-[#78716C]">
-                      No orders found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {/* 4. Recent Payments */}
-        <Card>
-          <CardHeader
-            title="Recent Payments"
-            action={
-              <Link
-                to="/earnings"
-                className="text-xs font-medium text-[#943D24] hover:underline inline-flex items-center gap-1"
-              >
-                View All <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            }
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#F8F7F5] text-[#78716C] font-medium border-b border-[#E7E5E4]">
-                <tr>
-                  <th className="py-3 px-4">Settlement</th>
-                  <th className="py-3 px-4">Period</th>
-                  <th className="py-3 px-4 text-right">Net Payout</th>
-                  <th className="py-3 px-4 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E7E5E4]">
-                {settlements.slice(0, 5).map((stl) => (
-                  <tr
-                    key={stl.id}
-                    onClick={() => navigate('/earnings')}
-                    className="hover:bg-[#F8F7F5] cursor-pointer transition-colors"
-                  >
-                    <td className="py-3 px-4 font-semibold text-[#292524]">
-                      {stl.settlementNumber || stl.id}
-                    </td>
-                    <td className="py-3 px-4 text-[#78716C]">{stl.period}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-[#292524]">
-                      ₹{(stl.netPayable || stl.netAmount || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Badge
-                        variant={stl.status === 'PAID' ? 'success' : 'warning'}
-                        size="sm"
-                      >
-                        {stl.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-                {settlements.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-[#78716C]">
-                      No settlement records yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
+      {/* Bar / Line Point Drilldown Drawer */}
+      <AnalyticsDrilldownDrawer target={drilldown} onClose={() => setDrilldown(null)} />
     </div>
   );
 };
