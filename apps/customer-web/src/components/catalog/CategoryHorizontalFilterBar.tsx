@@ -188,6 +188,16 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     }
   };
 
+  const hasAnyActiveFilters =
+    (activeFilters.categories?.length || 0) > 0 ||
+    (activeFilters.subcategories?.length || 0) > 0 ||
+    (activeFilters.brands?.length || 0) > 0 ||
+    !!activeFilters.inStockOnly ||
+    !!activeFilters.asapOnly ||
+    activeFilters.minPrice !== undefined ||
+    activeFilters.maxPrice !== undefined ||
+    Object.values(activeFilters.specifications || {}).some((v) => v && v.length > 0);
+
   return (
     <div className={`relative ${className}`}>
       {/* Click-away backdrop overlay when a dropdown is open */}
@@ -208,15 +218,8 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
             <span>Filter:</span>
           </div>
 
-          {/* Dynamic Category-Specific Dropdowns (Redundant Category Filter strictly excluded) */}
-          {availableFilters
-            .filter(
-              (f) =>
-                f.id !== 'category' &&
-                f.id !== 'subcategory' &&
-                f.name.toLowerCase() !== 'category'
-            )
-            .map((filter) => {
+          {/* Dynamic Category & Specification Dropdowns (Category lists only active Main Category's Child Categories) */}
+          {availableFilters.map((filter) => {
             const activeCount = getActiveCountForDimension(filter);
             const isOpen = openDropdownId === filter.id;
 
@@ -255,23 +258,21 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                   >
                     {/* Popover Header */}
                     <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
-                      <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
-                        <span>{filter.name}</span>
-                        {activeCount > 0 && (
-                          <span className="text-[10px] font-bold text-brand-blue-700 bg-brand-blue-50 px-1.5 py-0.2 rounded-full">
-                            {activeCount} selected
-                          </span>
-                        )}
+                      <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <span>{activeCount} selected</span>
                       </div>
-                      {activeCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => handleClearDimension(filter)}
-                          className="text-[11px] font-semibold text-red-600 hover:underline cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleClearDimension(filter)}
+                        disabled={activeCount === 0}
+                        className={`text-[11px] font-semibold transition-colors ${
+                          activeCount > 0
+                            ? 'text-brand-blue-900 hover:underline cursor-pointer'
+                            : 'text-slate-300 cursor-default'
+                        }`}
+                      >
+                        Reset
+                      </button>
                     </div>
 
                     {/* Checkbox Options List */}
@@ -480,6 +481,17 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
             <Check className="w-3.5 h-3.5" />
             <span>In Stock</span>
           </button>
+
+          {hasAnyActiveFilters && (
+            <button
+              type="button"
+              onClick={onResetFilters}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all select-none cursor-pointer flex-shrink-0"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Clear All</span>
+            </button>
+          )}
         </div>
 
         {/* Right Side: Product Count + Sort Dropdown */}

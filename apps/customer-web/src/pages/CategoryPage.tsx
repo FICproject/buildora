@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight,
   RotateCcw,
@@ -8,7 +8,6 @@ import {
 import {
   MASTER_CATEGORIES,
   NEW_LAUNCHES_CATEGORIES,
-  SEED_PRODUCTS,
   getAvailableFiltersForCategory,
   applyCategoryFilters,
   ActiveCategoryFilters
@@ -21,8 +20,67 @@ import {
   ActiveFilterChips
 } from '../components/catalog';
 
+function parseCategoryPageUrlFilters(
+  searchParams: URLSearchParams,
+  subcategoryParam?: string,
+  category?: Category
+): ActiveCategoryFilters {
+  const urlSubs = (searchParams.get('sub') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  let subcategories: string[] = [];
+  if (urlSubs.length > 0) {
+    subcategories = urlSubs;
+  } else if (subcategoryParam) {
+    const matchedSub = category?.subcategories?.find(
+      (s) =>
+        s.slug.toLowerCase() === subcategoryParam.toLowerCase() ||
+        s.name.toLowerCase() === subcategoryParam.toLowerCase()
+    );
+    subcategories = [matchedSub ? matchedSub.slug : subcategoryParam];
+  }
+
+  const brands = (searchParams.get('brand') || '')
+    .split(',')
+    .map((b) => b.trim())
+    .filter(Boolean);
+  const inStockOnly = searchParams.get('inStock') === 'true';
+  const asapOnly = searchParams.get('asap') === 'true';
+  const minPrice = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : undefined;
+  const maxPrice = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : undefined;
+  const sortBy = searchParams.get('sort') || 'relevance';
+
+  let specifications: Record<string, string[]> = {};
+  const specsParam = searchParams.get('specs');
+  if (specsParam) {
+    try {
+      const parsed = JSON.parse(specsParam);
+      if (parsed && typeof parsed === 'object') {
+        specifications = parsed;
+      }
+    } catch {
+      specifications = {};
+    }
+  }
+
+  return {
+    brands,
+    subcategories,
+    inStockOnly,
+    asapOnly,
+    minPrice: Number.isFinite(minPrice) ? minPrice : undefined,
+    maxPrice: Number.isFinite(maxPrice) ? maxPrice : undefined,
+    specifications,
+    sortBy,
+  };
+}
+
 export const CategoryPage: React.FC = () => {
   const { slug, subcategorySlug } = useParams<{ slug: string; subcategorySlug?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // Resolve master category slug if a new launch category slug was passed
   const effectiveCategorySlug = useMemo(() => {
@@ -38,77 +96,127 @@ export const CategoryPage: React.FC = () => {
       MASTER_CATEGORIES[0]
     );
   });
-  const [productList, setProductList] = useState<Product[]>(SEED_PRODUCTS);
+  const [productList, setProductList] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
-  // Active filter state
-  const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>({
-    brands: [],
-    subcategories: [],
-    inStockOnly: false,
-    asapOnly: false,
-    specifications: {},
-    sortBy: 'relevance'
-  });
+  const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() =>
+    parseCategoryPageUrlFilters(searchParams, subcategorySlug)
+  );
 
-  // Load category details and products
+  // Load category details and live products (re-fetches on admin approvals/updates)
   useEffect(() => {
+    let active = true;
     const targetSlug = effectiveCategorySlug || slug;
-    if (targetSlug) {
-      const fallbackCat = MASTER_CATEGORIES.find((c) => c.slug === targetSlug);
-      if (fallbackCat) setCategory(fallbackCat);
+    if (!targetSlug) return;
 
-      api.getCategoryBySlug(targetSlug).then((cat) => {
+    const fallbackCat = MASTER_CATEGORIES.find((c) => c.slug === targetSlug);
+    if (fallbackCat) setCategory(fallbackCat);
+
+    const loadCategoryData = async () => {
+      setLoadingProducts(true);
+      try {
+        const [cat, prods] = await Promise.all([
+          api.getCategoryBySlug(targetSlug),
+          api.getProducts({ category: targetSlug }),
+        ]);
+        if (!active) return;
         if (cat) setCategory(cat);
-      });
+        setProductList(Array.isArray(prods) ? prods : []);
+      } finally {
+        if (active) setLoadingProducts(false);
+      }
+    };
 
-      api.getProducts({ category: targetSlug }).then((prods) => {
-        if (prods && prods.length > 0) {
-          setProductList(prods);
-        } else {
-          // Fallback to seed products for this category
-          const categorySeed = SEED_PRODUCTS.filter((p) => p.categorySlug === targetSlug);
-          if (categorySeed.length > 0) {
-            setProductList(categorySeed);
-          }
-        }
-      });
-    }
+    void loadCategoryData();
+
+    const onRealtime = () => {
+      void loadCategoryData();
+    };
+    window.addEventListener('buildora:realtime:catalog', onRealtime);
+    return () => {
+      active = false;
+      window.removeEventListener('buildora:realtime:catalog', onRealtime);
+    };
   }, [slug, effectiveCategorySlug]);
 
-  // Sync subcategory route param with activeFilters
+  // Synchronize URL changes (initial load + browser Back/Forward navigation) into filter state
   useEffect(() => {
-    if (subcategorySlug && category) {
-      const foundSub = category.subcategories?.find(
-        (s) => s.slug === subcategorySlug || s.name.toLowerCase() === subcategorySlug.toLowerCase()
-      );
-      const subValue = foundSub ? foundSub.name : subcategorySlug;
-      setActiveFilters((prev) => ({
-        ...prev,
-        subcategories: [subValue]
-      }));
-    } else {
-      setActiveFilters((prev) => ({
-        ...prev,
-        subcategories: []
-      }));
-    }
-  }, [subcategorySlug, category]);
+    setActiveFilters(parseCategoryPageUrlFilters(searchParams, subcategorySlug, category));
+  }, [searchParams, subcategorySlug, category]);
 
-  const activeSubcategory = subcategorySlug
-    ? category.subcategories?.find(
-        (s) => s.slug === subcategorySlug || s.name.toLowerCase() === subcategorySlug.toLowerCase()
-      )
-    : null;
+  // Push filter changes cleanly to URL so selections persist across navigation & browser Back/Forward
+  const commitFiltersToUrl = useCallback(
+    (next: ActiveCategoryFilters) => {
+      setActiveFilters(next);
 
-  // All products belonging to this category
+      const params = new URLSearchParams();
+      if (next.subcategories && next.subcategories.length > 0) {
+        params.set('sub', next.subcategories.join(','));
+      }
+      if (next.brands && next.brands.length > 0) {
+        params.set('brand', next.brands.join(','));
+      }
+      if (next.inStockOnly) {
+        params.set('inStock', 'true');
+      }
+      if (next.asapOnly) {
+        params.set('asap', 'true');
+      }
+      if (next.minPrice !== undefined) {
+        params.set('minPrice', String(next.minPrice));
+      }
+      if (next.maxPrice !== undefined) {
+        params.set('maxPrice', String(next.maxPrice));
+      }
+      if (next.sortBy && next.sortBy !== 'relevance') {
+        params.set('sort', next.sortBy);
+      }
+      if (next.specifications && Object.keys(next.specifications).length > 0) {
+        params.set('specs', JSON.stringify(next.specifications));
+      }
+
+      if (subcategorySlug) {
+        // Move to main category base path with explicit URL filter state when filters are adjusted
+        const basePath = `/categories/${slug}`;
+        const nextUrl = params.toString() ? `${basePath}?${params.toString()}` : basePath;
+        navigate(nextUrl);
+      } else {
+        setSearchParams(params);
+      }
+    },
+    [slug, subcategorySlug, navigate, setSearchParams]
+  );
+
+  const activeSubcategory =
+    activeFilters.subcategories?.length === 1
+      ? category.subcategories?.find(
+          (s) =>
+            s.slug.toLowerCase() === activeFilters.subcategories[0].toLowerCase() ||
+            s.name.toLowerCase() === activeFilters.subcategories[0].toLowerCase()
+        )
+      : subcategorySlug
+      ? category.subcategories?.find(
+          (s) =>
+            s.slug.toLowerCase() === subcategorySlug.toLowerCase() ||
+            s.name.toLowerCase() === subcategorySlug.toLowerCase()
+        )
+      : null;
+
+  // All products belonging to this Main Category
   const allCategoryProducts = useMemo(() => {
-    return productList.filter((p) => p.categorySlug === category.slug);
-  }, [productList, category.slug]);
+    return productList.filter(
+      (p) => p.categorySlug === category.slug || (p as any).categoryId === category.id
+    );
+  }, [productList, category.slug, category.id]);
 
-  // Compute domain-specific available filters for this category
+  // Compute Child Category ("Category") + specification filters strictly scoped to active Main Category
   const availableFilters = useMemo(() => {
-    return getAvailableFiltersForCategory(category.slug, allCategoryProducts);
-  }, [category.slug, allCategoryProducts]);
+    return getAvailableFiltersForCategory(
+      category.slug,
+      allCategoryProducts,
+      category.subcategories || []
+    );
+  }, [category.slug, category.subcategories, allCategoryProducts]);
 
   // Apply active filters and sorting
   const filteredProducts = useMemo(() => {
@@ -136,7 +244,7 @@ export const CategoryPage: React.FC = () => {
 
   // Filter change handlers
   const handleResetFilters = () => {
-    setActiveFilters({
+    commitFiltersToUrl({
       brands: [],
       subcategories: [],
       inStockOnly: false,
@@ -147,56 +255,54 @@ export const CategoryPage: React.FC = () => {
   };
 
   const handleRemoveBrand = (brand: string) => {
-    setActiveFilters((prev) => ({
-      ...prev,
-      brands: prev.brands.filter((b) => b !== brand)
-    }));
+    commitFiltersToUrl({
+      ...activeFilters,
+      brands: activeFilters.brands.filter((b) => b !== brand)
+    });
   };
 
   const handleRemoveSubcategory = (sub: string) => {
-    setActiveFilters((prev) => ({
-      ...prev,
-      subcategories: prev.subcategories.filter((s) => s !== sub)
-    }));
+    commitFiltersToUrl({
+      ...activeFilters,
+      subcategories: activeFilters.subcategories.filter((s) => s !== sub)
+    });
   };
 
   const handleRemoveSpec = (dimId: string, val: string) => {
-    setActiveFilters((prev) => {
-      const currentList = prev.specifications[dimId] || [];
-      const updatedList = currentList.filter((v) => v !== val);
-      const updatedSpecs = { ...prev.specifications };
-      if (updatedList.length === 0) {
-        delete updatedSpecs[dimId];
-      } else {
-        updatedSpecs[dimId] = updatedList;
-      }
-      return {
-        ...prev,
-        specifications: updatedSpecs
-      };
+    const currentList = activeFilters.specifications[dimId] || [];
+    const updatedList = currentList.filter((v) => v !== val);
+    const updatedSpecs = { ...activeFilters.specifications };
+    if (updatedList.length === 0) {
+      delete updatedSpecs[dimId];
+    } else {
+      updatedSpecs[dimId] = updatedList;
+    }
+    commitFiltersToUrl({
+      ...activeFilters,
+      specifications: updatedSpecs
     });
   };
 
   const handleRemovePrice = () => {
-    setActiveFilters((prev) => ({
-      ...prev,
+    commitFiltersToUrl({
+      ...activeFilters,
       minPrice: undefined,
       maxPrice: undefined
-    }));
+    });
   };
 
   const handleRemoveInStock = () => {
-    setActiveFilters((prev) => ({
-      ...prev,
+    commitFiltersToUrl({
+      ...activeFilters,
       inStockOnly: false
-    }));
+    });
   };
 
   const handleRemoveAsap = () => {
-    setActiveFilters((prev) => ({
-      ...prev,
+    commitFiltersToUrl({
+      ...activeFilters,
       asapOnly: false
-    }));
+    });
   };
 
   return (
@@ -235,11 +341,11 @@ export const CategoryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Horizontal Filter Bar (HomeRun-Style) */}
+      {/* 3. Horizontal Filter Bar */}
       <CategoryHorizontalFilterBar
         availableFilters={availableFilters}
         activeFilters={activeFilters}
-        onChangeFilters={setActiveFilters}
+        onChangeFilters={commitFiltersToUrl}
         onResetFilters={handleResetFilters}
         totalResultsCount={filteredProducts.length}
       />
@@ -258,7 +364,13 @@ export const CategoryPage: React.FC = () => {
       />
 
       {/* 5. Full-Width Product Grid */}
-      {filteredProducts.length === 0 ? (
+      {loadingProducts && productList.length === 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 animate-pulse">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={idx} className="h-72 rounded-2xl bg-slate-100" />
+          ))}
+        </div>
+      ) : filteredProducts.length === 0 ? (
         <div className="p-16 bg-white rounded-3xl border border-slate-200 text-center space-y-4 shadow-2xs">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
             <PackageOpen className="w-8 h-8" />

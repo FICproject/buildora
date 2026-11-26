@@ -161,6 +161,7 @@ export const api = {
   }): Promise<Product[]> {
     const queryParts: string[] = [];
     if (params?.category) queryParts.push(`category=${encodeURIComponent(params.category)}`);
+    if (params?.subcategory) queryParts.push(`subcategory=${encodeURIComponent(params.subcategory)}`);
     if (params?.brand) queryParts.push(`brand=${encodeURIComponent(params.brand)}`);
     if (params?.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
     if (params?.newLaunch) queryParts.push(`newLaunch=true`);
@@ -171,10 +172,22 @@ export const api = {
     if (!params) return products;
 
     if (params.category) {
-      products = products.filter((p) => p.categorySlug === params.category);
+      const catNeedle = params.category.toLowerCase();
+      products = products.filter(
+        (p) =>
+          p.categorySlug.toLowerCase() === catNeedle ||
+          p.category.toLowerCase() === catNeedle ||
+          String((p as any).categoryId || '').toLowerCase() === catNeedle
+      );
     }
     if (params.subcategory) {
-      products = products.filter((p) => p.subcategorySlug === params.subcategory);
+      const subNeedle = params.subcategory.toLowerCase();
+      products = products.filter(
+        (p) =>
+          p.subcategorySlug.toLowerCase() === subNeedle ||
+          p.subcategory.toLowerCase() === subNeedle ||
+          String((p as any).subcategoryId || '').toLowerCase() === subNeedle
+      );
     }
     if (params.brand) {
       products = products.filter((p) => p.brandSlug === params.brand);

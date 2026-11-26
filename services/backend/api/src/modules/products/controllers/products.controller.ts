@@ -9,7 +9,11 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { dbStore } from '../../../database/store';
-import { CATEGORY_ATTRIBUTE_TEMPLATES, getAttributeTemplatesForCategory } from '@buildora/constants';
+import {
+  CATEGORY_ATTRIBUTE_TEMPLATES,
+  getAttributeTemplatesForCategory,
+  resolveCanonicalCategoryHierarchy,
+} from '@buildora/constants';
 import { vendorRecords, vendorProducts } from '../../vendors/controllers/vendor.controller';
 
 export function isProductCustomerVisible(p: any): boolean {
@@ -41,9 +45,19 @@ function enrichStorefrontProduct(p: any) {
   const totalStock = Number(p.stockCount ?? vp?.stockCount ?? 0);
   const reserved = Number(p.reservedStock ?? vp?.reservedStock ?? 0);
   const availableStock = Math.max(0, totalStock - reserved);
+  const hierarchy = resolveCanonicalCategoryHierarchy(
+    p.categorySlug || p.categoryId || p.category,
+    p.subcategorySlug || p.subcategoryId || p.subcategory
+  );
 
   return {
     ...p,
+    categoryId: p.categoryId || hierarchy.categoryId,
+    categorySlug: p.categorySlug || hierarchy.categorySlug,
+    category: p.category || hierarchy.categoryName,
+    subcategoryId: p.subcategoryId || hierarchy.subcategoryId,
+    subcategorySlug: p.subcategorySlug || hierarchy.subcategorySlug,
+    subcategory: p.subcategory || hierarchy.subcategoryName,
     vendorId,
     vendorName: p.vendorName || vendor?.storeName || vendor?.businessInfo?.businessName || 'Buildora Verified Supplier',
     vendorCity: vendor?.businessInfo?.address?.city || 'Bengaluru',
@@ -101,12 +115,21 @@ export class ProductsController {
     let result = dbStore.products.filter(isProductCustomerVisible).map(enrichStorefrontProduct);
 
     if (category) {
-      result = result.filter((p) => p.categorySlug === category || p.category === category);
+      const cats = category.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
+      result = result.filter(
+        (p) =>
+          cats.includes((p.categorySlug || '').toLowerCase()) ||
+          cats.includes((p.category || '').toLowerCase()) ||
+          cats.includes(String((p as any).categoryId || '').toLowerCase())
+      );
     }
     if (subcategory) {
-      const subs = subcategory.split(',').map((s) => s.trim().toLowerCase());
+      const subs = subcategory.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
       result = result.filter(
-        (p) => subs.includes(p.subcategorySlug.toLowerCase()) || subs.includes(p.subcategory.toLowerCase())
+        (p) =>
+          subs.includes((p.subcategorySlug || '').toLowerCase()) ||
+          subs.includes((p.subcategory || '').toLowerCase()) ||
+          subs.includes(String((p as any).subcategoryId || '').toLowerCase())
       );
     }
     if (brand) {

@@ -564,6 +564,59 @@ export const getNewLaunchCategoryBySlug = (slug?: string): NewLaunchCategory | u
   return NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug || c.masterCategorySlug === slug);
 };
 
+export function resolveCanonicalCategoryHierarchy(
+  categoryInput?: string,
+  subcategoryInput?: string
+) {
+  const cleanCat = (categoryInput || '').trim().toLowerCase();
+  const cleanSub = (subcategoryInput || '').trim().toLowerCase();
+
+  let matchedMain = cleanCat
+    ? MASTER_CATEGORIES.find(
+        (c) =>
+          c.id.toLowerCase() === cleanCat ||
+          c.slug.toLowerCase() === cleanCat ||
+          c.name.toLowerCase() === cleanCat
+      )
+    : undefined;
+
+  let matchedChild = matchedMain?.subcategories.find(
+    (s) =>
+      cleanSub &&
+      (s.id.toLowerCase() === cleanSub ||
+        s.slug.toLowerCase() === cleanSub ||
+        s.name.toLowerCase() === cleanSub)
+  );
+
+  // If only child category was supplied or main category wasn't matched cleanly, look up globally by unique child
+  if (!matchedMain && cleanSub) {
+    for (const c of MASTER_CATEGORIES) {
+      const hit = c.subcategories.find(
+        (s) =>
+          s.id.toLowerCase() === cleanSub ||
+          s.slug.toLowerCase() === cleanSub ||
+          s.name.toLowerCase() === cleanSub
+      );
+      if (hit) {
+        matchedMain = c;
+        matchedChild = hit;
+        break;
+      }
+    }
+  }
+
+  return {
+    matchedMain: matchedMain || null,
+    matchedChild: matchedChild || null,
+    categoryId: matchedMain?.id || '',
+    categoryName: matchedMain?.name || '',
+    categorySlug: matchedMain?.slug || '',
+    subcategoryId: matchedChild?.id || '',
+    subcategoryName: matchedChild?.name || '',
+    subcategorySlug: matchedChild?.slug || '',
+  };
+}
+
 export const MASTER_BRANDS = [
   {
     id: 'brand-1',

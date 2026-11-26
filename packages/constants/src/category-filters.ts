@@ -370,26 +370,93 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
 // DYNAMIC OPTION EXTRACTION ENGINE (PHASE 5: NO EMPTY / IRRELEVANT FILTERS)
 // -------------------------------------------------------------------------------------
 
+export interface ChildCategoryMeta {
+  id: string;
+  name: string;
+  slug: string;
+  categorySlug?: string;
+}
+
+/**
+ * Computes the Child Category ("Category") filter dimension for an active Main Category,
+ * showing ONLY child categories belonging to that Main Category with accurate product counts.
+ */
+export function buildChildCategoryFilter(
+  categoryProducts: Product[],
+  childCategories: ChildCategoryMeta[] = []
+): AvailableCategoryFilter | null {
+  const countsMap = new Map<string, { label: string; value: string; count: number }>();
+
+  for (const child of childCategories) {
+    countsMap.set(child.slug.toLowerCase(), {
+      value: child.slug,
+      label: child.name,
+      count: 0,
+    });
+  }
+
+  for (const p of categoryProducts) {
+    const subSlug = (p.subcategorySlug || '').trim();
+    const subName = (p.subcategory || '').trim();
+    const key = subSlug.toLowerCase() || subName.toLowerCase();
+    if (!key) continue;
+
+    // Match existing taxonomy child category first
+    const existing =
+      countsMap.get(subSlug.toLowerCase()) ||
+      Array.from(countsMap.values()).find(
+        (v) => v.label.toLowerCase() === subName.toLowerCase() || v.value.toLowerCase() === subSlug.toLowerCase()
+      );
+
+    if (existing) {
+      existing.count += 1;
+    } else if (childCategories.length === 0) {
+      // Fallback only if caller didn't pass canonical childCategories
+      const val = subSlug || subName;
+      const cur = countsMap.get(val.toLowerCase()) || {
+        value: val,
+        label: subName || subSlug,
+        count: 0,
+      };
+      cur.count += 1;
+      countsMap.set(val.toLowerCase(), cur);
+    }
+  }
+
+  const options = Array.from(countsMap.values());
+  if (options.length === 0) return null;
+
+  return {
+    id: 'subcategory',
+    name: 'Category',
+    type: 'checkbox',
+    options,
+  };
+}
+
 /**
  * Extracts all valid, available filter options for a category based on the actual products in that category.
- * If an attribute dimension has 0 options among the products, it is automatically omitted.
- * Note: Category / Subcategory dropdown is strictly excluded from PLP (Rule 2 & Rule 9).
+ * Prepends the active Main Category's Child Categories ("Category") filter when child categories exist.
  */
 export function getAvailableFiltersForCategory(
   categorySlug: string,
-  categoryProducts: Product[]
+  categoryProducts: Product[],
+  childCategories?: ChildCategoryMeta[]
 ): AvailableCategoryFilter[] {
   const rawDimensions = CATEGORY_FILTER_CONFIGS[categorySlug] || [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
     { id: 'price', name: 'Price Range', type: 'range', isStandardField: 'price' }
   ];
 
-  // Strictly omit redundant Category filter from Product Listing Page as per Rule 2 & Rule 9
   const dimensions = rawDimensions.filter(
     (dim) => dim.id !== 'subcategory' && dim.id !== 'category' && dim.name.toLowerCase() !== 'category'
   );
 
   const availableFilters: AvailableCategoryFilter[] = [];
+  const childCatFilter = buildChildCategoryFilter(categoryProducts, childCategories || []);
+  if (childCatFilter) {
+    availableFilters.push(childCatFilter);
+  }
 
   for (const dim of dimensions) {
     if (dim.type === 'range') {
@@ -540,16 +607,30 @@ export function getAvailableFiltersForCategory(
  */
 export function getAvailableFiltersForCatalog(
   allProducts: Product[],
-  selectedCategorySlug?: string
+  selectedCategorySlug?: string,
+  childCategories?: ChildCategoryMeta[]
 ): AvailableCategoryFilter[] {
   const availableFilters: AvailableCategoryFilter[] = [];
 
-  // 1. Category Filter Dimension (Only shown when browsing root catalogue with NO category selected)
-  if (!selectedCategorySlug) {
-    const categoryCounts = new Map<string, number>();
+  // 1. Category Filter Dimension:
+  // When a single Main Category is selected, show ONLY its Child Categories with counts;
+  // otherwise show all Main Categories present in the catalogue.
+  if (selectedCategorySlug) {
+    const matchingMainProducts = allProducts.filter(
+      (p) => p.categorySlug === selectedCategorySlug || p.category === selectedCategorySlug
+    );
+    const childFilter = buildChildCategoryFilter(matchingMainProducts, childCategories || []);
+    if (childFilter) {
+      availableFilters.push(childFilter);
+    }
+  } else {
+    const categoryCounts = new Map<string, { label: string; count: number }>();
     for (const p of allProducts) {
       if (p.category) {
-        categoryCounts.set(p.category, (categoryCounts.get(p.category) || 0) + 1);
+        const key = p.categorySlug || p.category;
+        const cur = categoryCounts.get(key) || { label: p.category, count: 0 };
+        cur.count += 1;
+        categoryCounts.set(key, cur);
       }
     }
     if (categoryCounts.size > 0) {
@@ -558,10 +639,10 @@ export function getAvailableFiltersForCatalog(
         name: 'Category',
         type: 'checkbox',
         options: Array.from(categoryCounts.entries())
-          .map(([value, count]) => ({
+          .map(([value, entry]) => ({
             value,
-            label: value,
-            count
+            label: entry.label,
+            count: entry.count
           }))
           .sort((a, b) => b.count - a.count)
       });
@@ -569,8 +650,11 @@ export function getAvailableFiltersForCatalog(
   }
 
   // 2. Brand Filter Dimension
+  const scopedForBrands = selectedCategorySlug
+    ? allProducts.filter((p) => p.categorySlug === selectedCategorySlug || p.category === selectedCategorySlug)
+    : allProducts;
   const brandCounts = new Map<string, number>();
-  for (const p of allProducts) {
+  for (const p of scopedForBrands) {
     if (p.brand) {
       brandCounts.set(p.brand, (brandCounts.get(p.brand) || 0) + 1);
     }
@@ -592,9 +676,9 @@ export function getAvailableFiltersForCatalog(
 
   // 3. Category-Specific Specification Filters (when a single category is active)
   if (selectedCategorySlug && CATEGORY_FILTER_CONFIGS[selectedCategorySlug]) {
-    const specificFilters = getAvailableFiltersForCategory(selectedCategorySlug, allProducts);
+    const specificFilters = getAvailableFiltersForCategory(selectedCategorySlug, scopedForBrands, childCategories);
     for (const sf of specificFilters) {
-      if (sf.id !== 'brand' && sf.id !== 'price') {
+      if (sf.id !== 'brand' && sf.id !== 'price' && sf.id !== 'subcategory') {
         availableFilters.push(sf);
       }
     }
@@ -634,28 +718,38 @@ export function applyCategoryFilters(
   const dimMap = new Map(dimensions.map((d) => [d.id, d]));
 
   return products.filter((p) => {
-    // 0. Category filter (OR within selected categories)
+    // 0. Category filter (OR within selected categories, case-insensitive across name/slug/id)
     if (activeFilters.categories && activeFilters.categories.length > 0) {
+      const catTargets = activeFilters.categories.map((c) => c.toLowerCase());
+      const pCatId = String((p as any).categoryId || '').toLowerCase();
       const matchCat =
-        activeFilters.categories.includes(p.category) ||
-        activeFilters.categories.includes(p.categorySlug);
+        catTargets.includes((p.category || '').toLowerCase()) ||
+        catTargets.includes((p.categorySlug || '').toLowerCase()) ||
+        (pCatId && catTargets.includes(pCatId));
       if (!matchCat) {
         return false;
       }
     }
 
-    // 1. Brand filter (OR within brands)
+    // 1. Brand filter (OR within brands, case-insensitive)
     if (activeFilters.brands && activeFilters.brands.length > 0) {
-      if (!activeFilters.brands.includes(p.brand) && !activeFilters.brands.includes(p.brandSlug)) {
+      const brandTargets = activeFilters.brands.map((b) => b.toLowerCase());
+      if (
+        !brandTargets.includes((p.brand || '').toLowerCase()) &&
+        !brandTargets.includes((p.brandSlug || '').toLowerCase())
+      ) {
         return false;
       }
     }
 
-    // 2. Subcategory filter (OR within subcategories)
+    // 2. Subcategory / Child Category filter (OR within subcategories, case-insensitive across name/slug/id)
     if (activeFilters.subcategories && activeFilters.subcategories.length > 0) {
+      const subTargets = activeFilters.subcategories.map((s) => s.toLowerCase());
+      const pSubId = String((p as any).subcategoryId || '').toLowerCase();
       const matchSub =
-        activeFilters.subcategories.includes(p.subcategory) ||
-        activeFilters.subcategories.includes(p.subcategorySlug);
+        subTargets.includes((p.subcategory || '').toLowerCase()) ||
+        subTargets.includes((p.subcategorySlug || '').toLowerCase()) ||
+        (pSubId && subTargets.includes(pSubId));
       if (!matchSub) {
         return false;
       }

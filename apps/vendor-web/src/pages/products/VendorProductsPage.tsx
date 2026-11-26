@@ -27,7 +27,7 @@ import {
   TablePagination,
 } from '../../components/common';
 import { VendorProduct, AttributeSelectorType } from '@buildora/types';
-import { getAttributeTemplatesForCategory } from '@buildora/constants';
+import { MASTER_CATEGORIES, getAttributeTemplatesForCategory, resolveCanonicalCategoryHierarchy } from '@buildora/constants';
 import { vendorApi } from '../../services/vendorApi';
 import { toast } from '../../store/useToastStore';
 
@@ -55,16 +55,7 @@ interface FormVariant {
   image?: string;
 }
 
-const DEFAULT_CATEGORIES = [
-  'Cement & Concrete',
-  'Steel & Structural Metals',
-  'Electrical Wires & MCBs',
-  'Plumbing & Sanitary',
-  'Hardware & Locks',
-  'Paints & Primers',
-  'Plywood & Boards',
-  'Tiles & Adhesives',
-];
+const DEFAULT_CATEGORIES = MASTER_CATEGORIES.map((c) => c.name);
 
 export const VendorProductsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -136,6 +127,17 @@ export const VendorProductsPage: React.FC = () => {
     });
     return Array.from(set);
   }, [products]);
+
+  const selectedMainCategoryObj = useMemo(() => {
+    const found = MASTER_CATEGORIES.find(
+      (c) => c.slug === category || c.name.toLowerCase() === category.toLowerCase()
+    );
+    return found || MASTER_CATEGORIES[0];
+  }, [category]);
+
+  const subcategoryOptions = useMemo(() => {
+    return selectedMainCategoryObj?.subcategories || [];
+  }, [selectedMainCategoryObj]);
 
   const openAddModal = () => {
     setEditingProduct(null);
@@ -422,14 +424,20 @@ export const VendorProductsPage: React.FC = () => {
 
       const resolvedStatus =
         stockNum === 0 ? 'OUT_OF_STOCK' : productStatus;
+      const hierarchy = resolveCanonicalCategoryHierarchy(category, subCategory);
+      const resolvedMain = hierarchy.matchedMain || MASTER_CATEGORIES[0];
+      const resolvedChild = hierarchy.matchedChild || resolvedMain.subcategories[0];
 
       const productData = {
         name: name.trim(),
         sku: sku.trim(),
-        category,
-        categorySlug: category,
-        subCategory: subCategory.trim(),
-        subcategory: subCategory.trim(),
+        categoryId: resolvedMain.id,
+        category: resolvedMain.name,
+        categorySlug: resolvedMain.slug,
+        subcategoryId: resolvedChild?.id || '',
+        subCategory: resolvedChild?.name || '',
+        subcategory: resolvedChild?.name || '',
+        subcategorySlug: resolvedChild?.slug || '',
         brand: brand.trim(),
         unit: unit.trim(),
         gstRate: Number(gstRate),
@@ -804,28 +812,37 @@ export const VendorProductsPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="portal-label">Category *</label>
+                <label className="portal-label">Main Category *</label>
                 <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  value={selectedMainCategoryObj?.name || category}
+                  onChange={(e) => {
+                    const nextMain = MASTER_CATEGORIES.find((c) => c.name === e.target.value);
+                    setCategory(nextMain?.name || e.target.value);
+                    setSubCategory(nextMain?.subcategories?.[0]?.name || '');
+                  }}
                   className="portal-input"
                 >
-                  {categoryOptions.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                  {MASTER_CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="portal-label">Subcategory</label>
-                <input
-                  type="text"
+                <label className="portal-label">Child Category *</label>
+                <select
                   value={subCategory}
                   onChange={(e) => setSubCategory(e.target.value)}
-                  placeholder="e.g. OPC 53 Grade"
                   className="portal-input"
-                />
+                  required
+                >
+                  {subcategoryOptions.map((sub) => (
+                    <option key={sub.id} value={sub.name}>
+                      {sub.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

@@ -36,6 +36,8 @@ import {
   CONSTRUCTION_DEPARTMENTS,
   NEW_LAUNCHES_CATEGORIES
 } from '@buildora/constants';
+import { Category, Product } from '@buildora/types';
+import { api } from '../../services/api';
 import { formatCurrency } from '@buildora/utils';
 import { formatLocationDisplay } from '../../utils';
 import { LocationModal } from './LocationModal';
@@ -67,17 +69,51 @@ export const Header: React.FC = () => {
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Active mega menu department dropdown
+  // Active mega menu department dropdown & hierarchy hover states
   const [activeDepartment, setActiveDepartment] = useState<string | null>(null);
   const [selectedParentCategorySlug, setSelectedParentCategorySlug] = useState<string | null>(null);
+  const [hoveredChildCategorySlug, setHoveredChildCategorySlug] = useState<string | null>(null);
+  const [hoveredChildMasterSlug, setHoveredChildMasterSlug] = useState<string | null>(null);
   const [isAllCategoriesOpen, setIsAllCategoriesOpen] = useState(false);
+
+  // Live catalog categories & customer-visible products for hover product panel
+  const [catalogCategories, setCatalogCategories] = useState<Category[]>(MASTER_CATEGORIES);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
   // Mobile navigation accordion state
   const [mobileExpandedDept, setMobileExpandedDept] = useState<string | null>(null);
   const [mobileExpandedCat, setMobileExpandedCat] = useState<string | null>(null);
 
+  const headerContainerRef = useRef<HTMLElement>(null);
   const megaMenuRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load live backend categories and customer-visible products (updates automatically on admin approvals)
+  useEffect(() => {
+    let active = true;
+    const fetchHeaderCatalog = async () => {
+      setIsLoadingProducts(true);
+      try {
+        const [cats, prods] = await Promise.all([api.getCategories(), api.getProducts()]);
+        if (!active) return;
+        if (cats && cats.length > 0) setCatalogCategories(cats);
+        if (Array.isArray(prods)) setCatalogProducts(prods);
+      } finally {
+        if (active) setIsLoadingProducts(false);
+      }
+    };
+    void fetchHeaderCatalog();
+
+    const onRealtimeCatalog = () => {
+      void fetchHeaderCatalog();
+    };
+    window.addEventListener('buildora:realtime:catalog', onRealtimeCatalog);
+    return () => {
+      active = false;
+      window.removeEventListener('buildora:realtime:catalog', onRealtimeCatalog);
+    };
+  }, []);
 
   // Debounced hover handlers for smooth, flicker-free mega menu opening/closing
   const handleDeptMouseEnter = (deptSlug: string) => {
@@ -90,6 +126,8 @@ export const Header: React.FC = () => {
       const isNL = deptSlug === 'new-launches';
       const cats = isNL ? NEW_LAUNCHES_CATEGORIES : getDepartmentCategories(deptSlug);
       setSelectedParentCategorySlug(cats[0]?.slug || 'all');
+      setHoveredChildCategorySlug(null);
+      setHoveredChildMasterSlug(null);
     }
   };
 
@@ -99,12 +137,16 @@ export const Header: React.FC = () => {
     }
     hoverTimeoutRef.current = setTimeout(() => {
       setActiveDepartment(null);
-    }, 200);
+      setHoveredChildCategorySlug(null);
+      setHoveredChildMasterSlug(null);
+    }, 180);
   };
 
   // Close menus on route change, outside click, or escape
   useEffect(() => {
     setActiveDepartment(null);
+    setHoveredChildCategorySlug(null);
+    setHoveredChildMasterSlug(null);
     setIsMobileMenuOpen(false);
     setMobileExpandedDept(null);
     setMobileExpandedCat(null);
@@ -115,15 +157,20 @@ export const Header: React.FC = () => {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (megaMenuRef.current && !megaMenuRef.current.contains(event.target as Node)) {
+      if (headerContainerRef.current && !headerContainerRef.current.contains(event.target as Node)) {
         setActiveDepartment(null);
+        setHoveredChildCategorySlug(null);
+        setHoveredChildMasterSlug(null);
         setIsAllCategoriesOpen(false);
+        setIsMobileMenuOpen(false);
       }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setActiveDepartment(null);
+        setHoveredChildCategorySlug(null);
+        setHoveredChildMasterSlug(null);
         setIsAllCategoriesOpen(false);
         setIsMobileMenuOpen(false);
       }
@@ -151,7 +198,8 @@ export const Header: React.FC = () => {
   const getDepartmentCategories = (deptSlug: string) => {
     const dept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === deptSlug);
     if (!dept) return [];
-    return MASTER_CATEGORIES.filter((c) => dept.categorySlugs.includes(c.slug));
+    const source = catalogCategories.length > 0 ? catalogCategories : MASTER_CATEGORIES;
+    return source.filter((c) => dept.categorySlugs.includes(c.slug));
   };
 
   const getLocationDisplaySubtitle = () => {
@@ -196,7 +244,7 @@ export const Header: React.FC = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm transition-all duration-200">
+      <header ref={headerContainerRef} className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm transition-all duration-200">
         {/* MAIN HEADER ROW */}
         <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3">
           {/* A. DESKTOP LAYOUT (lg & above)
@@ -529,6 +577,9 @@ export const Header: React.FC = () => {
                   >
                     <button
                       type="button"
+                      aria-expanded={isOpen}
+                      aria-haspopup="true"
+                      onFocus={() => handleDeptMouseEnter(dept.slug)}
                       onClick={() => {
                         if (activeDepartment === dept.slug) {
                           setActiveDepartment(null);
@@ -536,6 +587,8 @@ export const Header: React.FC = () => {
                           setActiveDepartment(dept.slug);
                           const cats = getDepartmentCategories(dept.slug);
                           setSelectedParentCategorySlug(cats[0]?.slug || 'all');
+                          setHoveredChildCategorySlug(null);
+                          setHoveredChildMasterSlug(null);
                         }
                       }}
                       className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs ${
@@ -565,12 +618,17 @@ export const Header: React.FC = () => {
               >
                 <button
                   type="button"
+                  aria-expanded={activeDepartment === 'new-launches'}
+                  aria-haspopup="true"
+                  onFocus={() => handleDeptMouseEnter('new-launches')}
                   onClick={() => {
                     if (activeDepartment === 'new-launches') {
                       setActiveDepartment(null);
                     } else {
                       setActiveDepartment('new-launches');
                       setSelectedParentCategorySlug(NEW_LAUNCHES_CATEGORIES[0]?.slug || 'all');
+                      setHoveredChildCategorySlug(null);
+                      setHoveredChildMasterSlug(null);
                     }
                   }}
                   className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
@@ -627,48 +685,123 @@ export const Header: React.FC = () => {
               ? NEW_LAUNCHES_CATEGORIES
               : getDepartmentCategories(activeDept!.slug);
 
+            const categorySource = catalogCategories.length > 0 ? catalogCategories : MASTER_CATEGORIES;
+
             // Currently active category in mega menu
             const currentCat = menuCategories.find((c) => c.slug === selectedParentCategorySlug);
 
-            // Subcategories for right panel
-            let subcategories: { id: string; name: string; slug: string; targetMasterSlug: string }[] = [];
+            // Child Categories for middle panel
+            type MenuChildCat = {
+              id: string;
+              name: string;
+              slug: string;
+              targetMasterSlug: string;
+              targetMasterName: string;
+              productCount?: number;
+            };
+
+            let subcategories: MenuChildCat[] = [];
             if (currentCat) {
               if (isNewLaunches) {
                 const nlCat = currentCat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
-                const masterCat = MASTER_CATEGORIES.find((m) => m.slug === nlCat.masterCategorySlug);
-                subcategories = (masterCat?.subcategories || []).map((sub) => ({
-                  ...sub,
-                  targetMasterSlug: masterCat?.slug || nlCat.masterCategorySlug || nlCat.slug
+                const masterCat = categorySource.find((m) => m.slug === nlCat.masterCategorySlug);
+                subcategories = (masterCat?.subcategories || []).map((sub: any) => ({
+                  id: sub.id,
+                  name: sub.name,
+                  slug: sub.slug,
+                  targetMasterSlug: masterCat?.slug || nlCat.masterCategorySlug || nlCat.slug,
+                  targetMasterName: masterCat?.name || nlCat.name,
+                  productCount: sub.productCount ?? sub.itemCount,
                 }));
               } else {
-                const deptCat = currentCat as (typeof MASTER_CATEGORIES)[0];
-                subcategories = (deptCat.subcategories || []).map((sub) => ({
-                  ...sub,
-                  targetMasterSlug: deptCat.slug
+                const deptCat = currentCat as Category;
+                subcategories = (deptCat.subcategories || []).map((sub: any) => ({
+                  id: sub.id,
+                  name: sub.name,
+                  slug: sub.slug,
+                  targetMasterSlug: deptCat.slug,
+                  targetMasterName: deptCat.name,
+                  productCount: sub.productCount ?? sub.itemCount,
                 }));
               }
             }
 
-            // All subcategories when 'all' is selected
-            const allSubcategories = menuCategories.flatMap((cat) => {
+            // All child categories when 'all' is hovered
+            const allSubcategories: MenuChildCat[] = menuCategories.flatMap((cat) => {
               if (isNewLaunches) {
                 const nlCat = cat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
-                const masterCat = MASTER_CATEGORIES.find((m) => m.slug === nlCat.masterCategorySlug);
-                return (masterCat?.subcategories || []).map((sub) => ({
-                  ...sub,
-                  targetMasterSlug: masterCat?.slug || nlCat.masterCategorySlug || nlCat.slug
+                const masterCat = categorySource.find((m) => m.slug === nlCat.masterCategorySlug);
+                return (masterCat?.subcategories || []).map((sub: any) => ({
+                  id: sub.id,
+                  name: sub.name,
+                  slug: sub.slug,
+                  targetMasterSlug: masterCat?.slug || nlCat.masterCategorySlug || nlCat.slug,
+                  targetMasterName: masterCat?.name || nlCat.name,
+                  productCount: sub.productCount ?? sub.itemCount,
                 }));
               } else {
-                const deptCat = cat as (typeof MASTER_CATEGORIES)[0];
-                return (deptCat.subcategories || []).map((sub) => ({
-                  ...sub,
-                  targetMasterSlug: deptCat.slug
+                const deptCat = cat as Category;
+                return (deptCat.subcategories || []).map((sub: any) => ({
+                  id: sub.id,
+                  name: sub.name,
+                  slug: sub.slug,
+                  targetMasterSlug: deptCat.slug,
+                  targetMasterName: deptCat.name,
+                  productCount: sub.productCount ?? sub.itemCount,
                 }));
               }
             });
 
             const displayedSubcategories =
               selectedParentCategorySlug === 'all' ? allSubcategories : subcategories;
+
+            const activeChildCat =
+              displayedSubcategories.find(
+                (s) =>
+                  s.slug === hoveredChildCategorySlug &&
+                  (!hoveredChildMasterSlug || s.targetMasterSlug === hoveredChildMasterSlug)
+              ) || null;
+
+            const currentMainSlug =
+              selectedParentCategorySlug !== 'all'
+                ? isNewLaunches
+                  ? (currentCat as any)?.masterCategorySlug || currentCat?.slug
+                  : currentCat?.slug
+                : undefined;
+
+            const matchingPanelProducts = catalogProducts.filter((p) => {
+              if (activeChildCat) {
+                const matchMain =
+                  p.categorySlug === activeChildCat.targetMasterSlug ||
+                  (p as any).categoryId === activeChildCat.targetMasterSlug;
+                const matchSub =
+                  p.subcategorySlug === activeChildCat.slug ||
+                  p.subcategory?.toLowerCase() === activeChildCat.name.toLowerCase() ||
+                  (p as any).subcategoryId === activeChildCat.id;
+                return matchMain && matchSub;
+              }
+              if (currentMainSlug) {
+                return p.categorySlug === currentMainSlug;
+              }
+              const deptSlugs = activeDept?.categorySlugs || [];
+              return deptSlugs.length > 0 ? deptSlugs.includes(p.categorySlug) : true;
+            });
+
+            const previewProducts = matchingPanelProducts.slice(0, 6);
+            const panelHeading = activeChildCat
+              ? activeChildCat.name
+              : currentCat
+              ? `Featured in ${currentCat.name}`
+              : isNewLaunches
+              ? 'Featured New Launches'
+              : `Top in ${activeDept?.name}`;
+            const panelViewAllUrl = activeChildCat
+              ? `/categories/${activeChildCat.targetMasterSlug}/${activeChildCat.slug}`
+              : currentMainSlug
+              ? `/categories/${currentMainSlug}`
+              : isNewLaunches
+              ? '/new-launches'
+              : '/products';
 
             return (
               <div
@@ -681,23 +814,32 @@ export const Header: React.FC = () => {
                 }}
                 onMouseLeave={handleDeptMouseLeave}
               >
-                <div className="w-full max-w-[1240px] xl:max-w-[1360px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in-0 slide-in-from-top-1 duration-150">
-                  <div className="flex min-h-[400px] max-h-[540px]">
-                    {/* LEFT PANEL: MAIN CATEGORIES */}
-                    <div className="w-[280px] sm:w-[320px] flex-shrink-0 border-r border-slate-100 bg-white p-5 overflow-y-auto no-scrollbar">
+                <div className="w-full max-w-[1320px] xl:max-w-[1440px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden transition-all duration-150 animate-in fade-in-0 slide-in-from-top-1">
+                  <div className="flex min-h-[420px] max-h-[540px]">
+                    {/* PANEL 1: MAIN CATEGORIES */}
+                    <div className="w-[240px] sm:w-[270px] flex-shrink-0 border-r border-slate-100 bg-white p-4 sm:p-5 overflow-y-auto no-scrollbar">
                       <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3 px-3">
                         MAIN CATEGORIES
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         {/* ALL Category Item */}
                         <button
                           type="button"
-                          onMouseEnter={() => setSelectedParentCategorySlug('all')}
+                          onMouseEnter={() => {
+                            setSelectedParentCategorySlug('all');
+                            setHoveredChildCategorySlug(null);
+                            setHoveredChildMasterSlug(null);
+                          }}
+                          onFocus={() => {
+                            setSelectedParentCategorySlug('all');
+                            setHoveredChildCategorySlug(null);
+                            setHoveredChildMasterSlug(null);
+                          }}
                           onClick={() => {
                             setActiveDepartment(null);
                             navigate(isNewLaunches ? '/new-launches' : '/products');
                           }}
-                          className={`w-full group flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                          className={`w-full group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
                             selectedParentCategorySlug === 'all'
                               ? 'bg-slate-900 text-white font-black shadow-xs'
                               : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
@@ -713,7 +855,7 @@ export const Header: React.FC = () => {
                           />
                         </button>
 
-                        {/* Category Items */}
+                        {/* Main Category Items */}
                         {menuCategories.map((cat) => {
                           const isSelected = selectedParentCategorySlug === cat.slug;
                           const targetUrl = isNewLaunches
@@ -724,14 +866,26 @@ export const Header: React.FC = () => {
                             <Link
                               key={cat.id}
                               to={targetUrl}
-                              onClick={() => setActiveDepartment(null)}
-                              onMouseEnter={() => setSelectedParentCategorySlug(cat.slug)}
-                              className={`group flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                              onClick={() => {
+                                setActiveDepartment(null);
+                                setHoveredChildCategorySlug(null);
+                              }}
+                              onMouseEnter={() => {
+                                setSelectedParentCategorySlug(cat.slug);
+                                setHoveredChildCategorySlug(null);
+                                setHoveredChildMasterSlug(null);
+                              }}
+                              onFocus={() => {
+                                setSelectedParentCategorySlug(cat.slug);
+                                setHoveredChildCategorySlug(null);
+                                setHoveredChildMasterSlug(null);
+                              }}
+                              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                                 isSelected
                                   ? 'bg-slate-900 text-white font-black shadow-xs'
                                   : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
                               }`}
-                              title={`View ${cat.name}`}
+                              title={`View all ${cat.name}`}
                             >
                               <span className="truncate flex-1 min-w-0">{cat.name}</span>
                               <ChevronRight
@@ -747,33 +901,176 @@ export const Header: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* RIGHT PANEL: ALL CHILD CATEGORIES */}
-                    <div className="flex-1 bg-white p-6 sm:p-8 overflow-y-auto no-scrollbar flex flex-col">
-                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-4">
-                        ALL CHILD CATEGORIES
+                    {/* PANEL 2: CHILD CATEGORIES FOR ACTIVE MAIN CATEGORY */}
+                    <div className="w-[270px] sm:w-[300px] flex-shrink-0 border-r border-slate-100 bg-slate-50/40 p-4 sm:p-5 overflow-y-auto no-scrollbar flex flex-col">
+                      <div className="flex items-center justify-between gap-2 mb-3 px-1">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">
+                          {currentCat ? `${currentCat.name} → Subcategories` : 'CHILD CATEGORIES'}
+                        </span>
                       </div>
 
                       {displayedSubcategories.length > 0 ? (
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                        <div className="space-y-1">
                           {displayedSubcategories.map((sub) => {
                             const subUrl = `/categories/${sub.targetMasterSlug}/${sub.slug}`;
+                            const isChildHovered =
+                              hoveredChildCategorySlug === sub.slug &&
+                              (!hoveredChildMasterSlug || hoveredChildMasterSlug === sub.targetMasterSlug);
 
                             return (
                               <Link
                                 key={`${sub.targetMasterSlug}-${sub.id}`}
                                 to={subUrl}
-                                onClick={() => setActiveDepartment(null)}
-                                className="group flex items-center justify-between p-3.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-brand-blue-900 bg-slate-50/70 hover:bg-brand-blue-50/60 border border-slate-100/90 hover:border-brand-blue-200/70 transition-all shadow-2xs hover:shadow-xs"
+                                onClick={() => {
+                                  setActiveDepartment(null);
+                                  setHoveredChildCategorySlug(null);
+                                }}
+                                onMouseEnter={() => {
+                                  setHoveredChildCategorySlug(sub.slug);
+                                  setHoveredChildMasterSlug(sub.targetMasterSlug);
+                                }}
+                                onFocus={() => {
+                                  setHoveredChildCategorySlug(sub.slug);
+                                  setHoveredChildMasterSlug(sub.targetMasterSlug);
+                                }}
+                                className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                                  isChildHovered
+                                    ? 'bg-brand-blue-900 text-white font-bold shadow-xs'
+                                    : 'text-slate-700 hover:text-brand-blue-900 hover:bg-white border border-transparent hover:border-slate-200/80'
+                                }`}
                               >
-                                <span className="truncate group-hover:font-bold">{sub.name}</span>
-                                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-blue-900 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                                <div className="min-w-0 flex-1 pr-2">
+                                  <div className="truncate">{sub.name}</div>
+                                  {selectedParentCategorySlug === 'all' && (
+                                    <div
+                                      className={`text-[10px] truncate ${
+                                        isChildHovered ? 'text-blue-200' : 'text-slate-400'
+                                      }`}
+                                    >
+                                      {sub.targetMasterName}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  {typeof sub.productCount === 'number' && (
+                                    <span
+                                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                                        isChildHovered
+                                          ? 'bg-white/20 text-white'
+                                          : 'bg-slate-200/70 text-slate-600'
+                                      }`}
+                                    >
+                                      {sub.productCount}
+                                    </span>
+                                  )}
+                                  <ChevronRight
+                                    className={`w-3.5 h-3.5 transition-all ${
+                                      isChildHovered
+                                        ? 'text-brand-orange-400 translate-x-0.5'
+                                        : 'text-slate-300 group-hover:text-brand-blue-900'
+                                    }`}
+                                  />
+                                </div>
                               </Link>
                             );
                           })}
                         </div>
                       ) : (
-                        <div className="flex-1 min-h-[240px] flex items-center justify-center text-xs font-medium text-slate-400">
-                          No third-level categories configured for Products.
+                        <div className="flex-1 flex items-center justify-center text-xs font-medium text-slate-400 text-center px-3">
+                          No child categories configured.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* PANEL 3: SECONDARY MATCHING PRODUCTS PANEL */}
+                    <div className="flex-1 bg-white p-5 sm:p-6 overflow-y-auto no-scrollbar flex flex-col">
+                      <div className="flex items-center justify-between gap-3 pb-3 mb-4 border-b border-slate-100">
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-brand-orange-600">
+                            {activeChildCat
+                              ? `${activeChildCat.targetMasterName} › ${activeChildCat.name}`
+                              : currentCat
+                              ? currentCat.name
+                              : activeDept?.name || 'Matching Products'}
+                          </div>
+                          <h4 className="text-sm font-black text-slate-900 truncate mt-0.5">
+                            {panelHeading}
+                          </h4>
+                        </div>
+                        <Link
+                          to={panelViewAllUrl}
+                          onClick={() => setActiveDepartment(null)}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-brand-blue-900 hover:text-brand-orange-600 transition-colors flex-shrink-0"
+                        >
+                          <span>View all ({matchingPanelProducts.length})</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </div>
+
+                      {isLoadingProducts && catalogProducts.length === 0 ? (
+                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 animate-pulse">
+                          {Array.from({ length: 6 }).map((_, idx) => (
+                            <div key={idx} className="h-24 rounded-xl bg-slate-100" />
+                          ))}
+                        </div>
+                      ) : previewProducts.length > 0 ? (
+                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
+                          {previewProducts.map((prod) => (
+                            <Link
+                              key={prod.id}
+                              to={`/products/${prod.slug}`}
+                              onClick={() => {
+                                setActiveDepartment(null);
+                                setHoveredChildCategorySlug(null);
+                              }}
+                              className="group flex items-start gap-3 p-3 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-brand-blue-200 hover:shadow-md transition-all"
+                            >
+                              <div className="w-14 h-14 rounded-xl bg-white border border-slate-100 overflow-hidden flex-shrink-0">
+                                {prod.images?.[0] ? (
+                                  <img
+                                    src={prod.images[0]}
+                                    alt={prod.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">
+                                    SKU
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase truncate">
+                                  {prod.brand}
+                                </div>
+                                <div className="text-xs font-bold text-slate-800 group-hover:text-brand-blue-900 line-clamp-2 leading-snug mt-0.5">
+                                  {prod.name}
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  <span className="text-xs font-black text-slate-900">
+                                    ₹{Number(prod.price || 0).toLocaleString('en-IN')}
+                                  </span>
+                                  {prod.mrp > prod.price && (
+                                    <span className="text-[10px] text-slate-400 line-through">
+                                      ₹{Number(prod.mrp).toLocaleString('en-IN')}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex-1 min-h-[220px] flex flex-col items-center justify-center text-center px-4">
+                          <p className="text-xs font-semibold text-slate-500">
+                            No approved products available yet in this category.
+                          </p>
+                          <Link
+                            to={panelViewAllUrl}
+                            onClick={() => setActiveDepartment(null)}
+                            className="mt-2 text-xs font-bold text-brand-blue-900 hover:underline"
+                          >
+                            Browse category page →
+                          </Link>
                         </div>
                       )}
                     </div>

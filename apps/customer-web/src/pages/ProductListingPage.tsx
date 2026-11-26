@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { ChevronRight, RotateCcw, PackageOpen, Search } from 'lucide-react';
+import { ChevronRight, RotateCcw, PackageOpen } from 'lucide-react';
 import {
   MASTER_CATEGORIES,
-  SEED_PRODUCTS,
   getAvailableFiltersForCatalog,
   applyCategoryFilters,
   ActiveCategoryFilters
@@ -16,59 +15,122 @@ import {
   ActiveFilterChips
 } from '../components/catalog';
 
+function parseCatalogUrlFilters(searchParams: URLSearchParams): ActiveCategoryFilters {
+  const categories = (searchParams.get('category') || '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const subcategories = (searchParams.get('sub') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const brands = (searchParams.get('brand') || '')
+    .split(',')
+    .map((b) => b.trim())
+    .filter(Boolean);
+  const inStockOnly = searchParams.get('inStock') === 'true';
+  const asapOnly = searchParams.get('asap') === 'true';
+  const minPrice = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : undefined;
+  const maxPrice = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : undefined;
+  const sortBy = searchParams.get('sort') || 'relevance';
+  const searchQuery = searchParams.get('search') || '';
+
+  let specifications: Record<string, string[]> = {};
+  const specsParam = searchParams.get('specs');
+  if (specsParam) {
+    try {
+      const parsed = JSON.parse(specsParam);
+      if (parsed && typeof parsed === 'object') {
+        specifications = parsed;
+      }
+    } catch {
+      specifications = {};
+    }
+  }
+
+  return {
+    categories,
+    subcategories,
+    brands,
+    inStockOnly,
+    asapOnly,
+    minPrice: Number.isFinite(minPrice) ? minPrice : undefined,
+    maxPrice: Number.isFinite(maxPrice) ? maxPrice : undefined,
+    specifications,
+    sortBy,
+    searchQuery,
+  };
+}
+
 export const ProductListingPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // URL query params
-  const initialCategory = searchParams.get('category') || '';
-  const initialBrand = searchParams.get('brand') || '';
-  const initialSearch = searchParams.get('search') || '';
-
   // Products and Category list state
-  const [products, setProducts] = useState<Product[]>(SEED_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>(MASTER_CATEGORIES);
+  const [loading, setLoading] = useState(true);
 
-  // Active filter state
-  const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>({
-    categories: initialCategory
-      ? [
-          MASTER_CATEGORIES.find((c) => c.slug === initialCategory)?.name || initialCategory
-        ]
-      : [],
-    brands: initialBrand ? [initialBrand] : [],
-    subcategories: [],
-    inStockOnly: false,
-    asapOnly: false,
-    specifications: {},
-    sortBy: 'relevance',
-    searchQuery: initialSearch
-  });
+  const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() =>
+    parseCatalogUrlFilters(searchParams)
+  );
 
-  // Fetch categories from Backend API on mount
+  // Fetch categories & live customer-visible products (updates automatically on admin approvals)
   useEffect(() => {
-    api.getCategories().then((c) => {
-      if (c && c.length) setCategories(c);
-    });
-    api.getProducts().then((p) => {
-      if (p && p.length) setProducts(p);
-    });
+    let active = true;
+    const loadCatalog = async () => {
+      setLoading(true);
+      try {
+        const [cats, prods] = await Promise.all([api.getCategories(), api.getProducts()]);
+        if (!active) return;
+        if (cats && cats.length) setCategories(cats);
+        setProducts(Array.isArray(prods) ? prods : []);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadCatalog();
+
+    const onRealtime = () => {
+      void loadCatalog();
+    };
+    window.addEventListener('buildora:realtime:catalog', onRealtime);
+    return () => {
+      active = false;
+      window.removeEventListener('buildora:realtime:catalog', onRealtime);
+    };
   }, []);
 
-  // Synchronize when URL changes
+  // Synchronize URL changes (initial load + browser Back/Forward) into filter state
   useEffect(() => {
-    const urlCat = searchParams.get('category');
-    const urlBrand = searchParams.get('brand');
-    const urlSearch = searchParams.get('search');
+    setActiveFilters(parseCatalogUrlFilters(searchParams));
+  }, [searchParams]);
 
-    setActiveFilters((prev) => ({
-      ...prev,
-      categories: urlCat
-        ? [categories.find((c) => c.slug === urlCat)?.name || urlCat]
-        : prev.categories,
-      brands: urlBrand ? [urlBrand] : prev.brands,
-      searchQuery: urlSearch || prev.searchQuery
-    }));
-  }, [searchParams, categories]);
+  const commitFiltersToUrl = useCallback(
+    (next: ActiveCategoryFilters) => {
+      setActiveFilters(next);
+      const params = new URLSearchParams();
+      if (next.categories && next.categories.length > 0) {
+        params.set('category', next.categories.join(','));
+      }
+      if (next.subcategories && next.subcategories.length > 0) {
+        params.set('sub', next.subcategories.join(','));
+      }
+      if (next.brands && next.brands.length > 0) {
+        params.set('brand', next.brands.join(','));
+      }
+      if (next.inStockOnly) params.set('inStock', 'true');
+      if (next.asapOnly) params.set('asap', 'true');
+      if (next.minPrice !== undefined) params.set('minPrice', String(next.minPrice));
+      if (next.maxPrice !== undefined) params.set('maxPrice', String(next.maxPrice));
+      if (next.sortBy && next.sortBy !== 'relevance') params.set('sort', next.sortBy);
+      if (next.searchQuery && next.searchQuery.trim()) params.set('search', next.searchQuery.trim());
+      if (next.specifications && Object.keys(next.specifications).length > 0) {
+        params.set('specs', JSON.stringify(next.specifications));
+      }
+      setSearchParams(params);
+    },
+    [setSearchParams]
+  );
 
   // Identify active category slug if a single category is selected
   const activeCategorySlug = useMemo(() => {
@@ -89,10 +151,14 @@ export const ProductListingPage: React.FC = () => {
     return categories.find((c) => c.slug === activeCategorySlug) || null;
   }, [activeCategorySlug, categories]);
 
-  // Dynamically compute available filters for the catalog (with category-specific specs if category selected)
+  // Dynamically compute available filters for the catalog (with active Main Category's Child Categories when selected)
   const availableFilters = useMemo(() => {
-    return getAvailableFiltersForCatalog(products, activeCategorySlug);
-  }, [products, activeCategorySlug]);
+    return getAvailableFiltersForCatalog(
+      products,
+      activeCategorySlug,
+      activeCategory?.subcategories
+    );
+  }, [products, activeCategorySlug, activeCategory?.subcategories]);
 
   // Filter & Sort Products
   const filteredProducts = useMemo(() => {
@@ -120,7 +186,7 @@ export const ProductListingPage: React.FC = () => {
 
   // Filter change handlers
   const handleResetFilters = () => {
-    setActiveFilters({
+    commitFiltersToUrl({
       categories: [],
       brands: [],
       subcategories: [],
@@ -130,68 +196,66 @@ export const ProductListingPage: React.FC = () => {
       sortBy: activeFilters.sortBy,
       searchQuery: ''
     });
-    setSearchParams({});
   };
 
   const handleRemoveCategory = (cat: string) => {
-    setActiveFilters((prev) => ({
-      ...prev,
-      categories: (prev.categories || []).filter((c) => c !== cat),
-      specifications: {} // clear category-specific specs when category removed
-    }));
+    commitFiltersToUrl({
+      ...activeFilters,
+      categories: (activeFilters.categories || []).filter((c) => c !== cat),
+      subcategories: [],
+      specifications: {}
+    });
   };
 
   const handleRemoveBrand = (brand: string) => {
-    setActiveFilters((prev) => ({
-      ...prev,
-      brands: prev.brands.filter((b) => b !== brand)
-    }));
+    commitFiltersToUrl({
+      ...activeFilters,
+      brands: activeFilters.brands.filter((b) => b !== brand)
+    });
   };
 
   const handleRemoveSubcategory = (sub: string) => {
-    setActiveFilters((prev) => ({
-      ...prev,
-      subcategories: prev.subcategories.filter((s) => s !== sub)
-    }));
+    commitFiltersToUrl({
+      ...activeFilters,
+      subcategories: activeFilters.subcategories.filter((s) => s !== sub)
+    });
   };
 
   const handleRemoveSpec = (dimId: string, val: string) => {
-    setActiveFilters((prev) => {
-      const currentList = prev.specifications[dimId] || [];
-      const updatedList = currentList.filter((v) => v !== val);
-      const updatedSpecs = { ...prev.specifications };
-      if (updatedList.length === 0) {
-        delete updatedSpecs[dimId];
-      } else {
-        updatedSpecs[dimId] = updatedList;
-      }
-      return {
-        ...prev,
-        specifications: updatedSpecs
-      };
+    const currentList = activeFilters.specifications[dimId] || [];
+    const updatedList = currentList.filter((v) => v !== val);
+    const updatedSpecs = { ...activeFilters.specifications };
+    if (updatedList.length === 0) {
+      delete updatedSpecs[dimId];
+    } else {
+      updatedSpecs[dimId] = updatedList;
+    }
+    commitFiltersToUrl({
+      ...activeFilters,
+      specifications: updatedSpecs
     });
   };
 
   const handleRemovePrice = () => {
-    setActiveFilters((prev) => ({
-      ...prev,
+    commitFiltersToUrl({
+      ...activeFilters,
       minPrice: undefined,
       maxPrice: undefined
-    }));
+    });
   };
 
   const handleRemoveInStock = () => {
-    setActiveFilters((prev) => ({
-      ...prev,
+    commitFiltersToUrl({
+      ...activeFilters,
       inStockOnly: false
-    }));
+    });
   };
 
   const handleRemoveAsap = () => {
-    setActiveFilters((prev) => ({
-      ...prev,
+    commitFiltersToUrl({
+      ...activeFilters,
       asapOnly: false
-    }));
+    });
   };
 
   return (
@@ -221,11 +285,11 @@ export const ProductListingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Horizontal Filter Bar (HomeRun-Style) */}
+      {/* 3. Horizontal Filter Bar */}
       <CategoryHorizontalFilterBar
         availableFilters={availableFilters}
         activeFilters={activeFilters}
-        onChangeFilters={setActiveFilters}
+        onChangeFilters={commitFiltersToUrl}
         onResetFilters={handleResetFilters}
         totalResultsCount={filteredProducts.length}
       />
@@ -245,7 +309,13 @@ export const ProductListingPage: React.FC = () => {
       />
 
       {/* 5. Full-Width High-Density Product Grid */}
-      {filteredProducts.length === 0 ? (
+      {loading && products.length === 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 animate-pulse">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={idx} className="h-72 rounded-2xl bg-slate-100" />
+          ))}
+        </div>
+      ) : filteredProducts.length === 0 ? (
         <div className="p-16 bg-white rounded-3xl border border-slate-200 text-center space-y-4 shadow-2xs">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
             <PackageOpen className="w-8 h-8" />

@@ -117,18 +117,24 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
         </button>
       )}
 
-      {/* Subcategory chips */}
-      {activeFilters.subcategories?.map((sub) => (
-        <button
-          key={`sub-${sub}`}
-          onClick={() => onRemoveSubcategory(sub)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue-50 text-brand-blue-900 border border-brand-blue-200 hover:bg-brand-blue-100 transition-colors"
-          title={`Remove subcategory ${sub}`}
-        >
-          <span>Sub: {sub}</span>
-          <X className="w-3.5 h-3.5 text-brand-blue-700" />
-        </button>
-      ))}
+      {/* Subcategory / Child Category chips */}
+      {activeFilters.subcategories?.map((sub) => {
+        const subOpt = availableFilters
+          .find((f) => f.id === 'subcategory')
+          ?.options.find((o) => o.value === sub);
+        const displayLabel = subOpt?.label || sub;
+        return (
+          <button
+            key={`sub-${sub}`}
+            onClick={() => onRemoveSubcategory(sub)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue-50 text-brand-blue-900 border border-brand-blue-200 hover:bg-brand-blue-100 transition-colors cursor-pointer"
+            title={`Remove category ${displayLabel}`}
+          >
+            <span>Category: {displayLabel}</span>
+            <X className="w-3.5 h-3.5 text-brand-blue-700" />
+          </button>
+        );
+      })}
 
       {/* Brand chips */}
       {activeFilters.brands?.map((brand) => (
