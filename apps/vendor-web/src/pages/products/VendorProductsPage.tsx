@@ -226,7 +226,10 @@ export const VendorProductsPage: React.FC = () => {
   }, [products]);
 
   const availableMainCategories = useMemo(
-    () => taxonomyState.mainCategories.length > 0 ? taxonomyState.mainCategories : MAIN_CATEGORIES_SEED,
+    () =>
+      [...(taxonomyState.mainCategories.length > 0 ? taxonomyState.mainCategories : MAIN_CATEGORIES_SEED)]
+        .filter((m) => m.isActive !== false)
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)),
     [taxonomyState.mainCategories]
   );
 
@@ -239,7 +242,9 @@ export const VendorProductsPage: React.FC = () => {
 
   const availableChildCategories = useMemo(() => {
     const source = taxonomyState.childCategories.length > 0 ? taxonomyState.childCategories : CHILD_CATEGORIES_SEED;
-    return source.filter((c) => c.mainCategoryId === selectedMainCatNode?.id);
+    return source
+      .filter((c) => c.mainCategoryId === selectedMainCatNode?.id && c.isActive !== false)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }, [taxonomyState.childCategories, selectedMainCatNode]);
 
   const selectedChildCatNode = useMemo(
@@ -251,7 +256,9 @@ export const VendorProductsPage: React.FC = () => {
 
   const availableProductTypes = useMemo(() => {
     const source = taxonomyState.productTypes.length > 0 ? taxonomyState.productTypes : PRODUCT_TYPES_SEED;
-    return source.filter((pt) => pt.childCategoryId === selectedChildCatNode?.id);
+    return source
+      .filter((pt) => pt.childCategoryId === selectedChildCatNode?.id && pt.isActive !== false)
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }, [taxonomyState.productTypes, selectedChildCatNode]);
 
   const selectedProductTypeNode = useMemo(
@@ -362,11 +369,11 @@ export const VendorProductsPage: React.FC = () => {
     const defaultType =
       taxonomyState.productTypes.find((pt) => pt.childCategoryId === defaultChild?.id) ||
       PRODUCT_TYPES_SEED[0];
-    setMainCategoryId(defaultMain?.id || 'mc-1');
-    setChildCategoryId(defaultChild?.id || 'cat-1');
-    setProductTypeId(defaultType?.id || 'sub-1-1');
-    setCategory(defaultChild?.name || 'Cement & Concrete');
-    setSubCategory(defaultType?.name || 'OPC 53 Grade Cement');
+    setMainCategoryId(defaultMain?.id || '');
+    setChildCategoryId(defaultChild?.id || '');
+    setProductTypeId(defaultType?.id || '');
+    setCategory(defaultChild?.name || '');
+    setSubCategory(defaultType?.name || '');
     setBrand('');
     setUnit('50 Kg Bag');
     setMoq('1');

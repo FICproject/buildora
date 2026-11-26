@@ -110,6 +110,7 @@ export class TaxonomyService implements OnModuleInit {
   public newLaunchCollections: NewLaunchCollection[] = [];
   public migrationRecords: TaxonomyMigrationRecord[] = [];
   public civilMigrationReport: CivilMigrationReport | null = null;
+  public furnitureMigrationReport: CivilMigrationReport | null = null;
   private drafts = new Map<string, TenantCatalogDraft>();
   private publishMeta = new Map<string, CatalogPublishMetadata>();
 
@@ -193,6 +194,7 @@ export class TaxonomyService implements OnModuleInit {
       this.desktopNavigation = this.buildDefaultDesktopNav(tenantId);
     }
     this.reconcileCivilAndInteriorsTaxonomySync(tenantId);
+    this.reconcileFurnitureHardwareTaxonomySync(tenantId);
     this.migrateLegacyCatalogRecords();
   }
 
@@ -386,6 +388,174 @@ export class TaxonomyService implements OnModuleInit {
     return report;
   }
 
+  /**
+   * Idempotently reconciles the exact Furniture & Architectural Hardware 4 Category Groups
+   * (cat-7..cat-10) and their 27 supplied Child Categories (ProductTypeNode records),
+   * reusing existing IDs and preserving 100% of existing products, variants, images & stock.
+   */
+  public reconcileFurnitureHardwareTaxonomySync(tenantId = GLOBAL_TENANT): CivilMigrationReport {
+    const now = new Date().toISOString();
+    const report: CivilMigrationReport = {
+      executedAt: now,
+      idempotentRun: Boolean(this.furnitureMigrationReport),
+      matchedExistingCategories: 0,
+      updatedCategories: 0,
+      createdCategories: 0,
+      matchedSubcategories: 0,
+      createdSubcategories: 0,
+      migratedLegacySubcategories: 0,
+      reassignedExtraCategories: 0,
+      productsPreserved: dbStore.products.length,
+      productsRemapped: 0,
+      filterConfigsSeeded: 0,
+    };
+
+    const seedMain = MAIN_CATEGORIES_SEED.find((m) => m.id === 'mc-2');
+    if (seedMain) {
+      const existingMain = this.mainCategories.find((m) => m.id === 'mc-2' || m.slug === 'furniture-hardware');
+      if (!existingMain) {
+        this.mainCategories.push({ ...seedMain, tenantId, createdAt: now, updatedAt: now });
+      }
+    }
+
+    const seedGroups = CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === 'mc-2');
+    const groupIdSet = new Set(seedGroups.map((c) => c.id));
+
+    // Reassign non-supplied groups (cat-25 Glass Door Hardware, cat-28 Ceiling & Flooring) to mc-5
+    for (const cc of this.childCategories) {
+      if (cc.mainCategoryId === 'mc-2' && !groupIdSet.has(cc.id)) {
+        cc.mainCategoryId = 'mc-5';
+        cc.mainCategorySlug = 'hardware-appliances';
+        cc.updatedAt = now;
+        report.reassignedExtraCategories += 1;
+      }
+    }
+
+    // Reconcile the 4 exact Category Groups under Furniture & Architectural Hardware
+    for (const seedGroup of seedGroups) {
+      const existing = this.childCategories.find(
+        (c) =>
+          c.id === seedGroup.id ||
+          (c.mainCategoryId === 'mc-2' &&
+            (c.slug === seedGroup.slug || c.name.toLowerCase() === seedGroup.name.toLowerCase()))
+      );
+      if (existing) {
+        report.matchedExistingCategories += 1;
+        if (
+          existing.name !== seedGroup.name ||
+          existing.slug !== seedGroup.slug ||
+          existing.sortOrder !== seedGroup.sortOrder ||
+          existing.mainCategoryId !== 'mc-2'
+        ) {
+          existing.name = seedGroup.name;
+          existing.slug = seedGroup.slug;
+          existing.mainCategoryId = 'mc-2';
+          existing.mainCategorySlug = 'furniture-hardware';
+          existing.description = seedGroup.description;
+          existing.sortOrder = seedGroup.sortOrder;
+          existing.isActive = true;
+          existing.updatedAt = now;
+          report.updatedCategories += 1;
+        }
+      } else {
+        this.childCategories.push({ ...seedGroup, tenantId, createdAt: now, updatedAt: now });
+        report.createdCategories += 1;
+      }
+    }
+
+    // Migrate legacy sub-7-*..sub-10-* entries under cat-7..cat-10 and upsert the 27 supplied Child Categories
+    const seedTypes = PRODUCT_TYPES_SEED.filter((pt) => groupIdSet.has(pt.childCategoryId));
+    const seedTypeIdSet = new Set(seedTypes.map((pt) => pt.id));
+
+    for (const pt of [...this.productTypes]) {
+      if (groupIdSet.has(pt.childCategoryId) && !seedTypeIdSet.has(pt.id)) {
+        const mapped = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[pt.slug?.toLowerCase() || ''];
+        if (mapped) {
+          report.migratedLegacySubcategories += 1;
+          this.productTypes = this.productTypes.filter((x) => x.id !== pt.id);
+        }
+      }
+    }
+
+    for (const seedType of seedTypes) {
+      const existing = this.productTypes.find(
+        (pt) =>
+          pt.id === seedType.id ||
+          (pt.childCategoryId === seedType.childCategoryId &&
+            (pt.slug.toLowerCase() === seedType.slug.toLowerCase() ||
+              pt.name.trim().toLowerCase() === seedType.name.trim().toLowerCase()))
+      );
+      if (existing) {
+        report.matchedSubcategories += 1;
+        existing.mainCategoryId = 'mc-2';
+        existing.childCategoryId = seedType.childCategoryId;
+        existing.childCategorySlug = seedType.childCategorySlug;
+        existing.name = seedType.name;
+        existing.slug = seedType.slug;
+        existing.sortOrder = seedType.sortOrder;
+        existing.isActive = true;
+        existing.updatedAt = now;
+      } else {
+        this.productTypes.push({ ...seedType, tenantId, createdAt: now, updatedAt: now });
+        report.createdSubcategories += 1;
+      }
+    }
+
+    // Ensure filter configs exist for cat-7..cat-10 without overwriting customized entries
+    for (const seedCfg of CATEGORY_FILTER_CONFIGS_SEED.filter((fc) => fc.mainCategoryId === 'mc-2')) {
+      const match = this.categoryFilterConfigs.find(
+        (c) =>
+          c.id === seedCfg.id ||
+          (c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
+      );
+      if (!match) {
+        this.categoryFilterConfigs.push({ ...seedCfg, tenantId, createdAt: now, updatedAt: now });
+        report.filterConfigsSeeded += 1;
+      }
+    }
+
+    // Safely upgrade existing products under Furniture & Architectural Hardware groups while preserving all product fields
+    const childById = new Map(this.childCategories.map((c) => [c.id, c]));
+    const ptById = new Map(this.productTypes.map((t) => [t.id, t]));
+    for (const p of dbStore.products as any[]) {
+      const catId = p.childCategoryId || p.categoryId;
+      const rawSubSlug = (p.subcategorySlug || p.productTypeSlug || '').toLowerCase();
+      const aliasSub = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[rawSubSlug];
+
+      if (catId && groupIdSet.has(catId)) {
+        const cc = childById.get(catId);
+        if (cc) {
+          p.mainCategoryId = 'mc-2';
+          p.mainCategorySlug = 'furniture-hardware';
+          p.mainCategoryName = 'Furniture & Architectural Hardware';
+          p.childCategoryId = cc.id;
+          p.childCategorySlug = cc.slug;
+          p.childCategoryName = cc.name;
+          p.categoryId = cc.id;
+          p.categorySlug = cc.slug;
+          p.category = cc.name;
+          report.productsRemapped += 1;
+        }
+        const pt = aliasSub ? ptById.get(aliasSub.productTypeId) : ptById.get(p.productTypeId || p.subcategoryId);
+        if (pt) {
+          p.productTypeId = pt.id;
+          p.productTypeSlug = pt.slug;
+          p.productTypeName = pt.name;
+          p.subcategoryId = pt.id;
+          p.subcategorySlug = pt.slug;
+          p.subcategory = pt.name;
+        }
+      } else if (p.categorySlug === 'glass-door-hardware' || p.categorySlug === 'ceiling-flooring') {
+        p.mainCategoryId = 'mc-5';
+        p.mainCategorySlug = 'hardware-appliances';
+        p.mainCategoryName = 'Hardware & Appliances';
+      }
+    }
+
+    this.furnitureMigrationReport = report;
+    return report;
+  }
+
   private buildDefaultDesktopNav(tenantId = GLOBAL_TENANT): DesktopNavItem[] {
     const now = new Date().toISOString();
     const sortedMains = [...this.mainCategories].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -524,13 +694,14 @@ export class TaxonomyService implements OnModuleInit {
     }
 
     this.reconcileCivilAndInteriorsTaxonomySync(GLOBAL_TENANT);
+    this.reconcileFurnitureHardwareTaxonomySync(GLOBAL_TENANT);
 
-    // Persist reconciled Civil & Interiors taxonomy changes idempotently if MongoDB is connected
+    // Persist reconciled Civil & Furniture taxonomy changes idempotently if MongoDB is connected
     if (platformPersistenceService.isDbConnected()) {
-      for (const c of this.childCategories.filter((x) => ['mc-1', 'mc-2', 'mc-4'].includes(x.mainCategoryId))) {
+      for (const c of this.childCategories.filter((x) => ['mc-1', 'mc-2', 'mc-4', 'mc-5'].includes(x.mainCategoryId))) {
         await platformPersistenceService.upsert(ChildCategoryModel, c);
       }
-      for (const pt of this.productTypes.filter((x) => x.mainCategoryId === 'mc-1')) {
+      for (const pt of this.productTypes.filter((x) => ['mc-1', 'mc-2'].includes(x.mainCategoryId))) {
         await platformPersistenceService.upsert(ProductTypeModel, pt);
       }
       for (const fc of this.categoryFilterConfigs) {
@@ -541,9 +712,10 @@ export class TaxonomyService implements OnModuleInit {
     if (dbSnapshots.length > 0) {
       for (const snap of dbSnapshots) {
         if (snap?.tenantId) {
-          // If an old persisted draft still has pre-migration cement-concrete / legacy slugs, refresh cleanly
+          // If an old persisted draft still has pre-migration cement-concrete / legacy sub-7-1 slugs, refresh cleanly
           const hasLegacyCement = Array.isArray(snap.childCategories) && snap.childCategories.some((c: any) => c.id === 'cat-1' && c.slug === 'cement-concrete');
-          if (!hasLegacyCement) {
+          const hasLegacyFurniture = Array.isArray(snap.productTypes) && snap.productTypes.some((pt: any) => pt.id === 'sub-7-1');
+          if (!hasLegacyCement && !hasLegacyFurniture) {
             if (!Array.isArray(snap.categoryFilterConfigs)) {
               snap.categoryFilterConfigs = this.cloneRecord(this.categoryFilterConfigs);
             }
@@ -2183,6 +2355,94 @@ export class TaxonomyService implements OnModuleInit {
     draft.lastPublishedAt = now;
     await this.persistDraftSnapshot(draft);
     return { id: target.id, deleted: true, reassignedProductsCount };
+  }
+
+  async reorderChildCategories(
+    tenantId: string,
+    orderedIds: string[],
+    options: { saveAsDraft?: boolean } = {}
+  ): Promise<ChildCategory[]> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      throw new BadRequestException('orderedIds array is required.');
+    }
+    const draft = this.getDraftState(cleanTenant);
+    const orderMap = new Map<string, number>();
+    orderedIds.forEach((cid, idx) => orderMap.set(cid, idx + 1));
+    const now = new Date().toISOString();
+
+    for (const cc of draft.childCategories) {
+      const nextOrder = orderMap.get(cc.id);
+      if (nextOrder !== undefined) {
+        cc.sortOrder = nextOrder;
+        cc.updatedAt = now;
+      }
+    }
+    draft.childCategories.sort((a, b) => a.sortOrder - b.sortOrder);
+    draft.draftVersion += 1;
+    draft.lastDraftSavedAt = now;
+
+    if (options.saveAsDraft) {
+      draft.hasUnpublishedChanges = true;
+      await this.persistDraftSnapshot(draft);
+      return this.cloneRecord(draft.childCategories);
+    }
+
+    for (const cc of draft.childCategories) {
+      if (orderMap.has(cc.id)) {
+        this.upsertArrayById(this.childCategories, cc);
+        await platformPersistenceService.upsert(ChildCategoryModel, cc);
+      }
+    }
+    this.syncDbStoreCategories(cleanTenant);
+    draft.publishedVersion += 1;
+    draft.lastPublishedAt = now;
+    await this.persistDraftSnapshot(draft);
+    return this.cloneRecord(draft.childCategories);
+  }
+
+  async reorderProductTypes(
+    tenantId: string,
+    orderedIds: string[],
+    options: { saveAsDraft?: boolean } = {}
+  ): Promise<ProductTypeNode[]> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      throw new BadRequestException('orderedIds array is required.');
+    }
+    const draft = this.getDraftState(cleanTenant);
+    const orderMap = new Map<string, number>();
+    orderedIds.forEach((ptId, idx) => orderMap.set(ptId, idx + 1));
+    const now = new Date().toISOString();
+
+    for (const pt of draft.productTypes) {
+      const nextOrder = orderMap.get(pt.id);
+      if (nextOrder !== undefined) {
+        pt.sortOrder = nextOrder;
+        pt.updatedAt = now;
+      }
+    }
+    draft.productTypes.sort((a, b) => a.sortOrder - b.sortOrder);
+    draft.draftVersion += 1;
+    draft.lastDraftSavedAt = now;
+
+    if (options.saveAsDraft) {
+      draft.hasUnpublishedChanges = true;
+      await this.persistDraftSnapshot(draft);
+      return this.cloneRecord(draft.productTypes);
+    }
+
+    for (const pt of draft.productTypes) {
+      if (orderMap.has(pt.id)) {
+        this.upsertArrayById(this.productTypes, pt);
+        await platformPersistenceService.upsert(ProductTypeModel, pt);
+      }
+    }
+    this.syncDbStoreCategories(cleanTenant);
+    draft.publishedVersion += 1;
+    draft.lastPublishedAt = now;
+    await this.persistDraftSnapshot(draft);
+    return this.cloneRecord(draft.productTypes);
   }
 
   // ==================== NEW LAUNCHES PROMOTIONAL COLLECTIONS ====================

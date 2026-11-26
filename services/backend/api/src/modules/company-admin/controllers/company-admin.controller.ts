@@ -1329,6 +1329,7 @@ export class CompanyAdminController {
         attributes: companyAdminDataService.attributes,
         newLaunchCollections: taxonomyService.getNewLaunchCollections(tenantId, false),
         civilMigrationReport: taxonomyService.civilMigrationReport,
+        furnitureMigrationReport: taxonomyService.furnitureMigrationReport,
         migrationSummary: {
           totalRecords: report.length,
           migrated: report.filter((r) => r.status === 'MIGRATED').length,
@@ -1897,6 +1898,86 @@ export class CompanyAdminController {
     taxonomyService.syncDbStoreCategories(tenantId);
     realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
     return { success: true, data: report };
+  }
+
+  @Post('catalog/reconcile-furniture')
+  reconcileFurnitureTaxonomy(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const report = taxonomyService.reconcileFurnitureHardwareTaxonomySync(tenantId);
+    taxonomyService.syncDbStoreCategories(tenantId);
+    realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: report };
+  }
+
+  @Put('catalog/child-categories/reorder')
+  async reorderChildCategories(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { orderedIds?: string[]; saveAsDraft?: boolean },
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const result = await taxonomyService.reorderChildCategories(
+      tenantId,
+      body?.orderedIds || [],
+      { saveAsDraft: body?.saveAsDraft }
+    );
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: body?.saveAsDraft ? 'CHILD_CATEGORIES_DRAFT_REORDERED' : 'CHILD_CATEGORIES_REORDERED',
+      module: 'Catalog',
+      entityType: 'ChildCategory',
+      entityId: 'reorder',
+      details: `Reordered ${body?.orderedIds?.length || 0} category groups.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { reorderedChildCategories: true }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: result, metadata: taxonomyService.getPublishMetadata(tenantId) };
+  }
+
+  @Put('catalog/product-types/reorder')
+  async reorderProductTypes(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { orderedIds?: string[]; saveAsDraft?: boolean },
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const result = await taxonomyService.reorderProductTypes(
+      tenantId,
+      body?.orderedIds || [],
+      { saveAsDraft: body?.saveAsDraft }
+    );
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: body?.saveAsDraft ? 'PRODUCT_TYPES_DRAFT_REORDERED' : 'PRODUCT_TYPES_REORDERED',
+      module: 'Catalog',
+      entityType: 'ProductTypeNode',
+      entityId: 'reorder',
+      details: `Reordered ${body?.orderedIds?.length || 0} child categories.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    if (body?.saveAsDraft) {
+      realtimeBus.emitToAdmin('taxonomy.draft_saved', { reorderedProductTypes: true }, tenantId);
+    } else {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
+    }
+    return { success: true, data: result, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
   @Post('catalog/product-types')

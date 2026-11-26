@@ -37,6 +37,18 @@ export const LEGACY_PRODUCT_TYPE_SLUG_ALIASES: Record<string, { childId: string;
   'exterior-weatherproof': { childId: 'cat-6', productTypeId: 'sub-civ-pnt-exterior', slug: 'exterior-emulsions' },
   'primers-putty': { childId: 'cat-6', productTypeId: 'sub-civ-pnt-putty', slug: 'putty-primer' },
   'painting-tools': { childId: 'cat-6', productTypeId: 'sub-civ-pnt-tools', slug: 'painting-tools-hardware' },
+  'auto-hinges': { childId: 'cat-7', productTypeId: 'sub-fah-hch-hinges', slug: 'hinges' },
+  'telescopic-channels': { childId: 'cat-7', productTypeId: 'sub-fah-hch-channels', slug: 'drawer-wardrobe-channels' },
+  'cabinet-handles': { childId: 'cat-7', productTypeId: 'sub-fah-hch-handles', slug: 'handles-profiles-drawer-locks' },
+  'wire-baskets': { childId: 'cat-8', productTypeId: 'sub-fah-kit-pullouts', slug: 'pullouts-baskets-wickers' },
+  'tandem-boxes': { childId: 'cat-8', productTypeId: 'sub-fah-kit-tandems', slug: 'tandems-inserts' },
+  'corner-carousels': { childId: 'cat-8', productTypeId: 'sub-fah-kit-magic', slug: 'magic-corner-pantry-units-pulldowns' },
+  'bed-lift-ups': { childId: 'cat-9', productTypeId: 'sub-fah-wbf-hydraulics', slug: 'bed-cabinet-hydraulics' },
+  'sliding-tracks': { childId: 'cat-9', productTypeId: 'sub-fah-wbf-channels', slug: 'drawer-wardrobe-channels' },
+  'wardrobe-rods': { childId: 'cat-9', productTypeId: 'sub-fah-wbf-pullouts', slug: 'wardrobe-pullouts-accessories' },
+  'mortise-locks': { childId: 'cat-10', productTypeId: 'sub-fah-dlh-locks', slug: 'door-hardware-locks' },
+  'cylindrical-locks': { childId: 'cat-10', productTypeId: 'sub-fah-dlh-cylindrical', slug: 'cylindrical-locks' },
+  'door-closers': { childId: 'cat-10', productTypeId: 'sub-fah-dlh-wooden', slug: 'wooden-door-hardware' },
 };
 
 export const MASTER_CATEGORIES = [
@@ -152,11 +164,12 @@ export const MASTER_CATEGORIES = [
     slug: 'hinges-channels-handles',
     icon: 'Cpu',
     image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80',
-    description: 'Soft-close hydraulic auto hinges, telescopic drawer slides, and architectural cabinet handles.',
+    description: 'Drawer & wardrobe channels, handles, profiles, drawer locks, soft-close hinges and skirting hardware.',
     subcategories: [
-      { id: 'sub-7-1', name: 'Soft-Close Auto Hinges (SS 304)', slug: 'auto-hinges', categorySlug: 'hinges-channels-handles' },
-      { id: 'sub-7-2', name: 'Telescopic Drawer Channels', slug: 'telescopic-channels', categorySlug: 'hinges-channels-handles' },
-      { id: 'sub-7-3', name: 'Cabinet Knobs & Pull Handles', slug: 'cabinet-handles', categorySlug: 'hinges-channels-handles' }
+      { id: 'sub-fah-hch-channels', name: 'Drawer & Wardrobe Channels', slug: 'drawer-wardrobe-channels', categorySlug: 'hinges-channels-handles' },
+      { id: 'sub-fah-hch-handles', name: 'Handles, Profiles & Drawer Locks', slug: 'handles-profiles-drawer-locks', categorySlug: 'hinges-channels-handles' },
+      { id: 'sub-fah-hch-hinges', name: 'Hinges', slug: 'hinges', categorySlug: 'hinges-channels-handles' },
+      { id: 'sub-fah-hch-skirting', name: 'Skirting & Hardware', slug: 'skirting-hardware', categorySlug: 'hinges-channels-handles' }
     ]
   },
   {
@@ -165,11 +178,19 @@ export const MASTER_CATEGORIES = [
     slug: 'kitchen-systems-accessories',
     icon: 'Box',
     image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=600&q=80',
-    description: 'Modular SS 304 wire baskets, tandem boxes, corner carousels, and pantry pull-outs.',
+    description: 'Modular kitchen pullouts, tandems, magic corners, pantry units, cabinetry lighting, hinges and accessories.',
     subcategories: [
-      { id: 'sub-8-1', name: 'SS 304 Modular Wire Baskets', slug: 'wire-baskets', categorySlug: 'kitchen-systems-accessories' },
-      { id: 'sub-8-2', name: 'Soft-Close Tandem Drawer Boxes', slug: 'tandem-boxes', categorySlug: 'kitchen-systems-accessories' },
-      { id: 'sub-8-3', name: 'Corner Carousel Units', slug: 'corner-carousels', categorySlug: 'kitchen-systems-accessories' }
+      { id: 'sub-fah-kit-hydraulics', name: 'Bed & Cabinet Hydraulics', slug: 'bed-cabinet-hydraulics', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-channels', name: 'Drawer & Wardrobe Channels', slug: 'drawer-wardrobe-channels', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-lighting', name: 'Furniture & Cabinetry Lighting', slug: 'furniture-cabinetry-lighting', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-handles', name: 'Handles, Profiles & Drawer Locks', slug: 'handles-profiles-drawer-locks', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-hinges', name: 'Hinges', slug: 'hinges', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-magic', name: 'Magic Corner, Pantry Units, Pulldowns', slug: 'magic-corner-pantry-units-pulldowns', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-pullouts', name: 'Pullouts, Baskets, Wickers', slug: 'pullouts-baskets-wickers', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-skirting', name: 'Skirting & Hardware', slug: 'skirting-hardware', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-strip', name: 'Strip Lights & Profiles', slug: 'strip-lights-profiles', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-tandems', name: 'Tandems & Inserts', slug: 'tandems-inserts', categorySlug: 'kitchen-systems-accessories' },
+      { id: 'sub-fah-kit-bins', name: 'Waste Bins & Other Accessories', slug: 'waste-bins-other-accessories', categorySlug: 'kitchen-systems-accessories' }
     ]
   },
   {
@@ -178,11 +199,15 @@ export const MASTER_CATEGORIES = [
     slug: 'wardrobe-bed-fittings',
     icon: 'Shield',
     image: 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=600&q=80',
-    description: 'Sliding wardrobe systems, hydraulic bed lifters, cloth hanging rods, and tie racks.',
+    description: 'Bed & cabinet hydraulics, sliding wardrobe channels, grills, strip lights and wardrobe pullouts.',
     subcategories: [
-      { id: 'sub-9-1', name: 'Heavy Duty Bed Lift-Up Mechanisms', slug: 'bed-lift-ups', categorySlug: 'wardrobe-bed-fittings' },
-      { id: 'sub-9-2', name: 'Sliding Wardrobe Track Systems', slug: 'sliding-tracks', categorySlug: 'wardrobe-bed-fittings' },
-      { id: 'sub-9-3', name: 'Wardrobe Organizers & Rods', slug: 'wardrobe-rods', categorySlug: 'wardrobe-bed-fittings' }
+      { id: 'sub-fah-wbf-hydraulics', name: 'Bed & Cabinet Hydraulics', slug: 'bed-cabinet-hydraulics', categorySlug: 'wardrobe-bed-fittings' },
+      { id: 'sub-fah-wbf-channels', name: 'Drawer & Wardrobe Channels', slug: 'drawer-wardrobe-channels', categorySlug: 'wardrobe-bed-fittings' },
+      { id: 'sub-fah-wbf-lighting', name: 'Furniture & Cabinetry Lighting', slug: 'furniture-cabinetry-lighting', categorySlug: 'wardrobe-bed-fittings' },
+      { id: 'sub-fah-wbf-grills', name: 'Grills & Accessories', slug: 'grills-accessories', categorySlug: 'wardrobe-bed-fittings' },
+      { id: 'sub-fah-wbf-handles', name: 'Handles, Profiles & Drawer Locks', slug: 'handles-profiles-drawer-locks', categorySlug: 'wardrobe-bed-fittings' },
+      { id: 'sub-fah-wbf-strip', name: 'Strip Lights & Profiles', slug: 'strip-lights-profiles', categorySlug: 'wardrobe-bed-fittings' },
+      { id: 'sub-fah-wbf-pullouts', name: 'Wardrobe Pullouts & Accessories', slug: 'wardrobe-pullouts-accessories', categorySlug: 'wardrobe-bed-fittings' }
     ]
   },
   {
@@ -191,11 +216,13 @@ export const MASTER_CATEGORIES = [
     slug: 'door-locks-hardware',
     icon: 'Key',
     image: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&w=600&q=80',
-    description: 'Mortise lock handles, computerized cylinder door locks, tower bolts, and hydraulic door closers.',
+    description: 'Cylindrical locks, mechanical locks, door hardware, handles, profiles and wooden door fittings.',
     subcategories: [
-      { id: 'sub-10-1', name: 'Main Door Mortise Handle Sets', slug: 'mortise-locks', categorySlug: 'door-locks-hardware' },
-      { id: 'sub-10-2', name: 'Computerized Cylindrical Locks', slug: 'cylindrical-locks', categorySlug: 'door-locks-hardware' },
-      { id: 'sub-10-3', name: 'Hydraulic Overhead Door Closers', slug: 'door-closers', categorySlug: 'door-locks-hardware' }
+      { id: 'sub-fah-dlh-cylindrical', name: 'Cylindrical Locks', slug: 'cylindrical-locks', categorySlug: 'door-locks-hardware' },
+      { id: 'sub-fah-dlh-locks', name: 'Door Hardware & Locks', slug: 'door-hardware-locks', categorySlug: 'door-locks-hardware' },
+      { id: 'sub-fah-dlh-handles', name: 'Handles, Profiles & Drawer Locks', slug: 'handles-profiles-drawer-locks', categorySlug: 'door-locks-hardware' },
+      { id: 'sub-fah-dlh-mechanical', name: 'Mechanical Locks', slug: 'mechanical-locks', categorySlug: 'door-locks-hardware' },
+      { id: 'sub-fah-dlh-wooden', name: 'Wooden Door Hardware', slug: 'wooden-door-hardware', categorySlug: 'door-locks-hardware' }
     ]
   },
   {
@@ -450,14 +477,12 @@ export const CONSTRUCTION_DEPARTMENTS = [
     name: 'Furniture & Architectural Hardware',
     slug: 'furniture-hardware',
     icon: 'Layers',
-    description: 'Concealed auto-hinges, telescopic channels, handles, mortise locks, sliding systems and ceiling & flooring.',
+    description: 'Hinges, channels, handles, kitchen systems, wardrobe & bed fittings, and door locks & hardware.',
     categorySlugs: [
       'hinges-channels-handles',
       'kitchen-systems-accessories',
       'wardrobe-bed-fittings',
-      'door-locks-hardware',
-      'glass-door-hardware',
-      'ceiling-flooring'
+      'door-locks-hardware'
     ]
   },
   {
@@ -494,13 +519,15 @@ export const CONSTRUCTION_DEPARTMENTS = [
     name: 'Hardware & Appliances',
     slug: 'hardware-appliances',
     icon: 'Wrench',
-    description: 'Rotary hammer drills, angle grinders, site safety PPE, inverters, geysers and welding electrodes.',
+    description: 'Rotary hammer drills, angle grinders, glass door hardware, ceiling & flooring, site safety PPE, inverters and welding electrodes.',
     categorySlugs: [
       'power-tools-accessories',
       'general-hardware-tools',
       'home-appliances-power-backup',
       'safety-workwear',
-      'welding-consumables'
+      'welding-consumables',
+      'glass-door-hardware',
+      'ceiling-flooring'
     ]
   }
 ];

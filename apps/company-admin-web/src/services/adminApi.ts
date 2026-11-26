@@ -281,6 +281,16 @@ export const adminApi = {
       method: 'DELETE',
     });
   },
+  reorderChildCategories: (orderedIds: string[], saveAsDraft = false) =>
+    rawRequest<any>('/company-admin/catalog/child-categories/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ orderedIds, saveAsDraft }),
+    }),
+  reorderProductTypes: (orderedIds: string[], saveAsDraft = false) =>
+    rawRequest<any>('/company-admin/catalog/product-types/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ orderedIds, saveAsDraft }),
+    }),
   createNewLaunchCollection: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/new-launches', {
       method: 'POST',

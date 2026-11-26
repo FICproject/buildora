@@ -97,6 +97,9 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
   const [previewHoveredMainSlug, setPreviewHoveredMainSlug] = useState<string | null>(null);
   const [previewHoveredChildSlug, setPreviewHoveredChildSlug] = useState<string | null>(null);
   const [draggedNavId, setDraggedNavId] = useState<string | null>(null);
+  const [draggedChildId, setDraggedChildId] = useState<string | null>(null);
+  const [draggedTypeId, setDraggedTypeId] = useState<string | null>(null);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Record<string, boolean>>({});
   const [publishing, setPublishing] = useState(false);
 
   // Desktop Navigation & Product Type modals
@@ -366,6 +369,54 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
       await adminApi.reorderDesktopNav(orderedIds, workInDraftMode);
       pushToast({
         title: workInDraftMode ? 'Drag & Drop Order Saved to Draft' : 'Desktop Navigation Published',
+      });
+      await loadTaxonomy();
+    } catch (err: any) {
+      pushToast({ title: 'Reorder Failed', message: err.message, variant: 'error' });
+    }
+  };
+
+  const handleDropChildCategory = async (targetChildId: string, mainCategoryId: string) => {
+    if (!draggedChildId || draggedChildId === targetChildId) return;
+    const siblingList = [...taxonomy.childCategories]
+      .filter((c) => c.mainCategoryId === mainCategoryId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const fromIdx = siblingList.findIndex((c) => c.id === draggedChildId);
+    const toIdx = siblingList.findIndex((c) => c.id === targetChildId);
+    setDraggedChildId(null);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = [...siblingList];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    const orderedIds = next.map((c) => c.id);
+    try {
+      await adminApi.reorderChildCategories(orderedIds, workInDraftMode);
+      pushToast({
+        title: workInDraftMode ? 'Category Group Order Saved to Draft' : 'Category Group Order Published',
+      });
+      await loadTaxonomy();
+    } catch (err: any) {
+      pushToast({ title: 'Reorder Failed', message: err.message, variant: 'error' });
+    }
+  };
+
+  const handleDropProductType = async (targetTypeId: string, childCategoryId: string) => {
+    if (!draggedTypeId || draggedTypeId === targetTypeId) return;
+    const siblingList = [...taxonomy.productTypes]
+      .filter((pt) => pt.childCategoryId === childCategoryId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const fromIdx = siblingList.findIndex((pt) => pt.id === draggedTypeId);
+    const toIdx = siblingList.findIndex((pt) => pt.id === targetTypeId);
+    setDraggedTypeId(null);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = [...siblingList];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    const orderedIds = next.map((pt) => pt.id);
+    try {
+      await adminApi.reorderProductTypes(orderedIds, workInDraftMode);
+      pushToast({
+        title: workInDraftMode ? 'Child Category Order Saved to Draft' : 'Child Category Order Published',
       });
       await loadTaxonomy();
     } catch (err: any) {
@@ -1217,96 +1268,158 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                             {children.length === 0 ? (
                               <p className="text-[#8E8777] italic py-1">No matching child categories under this Main Category.</p>
                             ) : (
-                              children.map((cc) => (
-                                <div
-                                  key={cc.id}
-                                  className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg hover:bg-[#FAF7F4] border border-transparent hover:border-[#E5DCD3]"
-                                >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <span className="text-[#8E8777] font-mono">└──</span>
-                                    {cc.image ? (
-                                      <img src={cc.image} alt={cc.name} className="w-7 h-7 rounded object-cover border border-[#E5DCD3]" />
-                                    ) : null}
-                                    <div className="min-w-0">
-                                      <p className="font-semibold text-[#5E5946] truncate">
-                                        #{cc.sortOrder} {cc.name}{' '}
-                                        <span className="font-mono text-[10px] text-[#8E8777]">/{cc.slug}</span>
-                                      </p>
-                                      <p className="text-[11px] text-[#6E6859]">
-                                        {cc.productCount ?? 0} products • {cc.fieldCount ?? 0} fields
-                                      </p>
+                              children.map((cc) => {
+                                const childSubItems = taxonomy.productTypes
+                                  .filter((pt) => pt.childCategoryId === cc.id)
+                                  .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+                                const isExpanded = Boolean(expandedGroupIds[cc.id]);
+                                return (
+                                  <div
+                                    key={cc.id}
+                                    draggable
+                                    onDragStart={() => setDraggedChildId(cc.id)}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={() => handleDropChildCategory(cc.id, mc.id)}
+                                    className={`rounded-lg border transition-colors ${
+                                      draggedChildId === cc.id
+                                        ? 'bg-[#F0DED0]/50 border-[#AE887B]'
+                                        : 'border-transparent hover:bg-[#FAF7F4] hover:border-[#E5DCD3]'
+                                    }`}
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2 p-2 cursor-move">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <GripVertical className="w-3.5 h-3.5 text-[#8E8777] shrink-0" />
+                                        <span className="text-[#8E8777] font-mono">└──</span>
+                                        {cc.image ? (
+                                          <img src={cc.image} alt={cc.name} className="w-7 h-7 rounded object-cover border border-[#E5DCD3]" />
+                                        ) : null}
+                                        <div className="min-w-0">
+                                          <p className="font-semibold text-[#5E5946] truncate">
+                                            #{cc.sortOrder} {cc.name}{' '}
+                                            <span className="font-mono text-[10px] text-[#8E8777]">/{cc.slug}</span>
+                                          </p>
+                                          <p className="text-[11px] text-[#6E6859]">
+                                            {cc.productCount ?? 0} products • {childSubItems.length} child categories • {cc.fieldCount ?? 0} fields
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            setExpandedGroupIds((prev) => ({
+                                              ...prev,
+                                              [cc.id]: !prev[cc.id],
+                                            }))
+                                          }
+                                        >
+                                          <FolderTree className="w-3 h-3" /> {isExpanded ? 'Hide' : 'Children'} ({childSubItems.length})
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            openCategoryProductsModal(
+                                              cc.id,
+                                              `Products in ${cc.name}`,
+                                              `/${cc.slug} • Parent: ${mc.name}`
+                                            )
+                                          }
+                                        >
+                                          <Package className="w-3 h-3" /> Products ({cc.productCount ?? 0})
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setSelectedFilterChildId(cc.id);
+                                            setSectionTab('FILTERS');
+                                          }}
+                                        >
+                                          <Sliders className="w-3 h-3" /> Filters ({cc.filterCount ?? 0})
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setSelectedFieldChildId(cc.id);
+                                            setSectionTab('FIELDS');
+                                          }}
+                                        >
+                                          <Sliders className="w-3 h-3" /> Fields
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => setChildEditModal({ ...cc, originalMainId: cc.mainCategoryId })}
+                                        >
+                                          <Edit3 className="w-3 h-3" /> Edit / Move
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant={cc.isActive !== false ? 'success' : 'outline'}
+                                          onClick={async () => {
+                                            await adminApi.updateChildCategory(cc.id, {
+                                              isActive: !(cc.isActive !== false),
+                                              saveAsDraft: workInDraftMode,
+                                            });
+                                            loadTaxonomy();
+                                          }}
+                                        >
+                                          {cc.isActive !== false ? 'Active' : 'Inactive'}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="danger"
+                                          onClick={() =>
+                                            setDeleteTargetModal({
+                                              kind: 'CHILD',
+                                              item: cc,
+                                              reassignToId: taxonomy.childCategories.find((c) => c.id !== cc.id && c.isActive !== false)?.id || '',
+                                            })
+                                          }
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </Button>
+                                      </div>
                                     </div>
+                                    {isExpanded && (
+                                      <div className="px-8 pb-2.5 pt-1 space-y-1 border-t border-[#E5DCD3]/70 bg-[#FAF7F4]/70">
+                                        {childSubItems.length === 0 ? (
+                                          <p className="text-[11px] text-[#8E8777] italic">No child categories yet.</p>
+                                        ) : (
+                                          childSubItems.map((subPt) => (
+                                            <div key={subPt.id} className="flex items-center justify-between gap-2 py-1 text-[11px]">
+                                              <span className="text-[#5E5946] font-medium truncate">
+                                                • {subPt.name} <code className="text-[10px] text-[#8E8777]">/{subPt.slug}</code>
+                                              </span>
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <Badge variant={subPt.isActive !== false ? 'success' : 'error'}>
+                                                  {subPt.isActive !== false ? 'Active' : 'Disabled'}
+                                                </Badge>
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() =>
+                                                    openCategoryProductsModal(
+                                                      subPt.id,
+                                                      `Products in ${subPt.name}`,
+                                                      `Group: ${cc.name}`
+                                                    )
+                                                  }
+                                                >
+                                                  {subPt.productCount ?? 0} prods
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        openCategoryProductsModal(
-                                          cc.id,
-                                          `Products in ${cc.name}`,
-                                          `/${cc.slug} • Parent: ${mc.name}`
-                                        )
-                                      }
-                                    >
-                                      <Package className="w-3 h-3" /> Products ({cc.productCount ?? 0})
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        setSelectedFilterChildId(cc.id);
-                                        setSectionTab('FILTERS');
-                                      }}
-                                    >
-                                      <Sliders className="w-3 h-3" /> Filters ({cc.filterCount ?? 0})
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        setSelectedFieldChildId(cc.id);
-                                        setSectionTab('FIELDS');
-                                      }}
-                                    >
-                                      <Sliders className="w-3 h-3" /> Fields
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => setChildEditModal({ ...cc, originalMainId: cc.mainCategoryId })}
-                                    >
-                                      <Edit3 className="w-3 h-3" /> Edit / Move
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant={cc.isActive !== false ? 'success' : 'outline'}
-                                      onClick={async () => {
-                                        await adminApi.updateChildCategory(cc.id, {
-                                          isActive: !(cc.isActive !== false),
-                                          saveAsDraft: workInDraftMode,
-                                        });
-                                        loadTaxonomy();
-                                      }}
-                                    >
-                                      {cc.isActive !== false ? 'Active' : 'Inactive'}
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="danger"
-                                      onClick={() =>
-                                        setDeleteTargetModal({
-                                          kind: 'CHILD',
-                                          item: cc,
-                                          reassignToId: taxonomy.childCategories.find((c) => c.id !== cc.id && c.isActive !== false)?.id || '',
-                                        })
-                                      }
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))
+                                );
+                              })
                             )}
                           </div>
                         </div>
@@ -1419,15 +1532,27 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                     .map((pt) => {
                       const parentChild = taxonomy.childCategories.find((c) => c.id === pt.childCategoryId);
                       return (
-                        <div key={pt.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-[#5E5946] truncate">
-                              #{pt.sortOrder} {pt.name}{' '}
-                              <code className="font-mono text-[10px] text-[#8E8777]">/{pt.slug}</code>
-                            </p>
-                            <p className="text-[11px] text-[#6E6859]">
-                              Under: {parentChild?.name || pt.childCategorySlug} • {pt.productCount ?? 0} products
-                            </p>
+                        <div
+                          key={pt.id}
+                          draggable
+                          onDragStart={() => setDraggedTypeId(pt.id)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => handleDropProductType(pt.id, pt.childCategoryId)}
+                          className={`py-2.5 px-1 flex flex-wrap items-center justify-between gap-2 cursor-move ${
+                            draggedTypeId === pt.id ? 'bg-[#F0DED0]/50' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <GripVertical className="w-3.5 h-3.5 text-[#8E8777] shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-semibold text-[#5E5946] truncate">
+                                #{pt.sortOrder} {pt.name}{' '}
+                                <code className="font-mono text-[10px] text-[#8E8777]">/{pt.slug}</code>
+                              </p>
+                              <p className="text-[11px] text-[#6E6859]">
+                                Under: {parentChild?.name || pt.childCategorySlug} • {pt.productCount ?? 0} products
+                              </p>
+                            </div>
                           </div>
                           <div className="flex items-center gap-1.5">
                             <Button

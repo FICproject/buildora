@@ -358,11 +358,11 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 7. Hinges, Channels & Handles
   'hinges-channels-handles': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'] },
-    { id: 'length', name: 'Size', type: 'checkbox', specKeys: ['Length', 'Size'] },
-    { id: 'crankType', name: 'Type', type: 'checkbox', specKeys: ['Crank Type', 'Opening Angle', 'Product Type'] },
-    { id: 'loadCapacity', name: 'Load Capacity', type: 'checkbox', specKeys: ['Load Capacity', 'Extension'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'], catAttrKeys: ['material'] },
+    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'], catAttrKeys: ['finish'] },
+    { id: 'size', name: 'Size', type: 'checkbox', specKeys: ['Length', 'Size'], catAttrKeys: ['size'] },
+    { id: 'crankType', name: 'Type', type: 'checkbox', specKeys: ['Crank Type', 'Opening Angle', 'Product Type', 'Hardware Type / Mechanism'], catAttrKeys: ['hardwareModel', 'crankType'] },
+    { id: 'loadCapacity', name: 'Load Capacity', type: 'checkbox', specKeys: ['Load Capacity', 'Extension'], catAttrKeys: ['loadCapacity'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -370,10 +370,10 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 8. Kitchen Systems & Accessories
   'kitchen-systems-accessories': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Grade', 'Material'] },
-    { id: 'dimensions', name: 'Size', type: 'checkbox', specKeys: ['Dimensions', 'Slide Length'] },
-    { id: 'weightRating', name: 'Load Capacity', type: 'checkbox', specKeys: ['Weight Rating', 'Wire Gauge'] },
-    { id: 'damping', name: 'Features', type: 'checkbox', specKeys: ['Damping', 'Wall Thickness'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Grade', 'Material', 'Material Grade'], catAttrKeys: ['material'] },
+    { id: 'cabinetSize', name: 'Size', type: 'checkbox', specKeys: ['Dimensions', 'Slide Length', 'Cabinet Width / Size'], catAttrKeys: ['cabinetSize'] },
+    { id: 'weightRating', name: 'Load Capacity', type: 'checkbox', specKeys: ['Weight Rating', 'Wire Gauge'], catAttrKeys: ['weightRating'] },
+    { id: 'damping', name: 'Features', type: 'checkbox', specKeys: ['Damping', 'Wall Thickness'], catAttrKeys: ['damping'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -381,10 +381,10 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 9. Wardrobe & Bed Fittings
   'wardrobe-bed-fittings': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'] },
-    { id: 'loadCapacity', name: 'Load Capacity', type: 'checkbox', specKeys: ['Load Capacity'] },
-    { id: 'mountingType', name: 'Type', type: 'checkbox', specKeys: ['Mounting Type', 'Application', 'Size'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Material & Finish'], catAttrKeys: ['material', 'materialFinish'] },
+    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish', 'Material & Finish'], catAttrKeys: ['finish', 'materialFinish'] },
+    { id: 'loadCapacity', name: 'Load Capacity', type: 'checkbox', specKeys: ['Load Capacity', 'Gas Spring / Load Capacity'], catAttrKeys: ['loadCapacity'] },
+    { id: 'mountingType', name: 'Type', type: 'checkbox', specKeys: ['Mounting Type', 'Application', 'Size', 'Fitting Type'], catAttrKeys: ['fittingType', 'mountingType'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -392,9 +392,9 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 10. Door Locks & Hardware
   'door-locks-hardware': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'shackleMaterial', name: 'Type', type: 'checkbox', specKeys: ['Shackle Material', 'Levers', 'Locking Mechanism'] },
-    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Body Material'], catAttrKeys: ['material'] },
+    { id: 'lockType', name: 'Type', type: 'checkbox', specKeys: ['Shackle Material', 'Levers', 'Locking Mechanism', 'Lock Type'], catAttrKeys: ['lockType'] },
+    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish'], catAttrKeys: ['finish'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -791,13 +791,17 @@ export function filterConfigsToDimensions(
 }
 
 export const CATEGORY_FILTER_CONFIGS_SEED: CategoryFilterConfiguration[] = (() => {
-  const slugToMeta: Record<string, { id: string; name: string; mainCategoryId: string }> = {
-    cement: { id: 'cat-1', name: 'Cement', mainCategoryId: 'mc-1' },
-    tiling: { id: 'cat-2', name: 'Tiling', mainCategoryId: 'mc-1' },
-    'plywood-mdf-hdhmr': { id: 'cat-3', name: 'Plywood, MDF & HDHMR', mainCategoryId: 'mc-1' },
-    fevicol: { id: 'cat-4', name: 'Fevicol', mainCategoryId: 'mc-1' },
-    waterproofing: { id: 'cat-5', name: 'Waterproofing', mainCategoryId: 'mc-1' },
-    painting: { id: 'cat-6', name: 'Painting', mainCategoryId: 'mc-1' },
+  const slugToMeta: Record<string, { id: string; name: string; mainCategoryId: string; mainCategoryName: string }> = {
+    cement: { id: 'cat-1', name: 'Cement', mainCategoryId: 'mc-1', mainCategoryName: 'Civil & Interiors' },
+    tiling: { id: 'cat-2', name: 'Tiling', mainCategoryId: 'mc-1', mainCategoryName: 'Civil & Interiors' },
+    'plywood-mdf-hdhmr': { id: 'cat-3', name: 'Plywood, MDF & HDHMR', mainCategoryId: 'mc-1', mainCategoryName: 'Civil & Interiors' },
+    fevicol: { id: 'cat-4', name: 'Fevicol', mainCategoryId: 'mc-1', mainCategoryName: 'Civil & Interiors' },
+    waterproofing: { id: 'cat-5', name: 'Waterproofing', mainCategoryId: 'mc-1', mainCategoryName: 'Civil & Interiors' },
+    painting: { id: 'cat-6', name: 'Painting', mainCategoryId: 'mc-1', mainCategoryName: 'Civil & Interiors' },
+    'hinges-channels-handles': { id: 'cat-7', name: 'Hinges, Channels & Handles', mainCategoryId: 'mc-2', mainCategoryName: 'Furniture & Architectural Hardware' },
+    'kitchen-systems-accessories': { id: 'cat-8', name: 'Kitchen Systems & Accessories', mainCategoryId: 'mc-2', mainCategoryName: 'Furniture & Architectural Hardware' },
+    'wardrobe-bed-fittings': { id: 'cat-9', name: 'Wardrobe & Bed Fittings', mainCategoryId: 'mc-2', mainCategoryName: 'Furniture & Architectural Hardware' },
+    'door-locks-hardware': { id: 'cat-10', name: 'Door Locks & Hardware', mainCategoryId: 'mc-2', mainCategoryName: 'Furniture & Architectural Hardware' },
   };
   const presetOptions: Record<string, Record<string, { options: string[]; fieldType?: CategoryFilterConfiguration['fieldType']; isRequired?: boolean; showInVendor?: boolean }>> = {
     'cat-1': {
@@ -843,6 +847,30 @@ export const CATEGORY_FILTER_CONFIGS_SEED: CategoryFilterConfiguration[] = (() =
       colour: { options: ['Brilliant White', 'Pastel Ivory', 'Warm Beige', 'Slate Grey', 'Clear / Translucent'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
       packSize: { options: ['1 Litre Can', '4 Litre Can', '10 Litre Bucket', '20 Litre Bucket', '20 Litres'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
     },
+    'cat-7': {
+      material: { options: ['Cold Rolled Steel (Zinc Plated)', 'SS 304 Stainless Steel', 'Anodized Aluminium', 'Zinc Alloy'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      finish: { options: ['Nickel / Satin Brush', 'Zinc Plated Silver', 'Matt Black', 'Antique Brass', 'Rose Gold'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      size: { options: ['10 Inch (250mm)', '12 Inch (300mm)', '14 Inch (350mm)', '16 Inch (400mm)', '18 Inch (450mm)', '20 Inch (500mm)', '22 Inch (550mm)'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      crankType: { options: ['0-Crank (Full Overlay)', '8-Crank (Half Overlay)', '16-Crank (Inset)', 'Soft-Close Ball Bearing'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      loadCapacity: { options: ['35 Kg Standard', '45 Kg Dynamic Load', '60 Kg Heavy Duty'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+    },
+    'cat-8': {
+      material: { options: ['SS 304 Stainless Steel', 'AISI SS 304 Grade', 'Electroplated Galvanized Steel', 'Aluminium Extruded'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      cabinetSize: { options: ['450mm (18 Inch)', '500mm Depth', '600mm (24 Inch)', '900mm Corner Unit'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      weightRating: { options: ['25 Kg Wire Basket', '40 Kg Soft-Close Undermount', '75 Kg Tall Pantry'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+      damping: { options: ['Soft-Close Synchronized', 'Push-to-Open', 'Standard Ball Bearing'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+    },
+    'cat-9': {
+      material: { options: ['Powder Coated MS Black', 'Anodized Aluminium', 'SS 304 Stainless Steel'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: false },
+      finish: { options: ['Powder Coated Black', 'Champagne Silver', 'Matt Anthracite', 'Satin Chrome'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: false },
+      loadCapacity: { options: ['75 Kg (Single Bed)', '100 Kg (2-Door Wardrobe)', '125 Kg (Queen Bed)', '150 Kg (King Bed Heavy)'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      mountingType: { options: ['Hydraulic Gas Lift', 'Top-Hung Sliding Track', 'Side-Mounted Organizer'], fieldType: 'DROPDOWN', isRequired: false, showInVendor: true },
+    },
+    'cat-10': {
+      material: { options: ['SS 304 Stainless Steel', 'Solid Brass Forged', 'Zinc Alloy + Hardened Steel Shackle'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      lockType: { options: ['Mortise Handle Lock Set', 'Cylindrical Knob Lock', 'Heavy Duty Brass Padlock', 'Smart Biometric / PIN'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      finish: { options: ['Satin Steel', 'Matt Black', 'Antique Brass', 'Polished Chrome', 'Rose Gold'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+    },
   };
 
   const out: CategoryFilterConfiguration[] = [];
@@ -853,7 +881,7 @@ export const CATEGORY_FILTER_CONFIGS_SEED: CategoryFilterConfiguration[] = (() =
       out.push({
         id: `cfc-${meta.id}-${dim.id}`,
         mainCategoryId: meta.mainCategoryId,
-        mainCategoryName: 'Civil & Interiors',
+        mainCategoryName: meta.mainCategoryName,
         childCategoryId: meta.id,
         childCategorySlug: slug,
         childCategoryName: meta.name,
