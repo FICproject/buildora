@@ -116,19 +116,48 @@ export interface ProductTypeNode {
   updatedAt?: string;
 }
 
+export interface NewLaunchCategoryMapping {
+  id: string;
+  displayLabel: string;
+  mainCategoryId?: string;
+  mainCategorySlug?: string;
+  mainCategoryName?: string;
+  categoryGroupId?: string;
+  categoryGroupSlug?: string;
+  categoryGroupName?: string;
+  childCategoryId?: string;
+  childCategorySlug?: string;
+  childCategoryName?: string;
+  mappingStatus: 'MAPPED' | 'UNMAPPED' | 'GROUP_MATCH';
+  suggestedPermanentCategoryIds?: string[];
+  sortOrder: number;
+  isActive: boolean;
+}
+
 export interface NewLaunchCollection {
   id: string;
   tenantId: string;
   title: string;
+  name?: string;
   slug: string;
   description?: string;
+  image?: string;
   bannerImage?: string;
   badge?: string;
+  mainCategoryId?: string;
+  mainCategoryName?: string;
+  categoryGroupId?: string;
+  categoryGroupSlug?: string;
+  categoryGroupName?: string;
+  categoryMappings?: NewLaunchCategoryMapping[];
   productIds: string[];
   displayOrder: number;
   startDate?: string;
   endDate?: string;
   isActive: boolean;
+  publishStatus?: 'DRAFT' | 'PUBLISHED';
+  createdBy?: string;
+  updatedBy?: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -26,6 +26,7 @@ import {
   Home,
 } from 'lucide-react';
 import { adminApi, formatINR } from '../services/adminApi';
+import { NewLaunchesAdminSection } from '../components/NewLaunchesAdminSection';
 import {
   PageHeader,
   Card,
@@ -138,19 +139,10 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
   const [mainForm, setMainForm] = useState({ name: '', slug: '', sortOrder: '6', description: '', image: '', showInNavigation: true });
   const [childForm, setChildForm] = useState({ mainCategoryId: 'mc-1', name: '', slug: '', sortOrder: '1', description: '', image: '' });
   const [typeForm, setTypeForm] = useState({ childCategoryId: 'cat-1', name: '', slug: '', sortOrder: '1' });
-  const [newLaunchForm, setNewLaunchForm] = useState({
-    name: '',
-    description: '',
-    startDate: '',
-    endDate: '',
-    displayOrder: '1',
-    productIds: [] as string[],
-  });
   const [brandForm, setBrandForm] = useState({ name: '', description: '' });
   const [attrForm, setAttrForm] = useState({ name: '', categoryName: 'Cement & Concrete', valuesCsv: '' });
   const [brandEditModal, setBrandEditModal] = useState<any>(null);
   const [attrEditModal, setAttrEditModal] = useState<any>(null);
-  const [launchEditModal, setLaunchEditModal] = useState<any>(null);
 
   useEffect(() => {
     setSectionTab(initialSection);
@@ -2221,172 +2213,10 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Create New Launches Promotional Collection */}
-          <Card title="Create New Launches Collection" subtitle="Promotional showcase without altering product taxonomy">
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                try {
-                  await adminApi.createNewLaunchCollection({
-                    title: newLaunchForm.name,
-                    description: newLaunchForm.description,
-                    startDate: newLaunchForm.startDate || undefined,
-                    endDate: newLaunchForm.endDate || undefined,
-                    displayOrder: Number(newLaunchForm.displayOrder) || 1,
-                    productIds: newLaunchForm.productIds,
-                    isActive: true,
-                  });
-                  setNewLaunchForm({ name: '', description: '', startDate: '', endDate: '', displayOrder: '1', productIds: [] });
-                  pushToast({ title: 'Collection Created', message: 'Promotional New Launches synced to Customer Web.' });
-                  loadTaxonomy();
-                } catch (err: any) {
-                  pushToast({ title: 'Failed', message: err.message, variant: 'error' });
-                }
-              }}
-              className="space-y-3 text-xs"
-            >
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Collection Title *</label>
-                <input
-                  required
-                  placeholder="e.g. Monsoon Waterproofing & Smart Electrical Launches"
-                  value={newLaunchForm.name}
-                  onChange={(e) => setNewLaunchForm({ ...newLaunchForm, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  value={newLaunchForm.description}
-                  onChange={(e) => setNewLaunchForm({ ...newLaunchForm, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block font-semibold text-[#5E5946] mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={newLaunchForm.startDate}
-                    onChange={(e) => setNewLaunchForm({ ...newLaunchForm, startDate: e.target.value })}
-                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-[#5E5946] mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={newLaunchForm.endDate}
-                    onChange={(e) => setNewLaunchForm({ ...newLaunchForm, endDate: e.target.value })}
-                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-[#5E5946] mb-1">Display Order</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={newLaunchForm.displayOrder}
-                    onChange={(e) => setNewLaunchForm({ ...newLaunchForm, displayOrder: e.target.value })}
-                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">
-                  Select Featured Products ({newLaunchForm.productIds.length} selected)
-                </label>
-                <div className="max-h-44 overflow-y-auto border border-[#E5DCD3] rounded-lg p-2 space-y-1 bg-[#FAF7F4]">
-                  {products.map((p) => {
-                    const checked = newLaunchForm.productIds.includes(p.id);
-                    return (
-                      <label key={p.id} className="flex items-center gap-2 py-1 px-1.5 rounded hover:bg-white cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            setNewLaunchForm((prev) => ({
-                              ...prev,
-                              productIds: checked
-                                ? prev.productIds.filter((id) => id !== p.id)
-                                : [...prev.productIds, p.id],
-                            }))
-                          }
-                        />
-                        <span className="truncate font-medium text-[#5E5946]">{p.name}</span>
-                        <span className="text-[10px] text-[#6E6859] ml-auto shrink-0">{p.childCategoryName || p.categoryName}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-              <Button type="submit" size="sm">
-                <Plus className="w-3.5 h-3.5" /> Create Promotional Collection
-              </Button>
-            </form>
-          </Card>
-
-          {/* Existing Collections */}
-          <Card title="Active & Scheduled Collections" subtitle={`${taxonomy.newLaunchCollections.length} collections`}>
-            <div className="space-y-3 text-xs">
-              {taxonomy.newLaunchCollections.length === 0 ? (
-                <p className="text-[#6E6859] py-6 text-center">No promotional collections configured yet.</p>
-              ) : (
-                taxonomy.newLaunchCollections.map((col) => (
-                  <div key={col.id} className="p-3 rounded-xl border border-[#E5DCD3] bg-[#FAF7F4] space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-bold text-[#5E5946]">
-                          #{col.displayOrder || 1} {col.title || col.name}
-                        </p>
-                        <p className="text-[#6E6859]">{col.description || col.slug}</p>
-                        <p className="text-[11px] text-[#6E6859] mt-1">
-                          Products linked: <strong>{(col.productIds || []).length}</strong>
-                          {col.startDate || col.endDate ? ` • Window: ${col.startDate || 'Now'} to ${col.endDate || 'Open'}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setLaunchEditModal({ ...col, title: col.title || col.name || '' })}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={col.isActive !== false ? 'success' : 'outline'}
-                          onClick={async () => {
-                            await adminApi.updateNewLaunchCollection(col.id, {
-                              isActive: !(col.isActive !== false),
-                            });
-                            loadTaxonomy();
-                          }}
-                        >
-                          {col.isActive !== false ? 'Visible' : 'Hidden'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            await adminApi.deleteNewLaunchCollection(col.id);
-                            pushToast({ title: 'Collection Removed' });
-                            loadTaxonomy();
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
+        <NewLaunchesAdminSection
+          onRefreshParentTaxonomy={loadTaxonomy}
+          onJumpToCatalogTab={(tab) => setSectionTab(tab)}
+        />
       )}
 
       {/* Edit Product Modal */}
@@ -3486,69 +3316,6 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                 Cancel
               </Button>
               <Button type="submit">Save Attribute</Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      <Modal open={Boolean(launchEditModal)} onClose={() => setLaunchEditModal(null)} title="Edit New Launch Collection">
-        {launchEditModal && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              await adminApi.updateNewLaunchCollection(launchEditModal.id, {
-                title: launchEditModal.title,
-                description: launchEditModal.description,
-                displayOrder: Number(launchEditModal.displayOrder || 1),
-                startDate: launchEditModal.startDate || undefined,
-                endDate: launchEditModal.endDate || undefined,
-              });
-              pushToast({ title: 'Collection Updated' });
-              setLaunchEditModal(null);
-              loadTaxonomy();
-            }}
-            className="space-y-3 text-xs"
-          >
-            <input
-              required
-              value={launchEditModal.title || ''}
-              onChange={(e) => setLaunchEditModal({ ...launchEditModal, title: e.target.value })}
-              placeholder="Collection Title"
-              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-            />
-            <textarea
-              value={launchEditModal.description || ''}
-              onChange={(e) => setLaunchEditModal({ ...launchEditModal, description: e.target.value })}
-              placeholder="Description"
-              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-            />
-            <div className="grid grid-cols-3 gap-2">
-              <input
-                type="number"
-                min={1}
-                value={launchEditModal.displayOrder || 1}
-                onChange={(e) => setLaunchEditModal({ ...launchEditModal, displayOrder: e.target.value })}
-                placeholder="Order"
-                className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-              />
-              <input
-                type="date"
-                value={launchEditModal.startDate || ''}
-                onChange={(e) => setLaunchEditModal({ ...launchEditModal, startDate: e.target.value })}
-                className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-              />
-              <input
-                type="date"
-                value={launchEditModal.endDate || ''}
-                onChange={(e) => setLaunchEditModal({ ...launchEditModal, endDate: e.target.value })}
-                className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setLaunchEditModal(null)}>
-                Cancel
-              </Button>
-              <Button type="submit">Save Collection</Button>
             </div>
           </form>
         )}

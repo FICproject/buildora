@@ -1,5 +1,5 @@
 // Master constants for BUILDORA 60
-import { NewLaunchCategory } from '@buildora/types';
+import { NewLaunchCategory, NewLaunchCategoryMapping, NewLaunchCollection } from '@buildora/types';
 
 export const APP_NAME = 'BUILDORA 60';
 export const APP_TAGLINE = 'BUILD SMART. DELIVER FAST.';
@@ -12,6 +12,7 @@ export const LEGACY_CATEGORY_SLUG_ALIASES: Record<string, string> = {
   'tiling-tile-adhesives': 'tiling',
   adhesives: 'fevicol',
   'painting-finishes': 'painting',
+  'water-storage-tanks': 'overhead-tanks',
 };
 
 export const LEGACY_PRODUCT_TYPE_SLUG_ALIASES: Record<string, { childId: string; productTypeId: string; slug: string }> = {
@@ -49,6 +50,26 @@ export const LEGACY_PRODUCT_TYPE_SLUG_ALIASES: Record<string, { childId: string;
   'mortise-locks': { childId: 'cat-10', productTypeId: 'sub-fah-dlh-locks', slug: 'door-hardware-locks' },
   'cylindrical-locks': { childId: 'cat-10', productTypeId: 'sub-fah-dlh-cylindrical', slug: 'cylindrical-locks' },
   'door-closers': { childId: 'cat-10', productTypeId: 'sub-fah-dlh-wooden', slug: 'wooden-door-hardware' },
+  'frls-copper-wires': { childId: 'cat-11', productTypeId: 'sub-ele-wmc-wires', slug: 'electrical-wires' },
+  mcbs: { childId: 'cat-11', productTypeId: 'sub-ele-wmc-db-mcb', slug: 'db-mcb-protection' },
+  'distribution-boards': { childId: 'cat-11', productTypeId: 'sub-ele-wmc-db-mcb', slug: 'db-mcb-protection' },
+  'modular-switches': { childId: 'cat-12', productTypeId: 'sub-ele-sws-switches', slug: 'switches-plates-sockets' },
+  'power-sockets': { childId: 'cat-12', productTypeId: 'sub-ele-sws-switches', slug: 'switches-plates-sockets' },
+  'cover-plates': { childId: 'cat-12', productTypeId: 'sub-ele-sws-switches', slug: 'switches-plates-sockets' },
+  'pvc-conduits': { childId: 'cat-13', productTypeId: 'sub-ele-con-pvc', slug: 'pvc-pipes-fittings' },
+  'conduit-accessories': { childId: 'cat-13', productTypeId: 'sub-ele-con-hw', slug: 'electrical-hardware' },
+  'recessed-downlights': { childId: 'cat-14', productTypeId: 'sub-ele-lgt-panel', slug: 'ceiling-panel-lights' },
+  'cob-spotlights': { childId: 'cat-14', productTypeId: 'sub-ele-lgt-cob', slug: 'cob-spot-lights' },
+  'led-battens': { childId: 'cat-14', productTypeId: 'sub-ele-lgt-mirror', slug: 'mirror-night-lights-battens' },
+  // Plumbing legacy aliases (old sub-16-* / sub-17-* / sub-19-* records)
+  'cpvc-pipes': { childId: 'cat-16', productTypeId: 'sub-plu-cot-cpvc-pipes', slug: 'cpvc-pipes-hardware' },
+  'cpvc-brass-fittings': { childId: 'cat-16', productTypeId: 'sub-plu-cot-brass-fittings', slug: 'brass-fittings' },
+  'cpvc-solvent': { childId: 'cat-16', productTypeId: 'sub-plu-cot-sealants', slug: 'sealants' },
+  'water-closets': { childId: 'cat-17', productTypeId: 'sub-plu-sbf-sanitary', slug: 'sanitary-bath-fittings-child' },
+  'basin-mixers': { childId: 'cat-17', productTypeId: 'sub-plu-sbf-mixers', slug: 'mixers-diverters-shower' },
+  'rain-showers': { childId: 'cat-17', productTypeId: 'sub-plu-sbf-mixers', slug: 'mixers-diverters-shower' },
+  '1000l-tanks': { childId: 'cat-19', productTypeId: 'sub-plu-oht-tanks', slug: 'overhead-tanks-child' },
+  '500l-tanks': { childId: 'cat-19', productTypeId: 'sub-plu-oht-tanks', slug: 'overhead-tanks-child' },
 };
 
 export const MASTER_CATEGORIES = [
@@ -231,12 +252,18 @@ export const MASTER_CATEGORIES = [
     slug: 'wires-mcb-distribution-boards',
     icon: 'Zap',
     image: 'https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?auto=format&fit=crop&w=600&q=80',
-    description: 'FR/FRLS copper flexible wires, miniature circuit breakers (MCBs), RCCBs, and metallic DB boxes.',
+    description: 'CAT 6 & CCTV cables, electrical wires, DB, MCB & protection, PVC fittings, switches and electrical supplies.',
     featured: true,
     subcategories: [
-      { id: 'sub-11-1', name: 'FRLS Insulated Copper Wires (90m)', slug: 'frls-copper-wires', categorySlug: 'wires-mcb-distribution-boards' },
-      { id: 'sub-11-2', name: 'Single & Double Pole MCBs', slug: 'mcbs', categorySlug: 'wires-mcb-distribution-boards' },
-      { id: 'sub-11-3', name: 'Distribution Boards & Enclosures', slug: 'distribution-boards', categorySlug: 'wires-mcb-distribution-boards' }
+      { id: 'sub-ele-wmc-cat6-other', name: 'CAT 6, Speaker & Other Cables', slug: 'cat-6-speaker-other-cables', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-ele-wmc-cctv-cat6', name: 'CCTV & CAT6 Cable', slug: 'cctv-cat6-cable', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-ele-wmc-db-mcb', name: 'DB, MCB & Protection', slug: 'db-mcb-protection', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-ele-wmc-hw', name: 'Electrical Hardware', slug: 'electrical-hardware', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-ele-wmc-wires', name: 'Electrical Wires', slug: 'electrical-wires', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-ele-wmc-pvc', name: 'PVC Pipes & Fittings', slug: 'pvc-pipes-fittings', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-ele-wmc-switches', name: 'Switches, Plates & Sockets', slug: 'switches-plates-sockets', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-ele-wmc-tools', name: 'Tools, Power Tools & General Hardware', slug: 'tools-power-tools-general-hardware', categorySlug: 'wires-mcb-distribution-boards' },
+      { id: 'sub-ele-wmc-supplies', name: 'Wires, MCB & Electrical Supplies', slug: 'wires-mcb-electrical-supplies', categorySlug: 'wires-mcb-distribution-boards' }
     ]
   },
   {
@@ -245,11 +272,13 @@ export const MASTER_CATEGORIES = [
     slug: 'switches-sockets',
     icon: 'ToggleRight',
     image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
-    description: 'Modular switches, power sockets, designer glass cover plates, and USB charger modules.',
+    description: 'Modular switches, plates, sockets, ceiling fans, electrical hardware and tools.',
     subcategories: [
-      { id: 'sub-12-1', name: 'Modular Switches (6A/16A)', slug: 'modular-switches', categorySlug: 'switches-sockets' },
-      { id: 'sub-12-2', name: 'Power Sockets & Shuttered Plugs', slug: 'power-sockets', categorySlug: 'switches-sockets' },
-      { id: 'sub-12-3', name: 'Designer Modular Cover Plates', slug: 'cover-plates', categorySlug: 'switches-sockets' }
+      { id: 'sub-ele-sws-fans', name: 'Ceiling Fans', slug: 'ceiling-fans', categorySlug: 'switches-sockets' },
+      { id: 'sub-ele-sws-hw', name: 'Electrical Hardware', slug: 'electrical-hardware', categorySlug: 'switches-sockets' },
+      { id: 'sub-ele-sws-switches', name: 'Switches, Plates & Sockets', slug: 'switches-plates-sockets', categorySlug: 'switches-sockets' },
+      { id: 'sub-ele-sws-tools', name: 'Tools, Power Tools & General Hardware', slug: 'tools-power-tools-general-hardware', categorySlug: 'switches-sockets' },
+      { id: 'sub-ele-sws-supplies', name: 'Wires, MCB & Electrical Supplies', slug: 'wires-mcb-electrical-supplies', categorySlug: 'switches-sockets' }
     ]
   },
   {
@@ -258,10 +287,13 @@ export const MASTER_CATEGORIES = [
     slug: 'electrical-conduits',
     icon: 'Columns',
     image: 'https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?auto=format&fit=crop&w=600&q=80',
-    description: 'Medium and heavy mechanical stress PVC conduit pipes, circular junction boxes, and bends.',
+    description: 'PVC conduit pipes & fittings, electrical hardware, sealants, chemicals and general accessories.',
     subcategories: [
-      { id: 'sub-13-1', name: 'Rigid PVC Electrical Conduits (20mm/25mm)', slug: 'pvc-conduits', categorySlug: 'electrical-conduits' },
-      { id: 'sub-13-2', name: 'Conduit Bends & Deep Junction Boxes', slug: 'conduit-accessories', categorySlug: 'electrical-conduits' }
+      { id: 'sub-ele-con-chemicals', name: 'chemicals', slug: 'chemicals', categorySlug: 'electrical-conduits' },
+      { id: 'sub-ele-con-hw', name: 'electrical hardware', slug: 'electrical-hardware', categorySlug: 'electrical-conduits' },
+      { id: 'sub-ele-con-general', name: 'general & multipurpose', slug: 'general-multipurpose', categorySlug: 'electrical-conduits' },
+      { id: 'sub-ele-con-pvc', name: 'pvc pipes & fittings', slug: 'pvc-pipes-fittings', categorySlug: 'electrical-conduits' },
+      { id: 'sub-ele-con-sealants', name: 'sealants', slug: 'sealants', categorySlug: 'electrical-conduits' }
     ]
   },
   {
@@ -270,11 +302,13 @@ export const MASTER_CATEGORIES = [
     slug: 'lighting',
     icon: 'Sun',
     image: 'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?auto=format&fit=crop&w=600&q=80',
-    description: 'Recessed LED downlights, COB spotlights, LED batten tube lights, and cove strip lighting.',
+    description: 'Ceiling panel lights, COB & spot lights, architectural lighting, mirror & batten lights and strip profiles.',
     subcategories: [
-      { id: 'sub-14-1', name: 'Slim LED Recessed Downlights', slug: 'recessed-downlights', categorySlug: 'lighting' },
-      { id: 'sub-14-2', name: 'COB Directional Spotlights', slug: 'cob-spotlights', categorySlug: 'lighting' },
-      { id: 'sub-14-3', name: 'LED Batten Surface Lights', slug: 'led-battens', categorySlug: 'lighting' }
+      { id: 'sub-ele-lgt-panel', name: 'Ceiling Panel Lights', slug: 'ceiling-panel-lights', categorySlug: 'lighting' },
+      { id: 'sub-ele-lgt-cob', name: 'COB & Spot Lights', slug: 'cob-spot-lights', categorySlug: 'lighting' },
+      { id: 'sub-ele-lgt-lighting', name: 'Lighting', slug: 'lighting', categorySlug: 'lighting' },
+      { id: 'sub-ele-lgt-mirror', name: 'Mirror, Night Lights & Battens', slug: 'mirror-night-lights-battens', categorySlug: 'lighting' },
+      { id: 'sub-ele-lgt-strip', name: 'Strip Lights & Profiles', slug: 'strip-lights-profiles', categorySlug: 'lighting' }
     ]
   },
   {
@@ -295,12 +329,15 @@ export const MASTER_CATEGORIES = [
     slug: 'cpvc-pipes-overhead-tanks',
     icon: 'Compass',
     image: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=600&q=80',
-    description: 'Hot & cold potable water CPVC pipes, fittings, ball valves, solvent cements, and storage tanks.',
+    description: 'Hot & cold potable water CPVC pipes, fittings, brass fittings, overhead tanks, sealants and power tools.',
     featured: true,
     subcategories: [
-      { id: 'sub-16-1', name: 'SDR 11 CPVC Hot & Cold Water Pipes', slug: 'cpvc-pipes', categorySlug: 'cpvc-pipes-overhead-tanks' },
-      { id: 'sub-16-2', name: 'Brass Elbows, Tees & Couplers', slug: 'cpvc-brass-fittings', categorySlug: 'cpvc-pipes-overhead-tanks' },
-      { id: 'sub-16-3', name: 'Heavy Duty CPVC Solvent Cement', slug: 'cpvc-solvent', categorySlug: 'cpvc-pipes-overhead-tanks' }
+      { id: 'sub-plu-cot-brass-fittings', name: 'Brass Fittings', slug: 'brass-fittings', categorySlug: 'cpvc-pipes-overhead-tanks' },
+      { id: 'sub-plu-cot-cpvc-fittings', name: 'CPVC Fittings', slug: 'cpvc-fittings', categorySlug: 'cpvc-pipes-overhead-tanks' },
+      { id: 'sub-plu-cot-cpvc-pipes', name: 'CPVC Pipes & Hardware', slug: 'cpvc-pipes-hardware', categorySlug: 'cpvc-pipes-overhead-tanks' },
+      { id: 'sub-plu-cot-overhead-tank', name: 'Overhead Tank', slug: 'overhead-tank', categorySlug: 'cpvc-pipes-overhead-tanks' },
+      { id: 'sub-plu-cot-power-tools', name: 'Power Tools & Accessories', slug: 'power-tools-accessories-plumbing', categorySlug: 'cpvc-pipes-overhead-tanks' },
+      { id: 'sub-plu-cot-sealants', name: 'Sealants', slug: 'sealants', categorySlug: 'cpvc-pipes-overhead-tanks' },
     ]
   },
   {
@@ -309,12 +346,17 @@ export const MASTER_CATEGORIES = [
     slug: 'sanitary-bath-fittings',
     icon: 'Anchor',
     image: 'https://images.unsplash.com/photo-1584622781564-1d987f7333c1?auto=format&fit=crop&w=600&q=80',
-    description: 'Ceramic single-piece water closets, wall-hung toilets, brass chrome faucets, and overhead showers.',
+    description: 'Ceramic water closets, wash basins, faucets, mixers, showers, bath accessories and home appliances.',
     featured: true,
     subcategories: [
-      { id: 'sub-17-1', name: 'Single Piece Ceramic Water Closets', slug: 'water-closets', categorySlug: 'sanitary-bath-fittings' },
-      { id: 'sub-17-2', name: 'Quarter Turn Brass Chrome Basin Mixers', slug: 'basin-mixers', categorySlug: 'sanitary-bath-fittings' },
-      { id: 'sub-17-3', name: 'Overhead Rain Showers & Arms', slug: 'rain-showers', categorySlug: 'sanitary-bath-fittings' }
+      { id: 'sub-plu-sbf-accessories', name: 'Accessories & Hardware', slug: 'accessories-hardware', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-plu-sbf-bath-fittings', name: 'Bathroom Fittings & Accessories', slug: 'bathroom-fittings-accessories', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-plu-sbf-cpvc', name: 'CPVC Pipes & Hardware', slug: 'cpvc-pipes-hardware-sanitary', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-plu-sbf-home-appliances', name: 'Home Appliances', slug: 'home-appliances-sanitary', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-plu-sbf-mixers', name: 'Mixers, Diverters & Shower', slug: 'mixers-diverters-shower', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-plu-sbf-sanitary', name: 'Sanitary & Bath Fittings', slug: 'sanitary-bath-fittings-child', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-plu-sbf-wash-basins', name: 'Wash Basins & Faucets', slug: 'wash-basins-faucets', categorySlug: 'sanitary-bath-fittings' },
+      { id: 'sub-plu-sbf-wc', name: 'WC & Concealed Cisterns', slug: 'wc-concealed-cisterns', categorySlug: 'sanitary-bath-fittings' },
     ]
   },
   {
@@ -331,14 +373,14 @@ export const MASTER_CATEGORIES = [
   },
   {
     id: 'cat-19',
-    name: 'Water Storage Tanks',
-    slug: 'water-storage-tanks',
+    name: 'Overhead Tanks',
+    slug: 'overhead-tanks',
+    legacySlugs: ['water-storage-tanks'],
     icon: 'Database',
     image: 'https://images.unsplash.com/photo-1521747116042-5a810fda9664?auto=format&fit=crop&w=600&q=80',
-    description: 'Triple and 4-layer UV stabilized anti-bacterial overhead water storage tanks.',
+    description: 'UV-stabilized multi-layer overhead water storage tanks.',
     subcategories: [
-      { id: 'sub-19-1', name: '1000L 4-Layer Anti-Bacterial Tanks', slug: '1000l-tanks', categorySlug: 'water-storage-tanks' },
-      { id: 'sub-19-2', name: '500L Multi-Layer Overhead Tanks', slug: '500l-tanks', categorySlug: 'water-storage-tanks' }
+      { id: 'sub-plu-oht-tanks', name: 'overhead tanks', slug: 'overhead-tanks-child', categorySlug: 'overhead-tanks' },
     ]
   },
   {
@@ -490,14 +532,12 @@ export const CONSTRUCTION_DEPARTMENTS = [
     name: 'Electrical',
     slug: 'electrical',
     icon: 'Zap',
-    description: 'FRLS building wires, MCBs, distribution boards, modular switches, PVC conduits, LEDs and surveillance.',
+    description: 'Wires, MCB & distribution boards, switches & sockets, electrical conduits and architectural lighting.',
     categorySlugs: [
       'wires-mcb-distribution-boards',
       'switches-sockets',
       'electrical-conduits',
-      'lighting',
-      'ceiling-fans-exhaust',
-      'cctv-networking'
+      'lighting'
     ]
   },
   {
@@ -509,9 +549,7 @@ export const CONSTRUCTION_DEPARTMENTS = [
     categorySlugs: [
       'cpvc-pipes-overhead-tanks',
       'sanitary-bath-fittings',
-      'kitchen-sinks-faucets',
-      'water-storage-tanks',
-      'bathroom-renovation-materials'
+      'overhead-tanks'
     ]
   },
   {
@@ -519,7 +557,7 @@ export const CONSTRUCTION_DEPARTMENTS = [
     name: 'Hardware & Appliances',
     slug: 'hardware-appliances',
     icon: 'Wrench',
-    description: 'Rotary hammer drills, angle grinders, glass door hardware, ceiling & flooring, site safety PPE, inverters and welding electrodes.',
+    description: 'Power tools, general hardware, ceiling fans, CCTV & networking, glass door hardware, ceiling & flooring, PPE and power backup.',
     categorySlugs: [
       'power-tools-accessories',
       'general-hardware-tools',
@@ -527,7 +565,11 @@ export const CONSTRUCTION_DEPARTMENTS = [
       'safety-workwear',
       'welding-consumables',
       'glass-door-hardware',
-      'ceiling-flooring'
+      'ceiling-flooring',
+      'ceiling-fans-exhaust',
+      'cctv-networking',
+      'kitchen-sinks-faucets',
+      'bathroom-renovation-materials'
     ]
   }
 ];
@@ -640,6 +682,303 @@ export const getNewLaunchCategoryBySlug = (slug?: string): NewLaunchCategory | u
   if (!slug) return undefined;
   return NEW_LAUNCHES_CATEGORIES.find((c) => c.slug === slug || c.masterCategorySlug === slug);
 };
+
+export interface SuppliedNewLaunchCollectionDef {
+  id: string;
+  title: string;
+  slug: string;
+  categoryGroupId: string;
+  description: string;
+  badge: string;
+  image: string;
+  bannerImage: string;
+  displayOrder: number;
+  childLabels: string[];
+}
+
+export const SUPPLIED_NEW_LAUNCH_DEFINITIONS: SuppliedNewLaunchCollectionDef[] = [
+  {
+    id: 'nl-col-cabinet-hardware',
+    title: 'Cabinet Hardware',
+    slug: 'cabinet-hardware',
+    categoryGroupId: 'cat-7',
+    badge: 'NEW ARRIVAL',
+    description: 'Architectural cabinet hinges, telescopic channels, handles, locks and hardware essentials.',
+    image: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=1400&q=80',
+    displayOrder: 1,
+    childLabels: [
+      'Bed & Cabinet Hydraulics',
+      'Cylindrical Locks',
+      'Drawer & Wardrobe Channels',
+      'Electrical Hardware',
+      'General & Multipurpose',
+      'Handles, Profiles & Drawer Locks',
+      'Harness & More',
+      'Helmets & Goggles',
+      'Hi-Vis Jackets',
+      'Hinges',
+      'Masonry Tools & Hardware',
+      'Mechanical Locks',
+      'Power Tools & Accessories',
+      'Pullouts, Baskets, Wickers',
+      'PVC Pipes & Fittings',
+      'Sanitary & Bath Fittings',
+      'Shoes & Gloves',
+      'Skirting & Hardware',
+      'Tandems & Inserts',
+      'UPS, Inverter & Batteries',
+      'Wardrobe Pullouts & Accessories',
+      'Waste Bins & Other Accessories',
+    ],
+  },
+  {
+    id: 'nl-col-kitchen-systems-hardware',
+    title: 'Kitchen Systems & Hardware',
+    slug: 'kitchen-systems-hardware',
+    categoryGroupId: 'cat-8',
+    badge: 'NEW ARRIVAL',
+    description: 'Modular pullouts, baskets, tandem drawers, magic corners, cabinetry lighting and hinges.',
+    image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=600&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1400&q=80',
+    displayOrder: 2,
+    childLabels: [
+      'Bed & Cabinet Hydraulics',
+      'Drawer & Wardrobe Channels',
+      'furniture & cabinetry lighting',
+      'Handles, Profiles & Drawer Locks',
+      'hinges',
+      'magic corner, pantry units, pulldowns',
+      'Pullouts, Baskets, Wickers',
+      'Skirting & Hardware',
+      'striplights & profiles',
+      'Tandems & Inserts',
+      'Waste Bins & Other Accessories',
+    ],
+  },
+  {
+    id: 'nl-col-general-hardware-tools',
+    title: 'General Hardware & Tools',
+    slug: 'general-hardware-tools',
+    categoryGroupId: 'cat-21',
+    badge: 'JOB SITE ESSENTIAL',
+    description: 'Site tools, power tools, sealants, adhesives, safety gear and civil finishing hardware.',
+    image: 'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=600&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=1400&q=80',
+    displayOrder: 3,
+    childLabels: [
+      'Cement & Civil Works',
+      'Electrical Hardware',
+      'Epoxy & Special Adhesives',
+      'General & Multipurpose',
+      'Hand Tools',
+      'Harness & More',
+      'Helmets & Goggles',
+      'Hi-Vis Jackets',
+      'Masonry Tools & Hardware',
+      'Measuring Tools',
+      'Painting',
+      'Painting Tools & Hardware',
+      'Power Tools & Accessories',
+      'Sealants',
+      'Shoes & Gloves',
+      'Tools, Power Tools & General Hardware',
+      'Waste Bins & Other Accessories',
+      'Waterproof Repairs',
+    ],
+  },
+  {
+    id: 'nl-col-bathroom-renovation-materials',
+    title: 'Bathroom Renovation Materials',
+    slug: 'bathroom-renovation-materials',
+    categoryGroupId: 'cat-27',
+    badge: 'HOT LAUNCH',
+    description: 'Sanitary fittings, CPVC plumbing, waterproofing membranes, tile adhesives, grouts and mixers.',
+    image: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=600&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=1400&q=80',
+    displayOrder: 4,
+    childLabels: [
+      'Accessories & Hardware',
+      'Admixtures',
+      'Bathroom Fittings & Accessories',
+      'Brass Fittings',
+      'Coatings & Membranes',
+      'CPVC Fittings',
+      'CPVC Pipes & Hardware',
+      'Epoxy & Special Adhesives',
+      'Grouts & Cleaners',
+      'Mixers, Diverters & Shower',
+      'Sanitary & Bath Fittings',
+      'Sealants',
+      'Tile Adhesives',
+      'Wash Basins & Faucets',
+      'WC & Concealed Cisterns',
+    ],
+  },
+  {
+    id: 'nl-col-conduits-piping',
+    title: 'Conduits & Piping',
+    slug: 'conduits-piping',
+    categoryGroupId: 'cat-13',
+    badge: 'FRESH BATCH',
+    description: 'FRLS electrical conduits, chemicals, hardware and PVC piping accessories.',
+    image: 'https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?auto=format&fit=crop&w=600&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?auto=format&fit=crop&w=1400&q=80',
+    displayOrder: 5,
+    childLabels: [
+      'chemicals',
+      'electrical hardware',
+      'PVC pipes & fittings',
+    ],
+  },
+  {
+    id: 'nl-col-pvc-pipes',
+    title: 'PVC Pipes',
+    slug: 'pvc-pipes',
+    categoryGroupId: 'cat-16',
+    badge: '60M DISPATCH',
+    description: 'Hot and cold plumbing PVC, CPVC piping and installation hardwares.',
+    image: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=600&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?auto=format&fit=crop&w=1400&q=80',
+    displayOrder: 6,
+    childLabels: [
+      'PVC pipes & hardwares',
+    ],
+  },
+  {
+    id: 'nl-col-kitchen-sinks-faucets',
+    title: 'Kitchen Sinks & Faucets',
+    slug: 'kitchen-sinks-faucets',
+    categoryGroupId: 'cat-18',
+    badge: 'NEW ARRIVAL',
+    description: 'SS 304 handmade sinks, luxury granite sinks, kitchen faucets, sealants and accessories.',
+    image: 'https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&w=600&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1588854337236-6889d631faa8?auto=format&fit=crop&w=1400&q=80',
+    displayOrder: 7,
+    childLabels: [
+      'Accessories & Hardware',
+      'CPVC Pipes & Hardware',
+      'Faucets',
+      'Kitchen Sinks & Faucets',
+      'Luxury Sinks',
+      'Sealants',
+      'SS Sinks',
+      'Wash Basins & Faucets',
+      'Waterproof Repairs',
+    ],
+  },
+  {
+    id: 'nl-col-home-appliances-power-backup',
+    title: 'Home Appliances & Power Backup',
+    slug: 'home-appliances-power-backup',
+    categoryGroupId: 'cat-23',
+    badge: 'DIRECT FROM BRAND',
+    description: 'Chimneys, water heaters, pumps, inverters, electrical hardware and protection supplies.',
+    image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80',
+    bannerImage: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1400&q=80',
+    displayOrder: 8,
+    childLabels: [
+      'Chimney',
+      'Electrical Hardware',
+      'Home Appliances',
+      'Pumps & Motors',
+      'UPS, Inverter & Batteries',
+      'Water Heater & Geyser',
+      'Wires, MCB & Electrical Supplies',
+    ],
+  },
+];
+
+const normalizeTaxonomyLabel = (raw: string): string =>
+  String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+
+export function resolveNewLaunchCategoryMapping(
+  displayLabel: string,
+  pool: TaxonomyPool,
+  preferredGroupId?: string,
+  sortOrder = 1,
+  mappingId?: string
+): NewLaunchCategoryMapping {
+  const exactNeedle = displayLabel.trim().toLowerCase();
+  const normNeedle = normalizeTaxonomyLabel(displayLabel);
+  const id = mappingId || `nl-map-${sortOrder}-${normNeedle.slice(0, 24) || 'item'}`;
+
+  const preferredGroup = preferredGroupId
+    ? pool.childCategories.find((c) => c.id === preferredGroupId)
+    : undefined;
+
+  let candidates = pool.productTypes.filter(
+    (pt) => pt.name.trim().toLowerCase() === exactNeedle
+  );
+  if (candidates.length === 0) {
+    candidates = pool.productTypes.filter(
+      (pt) => normalizeTaxonomyLabel(pt.name) === normNeedle
+    );
+  }
+
+  if (candidates.length > 0) {
+    const preferredMatch =
+      (preferredGroupId && candidates.find((pt) => pt.childCategoryId === preferredGroupId)) ||
+      (preferredGroup && candidates.find((pt) => pt.mainCategoryId === preferredGroup.mainCategoryId)) ||
+      candidates[0];
+
+    const grp = pool.childCategories.find((c) => c.id === preferredMatch.childCategoryId);
+    const main = pool.mainCategories.find((m) => m.id === (grp?.mainCategoryId || preferredMatch.mainCategoryId));
+
+    return {
+      id,
+      displayLabel,
+      mainCategoryId: main?.id || preferredMatch.mainCategoryId,
+      mainCategorySlug: main?.slug || '',
+      mainCategoryName: main?.name || '',
+      categoryGroupId: grp?.id || preferredMatch.childCategoryId,
+      categoryGroupSlug: grp?.slug || '',
+      categoryGroupName: grp?.name || '',
+      childCategoryId: preferredMatch.id,
+      childCategorySlug: preferredMatch.slug,
+      childCategoryName: preferredMatch.name,
+      mappingStatus: 'MAPPED',
+      suggestedPermanentCategoryIds: candidates.map((c) => c.id),
+      sortOrder,
+      isActive: true,
+    };
+  }
+
+  const groupMatches = pool.childCategories.filter(
+    (c) =>
+      c.name.trim().toLowerCase() === exactNeedle ||
+      normalizeTaxonomyLabel(c.name) === normNeedle
+  );
+  if (groupMatches.length > 0) {
+    const grp = (preferredGroupId && groupMatches.find((g) => g.id === preferredGroupId)) || groupMatches[0];
+    const main = pool.mainCategories.find((m) => m.id === grp.mainCategoryId);
+    return {
+      id,
+      displayLabel,
+      mainCategoryId: main?.id || grp.mainCategoryId,
+      mainCategorySlug: main?.slug || '',
+      mainCategoryName: main?.name || '',
+      categoryGroupId: grp.id,
+      categoryGroupSlug: grp.slug,
+      categoryGroupName: grp.name,
+      mappingStatus: 'GROUP_MATCH',
+      suggestedPermanentCategoryIds: groupMatches.map((g) => g.id),
+      sortOrder,
+      isActive: true,
+    };
+  }
+
+  return {
+    id,
+    displayLabel,
+    mappingStatus: 'UNMAPPED',
+    sortOrder,
+    isActive: true,
+  };
+}
 
 // Shared 4-level BUILDORA Taxonomy Seeds (Main Category -> Child Category -> Product Type)
 const DEPT_TO_MAIN_ID: Record<string, string> = {
@@ -923,7 +1262,7 @@ export const MASTER_BRANDS = [
     logo: 'https://images.unsplash.com/photo-1521747116042-5a810fda9664?auto=format&fit=crop&w=200&q=80',
     description: 'Multi-layer anti-bacterial water storage tanks, PVC conduits, and drainage piping systems.',
     featured: true,
-    categories: ['water-storage-tanks', 'electrical-conduits', 'cpvc-pipes-overhead-tanks']
+    categories: ['overhead-tanks', 'electrical-conduits', 'cpvc-pipes-overhead-tanks']
   }
 ];
 

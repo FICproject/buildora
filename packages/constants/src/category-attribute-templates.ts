@@ -469,12 +469,12 @@ export const CATEGORY_ATTRIBUTE_TEMPLATES: Record<string, CategoryAttributeTempl
     }
   ],
 
-  // 19. Water Storage Tanks
-  'water-storage-tanks': [
+  // 19. Overhead Tanks (renamed from Water Storage Tanks)
+  'overhead-tanks': [
     {
       id: 'cat-tpl-tank-capacity',
-      categorySlug: 'water-storage-tanks',
-      categoryName: 'Water Storage Tanks',
+      categorySlug: 'overhead-tanks',
+      categoryName: 'Overhead Tanks',
       name: 'Capacity',
       suggestedUiType: 'cards',
       suggestedOptions: ['500 Litres', '1000 Litres (Recommended)', '1500 Litres', '2000 Litres', '3000 Litres Industrial'],
@@ -482,8 +482,8 @@ export const CATEGORY_ATTRIBUTE_TEMPLATES: Record<string, CategoryAttributeTempl
     },
     {
       id: 'cat-tpl-tank-layers',
-      categorySlug: 'water-storage-tanks',
-      categoryName: 'Water Storage Tanks',
+      categorySlug: 'overhead-tanks',
+      categoryName: 'Overhead Tanks',
       name: 'Layers',
       suggestedUiType: 'pills',
       suggestedOptions: ['3 Layers (UV Stabilized)', '4 Layers (Foam Insulated Anti-Bacterial)', '5 Layers (Triple Foam Heavy All-Weather)'],

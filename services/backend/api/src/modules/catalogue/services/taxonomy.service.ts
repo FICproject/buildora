@@ -11,12 +11,15 @@ import {
   getAvailableFiltersForCategory,
   MASTER_BRANDS,
   resolveFullTaxonomy,
+  SUPPLIED_NEW_LAUNCH_DEFINITIONS,
+  resolveNewLaunchCategoryMapping,
 } from '@buildora/constants';
 import {
   MainCategory,
   ChildCategory,
   ProductTypeNode,
   NewLaunchCollection,
+  NewLaunchCategoryMapping,
   CategoryFieldSchema,
   CategoryFieldType,
   CategoryFilterConfiguration,
@@ -96,6 +99,26 @@ export interface TaxonomyMigrationRecord {
   status: 'MIGRATED' | 'UNMAPPED';
 }
 
+export interface NewLaunchesMigrationReport {
+  executedAt: string;
+  idempotentRun: boolean;
+  totalCollections: number;
+  createdCollections: number;
+  matchedCollections: number;
+  totalShortcuts: number;
+  mappedShortcuts: number;
+  groupMatchedShortcuts: number;
+  unmappedShortcuts: number;
+  unmappedItems: Array<{
+    collectionId: string;
+    collectionTitle: string;
+    displayLabel: string;
+    mappingId: string;
+    status: 'UNMAPPED' | 'GROUP_MATCH';
+    suggestedCategoryGroupId?: string;
+  }>;
+}
+
 @Injectable()
 export class TaxonomyService implements OnModuleInit {
   private readonly logger = new Logger(TaxonomyService.name);
@@ -111,8 +134,13 @@ export class TaxonomyService implements OnModuleInit {
   public migrationRecords: TaxonomyMigrationRecord[] = [];
   public civilMigrationReport: CivilMigrationReport | null = null;
   public furnitureMigrationReport: CivilMigrationReport | null = null;
+  public electricalMigrationReport: CivilMigrationReport | null = null;
+  public plumbingMigrationReport: CivilMigrationReport | null = null;
+  public newLaunchesMigrationReport: NewLaunchesMigrationReport | null = null;
   private drafts = new Map<string, TenantCatalogDraft>();
   private publishMeta = new Map<string, CatalogPublishMetadata>();
+  private newLaunchDrafts = new Map<string, NewLaunchCollection[]>();
+  private newLaunchDraftDirty = new Set<string>();
 
   constructor() {
     this.seedDefaultsIfEmpty();
@@ -150,28 +178,6 @@ export class TaxonomyService implements OnModuleInit {
         updatedAt: now,
       }));
     }
-    if (this.newLaunchCollections.length === 0) {
-      const now = new Date().toISOString();
-      const seedLaunchIds = dbStore.products
-        .filter((p) => p.isNewLaunch)
-        .map((p) => p.id);
-      this.newLaunchCollections = [
-        {
-          id: 'nl-col-default',
-          tenantId,
-          title: 'BUILDORA 60 New Launches',
-          slug: 'featured-new-launches',
-          description:
-            'Admin-curated showcase of newly onboarded certified building materials.',
-          badge: 'NEW ARRIVAL',
-          productIds: seedLaunchIds,
-          displayOrder: 1,
-          isActive: true,
-          createdAt: now,
-          updatedAt: now,
-        },
-      ];
-    }
     if (this.categoryFieldSchemas.length === 0) {
       const now = new Date().toISOString();
       this.categoryFieldSchemas = CATEGORY_FIELD_SCHEMAS_SEED.map((f) => ({
@@ -195,6 +201,9 @@ export class TaxonomyService implements OnModuleInit {
     }
     this.reconcileCivilAndInteriorsTaxonomySync(tenantId);
     this.reconcileFurnitureHardwareTaxonomySync(tenantId);
+    this.reconcileElectricalTaxonomySync(tenantId);
+    this.reconcilePlumbingTaxonomySync(tenantId);
+    this.reconcileNewLaunchesCollectionsSync(tenantId);
     this.migrateLegacyCatalogRecords();
   }
 
@@ -556,6 +565,541 @@ export class TaxonomyService implements OnModuleInit {
     return report;
   }
 
+  /**
+   * Idempotently reconciles the exact Electrical 4 Category Groups
+   * (cat-11..cat-14) and their 24 supplied Child Categories (ProductTypeNode records),
+   * reusing existing IDs and preserving 100% of existing products, variants, images & stock.
+   */
+  public reconcileElectricalTaxonomySync(tenantId = GLOBAL_TENANT): CivilMigrationReport {
+    const now = new Date().toISOString();
+    const report: CivilMigrationReport = {
+      executedAt: now,
+      idempotentRun: Boolean(this.electricalMigrationReport),
+      matchedExistingCategories: 0,
+      updatedCategories: 0,
+      createdCategories: 0,
+      matchedSubcategories: 0,
+      createdSubcategories: 0,
+      migratedLegacySubcategories: 0,
+      reassignedExtraCategories: 0,
+      productsPreserved: dbStore.products.length,
+      productsRemapped: 0,
+      filterConfigsSeeded: 0,
+    };
+
+    const seedMain = MAIN_CATEGORIES_SEED.find((m) => m.id === 'mc-3');
+    if (seedMain) {
+      const existingMain = this.mainCategories.find((m) => m.id === 'mc-3' || m.slug === 'electrical');
+      if (!existingMain) {
+        this.mainCategories.push({ ...seedMain, tenantId, createdAt: now, updatedAt: now });
+      }
+    }
+
+    const seedGroups = CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === 'mc-3');
+    const groupIdSet = new Set(seedGroups.map((c) => c.id));
+
+    // Reassign non-supplied groups (e.g. cat-15 Ceiling Fans & Exhaust, cat-22 CCTV & Networking) to mc-5
+    for (const cc of this.childCategories) {
+      if (cc.mainCategoryId === 'mc-3' && !groupIdSet.has(cc.id)) {
+        cc.mainCategoryId = 'mc-5';
+        cc.mainCategorySlug = 'hardware-appliances';
+        cc.updatedAt = now;
+        report.reassignedExtraCategories += 1;
+      }
+    }
+
+    // Reconcile the 4 exact Category Groups under Electrical
+    for (const seedGroup of seedGroups) {
+      const existing = this.childCategories.find(
+        (c) =>
+          c.id === seedGroup.id ||
+          (c.mainCategoryId === 'mc-3' &&
+            (c.slug === seedGroup.slug || c.name.toLowerCase() === seedGroup.name.toLowerCase()))
+      );
+      if (existing) {
+        report.matchedExistingCategories += 1;
+        if (
+          existing.name !== seedGroup.name ||
+          existing.slug !== seedGroup.slug ||
+          existing.sortOrder !== seedGroup.sortOrder ||
+          existing.mainCategoryId !== 'mc-3'
+        ) {
+          existing.name = seedGroup.name;
+          existing.slug = seedGroup.slug;
+          existing.mainCategoryId = 'mc-3';
+          existing.mainCategorySlug = 'electrical';
+          existing.description = seedGroup.description;
+          existing.sortOrder = seedGroup.sortOrder;
+          existing.isActive = true;
+          existing.updatedAt = now;
+          report.updatedCategories += 1;
+        }
+      } else {
+        this.childCategories.push({ ...seedGroup, tenantId, createdAt: now, updatedAt: now });
+        report.createdCategories += 1;
+      }
+    }
+
+    // Migrate legacy sub-11-*..sub-14-* entries under cat-11..cat-14 and upsert the 24 supplied Child Categories
+    const seedTypes = PRODUCT_TYPES_SEED.filter((pt) => groupIdSet.has(pt.childCategoryId));
+    const seedTypeIdSet = new Set(seedTypes.map((pt) => pt.id));
+
+    for (const pt of [...this.productTypes]) {
+      if (groupIdSet.has(pt.childCategoryId) && !seedTypeIdSet.has(pt.id)) {
+        const mapped = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[pt.slug?.toLowerCase() || ''];
+        if (mapped) {
+          report.migratedLegacySubcategories += 1;
+          this.productTypes = this.productTypes.filter((x) => x.id !== pt.id);
+        }
+      }
+    }
+
+    for (const seedType of seedTypes) {
+      const existing = this.productTypes.find(
+        (pt) =>
+          pt.id === seedType.id ||
+          (pt.childCategoryId === seedType.childCategoryId &&
+            (pt.slug.toLowerCase() === seedType.slug.toLowerCase() ||
+              pt.name.trim().toLowerCase() === seedType.name.trim().toLowerCase()))
+      );
+      if (existing) {
+        report.matchedSubcategories += 1;
+        existing.mainCategoryId = 'mc-3';
+        existing.childCategoryId = seedType.childCategoryId;
+        existing.childCategorySlug = seedType.childCategorySlug;
+        existing.name = seedType.name;
+        existing.slug = seedType.slug;
+        existing.sortOrder = seedType.sortOrder;
+        existing.isActive = true;
+        existing.updatedAt = now;
+      } else {
+        this.productTypes.push({ ...seedType, tenantId, createdAt: now, updatedAt: now });
+        report.createdSubcategories += 1;
+      }
+    }
+
+    // Ensure filter configs exist for cat-11..cat-14 without overwriting customized entries
+    for (const seedCfg of CATEGORY_FILTER_CONFIGS_SEED.filter((fc) => fc.mainCategoryId === 'mc-3')) {
+      const match = this.categoryFilterConfigs.find(
+        (c) =>
+          c.id === seedCfg.id ||
+          (c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
+      );
+      if (!match) {
+        this.categoryFilterConfigs.push({ ...seedCfg, tenantId, createdAt: now, updatedAt: now });
+        report.filterConfigsSeeded += 1;
+      }
+    }
+
+    // Safely upgrade existing products under Electrical groups while preserving all product fields
+    const childById = new Map(this.childCategories.map((c) => [c.id, c]));
+    const ptById = new Map(this.productTypes.map((t) => [t.id, t]));
+    for (const p of dbStore.products as any[]) {
+      const catId = p.childCategoryId || p.categoryId;
+      const rawSubSlug = (p.subcategorySlug || p.productTypeSlug || '').toLowerCase();
+      const aliasSub = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[rawSubSlug];
+
+      if (catId && groupIdSet.has(catId)) {
+        const cc = childById.get(catId);
+        if (cc) {
+          p.mainCategoryId = 'mc-3';
+          p.mainCategorySlug = 'electrical';
+          p.mainCategoryName = 'Electrical';
+          p.childCategoryId = cc.id;
+          p.childCategorySlug = cc.slug;
+          p.childCategoryName = cc.name;
+          p.categoryId = cc.id;
+          p.categorySlug = cc.slug;
+          p.category = cc.name;
+          report.productsRemapped += 1;
+        }
+        const pt = aliasSub ? ptById.get(aliasSub.productTypeId) : ptById.get(p.productTypeId || p.subcategoryId);
+        if (pt) {
+          p.productTypeId = pt.id;
+          p.productTypeSlug = pt.slug;
+          p.productTypeName = pt.name;
+          p.subcategoryId = pt.id;
+          p.subcategorySlug = pt.slug;
+          p.subcategory = pt.name;
+        }
+      } else if (
+        catId === 'cat-15' ||
+        catId === 'cat-22' ||
+        p.categorySlug === 'ceiling-fans-exhaust' ||
+        p.categorySlug === 'cctv-networking'
+      ) {
+        p.mainCategoryId = 'mc-5';
+        p.mainCategorySlug = 'hardware-appliances';
+        p.mainCategoryName = 'Hardware & Appliances';
+      }
+    }
+
+    this.electricalMigrationReport = report;
+    return report;
+  }
+
+  /**
+   * Idempotently reconciles the exact Plumbing, Sanitary & Bath 3 Category Groups
+   * (cat-16, cat-17, cat-19) and their 15 supplied Child Categories (ProductTypeNode records),
+   * reusing existing IDs and preserving 100% of existing products, variants, images & stock.
+   * Reassigns cat-18 (Kitchen Sinks & Faucets) and cat-27 (Bathroom Renovation Materials) to mc-5.
+   */
+  public reconcilePlumbingTaxonomySync(tenantId = GLOBAL_TENANT): CivilMigrationReport {
+    const now = new Date().toISOString();
+    const report: CivilMigrationReport = {
+      executedAt: now,
+      idempotentRun: Boolean(this.plumbingMigrationReport),
+      matchedExistingCategories: 0,
+      updatedCategories: 0,
+      createdCategories: 0,
+      matchedSubcategories: 0,
+      createdSubcategories: 0,
+      migratedLegacySubcategories: 0,
+      reassignedExtraCategories: 0,
+      productsPreserved: dbStore.products.length,
+      productsRemapped: 0,
+      filterConfigsSeeded: 0,
+    };
+
+    const seedMain = MAIN_CATEGORIES_SEED.find((m) => m.id === 'mc-4');
+    if (seedMain) {
+      const existingMain = this.mainCategories.find((m) => m.id === 'mc-4' || m.slug === 'plumbing-sanitary');
+      if (!existingMain) {
+        this.mainCategories.push({ ...seedMain, tenantId, createdAt: now, updatedAt: now });
+      }
+    }
+
+    const seedGroups = CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === 'mc-4');
+    const groupIdSet = new Set(seedGroups.map((c) => c.id));
+
+    // Reassign non-supplied groups (cat-18 Kitchen Sinks & Faucets, cat-27 Bathroom Renovation) to mc-5
+    for (const cc of this.childCategories) {
+      if (cc.mainCategoryId === 'mc-4' && !groupIdSet.has(cc.id)) {
+        cc.mainCategoryId = 'mc-5';
+        cc.mainCategorySlug = 'hardware-appliances';
+        cc.updatedAt = now;
+        report.reassignedExtraCategories += 1;
+      }
+    }
+
+    // Reconcile the 3 exact Category Groups under Plumbing, Sanitary & Bath
+    for (const seedGroup of seedGroups) {
+      const existing = this.childCategories.find(
+        (c) =>
+          c.id === seedGroup.id ||
+          (c.mainCategoryId === 'mc-4' &&
+            (c.slug === seedGroup.slug || c.name.toLowerCase() === seedGroup.name.toLowerCase()))
+      );
+      if (existing) {
+        report.matchedExistingCategories += 1;
+        if (
+          existing.name !== seedGroup.name ||
+          existing.slug !== seedGroup.slug ||
+          existing.sortOrder !== seedGroup.sortOrder ||
+          existing.mainCategoryId !== 'mc-4'
+        ) {
+          existing.name = seedGroup.name;
+          existing.slug = seedGroup.slug;
+          existing.mainCategoryId = 'mc-4';
+          existing.mainCategorySlug = 'plumbing-sanitary';
+          existing.description = seedGroup.description;
+          existing.sortOrder = seedGroup.sortOrder;
+          existing.isActive = true;
+          existing.updatedAt = now;
+          report.updatedCategories += 1;
+        }
+      } else {
+        this.childCategories.push({ ...seedGroup, tenantId, createdAt: now, updatedAt: now });
+        report.createdCategories += 1;
+      }
+    }
+
+    // Migrate legacy sub-16-*..sub-19-* entries under cat-16..cat-19 and upsert the 15 supplied Child Categories
+    const seedTypes = PRODUCT_TYPES_SEED.filter((pt) => groupIdSet.has(pt.childCategoryId));
+    const seedTypeIdSet = new Set(seedTypes.map((pt) => pt.id));
+
+    for (const pt of [...this.productTypes]) {
+      if (groupIdSet.has(pt.childCategoryId) && !seedTypeIdSet.has(pt.id)) {
+        const mapped = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[pt.slug?.toLowerCase() || ''];
+        if (mapped) {
+          report.migratedLegacySubcategories += 1;
+          this.productTypes = this.productTypes.filter((x) => x.id !== pt.id);
+        }
+      }
+    }
+
+    for (const seedType of seedTypes) {
+      const existing = this.productTypes.find(
+        (pt) =>
+          pt.id === seedType.id ||
+          (pt.childCategoryId === seedType.childCategoryId &&
+            (pt.slug.toLowerCase() === seedType.slug.toLowerCase() ||
+              pt.name.trim().toLowerCase() === seedType.name.trim().toLowerCase()))
+      );
+      if (existing) {
+        report.matchedSubcategories += 1;
+        existing.mainCategoryId = 'mc-4';
+        existing.childCategoryId = seedType.childCategoryId;
+        existing.childCategorySlug = seedType.childCategorySlug;
+        existing.name = seedType.name;
+        existing.slug = seedType.slug;
+        existing.sortOrder = seedType.sortOrder;
+        existing.isActive = true;
+        existing.updatedAt = now;
+      } else {
+        this.productTypes.push({ ...seedType, tenantId, createdAt: now, updatedAt: now });
+        report.createdSubcategories += 1;
+      }
+    }
+
+    // Ensure filter configs exist for cat-16, cat-17, cat-19 without overwriting customized entries
+    for (const seedCfg of CATEGORY_FILTER_CONFIGS_SEED.filter((fc) => fc.mainCategoryId === 'mc-4')) {
+      const match = this.categoryFilterConfigs.find(
+        (c) =>
+          c.id === seedCfg.id ||
+          (c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
+      );
+      if (!match) {
+        this.categoryFilterConfigs.push({ ...seedCfg, tenantId, createdAt: now, updatedAt: now });
+        report.filterConfigsSeeded += 1;
+      }
+    }
+
+    // Safely upgrade existing products under Plumbing groups while preserving all product fields
+    const childById = new Map(this.childCategories.map((c) => [c.id, c]));
+    const ptById = new Map(this.productTypes.map((t) => [t.id, t]));
+    for (const p of dbStore.products as any[]) {
+      const catId = p.childCategoryId || p.categoryId;
+      const rawSubSlug = (p.subcategorySlug || p.productTypeSlug || '').toLowerCase();
+      const aliasSub = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[rawSubSlug];
+
+      if (catId && groupIdSet.has(catId)) {
+        const cc = childById.get(catId);
+        if (cc) {
+          p.mainCategoryId = 'mc-4';
+          p.mainCategorySlug = 'plumbing-sanitary';
+          p.mainCategoryName = 'Plumbing, Sanitary & Bath';
+          p.childCategoryId = cc.id;
+          p.childCategorySlug = cc.slug;
+          p.childCategoryName = cc.name;
+          p.categoryId = cc.id;
+          p.categorySlug = cc.slug;
+          p.category = cc.name;
+          report.productsRemapped += 1;
+        }
+        const pt = aliasSub ? ptById.get(aliasSub.productTypeId) : ptById.get(p.productTypeId || p.subcategoryId);
+        if (pt) {
+          p.productTypeId = pt.id;
+          p.productTypeSlug = pt.slug;
+          p.productTypeName = pt.name;
+          p.subcategoryId = pt.id;
+          p.subcategorySlug = pt.slug;
+          p.subcategory = pt.name;
+        }
+      } else if (
+        catId === 'cat-18' ||
+        catId === 'cat-27' ||
+        p.categorySlug === 'kitchen-sinks-faucets' ||
+        p.categorySlug === 'bathroom-renovation-materials'
+      ) {
+        p.mainCategoryId = 'mc-5';
+        p.mainCategorySlug = 'hardware-appliances';
+        p.mainCategoryName = 'Hardware & Appliances';
+      }
+    }
+
+    this.plumbingMigrationReport = report;
+    return report;
+  }
+
+  /**
+   * Idempotently reconciles the exact 8 supplied New Launches promotional collections
+   * (Cabinet Hardware .. Home Appliances & Power Backup) and maps their shortcuts to
+   * real permanent taxonomy IDs WITHOUT creating duplicate permanent categories or modifying
+   * any product's original categoryIds. Preserves unmapped labels transparently for Admin review.
+   */
+  public reconcileNewLaunchesCollectionsSync(tenantId = GLOBAL_TENANT): NewLaunchesMigrationReport {
+    const now = new Date().toISOString();
+    const isIdempotent = Boolean(this.newLaunchesMigrationReport);
+    const pool = {
+      mainCategories: this.mainCategories,
+      childCategories: this.childCategories,
+      productTypes: this.productTypes,
+    };
+
+    // Migrate away pure legacy nl-col-default once real 8 promotional collections are seeded
+    const onlyLegacyDefault =
+      this.newLaunchCollections.length === 1 &&
+      this.newLaunchCollections[0]?.id === 'nl-col-default';
+    const preservedLegacyProductIds = onlyLegacyDefault
+      ? [...(this.newLaunchCollections[0]?.productIds || [])]
+      : [];
+    if (onlyLegacyDefault) {
+      this.newLaunchCollections = [];
+    }
+
+    let createdCollections = 0;
+    let matchedCollections = 0;
+
+    for (const def of SUPPLIED_NEW_LAUNCH_DEFINITIONS) {
+      const existing = this.newLaunchCollections.find(
+        (c) =>
+          c.id === def.id ||
+          c.slug.toLowerCase() === def.slug.toLowerCase() ||
+          c.title.trim().toLowerCase() === def.title.trim().toLowerCase()
+      );
+      const grp = this.childCategories.find((c) => c.id === def.categoryGroupId);
+      const main = grp ? this.mainCategories.find((m) => m.id === grp.mainCategoryId) : undefined;
+
+      const existingMappings = Array.isArray(existing?.categoryMappings) ? existing!.categoryMappings! : [];
+      const reconciledMappings: NewLaunchCategoryMapping[] = def.childLabels.map((label, idx) => {
+        const existingMap = existingMappings.find(
+          (m) => m.displayLabel.trim().toLowerCase() === label.trim().toLowerCase()
+        );
+        if (existingMap && existingMap.mappingStatus === 'MAPPED' && existingMap.childCategoryId) {
+          const validPt = this.productTypes.find((pt) => pt.id === existingMap.childCategoryId);
+          if (validPt) {
+            const validGrp = this.childCategories.find((c) => c.id === validPt.childCategoryId);
+            const validMain = validGrp ? this.mainCategories.find((m) => m.id === validGrp.mainCategoryId) : undefined;
+            return {
+              ...existingMap,
+              displayLabel: label,
+              mainCategoryId: validMain?.id || validPt.mainCategoryId,
+              mainCategorySlug: validMain?.slug || '',
+              mainCategoryName: validMain?.name || '',
+              categoryGroupId: validGrp?.id || validPt.childCategoryId,
+              categoryGroupSlug: validGrp?.slug || '',
+              categoryGroupName: validGrp?.name || '',
+              childCategoryId: validPt.id,
+              childCategorySlug: validPt.slug,
+              childCategoryName: validPt.name,
+              sortOrder: existingMap.sortOrder || idx + 1,
+            };
+          }
+        }
+        return resolveNewLaunchCategoryMapping(label, pool, def.categoryGroupId, idx + 1, existingMap?.id);
+      });
+
+      // Keep any extra Admin-added shortcuts beyond the supplied labels
+      const suppliedLower = new Set(def.childLabels.map((l) => l.trim().toLowerCase()));
+      for (const extraMap of existingMappings) {
+        if (!suppliedLower.has(extraMap.displayLabel.trim().toLowerCase())) {
+          reconciledMappings.push(extraMap);
+        }
+      }
+
+      if (existing) {
+        matchedCollections += 1;
+        existing.categoryGroupId = existing.categoryGroupId || grp?.id || def.categoryGroupId;
+        existing.categoryGroupSlug = existing.categoryGroupSlug || grp?.slug;
+        existing.categoryGroupName = existing.categoryGroupName || grp?.name;
+        existing.mainCategoryId = existing.mainCategoryId || main?.id;
+        existing.mainCategoryName = existing.mainCategoryName || main?.name;
+        existing.categoryMappings = reconciledMappings;
+        if (!existing.image) existing.image = def.image;
+        if (!existing.bannerImage) existing.bannerImage = def.bannerImage;
+        if (!existing.publishStatus) existing.publishStatus = existing.isActive !== false ? 'PUBLISHED' : 'DRAFT';
+        existing.updatedAt = now;
+      } else {
+        const eligibleProdIds = dbStore.products
+          .filter((p: any) => {
+            if (!p.isNewLaunch && !preservedLegacyProductIds.includes(p.id)) return false;
+            return reconciledMappings.some(
+              (m) =>
+                m.mappingStatus === 'MAPPED' &&
+                ((m.childCategoryId && (p.productTypeId === m.childCategoryId || p.subcategoryId === m.childCategoryId)) ||
+                  (m.categoryGroupId && (p.childCategoryId === m.categoryGroupId || p.categoryId === m.categoryGroupId)))
+            );
+          })
+          .map((p) => p.id);
+
+        this.newLaunchCollections.push({
+          id: def.id,
+          tenantId,
+          title: def.title,
+          name: def.title,
+          slug: def.slug,
+          description: def.description,
+          image: def.image,
+          bannerImage: def.bannerImage,
+          badge: def.badge,
+          mainCategoryId: main?.id || 'mc-2',
+          mainCategoryName: main?.name || '',
+          categoryGroupId: grp?.id || def.categoryGroupId,
+          categoryGroupSlug: grp?.slug || '',
+          categoryGroupName: grp?.name || '',
+          categoryMappings: reconciledMappings,
+          productIds: eligibleProdIds,
+          displayOrder: def.displayOrder,
+          isActive: true,
+          publishStatus: 'PUBLISHED',
+          createdAt: now,
+          updatedAt: now,
+        });
+        createdCollections += 1;
+      }
+    }
+
+    const report = this.buildNewLaunchesReport(this.newLaunchCollections, createdCollections, matchedCollections, isIdempotent);
+    this.newLaunchesMigrationReport = report;
+    return report;
+  }
+
+  private buildNewLaunchesReport(
+    collections: NewLaunchCollection[],
+    createdCollections = 0,
+    matchedCollections = collections.length,
+    idempotentRun = true
+  ): NewLaunchesMigrationReport {
+    const unmappedItems: NewLaunchesMigrationReport['unmappedItems'] = [];
+    let totalShortcuts = 0;
+    let mappedShortcuts = 0;
+    let groupMatchedShortcuts = 0;
+    let unmappedShortcuts = 0;
+
+    for (const col of collections) {
+      for (const m of col.categoryMappings || []) {
+        if (m.isActive === false) continue;
+        totalShortcuts += 1;
+        if (m.mappingStatus === 'MAPPED') mappedShortcuts += 1;
+        else if (m.mappingStatus === 'GROUP_MATCH') {
+          groupMatchedShortcuts += 1;
+          unmappedItems.push({
+            collectionId: col.id,
+            collectionTitle: col.title || col.name || col.slug,
+            displayLabel: m.displayLabel,
+            mappingId: m.id,
+            status: 'GROUP_MATCH',
+            suggestedCategoryGroupId: m.categoryGroupId,
+          });
+        } else {
+          unmappedShortcuts += 1;
+          unmappedItems.push({
+            collectionId: col.id,
+            collectionTitle: col.title || col.name || col.slug,
+            displayLabel: m.displayLabel,
+            mappingId: m.id,
+            status: 'UNMAPPED',
+            suggestedCategoryGroupId: col.categoryGroupId,
+          });
+        }
+      }
+    }
+
+    return {
+      executedAt: new Date().toISOString(),
+      idempotentRun,
+      totalCollections: collections.length,
+      createdCollections,
+      matchedCollections,
+      totalShortcuts,
+      mappedShortcuts,
+      groupMatchedShortcuts,
+      unmappedShortcuts,
+      unmappedItems,
+    };
+  }
+
   private buildDefaultDesktopNav(tenantId = GLOBAL_TENANT): DesktopNavItem[] {
     const now = new Date().toISOString();
     const sortedMains = [...this.mainCategories].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -695,27 +1239,35 @@ export class TaxonomyService implements OnModuleInit {
 
     this.reconcileCivilAndInteriorsTaxonomySync(GLOBAL_TENANT);
     this.reconcileFurnitureHardwareTaxonomySync(GLOBAL_TENANT);
+    this.reconcileElectricalTaxonomySync(GLOBAL_TENANT);
+    this.reconcilePlumbingTaxonomySync(GLOBAL_TENANT);
+    this.reconcileNewLaunchesCollectionsSync(GLOBAL_TENANT);
 
-    // Persist reconciled Civil & Furniture taxonomy changes idempotently if MongoDB is connected
+    // Persist reconciled Civil, Furniture, Electrical, Plumbing & New Launches changes idempotently if MongoDB is connected
     if (platformPersistenceService.isDbConnected()) {
-      for (const c of this.childCategories.filter((x) => ['mc-1', 'mc-2', 'mc-4', 'mc-5'].includes(x.mainCategoryId))) {
+      for (const c of this.childCategories.filter((x) => ['mc-1', 'mc-2', 'mc-3', 'mc-4', 'mc-5'].includes(x.mainCategoryId))) {
         await platformPersistenceService.upsert(ChildCategoryModel, c);
       }
-      for (const pt of this.productTypes.filter((x) => ['mc-1', 'mc-2'].includes(x.mainCategoryId))) {
+      for (const pt of this.productTypes.filter((x) => ['mc-1', 'mc-2', 'mc-3', 'mc-4'].includes(x.mainCategoryId))) {
         await platformPersistenceService.upsert(ProductTypeModel, pt);
       }
       for (const fc of this.categoryFilterConfigs) {
         await platformPersistenceService.upsert(CategoryFilterConfigModel, fc);
+      }
+      for (const col of this.newLaunchCollections) {
+        await platformPersistenceService.upsert(NewLaunchCollectionModel, col);
       }
     }
 
     if (dbSnapshots.length > 0) {
       for (const snap of dbSnapshots) {
         if (snap?.tenantId) {
-          // If an old persisted draft still has pre-migration cement-concrete / legacy sub-7-1 slugs, refresh cleanly
+          // If an old persisted draft still has pre-migration cement-concrete / legacy sub-7-1 / sub-11-1 / sub-16-1 slugs, refresh cleanly
           const hasLegacyCement = Array.isArray(snap.childCategories) && snap.childCategories.some((c: any) => c.id === 'cat-1' && c.slug === 'cement-concrete');
           const hasLegacyFurniture = Array.isArray(snap.productTypes) && snap.productTypes.some((pt: any) => pt.id === 'sub-7-1');
-          if (!hasLegacyCement && !hasLegacyFurniture) {
+          const hasLegacyElectrical = Array.isArray(snap.productTypes) && snap.productTypes.some((pt: any) => pt.id === 'sub-11-1');
+          const hasLegacyPlumbing = Array.isArray(snap.productTypes) && snap.productTypes.some((pt: any) => pt.id === 'sub-16-1');
+          if (!hasLegacyCement && !hasLegacyFurniture && !hasLegacyElectrical && !hasLegacyPlumbing) {
             if (!Array.isArray(snap.categoryFilterConfigs)) {
               snap.categoryFilterConfigs = this.cloneRecord(this.categoryFilterConfigs);
             }
@@ -2447,14 +2999,170 @@ export class TaxonomyService implements OnModuleInit {
 
   // ==================== NEW LAUNCHES PROMOTIONAL COLLECTIONS ====================
 
+  private getNewLaunchTargetPool(tenantId: string, useDraft: boolean): NewLaunchCollection[] {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    if (useDraft && this.newLaunchDrafts.has(cleanTenant)) {
+      return this.newLaunchDrafts.get(cleanTenant)!;
+    }
+    return this.newLaunchCollections.filter(
+      (col) => !col.tenantId || col.tenantId === GLOBAL_TENANT || col.tenantId === cleanTenant
+    );
+  }
+
+  private ensureNewLaunchDraft(tenantId: string): NewLaunchCollection[] {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    if (!this.newLaunchDrafts.has(cleanTenant)) {
+      const live = this.getNewLaunchTargetPool(cleanTenant, false);
+      this.newLaunchDrafts.set(cleanTenant, this.cloneRecord(live));
+    }
+    return this.newLaunchDrafts.get(cleanTenant)!;
+  }
+
+  private validateAndNormalizeMappings(
+    rawMappings: any[] | undefined,
+    preferredGroupId?: string
+  ): NewLaunchCategoryMapping[] {
+    if (!Array.isArray(rawMappings)) return [];
+    const pool = {
+      mainCategories: this.mainCategories,
+      childCategories: this.childCategories,
+      productTypes: this.productTypes,
+    };
+
+    return rawMappings.map((raw, idx) => {
+      const displayLabel = String(raw?.displayLabel || raw?.name || raw?.label || '').trim();
+      if (!displayLabel) {
+        throw new BadRequestException('Every New Launches category shortcut must have a displayLabel.');
+      }
+      const sortOrder = Number(raw?.sortOrder ?? idx + 1);
+      const isActive = raw?.isActive !== false;
+      const mappingId = raw?.id || `nl-map-${Date.now()}-${idx + 1}`;
+
+      if (raw?.childCategoryId) {
+        const pt = this.productTypes.find((t) => t.id === raw.childCategoryId);
+        if (!pt) {
+          throw new BadRequestException(`Invalid child category reference "${raw.childCategoryId}" in New Launches mapping "${displayLabel}".`);
+        }
+        const grp = this.childCategories.find((c) => c.id === pt.childCategoryId);
+        if (!grp) {
+          throw new BadRequestException(`Category group missing for child category "${pt.name}".`);
+        }
+        if (raw.categoryGroupId && raw.categoryGroupId !== grp.id) {
+          throw new BadRequestException(`Child category "${pt.name}" does not belong to category group "${raw.categoryGroupId}".`);
+        }
+        const main = this.mainCategories.find((m) => m.id === grp.mainCategoryId);
+        if (raw.mainCategoryId && main && raw.mainCategoryId !== main.id) {
+          throw new BadRequestException(`Category group "${grp.name}" does not belong to main category "${raw.mainCategoryId}".`);
+        }
+        return {
+          id: mappingId,
+          displayLabel,
+          mainCategoryId: main?.id || grp.mainCategoryId,
+          mainCategorySlug: main?.slug || '',
+          mainCategoryName: main?.name || '',
+          categoryGroupId: grp.id,
+          categoryGroupSlug: grp.slug,
+          categoryGroupName: grp.name,
+          childCategoryId: pt.id,
+          childCategorySlug: pt.slug,
+          childCategoryName: pt.name,
+          mappingStatus: 'MAPPED',
+          suggestedPermanentCategoryIds: raw?.suggestedPermanentCategoryIds || [pt.id],
+          sortOrder,
+          isActive,
+        };
+      }
+
+      if (raw?.categoryGroupId) {
+        const grp = this.childCategories.find((c) => c.id === raw.categoryGroupId);
+        if (!grp) {
+          throw new BadRequestException(`Invalid category group "${raw.categoryGroupId}" in New Launches mapping "${displayLabel}".`);
+        }
+        const main = this.mainCategories.find((m) => m.id === grp.mainCategoryId);
+        if (raw.mainCategoryId && main && raw.mainCategoryId !== main.id) {
+          throw new BadRequestException(`Category group "${grp.name}" does not belong to main category "${raw.mainCategoryId}".`);
+        }
+        return {
+          id: mappingId,
+          displayLabel,
+          mainCategoryId: main?.id || grp.mainCategoryId,
+          mainCategorySlug: main?.slug || '',
+          mainCategoryName: main?.name || '',
+          categoryGroupId: grp.id,
+          categoryGroupSlug: grp.slug,
+          categoryGroupName: grp.name,
+          mappingStatus: raw?.mappingStatus === 'UNMAPPED' ? 'UNMAPPED' : 'GROUP_MATCH',
+          sortOrder,
+          isActive,
+        };
+      }
+
+      const resolved = resolveNewLaunchCategoryMapping(displayLabel, pool, preferredGroupId, sortOrder, mappingId);
+      return { ...resolved, isActive };
+    });
+  }
+
+  private validateProductIds(productIds: any): string[] {
+    if (!Array.isArray(productIds)) return [];
+    const validSet = new Set(dbStore.products.map((p) => p.id));
+    const clean: string[] = [];
+    for (const rawId of productIds) {
+      const id = String(rawId || '').trim();
+      if (!id) continue;
+      if (!validSet.has(id)) {
+        throw new BadRequestException(`Invalid product ID "${id}" in New Launches collection.`);
+      }
+      if (!clean.includes(id)) clean.push(id);
+    }
+    return clean;
+  }
+
+  private hydrateCollectionLiveShortcuts(col: NewLaunchCollection, customerOnly: boolean): NewLaunchCollection {
+    const cloned = this.cloneRecord(col);
+    const activePts = new Map(this.productTypes.map((pt) => [pt.id, pt]));
+    const activeGroups = new Map(this.childCategories.map((c) => [c.id, c]));
+    const activeMains = new Map(this.mainCategories.map((m) => [m.id, m]));
+
+    const rawMappings = Array.isArray(cloned.categoryMappings) ? cloned.categoryMappings : [];
+    cloned.categoryMappings = rawMappings
+      .map((m) => {
+        if (m.mappingStatus === 'MAPPED' && m.childCategoryId) {
+          const pt = activePts.get(m.childCategoryId);
+          const grp = pt ? activeGroups.get(pt.childCategoryId) : undefined;
+          const main = grp ? activeMains.get(grp.mainCategoryId) : undefined;
+          if (!pt || !grp || !main || pt.isActive === false || grp.isActive === false || main.isActive === false) {
+            return null;
+          }
+          return {
+            ...m,
+            mainCategoryId: main.id,
+            mainCategorySlug: main.slug,
+            mainCategoryName: main.name,
+            categoryGroupId: grp.id,
+            categoryGroupSlug: grp.slug,
+            categoryGroupName: grp.name,
+            childCategoryId: pt.id,
+            childCategorySlug: pt.slug,
+            childCategoryName: pt.name,
+          };
+        }
+        return customerOnly ? null : m;
+      })
+      .filter((m): m is NewLaunchCategoryMapping => Boolean(m && (!customerOnly || m.isActive !== false)))
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+    return cloned;
+  }
+
   getNewLaunchCollections(tenantId: string, onlyActiveAndInWindow = false): NewLaunchCollection[] {
     const now = Date.now();
-    const cleanTenant = tenantId || DEFAULT_TENANT;
+    const cleanTenant = this.resolveNavTenantId(tenantId);
     return this.newLaunchCollections
       .filter((col) => !col.tenantId || col.tenantId === GLOBAL_TENANT || col.tenantId === cleanTenant)
       .filter((col) => {
         if (!onlyActiveAndInWindow) return true;
         if (!col.isActive) return false;
+        if (col.publishStatus === 'DRAFT') return false;
         if (col.startDate) {
           const s = new Date(col.startDate).getTime();
           if (!Number.isNaN(s) && now < s) return false;
@@ -2465,74 +3173,422 @@ export class TaxonomyService implements OnModuleInit {
         }
         return true;
       })
+      .map((col) => this.hydrateCollectionLiveShortcuts(col, onlyActiveAndInWindow))
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+
+  getNewLaunchAdminState(tenantId: string) {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const hasDraft = this.newLaunchDraftDirty.has(cleanTenant) && this.newLaunchDrafts.has(cleanTenant);
+    const draftCols = this.getNewLaunchTargetPool(cleanTenant, hasDraft).sort(
+      (a, b) => a.displayOrder - b.displayOrder
+    );
+    const liveCols = this.getNewLaunchCollections(cleanTenant, false);
+    const report = this.buildNewLaunchesReport(draftCols, 0, draftCols.length, true);
+    this.newLaunchesMigrationReport = report;
+    return {
+      collections: this.cloneRecord(draftCols),
+      liveCollections: liveCols,
+      hasUnpublishedChanges: hasDraft,
+      migrationReport: report,
+    };
+  }
+
+  getNewLaunchPreview(tenantId: string): NewLaunchCollection[] {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const hasDraft = this.newLaunchDraftDirty.has(cleanTenant) && this.newLaunchDrafts.has(cleanTenant);
+    return this.getNewLaunchTargetPool(cleanTenant, hasDraft)
+      .filter((col) => col.isActive !== false)
+      .map((col) => this.hydrateCollectionLiveShortcuts(col, true))
       .sort((a, b) => a.displayOrder - b.displayOrder);
   }
 
   async createNewLaunchCollection(
     tenantId: string,
-    payload: Partial<NewLaunchCollection> & { name?: string; isVisible?: boolean }
+    payload: Partial<NewLaunchCollection> & { name?: string; isVisible?: boolean; saveAsDraft?: boolean; confirmIncompleteMappings?: boolean }
   ): Promise<NewLaunchCollection> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
     const resolvedTitle = (payload.title || payload.name || '').trim();
     if (!resolvedTitle) throw new BadRequestException('Collection title is required.');
+    const saveAsDraft = Boolean(payload.saveAsDraft);
+    const publishStatus: 'DRAFT' | 'PUBLISHED' =
+      saveAsDraft || payload.publishStatus === 'DRAFT' ? 'DRAFT' : 'PUBLISHED';
+
+    const slug = (payload.slug?.trim() || resolvedTitle)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+    const targetList = saveAsDraft ? this.ensureNewLaunchDraft(cleanTenant) : this.newLaunchCollections;
+    if (targetList.some((c) => c.slug.toLowerCase() === slug && (!c.tenantId || c.tenantId === GLOBAL_TENANT || c.tenantId === cleanTenant))) {
+      throw new BadRequestException(`New Launch collection slug "${slug}" already exists.`);
+    }
+
+    const grp = payload.categoryGroupId
+      ? this.childCategories.find((c) => c.id === payload.categoryGroupId)
+      : undefined;
+    if (payload.categoryGroupId && !grp) {
+      throw new BadRequestException(`Invalid categoryGroupId "${payload.categoryGroupId}".`);
+    }
+    const main = grp ? this.mainCategories.find((m) => m.id === grp.mainCategoryId) : undefined;
+
+    const categoryMappings = this.validateAndNormalizeMappings(
+      payload.categoryMappings,
+      payload.categoryGroupId
+    );
+    if (publishStatus === 'PUBLISHED' && !payload.confirmIncompleteMappings) {
+      const bad = categoryMappings.filter((m) => m.isActive !== false && m.mappingStatus === 'UNMAPPED');
+      if (bad.length > 0) {
+        throw new BadRequestException(
+          `Cannot publish collection with unmapped child categories: ${bad.map((b) => b.displayLabel).join(', ')}. Map them or pass confirmIncompleteMappings.`
+        );
+      }
+    }
+
+    const productIds = this.validateProductIds(payload.productIds);
     const now = new Date().toISOString();
     const record: NewLaunchCollection = {
       id: `nl-col-${Date.now()}`,
-      tenantId,
+      tenantId: cleanTenant,
       title: resolvedTitle,
-      slug: (payload.slug?.trim() || resolvedTitle)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, ''),
+      name: resolvedTitle,
+      slug,
       description: payload.description || '',
-      bannerImage: payload.bannerImage || '',
+      image: payload.image || payload.bannerImage || grp?.image || '',
+      bannerImage: payload.bannerImage || payload.image || '',
       badge: payload.badge || 'NEW LAUNCH',
-      productIds: Array.isArray(payload.productIds) ? payload.productIds : [],
-      displayOrder: Number(payload.displayOrder ?? this.newLaunchCollections.length + 1),
+      mainCategoryId: main?.id || payload.mainCategoryId,
+      mainCategoryName: main?.name || payload.mainCategoryName,
+      categoryGroupId: grp?.id || payload.categoryGroupId,
+      categoryGroupSlug: grp?.slug || payload.categoryGroupSlug,
+      categoryGroupName: grp?.name || payload.categoryGroupName,
+      categoryMappings,
+      productIds,
+      displayOrder: Number(payload.displayOrder ?? targetList.length + 1),
       startDate: payload.startDate || undefined,
       endDate: payload.endDate || undefined,
       isActive: payload.isActive !== undefined ? Boolean(payload.isActive) : payload.isVisible !== false,
+      publishStatus,
       createdAt: now,
       updatedAt: now,
     };
-    this.newLaunchCollections.push(record);
-    await platformPersistenceService.upsert(NewLaunchCollectionModel, record);
+
+    if (saveAsDraft) {
+      targetList.push(record);
+      this.newLaunchDraftDirty.add(cleanTenant);
+    } else {
+      this.newLaunchCollections.push(record);
+      await platformPersistenceService.upsert(NewLaunchCollectionModel, record);
+      if (this.newLaunchDrafts.has(cleanTenant) && !this.newLaunchDraftDirty.has(cleanTenant)) {
+        this.newLaunchDrafts.set(cleanTenant, this.cloneRecord(this.getNewLaunchTargetPool(cleanTenant, false)));
+      }
+    }
     return record;
   }
 
   async updateNewLaunchCollection(
     tenantId: string,
     id: string,
-    updates: Partial<NewLaunchCollection> & { name?: string; isVisible?: boolean }
+    updates: Partial<NewLaunchCollection> & { name?: string; isVisible?: boolean; saveAsDraft?: boolean; confirmIncompleteMappings?: boolean }
   ): Promise<NewLaunchCollection> {
-    const existing = this.newLaunchCollections.find(
-      (c) => c.id === id && (!c.tenantId || c.tenantId === GLOBAL_TENANT || c.tenantId === tenantId)
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const saveAsDraft = Boolean(updates.saveAsDraft);
+    const pool = saveAsDraft ? this.ensureNewLaunchDraft(cleanTenant) : this.newLaunchCollections;
+
+    const existing = pool.find(
+      (c) => c.id === id && (!c.tenantId || c.tenantId === GLOBAL_TENANT || c.tenantId === cleanTenant)
     );
     if (!existing) throw new BadRequestException(`New Launch collection ${id} not found.`);
+
     const nextTitle = updates.title !== undefined ? updates.title : updates.name;
-    if (nextTitle !== undefined) existing.title = nextTitle.trim();
+    if (nextTitle !== undefined) {
+      if (!nextTitle.trim()) throw new BadRequestException('Collection title cannot be empty.');
+      existing.title = nextTitle.trim();
+      existing.name = nextTitle.trim();
+    }
+    if (updates.slug !== undefined && updates.slug.trim()) {
+      existing.slug = this.toSlug(updates.slug);
+    }
     if (updates.description !== undefined) existing.description = updates.description;
+    if (updates.image !== undefined) existing.image = updates.image;
     if (updates.bannerImage !== undefined) existing.bannerImage = updates.bannerImage;
     if (updates.badge !== undefined) existing.badge = updates.badge;
-    if (updates.productIds !== undefined && Array.isArray(updates.productIds)) {
-      existing.productIds = updates.productIds;
+    if (updates.categoryGroupId !== undefined) {
+      if (updates.categoryGroupId) {
+        const grp = this.childCategories.find((c) => c.id === updates.categoryGroupId);
+        if (!grp) throw new BadRequestException(`Invalid categoryGroupId "${updates.categoryGroupId}".`);
+        const main = this.mainCategories.find((m) => m.id === grp.mainCategoryId);
+        existing.categoryGroupId = grp.id;
+        existing.categoryGroupSlug = grp.slug;
+        existing.categoryGroupName = grp.name;
+        existing.mainCategoryId = main?.id;
+        existing.mainCategoryName = main?.name;
+      } else {
+        existing.categoryGroupId = undefined;
+        existing.categoryGroupSlug = undefined;
+        existing.categoryGroupName = undefined;
+      }
+    }
+    if (updates.categoryMappings !== undefined) {
+      const normalized = this.validateAndNormalizeMappings(
+        updates.categoryMappings,
+        existing.categoryGroupId
+      );
+      if (!saveAsDraft && updates.publishStatus === 'PUBLISHED' && !updates.confirmIncompleteMappings) {
+        const bad = normalized.filter((m) => m.isActive !== false && m.mappingStatus === 'UNMAPPED');
+        if (bad.length > 0) {
+          throw new BadRequestException(
+            `Unmapped categories require Admin confirmation before publishing: ${bad.map((b) => b.displayLabel).join(', ')}`
+          );
+        }
+      }
+      existing.categoryMappings = normalized;
+    }
+    if (updates.productIds !== undefined) {
+      existing.productIds = this.validateProductIds(updates.productIds);
     }
     if (updates.displayOrder !== undefined) existing.displayOrder = Number(updates.displayOrder);
     if (updates.startDate !== undefined) existing.startDate = updates.startDate || undefined;
     if (updates.endDate !== undefined) existing.endDate = updates.endDate || undefined;
     const nextActive = updates.isActive !== undefined ? updates.isActive : updates.isVisible;
     if (nextActive !== undefined) existing.isActive = Boolean(nextActive);
+    if (updates.publishStatus !== undefined) existing.publishStatus = updates.publishStatus;
     existing.updatedAt = new Date().toISOString();
-    await platformPersistenceService.upsert(NewLaunchCollectionModel, existing);
+
+    if (saveAsDraft) {
+      this.newLaunchDraftDirty.add(cleanTenant);
+    } else {
+      await platformPersistenceService.upsert(NewLaunchCollectionModel, existing);
+    }
     return existing;
   }
 
-  async deleteNewLaunchCollection(tenantId: string, id: string) {
+  async reorderNewLaunchCollections(
+    tenantId: string,
+    orderedIds: string[],
+    saveAsDraft = false
+  ): Promise<NewLaunchCollection[]> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const pool = saveAsDraft ? this.ensureNewLaunchDraft(cleanTenant) : this.newLaunchCollections;
+    const now = new Date().toISOString();
+    const orderMap = new Map(orderedIds.map((id, idx) => [id, idx + 1]));
+
+    for (const col of pool) {
+      if (orderMap.has(col.id)) {
+        col.displayOrder = orderMap.get(col.id)!;
+        col.updatedAt = now;
+        if (!saveAsDraft) {
+          await platformPersistenceService.upsert(NewLaunchCollectionModel, col);
+        }
+      }
+    }
+    if (saveAsDraft) {
+      this.newLaunchDraftDirty.add(cleanTenant);
+    }
+    return pool.sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+
+  async upsertNewLaunchMapping(
+    tenantId: string,
+    collectionId: string,
+    mappingPayload: {
+      mappingId?: string;
+      displayLabel: string;
+      mainCategoryId?: string;
+      categoryGroupId?: string;
+      childCategoryId?: string;
+      sortOrder?: number;
+      isActive?: boolean;
+      saveAsDraft?: boolean;
+    }
+  ): Promise<NewLaunchCollection> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const saveAsDraft = Boolean(mappingPayload.saveAsDraft);
+    const pool = saveAsDraft ? this.ensureNewLaunchDraft(cleanTenant) : this.newLaunchCollections;
+    const col = pool.find((c) => c.id === collectionId);
+    if (!col) throw new BadRequestException(`New Launch collection ${collectionId} not found.`);
+
+    const [normalized] = this.validateAndNormalizeMappings(
+      [
+        {
+          id: mappingPayload.mappingId,
+          displayLabel: mappingPayload.displayLabel,
+          mainCategoryId: mappingPayload.mainCategoryId,
+          categoryGroupId: mappingPayload.categoryGroupId,
+          childCategoryId: mappingPayload.childCategoryId,
+          sortOrder: mappingPayload.sortOrder ?? (col.categoryMappings?.length || 0) + 1,
+          isActive: mappingPayload.isActive !== false,
+        },
+      ],
+      col.categoryGroupId
+    );
+
+    const list = [...(col.categoryMappings || [])];
+    const idx = list.findIndex(
+      (m) =>
+        (mappingPayload.mappingId && m.id === mappingPayload.mappingId) ||
+        m.displayLabel.trim().toLowerCase() === normalized.displayLabel.trim().toLowerCase()
+    );
+    if (idx >= 0) {
+      list[idx] = { ...normalized, id: list[idx].id };
+    } else {
+      list.push(normalized);
+    }
+    col.categoryMappings = list;
+    col.updatedAt = new Date().toISOString();
+
+    if (saveAsDraft) {
+      this.newLaunchDraftDirty.add(cleanTenant);
+    } else {
+      await platformPersistenceService.upsert(NewLaunchCollectionModel, col);
+    }
+    return col;
+  }
+
+  async removeNewLaunchMapping(
+    tenantId: string,
+    collectionId: string,
+    mappingId: string,
+    saveAsDraft = false
+  ): Promise<NewLaunchCollection> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const pool = saveAsDraft ? this.ensureNewLaunchDraft(cleanTenant) : this.newLaunchCollections;
+    const col = pool.find((c) => c.id === collectionId);
+    if (!col) throw new BadRequestException(`New Launch collection ${collectionId} not found.`);
+
+    col.categoryMappings = (col.categoryMappings || []).filter((m) => m.id !== mappingId);
+    col.updatedAt = new Date().toISOString();
+
+    if (saveAsDraft) {
+      this.newLaunchDraftDirty.add(cleanTenant);
+    } else {
+      await platformPersistenceService.upsert(NewLaunchCollectionModel, col);
+    }
+    return col;
+  }
+
+  async publishNewLaunchCollection(
+    tenantId: string,
+    collectionId: string,
+    options: { confirmIncompleteMappings?: boolean } = {}
+  ): Promise<NewLaunchCollection> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const draftList = this.newLaunchDrafts.get(cleanTenant);
+    const draftCol = draftList?.find((c) => c.id === collectionId);
+    const target = draftCol || this.newLaunchCollections.find((c) => c.id === collectionId);
+    if (!target) throw new BadRequestException(`New Launch collection ${collectionId} not found.`);
+
+    const validatedMappings = this.validateAndNormalizeMappings(
+      target.categoryMappings || [],
+      target.categoryGroupId
+    );
+    const unmapped = validatedMappings.filter(
+      (m) => m.isActive !== false && m.mappingStatus === 'UNMAPPED'
+    );
+    if (unmapped.length > 0 && !options.confirmIncompleteMappings) {
+      throw new BadRequestException(
+        `Cannot publish "${target.title}": unmapped child categories (${unmapped.map((u) => u.displayLabel).join(', ')}) must be mapped, removed, or explicitly confirmed.`
+      );
+    }
+
+    const published: NewLaunchCollection = {
+      ...this.cloneRecord(target),
+      categoryMappings: validatedMappings,
+      publishStatus: 'PUBLISHED',
+      isActive: true,
+      updatedAt: new Date().toISOString(),
+    };
+    this.upsertArrayById(this.newLaunchCollections, published);
+    await platformPersistenceService.upsert(NewLaunchCollectionModel, published);
+
+    if (draftCol && draftList) {
+      const idx = draftList.findIndex((c) => c.id === collectionId);
+      if (idx >= 0) draftList[idx] = this.cloneRecord(published);
+    }
+    this.newLaunchesMigrationReport = this.buildNewLaunchesReport(this.newLaunchCollections);
+    return published;
+  }
+
+  async publishAllNewLaunchDrafts(
+    tenantId: string,
+    options: { confirmIncompleteMappings?: boolean } = {}
+  ): Promise<NewLaunchCollection[]> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const draftList = this.ensureNewLaunchDraft(cleanTenant);
+    const now = new Date().toISOString();
+
+    for (const col of draftList) {
+      const validated = this.validateAndNormalizeMappings(col.categoryMappings || [], col.categoryGroupId);
+      const unmapped = validated.filter((m) => m.isActive !== false && m.mappingStatus === 'UNMAPPED');
+      if (unmapped.length > 0 && !options.confirmIncompleteMappings) {
+        throw new BadRequestException(
+          `Cannot publish "${col.title}": unmapped shortcuts remain (${unmapped.map((u) => u.displayLabel).join(', ')}). Confirm or map them first.`
+        );
+      }
+      col.categoryMappings = validated;
+      if (col.isActive !== false) col.publishStatus = 'PUBLISHED';
+      col.updatedAt = now;
+    }
+
+    const draftIds = new Set(draftList.map((d) => d.id));
+    for (const existing of [...this.newLaunchCollections]) {
+      if ((existing.tenantId === cleanTenant || existing.tenantId === GLOBAL_TENANT) && !draftIds.has(existing.id)) {
+        this.newLaunchCollections = this.newLaunchCollections.filter((c) => c.id !== existing.id);
+        await platformPersistenceService.remove(NewLaunchCollectionModel, existing.id);
+      }
+    }
+    for (const col of draftList) {
+      this.upsertArrayById(this.newLaunchCollections, this.cloneRecord(col));
+      await platformPersistenceService.upsert(NewLaunchCollectionModel, col);
+    }
+    this.newLaunchDraftDirty.delete(cleanTenant);
+    this.newLaunchDrafts.set(cleanTenant, this.cloneRecord(draftList));
+    this.newLaunchesMigrationReport = this.buildNewLaunchesReport(this.newLaunchCollections);
+    return this.getNewLaunchCollections(cleanTenant, false);
+  }
+
+  async unpublishNewLaunchCollection(tenantId: string, collectionId: string): Promise<NewLaunchCollection> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const live = this.newLaunchCollections.find((c) => c.id === collectionId);
+    if (!live) throw new BadRequestException(`New Launch collection ${collectionId} not found.`);
+    live.publishStatus = 'DRAFT';
+    live.isActive = false;
+    live.updatedAt = new Date().toISOString();
+    await platformPersistenceService.upsert(NewLaunchCollectionModel, live);
+
+    if (this.newLaunchDrafts.has(cleanTenant)) {
+      const draftCol = this.newLaunchDrafts.get(cleanTenant)!.find((c) => c.id === collectionId);
+      if (draftCol) {
+        draftCol.publishStatus = 'DRAFT';
+        draftCol.isActive = false;
+        draftCol.updatedAt = live.updatedAt;
+      }
+    }
+    return live;
+  }
+
+  async deleteNewLaunchCollection(tenantId: string, id: string, saveAsDraft = false) {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    if (saveAsDraft) {
+      const draftPool = this.ensureNewLaunchDraft(cleanTenant);
+      const dIdx = draftPool.findIndex((c) => c.id === id);
+      if (dIdx < 0) throw new BadRequestException(`New Launch collection ${id} not found.`);
+      const [removed] = draftPool.splice(dIdx, 1);
+      this.newLaunchDraftDirty.add(cleanTenant);
+      return removed;
+    }
     const idx = this.newLaunchCollections.findIndex(
-      (c) => c.id === id && (!c.tenantId || c.tenantId === GLOBAL_TENANT || c.tenantId === tenantId)
+      (c) => c.id === id && (!c.tenantId || c.tenantId === GLOBAL_TENANT || c.tenantId === cleanTenant)
     );
     if (idx < 0) throw new BadRequestException(`New Launch collection ${id} not found.`);
     const [removed] = this.newLaunchCollections.splice(idx, 1);
     await platformPersistenceService.remove(NewLaunchCollectionModel, id);
+    if (this.newLaunchDrafts.has(cleanTenant)) {
+      this.newLaunchDrafts.set(
+        cleanTenant,
+        this.newLaunchDrafts.get(cleanTenant)!.filter((c) => c.id !== id)
+      );
+    }
     return removed;
   }
 

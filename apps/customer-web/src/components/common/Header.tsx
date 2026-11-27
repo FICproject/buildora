@@ -32,7 +32,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import {
   MASTER_CATEGORIES,
   CONSTRUCTION_DEPARTMENTS,
-  NEW_LAUNCHES_CATEGORIES,
+  SUPPLIED_NEW_LAUNCH_DEFINITIONS,
   MAIN_CATEGORIES_SEED,
   PRODUCT_TYPES_SEED
 } from '@buildora/constants';
@@ -81,6 +81,8 @@ export const Header: React.FC = () => {
   const [desktopNavigation, setDesktopNavigation] = useState<DesktopNavItem[]>([]);
   const [navigationSections, setNavigationSections] = useState<any[]>([]);
   const [catalogCategories, setCatalogCategories] = useState<Category[]>(MASTER_CATEGORIES);
+  const [newLaunchCollections, setNewLaunchCollections] = useState<any[]>([]);
+  const [hasLoadedTaxonomy, setHasLoadedTaxonomy] = useState(false);
 
   // Mobile navigation accordion state
   const [mobileExpandedDept, setMobileExpandedDept] = useState<string | null>(null);
@@ -112,6 +114,11 @@ export const Header: React.FC = () => {
         if (Array.isArray(taxonomy?.navigationSections)) {
           setNavigationSections(taxonomy.navigationSections);
         }
+
+        if (Array.isArray(taxonomy?.newLaunchCollections)) {
+          setNewLaunchCollections(taxonomy.newLaunchCollections);
+        }
+        setHasLoadedTaxonomy(true);
 
         if (Array.isArray(taxonomy?.childCategories)) {
           const typePool = Array.isArray(taxonomy.productTypes) ? taxonomy.productTypes : PRODUCT_TYPES_SEED;
@@ -198,6 +205,29 @@ export const Header: React.FC = () => {
     ] as DesktopNavItem[];
   }, [desktopNavigation, visibleMainCategories]);
 
+  // Live Admin-published New Launches promotional collections
+  const liveNewLaunchCollections = React.useMemo(() => {
+    const source = hasLoadedTaxonomy
+      ? newLaunchCollections
+      : SUPPLIED_NEW_LAUNCH_DEFINITIONS.map((d) => ({
+          id: d.id,
+          title: d.title,
+          name: d.title,
+          slug: d.slug,
+          displayOrder: d.displayOrder,
+          isActive: true,
+          publishStatus: 'PUBLISHED',
+          categoryMappings: [],
+        }));
+    return [...source]
+      .filter((c) => c && c.isActive !== false && c.publishStatus !== 'DRAFT')
+      .sort((a, b) => Number(a.displayOrder || 0) - Number(b.displayOrder || 0))
+      .map((c) => ({
+        ...c,
+        name: c.title || c.name || c.slug,
+      }));
+  }, [hasLoadedTaxonomy, newLaunchCollections]);
+
   // Helper to get Main Categories (previously Child Categories) under a top-bar section
   const getMainChildCategories = (deptSlug: string) => {
     const navSec = navigationSections.find((s) => s.slug === deptSlug);
@@ -225,7 +255,7 @@ export const Header: React.FC = () => {
     if (activeDepartment !== deptSlug) {
       setActiveDepartment(deptSlug);
       const isNL = deptSlug === 'new-launches';
-      const cats = isNL ? NEW_LAUNCHES_CATEGORIES : getMainChildCategories(deptSlug);
+      const cats = isNL ? liveNewLaunchCollections : getMainChildCategories(deptSlug);
       setSelectedParentCategorySlug(cats[0]?.slug || 'all');
       setHoveredChildCategorySlug(null);
       setHoveredChildMasterSlug(null);
@@ -801,39 +831,51 @@ export const Header: React.FC = () => {
 
             if (!isNewLaunches && !activeDept) return null;
 
-            // Main Categories listed in Panel 1 (Cement & Concrete, Tiling, Adhesives, etc.)
+            // Main Categories listed in Panel 1 (Cement & Concrete, Tiling, Adhesives, etc. OR Admin New Launch Collections)
             const menuCategories = isNewLaunches
-              ? NEW_LAUNCHES_CATEGORIES
+              ? liveNewLaunchCollections
               : getMainChildCategories(activeDept!.slug);
 
-            const categorySource = catalogCategories.length > 0 ? catalogCategories : MASTER_CATEGORIES;
-
-            // Currently hovered Main Category in Panel 1
+            // Currently hovered Main Category or New Launch Collection in Panel 1
             const currentCat = menuCategories.find((c: any) => c.slug === selectedParentCategorySlug);
 
-            // Child Categories for Panel 2 (mapped from Product Types under hovered Main Category)
+            // Child Categories for Panel 2 (mapped from Product Types or NewLaunchCategoryMappings)
             type MenuChildCategory = {
               id: string;
               name: string;
               slug: string;
               targetMasterSlug: string;
               targetMasterName: string;
+              targetUrl?: string;
               productCount?: number;
+            };
+
+            const mapNewLaunchShortcuts = (col: any): MenuChildCategory[] => {
+              const mappings = Array.isArray(col?.categoryMappings) ? col.categoryMappings : [];
+              return mappings
+                .filter(
+                  (m: any) =>
+                    m &&
+                    m.isActive !== false &&
+                    m.mappingStatus === 'MAPPED' &&
+                    m.categoryGroupSlug &&
+                    m.childCategorySlug
+                )
+                .map((m: any) => ({
+                  id: `${col.slug}-${m.id}`,
+                  name: m.displayLabel || m.childCategoryName,
+                  slug: m.childCategorySlug,
+                  targetMasterSlug: m.categoryGroupSlug,
+                  targetMasterName: col.title || col.name,
+                  targetUrl: `/categories/${m.categoryGroupSlug}/${m.childCategorySlug}`,
+                  productCount: typeof m.productCount === 'number' ? m.productCount : undefined,
+                }));
             };
 
             let childCategories: MenuChildCategory[] = [];
             if (currentCat) {
               if (isNewLaunches) {
-                const nlCat = currentCat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
-                const masterCat = categorySource.find((m) => m.slug === nlCat.masterCategorySlug);
-                childCategories = (masterCat?.subcategories || []).map((sub: any) => ({
-                  id: sub.id,
-                  name: sub.name,
-                  slug: sub.slug,
-                  targetMasterSlug: masterCat?.slug || nlCat.masterCategorySlug || nlCat.slug,
-                  targetMasterName: masterCat?.name || nlCat.name,
-                  productCount: sub.productCount ?? sub.itemCount,
-                }));
+                childCategories = mapNewLaunchShortcuts(currentCat);
               } else {
                 const deptCat = currentCat as Category;
                 const rawChildren = (deptCat as any).childCategories || deptCat.subcategories || [];
@@ -851,16 +893,7 @@ export const Header: React.FC = () => {
             // All Child Categories in this section when 'all' is hovered
             const allChildCategories: MenuChildCategory[] = menuCategories.flatMap((cat: any) => {
               if (isNewLaunches) {
-                const nlCat = cat as (typeof NEW_LAUNCHES_CATEGORIES)[0];
-                const masterCat = categorySource.find((m) => m.slug === nlCat.masterCategorySlug);
-                return (masterCat?.subcategories || []).map((sub: any) => ({
-                  id: sub.id,
-                  name: sub.name,
-                  slug: sub.slug,
-                  targetMasterSlug: masterCat?.slug || nlCat.masterCategorySlug || nlCat.slug,
-                  targetMasterName: masterCat?.name || nlCat.name,
-                  productCount: sub.productCount ?? sub.itemCount,
-                }));
+                return mapNewLaunchShortcuts(cat);
               } else {
                 const deptCat = cat as Category;
                 const rawChildren = (deptCat as any).childCategories || deptCat.subcategories || [];
@@ -934,11 +967,11 @@ export const Header: React.FC = () => {
                           />
                         </button>
 
-                        {/* Main Category Items */}
+                        {/* Main Category / Collection Items */}
                         {menuCategories.map((cat: any) => {
                           const isSelected = selectedParentCategorySlug === cat.slug;
                           const targetUrl = isNewLaunches
-                            ? `/categories/${(cat as (typeof NEW_LAUNCHES_CATEGORIES)[0]).masterCategorySlug || cat.slug}`
+                            ? `/new-launches/${cat.slug}`
                             : `/categories/${cat.slug}`;
 
                           return (
@@ -991,7 +1024,7 @@ export const Header: React.FC = () => {
                       {displayedChildCategories.length > 0 ? (
                         <div className="space-y-1">
                           {displayedChildCategories.map((sub) => {
-                            const subUrl = `/categories/${sub.targetMasterSlug}/${sub.slug}`;
+                            const subUrl = sub.targetUrl || `/categories/${sub.targetMasterSlug}/${sub.slug}`;
                             const isChildHovered =
                               hoveredChildCategorySlug === sub.slug &&
                               (!hoveredChildMasterSlug || hoveredChildMasterSlug === sub.targetMasterSlug);
@@ -1255,7 +1288,7 @@ export const Header: React.FC = () => {
                     onClick={() => {
                       setMobileExpandedDept(mobileExpandedDept === 'new-launches' ? null : 'new-launches');
                       if (mobileExpandedDept !== 'new-launches') {
-                        setMobileExpandedCat(NEW_LAUNCHES_CATEGORIES[0]?.slug || null);
+                        setMobileExpandedCat(liveNewLaunchCollections[0]?.slug || null);
                       }
                     }}
                     className={`w-full flex items-center justify-between p-2.5 text-xs font-bold transition-colors cursor-pointer ${
@@ -1294,17 +1327,22 @@ export const Header: React.FC = () => {
                         <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
 
-                      {NEW_LAUNCHES_CATEGORIES.map((cat) => {
+                      {liveNewLaunchCollections.map((cat: any) => {
                         const isCatExpanded = mobileExpandedCat === cat.slug;
-                        const mCat = MASTER_CATEGORIES.find((m) => m.slug === cat.masterCategorySlug);
-                        const subs = mCat ? mCat.subcategories || [] : [];
-                        const targetCategorySlug = mCat?.slug || cat.masterCategorySlug || cat.slug;
+                        const subs = (cat.categoryMappings || []).filter(
+                          (m: any) =>
+                            m &&
+                            m.isActive !== false &&
+                            m.mappingStatus === 'MAPPED' &&
+                            m.categoryGroupSlug &&
+                            m.childCategorySlug
+                        );
 
                         return (
                           <div key={cat.id} className="bg-white rounded-lg border border-slate-200/70 overflow-hidden">
                             <div className="flex items-center justify-between p-2 text-xs font-bold text-slate-800">
                               <Link
-                                to={`/categories/${targetCategorySlug}`}
+                                to={`/new-launches/${cat.slug}`}
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className="flex items-center gap-1.5 truncate text-brand-blue-950 hover:underline flex-1"
                               >
@@ -1325,14 +1363,14 @@ export const Header: React.FC = () => {
 
                             {isCatExpanded && subs.length > 0 && (
                               <div className="pl-6 pr-2 py-1.5 bg-slate-50/80 border-t border-slate-100 space-y-1 text-[11px]">
-                                {subs.map((sub) => (
+                                {subs.map((sub: any) => (
                                   <Link
                                     key={sub.id}
-                                    to={`/categories/${targetCategorySlug}/${sub.slug}`}
+                                    to={`/categories/${sub.categoryGroupSlug}/${sub.childCategorySlug}`}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className="block py-1 text-slate-600 hover:text-brand-blue-900 truncate"
                                   >
-                                    &bull; {sub.name}
+                                    &bull; {sub.displayLabel || sub.childCategoryName}
                                   </Link>
                                 ))}
                               </div>

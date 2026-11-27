@@ -291,6 +291,15 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify({ orderedIds, saveAsDraft }),
     }),
+  getNewLaunchesAdmin: () =>
+    rawRequest<any>('/company-admin/catalog/new-launches'),
+  previewNewLaunches: () =>
+    rawRequest<any>('/company-admin/catalog/new-launches/preview'),
+  reconcileNewLaunches: () =>
+    rawRequest<any>('/company-admin/catalog/reconcile-new-launches', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   createNewLaunchCollection: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/new-launches', {
       method: 'POST',
@@ -301,10 +310,41 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
-  deleteNewLaunchCollection: (id: string) =>
-    rawRequest<any>(`/company-admin/catalog/new-launches/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
+  reorderNewLaunchCollections: (orderedIds: string[], saveAsDraft = false) =>
+    rawRequest<any>('/company-admin/catalog/new-launches/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ orderedIds, saveAsDraft }),
     }),
+  upsertNewLaunchMapping: (collectionId: string, payload: any) =>
+    rawRequest<any>(`/company-admin/catalog/new-launches/${encodeURIComponent(collectionId)}/mappings`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  removeNewLaunchMapping: (collectionId: string, mappingId: string, saveAsDraft = false) =>
+    rawRequest<any>(
+      `/company-admin/catalog/new-launches/${encodeURIComponent(collectionId)}/mappings/${encodeURIComponent(mappingId)}${saveAsDraft ? '?saveAsDraft=true' : ''}`,
+      { method: 'DELETE' }
+    ),
+  publishOneNewLaunch: (id: string, confirmIncompleteMappings = false) =>
+    rawRequest<any>(`/company-admin/catalog/new-launches/${encodeURIComponent(id)}/publish`, {
+      method: 'POST',
+      body: JSON.stringify({ confirmIncompleteMappings }),
+    }),
+  unpublishOneNewLaunch: (id: string) =>
+    rawRequest<any>(`/company-admin/catalog/new-launches/${encodeURIComponent(id)}/unpublish`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  publishAllNewLaunches: (confirmIncompleteMappings = false) =>
+    rawRequest<any>('/company-admin/catalog/new-launches/publish', {
+      method: 'POST',
+      body: JSON.stringify({ confirmIncompleteMappings }),
+    }),
+  deleteNewLaunchCollection: (id: string, saveAsDraft = false) =>
+    rawRequest<any>(
+      `/company-admin/catalog/new-launches/${encodeURIComponent(id)}${saveAsDraft ? '?saveAsDraft=true' : ''}`,
+      { method: 'DELETE' }
+    ),
   createCategory: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/categories', {
       method: 'POST',

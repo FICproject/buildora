@@ -402,11 +402,10 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 11. Wires, MCB & Distribution Boards
   'wires-mcb-distribution-boards': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'wireSize', name: 'Wire Size', type: 'checkbox', specKeys: ['Conductor Size', 'Wire Size', 'Size'] },
-    { id: 'voltage', name: 'Voltage', type: 'checkbox', specKeys: ['Voltage', 'Voltage Rating', 'Current Carrying Capacity', 'Current Rating'] },
-    { id: 'cableType', name: 'Cable Type', type: 'checkbox', specKeys: ['Cable Type', 'Insulation', 'Certification'] },
-    { id: 'length', name: 'Length', type: 'checkbox', specKeys: ['Length'] },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging'] },
+    { id: 'size', name: 'Wire Size / Modules', type: 'checkbox', specKeys: ['Conductor Size', 'Wire Size', 'Size'], catAttrKeys: ['size'] },
+    { id: 'voltageOrRating', name: 'Voltage / Rating', type: 'checkbox', specKeys: ['Voltage', 'Voltage Rating', 'Current Carrying Capacity', 'Current Rating'], catAttrKeys: ['voltageOrRating'] },
+    { id: 'electricalType', name: 'Type', type: 'checkbox', specKeys: ['Cable Type', 'Insulation', 'Certification', 'Product Type'], catAttrKeys: ['electricalType'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'], catAttrKeys: ['material'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -414,19 +413,19 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 12. Switches & Sockets
   'switches-sockets': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'moduleSize', name: 'Size', type: 'checkbox', specKeys: ['Module Size', 'Number of Modules'] },
-    { id: 'ampRating', name: 'Rating', type: 'checkbox', specKeys: ['Amp Rating'] },
-    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color'] },
-    { id: 'seriesModel', name: 'Type', type: 'checkbox', specKeys: ['Series / Model', 'Switch Type', 'Socket Type', 'Product Type'] },
+    { id: 'moduleSize', name: 'Size', type: 'checkbox', specKeys: ['Module Size', 'Number of Modules'], catAttrKeys: ['moduleSize'] },
+    { id: 'ampVoltageRating', name: 'Rating', type: 'checkbox', specKeys: ['Amp Rating', 'Voltage Rating'], catAttrKeys: ['ampVoltageRating'] },
+    { id: 'colour', name: 'Colors', type: 'checkbox', specKeys: ['Colour', 'Color'], catAttrKeys: ['colour'] },
+    { id: 'switchType', name: 'Type', type: 'checkbox', specKeys: ['Series / Model', 'Switch Type', 'Socket Type', 'Product Type'], catAttrKeys: ['switchType'] },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
   // 13. Electrical Conduits
   'electrical-conduits': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'nominalDiameter', name: 'Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Size'] },
-    { id: 'stressClass', name: 'Grade', type: 'checkbox', specKeys: ['Stress Class', 'Standard', 'Ways'] },
-    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
+    { id: 'nominalDiameter', name: 'Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Size'], catAttrKeys: ['nominalDiameter'] },
+    { id: 'stressClass', name: 'Grade', type: 'checkbox', specKeys: ['Stress Class', 'Standard', 'Ways'], catAttrKeys: ['stressClass'] },
+    { id: 'conduitType', name: 'Type', type: 'checkbox', specKeys: ['Conduit Type', 'Product Type', 'Material'], catAttrKeys: ['conduitType'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -434,10 +433,10 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 14. Lighting
   'lighting': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'wattage', name: 'Wattage', type: 'checkbox', specKeys: ['Wattage'] },
-    { id: 'colorTemperature', name: 'Color Temperature', type: 'checkbox', specKeys: ['Color Temperature', 'Colour Temperature'] },
-    { id: 'beamAngle', name: 'Size', type: 'checkbox', specKeys: ['Beam Angle', 'Ceiling Cutout'] },
-    { id: 'productType', name: 'Type', type: 'checkbox', specKeys: ['Product Type'] },
+    { id: 'wattage', name: 'Wattage', type: 'checkbox', specKeys: ['Wattage'], catAttrKeys: ['wattage'] },
+    { id: 'colorTemperature', name: 'Color Temperature', type: 'checkbox', specKeys: ['Color Temperature', 'Colour Temperature'], catAttrKeys: ['colorTemperature'] },
+    { id: 'cutoutSize', name: 'Size', type: 'checkbox', specKeys: ['Beam Angle', 'Ceiling Cutout'], catAttrKeys: ['cutoutSize'] },
+    { id: 'lightingType', name: 'Type', type: 'checkbox', specKeys: ['Product Type'], catAttrKeys: ['lightingType'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -457,10 +456,10 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 16. CPVC Pipes & Overhead Tanks
   'cpvc-pipes-overhead-tanks': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'pipeSize', name: 'Pipe Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Pipe Size', 'Size'] },
-    { id: 'pressureRating', name: 'Pressure Rating', type: 'checkbox', specKeys: ['Pressure Class', 'Pressure Rating'] },
-    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Max Operating Temp', 'Certification'] },
-    { id: 'packSize', name: 'Pack Size', type: 'checkbox', isStandardField: 'packSize', specKeys: ['Packaging'] },
+    { id: 'diameter', name: 'Pipe Size', type: 'checkbox', specKeys: ['Nominal Diameter', 'Pipe Size', 'Size'], catAttrKeys: ['diameter'] },
+    { id: 'pressureRating', name: 'Pressure Rating', type: 'checkbox', specKeys: ['Pressure Class', 'Pressure Rating'], catAttrKeys: ['pressureRating'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Max Operating Temp', 'Certification'], catAttrKeys: ['material'] },
+    { id: 'pipeOrFittingType', name: 'Type', type: 'checkbox', specKeys: ['Product Type', 'Pipe / Fitting Type'], catAttrKeys: ['pipeOrFittingType'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -468,9 +467,10 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
   // 17. Sanitary & Bath Fittings
   'sanitary-bath-fittings': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
-    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'] },
-    { id: 'finish', name: 'Finish', type: 'checkbox', specKeys: ['Finish', 'Colour'] },
-    { id: 'installationType', name: 'Type', type: 'checkbox', specKeys: ['Installation Type', 'Product Type', 'Water Flow / Operating Type'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material'], catAttrKeys: ['material'] },
+    { id: 'finishColour', name: 'Finish', type: 'checkbox', specKeys: ['Finish', 'Colour'], catAttrKeys: ['finishColour'] },
+    { id: 'installationType', name: 'Installation', type: 'checkbox', specKeys: ['Installation Type', 'Mounting Type'], catAttrKeys: ['installationType'] },
+    { id: 'fixtureType', name: 'Type', type: 'checkbox', specKeys: ['Product Type', 'Water Flow / Operating Type'], catAttrKeys: ['fixtureType'] },
     { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
@@ -485,7 +485,17 @@ export const CATEGORY_FILTER_CONFIGS: Record<string, CategoryFilterDimension[]> 
     { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
   ],
 
-  // 19. Water Storage Tanks
+  // 19. Overhead Tanks (renamed from water-storage-tanks)
+  'overhead-tanks': [
+    { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
+    { id: 'capacity', name: 'Capacity', type: 'checkbox', specKeys: ['Capacity', 'Volume'], catAttrKeys: ['capacity'] },
+    { id: 'layers', name: 'Layer Construction', type: 'checkbox', specKeys: ['Layer Construction', 'Layers'], catAttrKeys: ['layers'] },
+    { id: 'shape', name: 'Shape', type: 'checkbox', specKeys: ['Shape', 'Tank Shape'], catAttrKeys: ['shape'] },
+    { id: 'material', name: 'Material', type: 'checkbox', specKeys: ['Material', 'Grade'] },
+    { id: 'rating', name: 'Rating', type: 'checkbox', isStandardField: 'rating' },
+    { id: 'price', name: 'Price', type: 'range', isStandardField: 'price' }
+  ],
+  // legacy alias kept for backward compat
   'water-storage-tanks': [
     { id: 'brand', name: 'Brand', type: 'checkbox', isStandardField: 'brand' },
     { id: 'capacity', name: 'Capacity', type: 'checkbox', specKeys: ['Capacity'] },
@@ -802,6 +812,13 @@ export const CATEGORY_FILTER_CONFIGS_SEED: CategoryFilterConfiguration[] = (() =
     'kitchen-systems-accessories': { id: 'cat-8', name: 'Kitchen Systems & Accessories', mainCategoryId: 'mc-2', mainCategoryName: 'Furniture & Architectural Hardware' },
     'wardrobe-bed-fittings': { id: 'cat-9', name: 'Wardrobe & Bed Fittings', mainCategoryId: 'mc-2', mainCategoryName: 'Furniture & Architectural Hardware' },
     'door-locks-hardware': { id: 'cat-10', name: 'Door Locks & Hardware', mainCategoryId: 'mc-2', mainCategoryName: 'Furniture & Architectural Hardware' },
+    'wires-mcb-distribution-boards': { id: 'cat-11', name: 'Wires, MCB & Distribution Boards', mainCategoryId: 'mc-3', mainCategoryName: 'Electrical' },
+    'switches-sockets': { id: 'cat-12', name: 'Switches & Sockets', mainCategoryId: 'mc-3', mainCategoryName: 'Electrical' },
+    'electrical-conduits': { id: 'cat-13', name: 'Electrical Conduits', mainCategoryId: 'mc-3', mainCategoryName: 'Electrical' },
+    lighting: { id: 'cat-14', name: 'Lighting', mainCategoryId: 'mc-3', mainCategoryName: 'Electrical' },
+    'cpvc-pipes-overhead-tanks': { id: 'cat-16', name: 'CPVC Pipes & Overhead Tanks', mainCategoryId: 'mc-4', mainCategoryName: 'Plumbing, Sanitary & Bath' },
+    'sanitary-bath-fittings': { id: 'cat-17', name: 'Sanitary & Bath Fittings', mainCategoryId: 'mc-4', mainCategoryName: 'Plumbing, Sanitary & Bath' },
+    'overhead-tanks': { id: 'cat-19', name: 'Overhead Tanks', mainCategoryId: 'mc-4', mainCategoryName: 'Plumbing, Sanitary & Bath' },
   };
   const presetOptions: Record<string, Record<string, { options: string[]; fieldType?: CategoryFilterConfiguration['fieldType']; isRequired?: boolean; showInVendor?: boolean }>> = {
     'cat-1': {
@@ -870,6 +887,46 @@ export const CATEGORY_FILTER_CONFIGS_SEED: CategoryFilterConfiguration[] = (() =
       material: { options: ['SS 304 Stainless Steel', 'Solid Brass Forged', 'Zinc Alloy + Hardened Steel Shackle'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
       lockType: { options: ['Mortise Handle Lock Set', 'Cylindrical Knob Lock', 'Heavy Duty Brass Padlock', 'Smart Biometric / PIN'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
       finish: { options: ['Satin Steel', 'Matt Black', 'Antique Brass', 'Polished Chrome', 'Rose Gold'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+    },
+    'cat-11': {
+      electricalType: { options: ['FRLS Flame Retardant PVC Copper Wire', 'FR-LSH Zero Halogen Wire', 'Armoured Power Cable', 'MCB / RCCB Circuit Breaker', 'Metal Distribution Board'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      size: { options: ['1.0 sq mm', '1.5 sq mm', '2.5 sq mm', '4.0 sq mm', '6.0 sq mm', '10.0 sq mm', 'SP / DP / TPN Breaker', '8 Way / 12 Way DB'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      material: { options: ['99.97% Electrolytic Annealed Copper (FRLS PVC)', 'Tinned Copper XLPE', 'Flame-Retardant Thermoset Housing'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      voltageOrRating: { options: ['1100V Grade', '16A C-Curve (10kA)', '32A C-Curve (10kA)', '40A / 63A Isolator'], fieldType: 'TEXT', isRequired: true, showInVendor: true },
+    },
+    'cat-12': {
+      switchType: { options: ['1-Way / 2-Way Modular Switch', '6A / 16A Combined Power Socket', 'USB Fast Charger Module', 'Fan Regulator & Dimmer', 'Cover Plate Frame'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      moduleSize: { options: ['1 Module', '2 Module', '3 Module', '4 Module', '6 Module', '8 Module', '12 Module'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      colour: { options: ['Pure White', 'Anthracite Matt Grey', 'Champagne Gold', 'Brushed Silver'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      ampVoltageRating: { options: ['6A / 240V AC', '16A / 240V AC 50Hz', '32A DP Switch'], fieldType: 'TEXT', isRequired: true, showInVendor: true },
+    },
+    'cat-13': {
+      conduitType: { options: ['Rigid PVC FRLS Conduit Pipe', 'Flexible Corrugated Conduit', 'PVC Circular Junction Box', 'Bends, Couplers & Saddles'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      nominalDiameter: { options: ['20mm (HMS Heavy)', '25mm (HMS Heavy)', '32mm Heavy Duty', '40mm Industrial'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      stressClass: { options: ['FRLS Virgin uPVC (Heavy Mechanical Stress IS 9537)', 'Medium Stress IS 9537 Part 3', 'Galvanized GI Conduit'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+    },
+    'cat-14': {
+      lightingType: { options: ['Recessed LED Downlight', 'COB Architectural Spotlight', 'LED Batten Tube', 'Outdoor Flood / Street Light', 'LED Strip & Driver'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      wattage: { options: ['7W', '12W', '15W', '18W', '20W', '24W', '36W', '50W'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      colorTemperature: { options: ['6500K Cool Daylight', '4000K Natural White', '3000K Warm White', '3-in-1 CCT Tunable'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      cutoutSize: { options: ['75mm Cutout', '125mm Cutout', '150mm Cutout', '4 Feet Batten', '5m Strip'], fieldType: 'TEXT', isRequired: false, showInVendor: true },
+    },
+    'cat-16': {
+      pipeOrFittingType: { options: ['CPVC Hot & Cold Pipe', 'UPVC Cold Water Pipe', 'SWR Drainage Pipe', 'Elbow / Tee / Brass Threaded Fitting', 'Solvent Cement'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      diameter: { options: ['1/2 Inch (15mm)', '3/4 Inch (20mm)', '1 Inch (25mm)', '1-1/4 Inch (32mm)', '1-1/2 Inch (40mm)', '2 Inch (50mm)', '110mm SWR'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      pressureRating: { options: ['SDR 11 (Class 1 - High Pressure)', 'SDR 13.5 (Class 2)', 'SCH 40 Heavy Duty', 'SCH 80 Industrial'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      material: { options: ['Virgin Lead-Free CPVC (IS 15778)', 'Lead-Free UPVC (ASTM D1785)', 'SWR Type-B uPVC (IS 13592)', 'Dezincification-Resistant Brass', 'PTFE Thread Sealant'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+    },
+    'cat-17': {
+      fixtureType: { options: ['One-Piece / Wall-Hung Rimless EWC', 'Countertop / Pedestal Wash Basin', 'Single-Lever Basin / Diverter Mixer', 'Rain Overhead Shower & Health Faucet', 'Shower Enclosure & Accessories', 'WC Concealed Cistern Frame'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      material: { options: ['Vitreous Ceramic Porcelain', 'Solid Cast Brass Alloy', 'SS 304 Stainless Steel', 'ABS Engineering Plastic'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      finishColour: { options: ['Alpine White Ceramic', 'Polished Chrome', 'Matt Black PVD', 'Brushed Gold', 'Rose Gold PVD'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      installationType: { options: ['Wall Mounted', 'Floor Mounted S-Trap', 'Concealed In-Wall', 'Table Top', 'Deck Mounted', 'Column Freestanding'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+    },
+    'cat-19': {
+      capacity: { options: ['500 Litres', '1000 Litres', '1500 Litres', '2000 Litres', '3000 Litres', '5000 Litres'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      layers: { options: ['3-Layer UV Stabilized', '4-Layer Foam Insulated', '5-Layer Anti-Bacterial Heavy Duty'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
+      shape: { options: ['Vertical Cylindrical', 'Horizontal Cylindrical', 'Rectangular', 'Loft (Slim Vertical)'], fieldType: 'DROPDOWN', isRequired: true, showInVendor: true },
     },
   };
 

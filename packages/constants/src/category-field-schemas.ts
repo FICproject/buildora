@@ -1,4 +1,4 @@
-import { CategoryFieldSchema, CategoryFieldType, CategoryFieldValidation } from '@buildora/types';
+﻿import { CategoryFieldSchema, CategoryFieldType, CategoryFieldValidation } from '@buildora/types';
 
 type RawFieldDef = {
   key: string;
@@ -184,26 +184,26 @@ export const CATEGORY_FIELD_SCHEMAS_SEED: CategoryFieldSchema[] = [
     { key: 'remoteIncluded', label: 'Includes RF Remote Control', type: 'checkbox', required: false },
   ]),
 
-  // cat-16: CPVC Pipes & Overhead Tanks
+  // cat-16: CPVC Pipes & Overhead Tanks (GROUP – new 6 Child Categories)
   ...makeSchemas('cat-16', 'cpvc-pipes-overhead-tanks', [
     { key: 'pipeOrFittingType', label: 'Pipe / Fitting Type', type: 'dropdown', required: true, options: ['CPVC Hot & Cold Pipe', 'UPVC Cold Water Pipe', 'SWR Drainage Pipe', 'Elbow / Tee / Brass Threaded Fitting', 'Solvent Cement'] },
     { key: 'diameter', label: 'Nominal Diameter', type: 'dropdown', required: true, options: ['1/2 Inch (15mm)', '3/4 Inch (20mm)', '1 Inch (25mm)', '1-1/4 Inch (32mm)', '1-1/2 Inch (40mm)', '2 Inch (50mm)', '110mm SWR'], group: 'Dimensions & Packaging' },
     { key: 'length', label: 'Pipe Length / Size', type: 'text', required: true, placeholder: 'e.g. 3 Metres (10 Feet)', group: 'Dimensions & Packaging' },
     { key: 'pressureRating', label: 'Pressure Rating / Class', type: 'dropdown', required: true, options: ['SDR 11 (Class 1 - High Pressure)', 'SDR 13.5 (Class 2)', 'SCH 40 Heavy Duty', 'SCH 80 Industrial'], group: 'Performance & Compliance' },
-    { key: 'material', label: 'Polymer Material', type: 'dropdown', required: true, options: ['Virgin Lead-Free CPVC (IS 15778)', 'Lead-Free UPVC (ASTM D1785)', 'SWR Type-B uPVC (IS 13592)'] },
+    { key: 'material', label: 'Polymer Material', type: 'dropdown', required: true, options: ['Virgin Lead-Free CPVC (IS 15778)', 'Lead-Free UPVC (ASTM D1785)', 'SWR Type-B uPVC (IS 13592)', 'Dezincification-Resistant Brass', 'PTFE Thread Sealant'] },
     { key: 'maxTemp', label: 'Max Operating Temperature', type: 'text', required: false, placeholder: 'e.g. Up to 93°C', group: 'Performance & Compliance' },
   ]),
 
-  // cat-17: Sanitary & Bath Fittings
+  // cat-17: Sanitary & Bath Fittings (GROUP – new 8 Child Categories)
   ...makeSchemas('cat-17', 'sanitary-bath-fittings', [
-    { key: 'fixtureType', label: 'Sanitary / Fitting Type', type: 'dropdown', required: true, options: ['One-Piece / Wall-Hung Rimless EWC', 'Countertop / Pedestal Wash Basin', 'Single-Lever Basin / Diverter Mixer', 'Rain Overhead Shower & Health Faucet'] },
-    { key: 'material', label: 'Material', type: 'dropdown', required: true, options: ['Vitreous Ceramic Porcelain', 'Solid Cast Brass Alloy', 'SS 304 Stainless Steel'] },
-    { key: 'finishColour', label: 'Colour / Finish', type: 'dropdown', required: true, options: ['Alpine White Ceramic', 'Polished Chrome', 'Matt Black PVD', 'Brushed Gold'] },
-    { key: 'installationType', label: 'Installation / Mounting Type', type: 'dropdown', required: true, options: ['Wall Mounted', 'Floor Mounted S-Trap', 'Concealed In-Wall', 'Table Top'] },
+    { key: 'fixtureType', label: 'Sanitary / Fitting Type', type: 'dropdown', required: true, options: ['One-Piece / Wall-Hung Rimless EWC', 'Countertop / Pedestal Wash Basin', 'Single-Lever Basin / Diverter Mixer', 'Rain Overhead Shower & Health Faucet', 'Shower Enclosure & Accessories', 'WC Concealed Cistern Frame'] },
+    { key: 'material', label: 'Material', type: 'dropdown', required: true, options: ['Vitreous Ceramic Porcelain', 'Solid Cast Brass Alloy', 'SS 304 Stainless Steel', 'ABS Engineering Plastic'] },
+    { key: 'finishColour', label: 'Colour / Finish', type: 'dropdown', required: true, options: ['Alpine White Ceramic', 'Polished Chrome', 'Matt Black PVD', 'Brushed Gold', 'Rose Gold PVD'] },
+    { key: 'installationType', label: 'Installation / Mounting Type', type: 'dropdown', required: true, options: ['Wall Mounted', 'Floor Mounted S-Trap', 'Concealed In-Wall', 'Table Top', 'Deck Mounted', 'Column Freestanding'] },
     { key: 'trapOrFlowSpec', label: 'Trap Distance / Flow Spec', type: 'text', required: false, placeholder: 'e.g. S-Trap 220mm / 3/6L Dual Flush', group: 'Dimensions & Packaging' },
   ]),
 
-  // cat-18: Kitchen Sinks & Faucets
+  // cat-18: Kitchen Sinks & Faucets (mc-5 after Plumbing reconcile)
   ...makeSchemas('cat-18', 'kitchen-sinks-faucets', [
     { key: 'sinkOrFaucetType', label: 'Product Type', type: 'dropdown', required: true, options: ['Handmade SS 304 Kitchen Sink', 'Quartz Granite Composite Sink', 'Flexible Pull-Out Kitchen Faucet', 'Swivel Deck Sink Mixer'] },
     { key: 'dimensions', label: 'Size / Bowl Dimensions', type: 'dropdown', required: true, options: ['24" x 18" Single Bowl', '32" x 20" Bowl with Drainboard', '37" x 18" Double Bowl', 'Standard Brass Pillar/Deck Mount'], group: 'Dimensions & Packaging' },
@@ -212,15 +212,16 @@ export const CATEGORY_FIELD_SCHEMAS_SEED: CategoryFieldSchema[] = [
     { key: 'accessoriesIncluded', label: 'Includes Waste Coupling & Drain Pipe', type: 'checkbox', required: false },
   ]),
 
-  // cat-19: Water Storage Tanks
-  ...makeSchemas('cat-19', 'water-storage-tanks', [
+  // cat-19: Overhead Tanks (renamed - legacy water-storage-tanks slug also resolved here)
+  ...makeSchemas('cat-19', 'overhead-tanks', [
     { key: 'capacity', label: 'Storage Capacity', type: 'dropdown', required: true, options: ['500 Litres', '1000 Litres', '1500 Litres', '2000 Litres', '3000 Litres', '5000 Litres'], group: 'Dimensions & Packaging' },
     { key: 'layers', label: 'Layer Construction', type: 'dropdown', required: true, options: ['3-Layer UV Stabilized', '4-Layer Foam Insulated', '5-Layer Anti-Bacterial Heavy Duty'] },
+    { key: 'shape', label: 'Shape', type: 'dropdown', required: true, options: ['Vertical Cylindrical', 'Horizontal Cylindrical', 'Rectangular', 'Loft (Slim Vertical)'] },
     { key: 'dimensions', label: 'Dimensions (Dia x Height)', type: 'text', required: true, placeholder: 'e.g. 1100mm x 1250mm', group: 'Dimensions & Packaging' },
     { key: 'foodGradeVirgin', label: '100% Virgin Food-Grade LLDPE', type: 'checkbox', required: false, group: 'Performance & Compliance' },
     { key: 'warrantyYears', label: 'Manufacturer Warranty (Years)', type: 'number', required: false, placeholder: 'e.g. 10', unitSuffix: 'Years', validation: { min: 1, max: 25 } },
-  ]),
 
+  ]),
   // cat-20: Power Tools & Accessories
   ...makeSchemas('cat-20', 'power-tools-accessories', [
     { key: 'toolCategory', label: 'Tool / Accessory Type', type: 'dropdown', required: true, options: ['4-Inch Angle Grinder', 'SDS-Plus Rotary Hammer Drill', 'Cordless Brushless Impact Driver', 'Marble / Wood Circular Saw', 'Diamond Cutting Blades & Bits'] },

@@ -1328,8 +1328,12 @@ export class CompanyAdminController {
         brands: dbStore.brands,
         attributes: companyAdminDataService.attributes,
         newLaunchCollections: taxonomyService.getNewLaunchCollections(tenantId, false),
+        newLaunchDraftState: taxonomyService.getNewLaunchAdminState(tenantId),
         civilMigrationReport: taxonomyService.civilMigrationReport,
         furnitureMigrationReport: taxonomyService.furnitureMigrationReport,
+        electricalMigrationReport: taxonomyService.electricalMigrationReport,
+        plumbingMigrationReport: taxonomyService.plumbingMigrationReport,
+        newLaunchesMigrationReport: taxonomyService.newLaunchesMigrationReport,
         migrationSummary: {
           totalRecords: report.length,
           migrated: report.filter((r) => r.status === 'MIGRATED').length,
@@ -1912,6 +1916,30 @@ export class CompanyAdminController {
     return { success: true, data: report };
   }
 
+  @Post('catalog/reconcile-electrical')
+  reconcileElectricalTaxonomy(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const report = taxonomyService.reconcileElectricalTaxonomySync(tenantId);
+    taxonomyService.syncDbStoreCategories(tenantId);
+    realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: report };
+  }
+
+  @Post('catalog/reconcile-plumbing')
+  reconcilePlumbingTaxonomy(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const report = taxonomyService.reconcilePlumbingTaxonomySync(tenantId);
+    taxonomyService.syncDbStoreCategories(tenantId);
+    realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    return { success: true, data: report };
+  }
+
   @Put('catalog/child-categories/reorder')
   async reorderChildCategories(
     @Headers('authorization') authHeader?: string,
@@ -2040,6 +2068,101 @@ export class CompanyAdminController {
     return { success: true, data: res, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
+  @Get('catalog/new-launches')
+  getNewLaunchesAdmin(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const state = taxonomyService.getNewLaunchAdminState(tenantId);
+    const pool = taxonomyService.getTenantPool(tenantId);
+    const approvedProducts = dbStore.products
+      .filter((p) => (p as any).approvalStatus !== 'REJECTED' && (p as any).approvalStatus !== 'PENDING_APPROVAL' && (p as any).isActive !== false)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        brand: p.brand,
+        price: p.price,
+        mainCategoryId: (p as any).mainCategoryId,
+        childCategoryId: (p as any).childCategoryId || (p as any).categoryId,
+        productTypeId: (p as any).productTypeId || (p as any).subcategoryId,
+        childCategoryName: (p as any).childCategoryName || (p as any).category,
+        productTypeName: (p as any).productTypeName || (p as any).subcategory,
+      }));
+    return {
+      success: true,
+      data: {
+        ...state,
+        permanentTaxonomy: {
+          mainCategories: pool.mainCategories,
+          childCategories: pool.childCategories,
+          productTypes: pool.productTypes,
+        },
+        approvedProducts,
+      },
+    };
+  }
+
+  @Get('catalog/new-launches/preview')
+  previewNewLaunches(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    return {
+      success: true,
+      data: {
+        collections: taxonomyService.getNewLaunchPreview(tenantId),
+      },
+    };
+  }
+
+  @Put('catalog/new-launches/reorder')
+  async reorderNewLaunchCollections(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { orderedIds?: string[]; saveAsDraft?: boolean }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const list = await taxonomyService.reorderNewLaunchCollections(
+      tenantId,
+      Array.isArray(body?.orderedIds) ? body!.orderedIds : [],
+      Boolean(body?.saveAsDraft)
+    );
+    if (!body?.saveAsDraft) {
+      realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    }
+    return { success: true, data: list };
+  }
+
+  @Post('catalog/new-launches/publish')
+  async publishAllNewLaunchDrafts(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { confirmIncompleteMappings?: boolean }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const list = await taxonomyService.publishAllNewLaunchDrafts(tenantId, {
+      confirmIncompleteMappings: Boolean(body?.confirmIncompleteMappings),
+    });
+    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    return { success: true, data: list };
+  }
+
+  @Post('catalog/reconcile-new-launches')
+  reconcileNewLaunches(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const report = taxonomyService.reconcileNewLaunchesCollectionsSync(tenantId);
+    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    return { success: true, data: report };
+  }
+
   @Post('catalog/new-launches')
   async createNewLaunchCollection(
     @Headers('authorization') authHeader?: string,
@@ -2048,7 +2171,10 @@ export class CompanyAdminController {
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const created = await taxonomyService.createNewLaunchCollection(tenantId, body || {});
-    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    if (!body?.saveAsDraft) {
+      realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    }
     return { success: true, data: created };
   }
 
@@ -2061,19 +2187,90 @@ export class CompanyAdminController {
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const updated = await taxonomyService.updateNewLaunchCollection(tenantId, id, body || {});
-    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    if (!body?.saveAsDraft) {
+      realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    }
     return { success: true, data: updated };
+  }
+
+  @Post('catalog/new-launches/:id/mappings')
+  async upsertNewLaunchMapping(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const updated = await taxonomyService.upsertNewLaunchMapping(tenantId, id, body || {});
+    if (!body?.saveAsDraft) {
+      realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    }
+    return { success: true, data: updated };
+  }
+
+  @Delete('catalog/new-launches/:id/mappings/:mappingId')
+  async removeNewLaunchMapping(
+    @Param('id') id: string,
+    @Param('mappingId') mappingId: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('saveAsDraft') saveAsDraft?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const isDraft = saveAsDraft === 'true';
+    const updated = await taxonomyService.removeNewLaunchMapping(tenantId, id, mappingId, isDraft);
+    if (!isDraft) {
+      realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    }
+    return { success: true, data: updated };
+  }
+
+  @Post('catalog/new-launches/:id/publish')
+  async publishOneNewLaunchCollection(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { confirmIncompleteMappings?: boolean }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const published = await taxonomyService.publishNewLaunchCollection(tenantId, id, {
+      confirmIncompleteMappings: Boolean(body?.confirmIncompleteMappings),
+    });
+    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    return { success: true, data: published };
+  }
+
+  @Post('catalog/new-launches/:id/unpublish')
+  async unpublishOneNewLaunchCollection(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const unpublished = await taxonomyService.unpublishNewLaunchCollection(tenantId, id);
+    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    return { success: true, data: unpublished };
   }
 
   @Delete('catalog/new-launches/:id')
   async deleteNewLaunchCollection(
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
-    @Headers('x-tenant-id') headerTenantId?: string
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('saveAsDraft') saveAsDraft?: string
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
-    const removed = await taxonomyService.deleteNewLaunchCollection(tenantId, id);
-    realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+    const isDraft = saveAsDraft === 'true';
+    const removed = await taxonomyService.deleteNewLaunchCollection(tenantId, id, isDraft);
+    if (!isDraft) {
+      realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+    }
     return { success: true, data: removed };
   }
 

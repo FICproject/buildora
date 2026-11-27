@@ -203,14 +203,27 @@ export const api = {
     });
   },
 
-  async getNewLaunches(): Promise<{
+  async getNewLaunches(params?: {
+    collection?: string;
+    child?: string;
+    search?: string;
+  }): Promise<{
     collections: any[];
     activeCollection: any | null;
+    shortcuts?: any[];
+    activeShortcut?: any | null;
     products: Product[];
   }> {
-    const data = await request<any>('/new-launches', {}, {
+    const q = new URLSearchParams();
+    if (params?.collection) q.set('collection', params.collection);
+    if (params?.child) q.set('child', params.child);
+    if (params?.search) q.set('search', params.search);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    const data = await request<any>(`/new-launches${qs}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }, {
       collections: [],
       activeCollection: null,
+      shortcuts: [],
+      activeShortcut: null,
       products: [],
     });
     if (Array.isArray(data?.products)) {
@@ -219,8 +232,46 @@ export const api = {
     return {
       collections: [],
       activeCollection: null,
+      shortcuts: [],
+      activeShortcut: null,
       products: [],
     };
+  },
+
+  async getNewLaunchCollectionBySlug(
+    slug: string,
+    params?: { child?: string; search?: string }
+  ): Promise<{
+    collection: any | null;
+    collections: any[];
+    shortcuts: any[];
+    activeShortcut: any | null;
+    products: Product[];
+    notFound?: boolean;
+  }> {
+    const q = new URLSearchParams();
+    if (params?.child) q.set('child', params.child);
+    if (params?.search) q.set('search', params.search);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    try {
+      const res = await fetch(`${API_BASE_URL}/new-launches/${encodeURIComponent(slug)}${qs}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.success) {
+        return { collection: null, collections: [], shortcuts: [], activeShortcut: null, products: [], notFound: true };
+      }
+      return {
+        collection: json.data?.collection || null,
+        collections: json.data?.collections || [],
+        shortcuts: json.data?.shortcuts || [],
+        activeShortcut: json.data?.activeShortcut || null,
+        products: json.data?.products || [],
+      };
+    } catch {
+      return { collection: null, collections: [], shortcuts: [], activeShortcut: null, products: [], notFound: true };
+    }
   },
 
   // Categories

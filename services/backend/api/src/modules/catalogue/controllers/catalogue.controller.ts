@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, Param, Query } from '@nestjs/common';
+import { Controller, Get, Headers, NotFoundException, Param, Query } from '@nestjs/common';
 import { LEGACY_CATEGORY_SLUG_ALIASES } from '@buildora/constants';
 import { dbStore } from '../../../database/store';
 import { isProductCustomerVisible } from '../../products/controllers/products.controller';
@@ -73,6 +73,46 @@ function buildTaxonomyData(tenantId?: string, includeHidden = false) {
   return { mainCategories, allChildren };
 }
 
+function resolveCustomerProductsWithTaxonomy(tenantId?: string) {
+  const visibleProducts = dbStore.products.filter(isProductCustomerVisible);
+  return visibleProducts.map((p) => {
+    const taxonomy = taxonomyService.resolveAndValidateProductTaxonomy(p, {
+      strictChildMatch: false,
+      tenantId,
+    });
+    return { ...p, ...taxonomy };
+  });
+}
+
+function buildHydratedNewLaunchCollections(tenantId?: string, preResolvedProducts?: any[]) {
+  const collections = taxonomyService.getNewLaunchCollections(
+    tenantId || 'tenant-buildora-blr',
+    true
+  );
+  const resolvedProducts = preResolvedProducts || resolveCustomerProductsWithTaxonomy(tenantId);
+
+  return collections.map((col) => {
+    const curatedSet = new Set(col.productIds || []);
+    const mappings = (col.categoryMappings || []).map((m) => {
+      const count = resolvedProducts.filter(
+        (p) =>
+          (m.childCategoryId && (p.productTypeId === m.childCategoryId || p.subcategoryId === m.childCategoryId)) ||
+          (m.childCategorySlug && (p.productTypeSlug === m.childCategorySlug || p.subcategorySlug === m.childCategorySlug))
+      ).length;
+      return { ...m, productCount: count };
+    });
+    const mappedTypeIds = new Set(mappings.filter((m) => m.childCategoryId).map((m) => m.childCategoryId!));
+    const colProducts = resolvedProducts.filter(
+      (p) => curatedSet.has(p.id) || (p.productTypeId && mappedTypeIds.has(p.productTypeId))
+    );
+    return {
+      ...col,
+      categoryMappings: mappings,
+      productCount: colProducts.length,
+    };
+  });
+}
+
 @Controller('api/v1')
 export class CatalogueController {
   @Get('taxonomy')
@@ -119,7 +159,7 @@ export class CatalogueController {
         desktopNavigation,
         publishMetadata,
         tree: navMainCategories,
-        newLaunchCollections: taxonomyService.getNewLaunchCollections(cleanTenant, true),
+        newLaunchCollections: buildHydratedNewLaunchCollections(cleanTenant),
         brands: dbStore.brands,
       },
     };
@@ -199,35 +239,119 @@ export class CatalogueController {
   @Get('new-launches')
   getPromotionalNewLaunches(
     @Headers('x-tenant-id') tenantId?: string,
-    @Query('collection') collectionSlug?: string
+    @Query('collection') collectionSlug?: string,
+    @Query('child') childNeedle?: string,
+    @Query('search') search?: string
   ) {
-    const collections = taxonomyService.getNewLaunchCollections(
-      tenantId || 'tenant-buildora-blr',
-      true
-    );
-    const activeCollection = collectionSlug
-      ? collections.find((c) => c.slug === collectionSlug || c.id === collectionSlug) || collections[0]
-      : collections[0];
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const resolvedProducts = resolveCustomerProductsWithTaxonomy(cleanTenant);
+    const collections = buildHydratedNewLaunchCollections(cleanTenant, resolvedProducts);
 
-    const visibleProducts = dbStore.products.filter(isProductCustomerVisible);
-    const targetCollections = collectionSlug && activeCollection ? [activeCollection] : collections;
+    let activeCollection = collectionSlug
+      ? collections.find(
+          (c) =>
+            c.slug.toLowerCase() === collectionSlug.toLowerCase() ||
+            c.id.toLowerCase() === collectionSlug.toLowerCase()
+        ) || null
+      : null;
+
+    if (collectionSlug && !activeCollection) {
+      return {
+        success: true,
+        data: {
+          collections,
+          activeCollection: null,
+          shortcuts: [],
+          activeShortcut: null,
+          products: [],
+        },
+      };
+    }
+
+    const targetCollections = activeCollection ? [activeCollection] : collections;
+    const allShortcuts = targetCollections.flatMap((c) => c.categoryMappings || []);
+    const cleanChild = childNeedle?.trim().toLowerCase();
+    const matchedShortcut = cleanChild
+      ? allShortcuts.find(
+          (m) =>
+            m.id.toLowerCase() === cleanChild ||
+            (m.childCategoryId || '').toLowerCase() === cleanChild ||
+            (m.childCategorySlug || '').toLowerCase() === cleanChild ||
+            m.displayLabel.trim().toLowerCase() === cleanChild
+        ) || null
+      : null;
+
     const curatedIdSet = new Set(targetCollections.flatMap((c) => c.productIds || []));
-    const matched = visibleProducts
-      .filter((p) => (curatedIdSet.size > 0 ? curatedIdSet.has(p.id) || p.isNewLaunch : p.isNewLaunch))
-      .map((p) => {
-        const taxonomy = taxonomyService.resolveAndValidateProductTaxonomy(p, {
-          strictChildMatch: false,
-          tenantId,
-        });
-        return { ...p, ...taxonomy };
-      });
+    const allowedTypeIds = new Set(
+      (matchedShortcut ? [matchedShortcut] : allShortcuts)
+        .filter((m) => m.childCategoryId)
+        .map((m) => m.childCategoryId!)
+    );
+
+    let matched = resolvedProducts.filter((p) => {
+      if (matchedShortcut) {
+        return Boolean(matchedShortcut.childCategoryId && p.productTypeId === matchedShortcut.childCategoryId);
+      }
+      if (activeCollection) {
+        return curatedIdSet.has(p.id) || Boolean(p.productTypeId && allowedTypeIds.has(p.productTypeId));
+      }
+      return (
+        p.isNewLaunch ||
+        curatedIdSet.has(p.id) ||
+        Boolean(p.productTypeId && allowedTypeIds.has(p.productTypeId))
+      );
+    });
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      matched = matched.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(q) ||
+          p.brand?.toLowerCase().includes(q) ||
+          p.sku?.toLowerCase().includes(q) ||
+          p.childCategoryName?.toLowerCase().includes(q) ||
+          p.productTypeName?.toLowerCase().includes(q)
+      );
+    }
 
     return {
       success: true,
       data: {
         collections,
-        activeCollection: activeCollection || null,
+        activeCollection,
+        shortcuts: activeCollection ? activeCollection.categoryMappings || [] : [],
+        activeShortcut: matchedShortcut,
         products: matched,
+      },
+    };
+  }
+
+  @Get('new-launches/:slug')
+  getNewLaunchCollectionBySlug(
+    @Param('slug') slug: string,
+    @Headers('x-tenant-id') tenantId?: string,
+    @Query('child') childNeedle?: string,
+    @Query('search') search?: string
+  ) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const resolvedProducts = resolveCustomerProductsWithTaxonomy(cleanTenant);
+    const collections = buildHydratedNewLaunchCollections(cleanTenant, resolvedProducts);
+    const collection = collections.find(
+      (c) => c.slug.toLowerCase() === slug.toLowerCase() || c.id.toLowerCase() === slug.toLowerCase()
+    );
+    if (!collection) {
+      throw new NotFoundException(`New Launches collection "${slug}" not found or unpublished.`);
+    }
+
+    const res = this.getPromotionalNewLaunches(cleanTenant, collection.slug, childNeedle, search);
+    return {
+      success: true,
+      data: {
+        collection,
+        collections,
+        shortcuts: collection.categoryMappings || [],
+        activeShortcut: res.data.activeShortcut,
+        products: res.data.products,
       },
     };
   }

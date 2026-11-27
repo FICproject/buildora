@@ -1933,14 +1933,9 @@ export const VendorProductsPage: React.FC = () => {
                     />
                     <span>Enable B2B Bulk Pricing Tiers</span>
                   </label>
-                  <label className="flex items-center gap-2 text-xs font-medium text-[#292524] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isNewLaunch}
-                      onChange={(e) => setIsNewLaunch(e.target.checked)}
-                    />
-                    <span>Tag as New Launch</span>
-                  </label>
+                  <span className="text-[11px] text-[#78716C]">
+                    Promotional New Launches curation is managed by Company Admin after approval.
+                  </span>
                 </div>
                 {enableBulkPricing && (
                   <div className="grid grid-cols-2 gap-3 pt-1">
