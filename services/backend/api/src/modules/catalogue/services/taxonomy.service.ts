@@ -1472,6 +1472,99 @@ export class TaxonomyService implements OnModuleInit {
     return !inactiveByNav.has(mc.id);
   }
 
+  /**
+   * Authoritative 4-level parent-child effective status check for Customer discovery & Vendor selection.
+   * Ensures any product/reference under an inactive Main Category, inactive Desktop Nav link,
+   * inactive Category Group (ChildCategory), or inactive Child Category (ProductTypeNode) is treated as inactive.
+   */
+  public isProductCategoryHierarchyActive(product: any, tenantId = DEFAULT_TENANT): boolean {
+    if (!product) return false;
+    const cleanTenant = tenantId || DEFAULT_TENANT;
+    const pool = this.getTenantPool(cleanTenant);
+
+    const rawChild = String(
+      product.childCategoryId || product.categoryId || product.childCategorySlug || product.categorySlug || product.category || ''
+    ).trim().toLowerCase();
+    const rawType = String(
+      product.productTypeId || product.subcategoryId || product.productTypeSlug || product.subcategorySlug || product.subcategory || ''
+    ).trim().toLowerCase();
+    const rawMain = String(product.mainCategoryId || product.mainCategorySlug || product.mainCategoryName || '').trim().toLowerCase();
+
+    const childNeedle = LEGACY_CATEGORY_SLUG_ALIASES[rawChild] || rawChild;
+    const typeNeedle = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[rawType] || rawType;
+
+    // 1. Direct explicit ID checks first so inactive IDs are never masked by fallback resolution
+    if (product.mainCategoryId) {
+      const explicitMain = pool.mainCategories.find((m) => m.id === product.mainCategoryId);
+      if (explicitMain && !this.isMainCategoryActiveForPortals(cleanTenant, explicitMain.id)) {
+        return false;
+      }
+    }
+    if (product.childCategoryId || product.categoryId) {
+      const explicitChildId = product.childCategoryId || product.categoryId;
+      const explicitChild = pool.childCategories.find((c) => c.id === explicitChildId);
+      if (explicitChild) {
+        if (explicitChild.isActive === false) return false;
+        if (!this.isMainCategoryActiveForPortals(cleanTenant, explicitChild.mainCategoryId)) return false;
+      }
+    }
+    if (product.productTypeId || product.subcategoryId) {
+      const explicitTypeId = product.productTypeId || product.subcategoryId;
+      const explicitType = pool.productTypes.find((pt) => pt.id === explicitTypeId);
+      if (explicitType) {
+        if (explicitType.isActive === false) return false;
+        const parentGroup = pool.childCategories.find((c) => c.id === explicitType.childCategoryId);
+        if (!parentGroup || parentGroup.isActive === false) return false;
+        if (!this.isMainCategoryActiveForPortals(cleanTenant, parentGroup.mainCategoryId)) return false;
+      }
+    }
+
+    // 2. Canonical slug/name lookup across the full active hierarchy chain
+    const matchedChild = childNeedle
+      ? pool.childCategories.find(
+          (c) =>
+            c.id.toLowerCase() === childNeedle ||
+            c.slug.toLowerCase() === childNeedle ||
+            c.name.trim().toLowerCase() === childNeedle
+        )
+      : undefined;
+
+    const matchedMain =
+      (rawMain
+        ? pool.mainCategories.find(
+            (m) =>
+              m.id.toLowerCase() === rawMain ||
+              m.slug.toLowerCase() === rawMain ||
+              m.name.trim().toLowerCase() === rawMain
+          )
+        : undefined) ||
+      (matchedChild ? pool.mainCategories.find((m) => m.id === matchedChild.mainCategoryId) : undefined);
+
+    if (!matchedMain || !this.isMainCategoryActiveForPortals(cleanTenant, matchedMain.id)) {
+      return false;
+    }
+
+    if (matchedChild) {
+      if (matchedChild.isActive === false) return false;
+      if (matchedChild.mainCategoryId !== matchedMain.id) return false;
+    }
+
+    if (typeNeedle) {
+      const matchedType = pool.productTypes.find(
+        (pt) =>
+          (!matchedChild || pt.childCategoryId === matchedChild.id) &&
+          (pt.id.toLowerCase() === typeNeedle ||
+            pt.slug.toLowerCase() === typeNeedle ||
+            pt.name.trim().toLowerCase() === typeNeedle)
+      );
+      if (matchedType && matchedType.isActive === false) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   public getPublishedDesktopNavigation(tenantId = DEFAULT_TENANT, includeHidden = false): DesktopNavItem[] {
     const cleanTenant = tenantId || DEFAULT_TENANT;
     const pool = this.getTenantPool(cleanTenant);
@@ -1521,6 +1614,22 @@ export class TaxonomyService implements OnModuleInit {
           const linkedMain = pool.mainCategories.find((m) => m.id === nav.mainCategoryId);
           if (!linkedMain || linkedMain.isActive === false || linkedMain.showInNavigation === false) {
             return false;
+          }
+          if (nav.childCategoryId) {
+            const linkedChild = pool.childCategories.find((c) => c.id === nav.childCategoryId);
+            if (!linkedChild || linkedChild.isActive === false || linkedChild.mainCategoryId !== linkedMain.id) {
+              return false;
+            }
+          }
+          if (nav.productTypeId) {
+            const linkedType = pool.productTypes.find((pt) => pt.id === nav.productTypeId);
+            if (
+              !linkedType ||
+              linkedType.isActive === false ||
+              (nav.childCategoryId && linkedType.childCategoryId !== nav.childCategoryId)
+            ) {
+              return false;
+            }
           }
         }
         return true;
@@ -2542,10 +2651,11 @@ export class TaxonomyService implements OnModuleInit {
     for (const nav of draft.desktopNavigation) {
       if (nav.mainCategoryId === existing.id) {
         nav.mainCategorySlug = existing.slug;
-        nav.route = `/categories/${existing.slug}`;
+        if (!nav.childCategoryId && !nav.productTypeId) {
+          nav.route = `/categories/${existing.slug}`;
+        }
         if (nav.label === oldName) nav.label = existing.name;
         if (updates.showInNavigation !== undefined) nav.isVisible = Boolean(updates.showInNavigation);
-        if (updates.isActive !== undefined) nav.isActive = Boolean(updates.isActive);
         nav.updatedAt = now;
         touchedNavs.push(nav);
       }
@@ -3392,11 +3502,17 @@ export class TaxonomyService implements OnModuleInit {
     return clean;
   }
 
-  private hydrateCollectionLiveShortcuts(col: NewLaunchCollection, customerOnly: boolean): NewLaunchCollection {
+  private hydrateCollectionLiveShortcuts(
+    col: NewLaunchCollection,
+    customerOnly: boolean,
+    tenantId = DEFAULT_TENANT
+  ): NewLaunchCollection {
+    const cleanTenant = tenantId || DEFAULT_TENANT;
+    const pool = this.getTenantPool(cleanTenant);
     const cloned = this.cloneRecord(col);
-    const activePts = new Map(this.productTypes.map((pt) => [pt.id, pt]));
-    const activeGroups = new Map(this.childCategories.map((c) => [c.id, c]));
-    const activeMains = new Map(this.mainCategories.map((m) => [m.id, m]));
+    const activePts = new Map(pool.productTypes.map((pt) => [pt.id, pt]));
+    const activeGroups = new Map(pool.childCategories.map((c) => [c.id, c]));
+    const activeMains = new Map(pool.mainCategories.map((m) => [m.id, m]));
 
     const rawMappings = Array.isArray(cloned.categoryMappings) ? cloned.categoryMappings : [];
     cloned.categoryMappings = rawMappings
@@ -3405,7 +3521,14 @@ export class TaxonomyService implements OnModuleInit {
           const pt = activePts.get(m.childCategoryId);
           const grp = pt ? activeGroups.get(pt.childCategoryId) : undefined;
           const main = grp ? activeMains.get(grp.mainCategoryId) : undefined;
-          if (!pt || !grp || !main || pt.isActive === false || grp.isActive === false || main.isActive === false) {
+          if (
+            !pt ||
+            !grp ||
+            !main ||
+            pt.isActive === false ||
+            grp.isActive === false ||
+            !this.isMainCategoryActiveForPortals(cleanTenant, main.id)
+          ) {
             return null;
           }
           return {
@@ -3432,12 +3555,28 @@ export class TaxonomyService implements OnModuleInit {
   getNewLaunchCollections(tenantId: string, onlyActiveAndInWindow = false): NewLaunchCollection[] {
     const now = Date.now();
     const cleanTenant = this.resolveNavTenantId(tenantId);
+    const pool = this.getTenantPool(cleanTenant);
     return this.newLaunchCollections
       .filter((col) => !col.tenantId || col.tenantId === GLOBAL_TENANT || col.tenantId === cleanTenant)
       .filter((col) => {
         if (!onlyActiveAndInWindow) return true;
         if (!col.isActive) return false;
         if (col.publishStatus === 'DRAFT') return false;
+        if (col.mainCategoryId) {
+          const linkedMain = pool.mainCategories.find((m) => m.id === col.mainCategoryId);
+          if (linkedMain && !this.isMainCategoryActiveForPortals(cleanTenant, linkedMain.id)) {
+            return false;
+          }
+        }
+        if (col.categoryGroupId) {
+          const linkedGroup = pool.childCategories.find((c) => c.id === col.categoryGroupId);
+          if (
+            linkedGroup &&
+            (linkedGroup.isActive === false || !this.isMainCategoryActiveForPortals(cleanTenant, linkedGroup.mainCategoryId))
+          ) {
+            return false;
+          }
+        }
         if (col.startDate) {
           const s = new Date(col.startDate).getTime();
           if (!Number.isNaN(s) && now < s) return false;
@@ -3448,7 +3587,7 @@ export class TaxonomyService implements OnModuleInit {
         }
         return true;
       })
-      .map((col) => this.hydrateCollectionLiveShortcuts(col, onlyActiveAndInWindow))
+      .map((col) => this.hydrateCollectionLiveShortcuts(col, onlyActiveAndInWindow, cleanTenant))
       .sort((a, b) => a.displayOrder - b.displayOrder);
   }
 

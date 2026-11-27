@@ -241,8 +241,8 @@ export const VendorProductsPage: React.FC = () => {
   const selectedMainCatNode = useMemo(
     () =>
       availableMainCategories.find((m) => m.id === mainCategoryId) ||
-      availableMainCategories[0],
-    [availableMainCategories, mainCategoryId]
+      (!editingProduct && !mainCategoryId ? availableMainCategories[0] : undefined),
+    [availableMainCategories, mainCategoryId, editingProduct]
   );
 
   const availableChildCategories = useMemo(() => {
@@ -255,8 +255,8 @@ export const VendorProductsPage: React.FC = () => {
   const selectedChildCatNode = useMemo(
     () =>
       availableChildCategories.find((c) => c.id === childCategoryId) ||
-      availableChildCategories[0],
-    [availableChildCategories, childCategoryId]
+      (!editingProduct && !childCategoryId ? availableChildCategories[0] : undefined),
+    [availableChildCategories, childCategoryId, editingProduct]
   );
 
   const availableProductTypes = useMemo(() => {
@@ -272,6 +272,26 @@ export const VendorProductsPage: React.FC = () => {
       availableProductTypes[0],
     [availableProductTypes, productTypeId]
   );
+
+  const isAssignedCategoryInactive = useMemo(() => {
+    if (!hasLoadedTaxonomy) return false;
+    if (mainCategoryId && !availableMainCategories.some((m) => m.id === mainCategoryId)) {
+      return true;
+    }
+    if (
+      childCategoryId &&
+      !taxonomyState.childCategories.some((c) => c.id === childCategoryId && c.isActive !== false)
+    ) {
+      return true;
+    }
+    if (
+      productTypeId &&
+      !taxonomyState.productTypes.some((pt) => pt.id === productTypeId && pt.isActive !== false)
+    ) {
+      return true;
+    }
+    return false;
+  }, [hasLoadedTaxonomy, availableMainCategories, taxonomyState.childCategories, taxonomyState.productTypes, mainCategoryId, childCategoryId, productTypeId]);
 
   const selectedMainCategoryObj = useMemo(() => {
     const found = MASTER_CATEGORIES.find(
@@ -367,13 +387,17 @@ export const VendorProductsPage: React.FC = () => {
     setFieldErrors({});
     setName('');
     setSku(`SKU-BLR-${Math.floor(1000 + Math.random() * 9000)}`);
-    const defaultMain = availableMainCategories[0] || MAIN_CATEGORIES_SEED[0];
-    const defaultChild =
-      taxonomyState.childCategories.find((c) => c.mainCategoryId === defaultMain?.id) ||
-      CHILD_CATEGORIES_SEED[0];
-    const defaultType =
-      taxonomyState.productTypes.find((pt) => pt.childCategoryId === defaultChild?.id) ||
-      PRODUCT_TYPES_SEED[0];
+    const defaultMain = availableMainCategories[0];
+    const defaultChild = defaultMain
+      ? (hasLoadedTaxonomy ? taxonomyState.childCategories : CHILD_CATEGORIES_SEED).find(
+          (c) => c.mainCategoryId === defaultMain.id && c.isActive !== false
+        )
+      : undefined;
+    const defaultType = defaultChild
+      ? (hasLoadedTaxonomy ? taxonomyState.productTypes : PRODUCT_TYPES_SEED).find(
+          (pt) => pt.childCategoryId === defaultChild.id && pt.isActive !== false
+        )
+      : undefined;
     setMainCategoryId(defaultMain?.id || '');
     setChildCategoryId(defaultChild?.id || '');
     setProductTypeId(defaultType?.id || '');
@@ -639,6 +663,20 @@ export const VendorProductsPage: React.FC = () => {
     const stockNum = Number(stock);
 
     const nextFieldErrors: Record<string, string> = submitAsDraft ? {} : validateDynamicFieldsClient();
+    if (!editingProduct && (!selectedMainCatNode || !selectedChildCatNode)) {
+      setFormError('This category is currently inactive and cannot be selected for new products.');
+      setWizardStep(1);
+      return;
+    }
+    if (
+      !submitAsDraft &&
+      isAssignedCategoryInactive &&
+      (!editingProduct || editingProduct.approvalStatus === 'DRAFT' || editingProduct.approvalStatus === 'REJECTED')
+    ) {
+      setFormError('This category is currently inactive and cannot be selected for new products.');
+      setWizardStep(1);
+      return;
+    }
     if (!name.trim()) nextFieldErrors.name = 'Product Name is required.';
     if (!brand.trim()) nextFieldErrors.brand = 'Brand is required.';
     if (!sku.trim()) nextFieldErrors.sku = 'SKU / Product Code is required.';
@@ -711,12 +749,22 @@ export const VendorProductsPage: React.FC = () => {
       const resolvedMain = selectedMainCatNode;
       const resolvedChild = selectedChildCatNode;
       const resolvedType = selectedProductTypeNode;
-      const fallbackHierarchy = resolveCanonicalCategoryHierarchy(
-        resolvedChild?.name || category,
-        resolvedType?.name || subCategory
-      );
-      const canonicalChild = resolvedChild || fallbackHierarchy.matchedMain || MASTER_CATEGORIES[0];
-      const canonicalType = resolvedType || fallbackHierarchy.matchedChild || MASTER_CATEGORIES[0].subcategories[0];
+      const preservingInactiveOriginal = Boolean(editingProduct && (!resolvedMain || !resolvedChild));
+      const canonicalChild = preservingInactiveOriginal
+        ? {
+            id: (editingProduct as any).childCategoryId || editingProduct!.categoryId || '',
+            name: (editingProduct as any).childCategoryName || editingProduct!.category || '',
+            slug: (editingProduct as any).childCategorySlug || editingProduct!.categorySlug || '',
+            mainCategoryId: (editingProduct as any).mainCategoryId || '',
+          }
+        : resolvedChild || MASTER_CATEGORIES[0];
+      const canonicalType = preservingInactiveOriginal
+        ? {
+            id: (editingProduct as any).productTypeId || editingProduct!.subcategoryId || '',
+            name: (editingProduct as any).productTypeName || editingProduct!.subCategory || editingProduct!.subcategory || '',
+            slug: (editingProduct as any).productTypeSlug || editingProduct!.subcategorySlug || '',
+          }
+        : resolvedType;
 
       // Build human-readable specifications from dynamic CategoryFieldSchema + manual extra specs
       const dynamicSpecs: Record<string, string> = {};
@@ -744,9 +792,9 @@ export const VendorProductsPage: React.FC = () => {
       const productData = {
         name: name.trim(),
         sku: sku.trim(),
-        mainCategoryId: resolvedMain?.id || canonicalChild.mainCategoryId || 'mc-1',
-        mainCategoryName: resolvedMain?.name || 'Civil & Interiors',
-        mainCategorySlug: resolvedMain?.slug || 'civil-interiors',
+        mainCategoryId: resolvedMain?.id || (editingProduct as any)?.mainCategoryId || canonicalChild.mainCategoryId || '',
+        mainCategoryName: resolvedMain?.name || (editingProduct as any)?.mainCategoryName || '',
+        mainCategorySlug: resolvedMain?.slug || (editingProduct as any)?.mainCategorySlug || '',
         childCategoryId: canonicalChild.id,
         childCategoryName: canonicalChild.name,
         childCategorySlug: canonicalChild.slug,
@@ -1024,8 +1072,13 @@ export const VendorProductsPage: React.FC = () => {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="text-[#292524] font-medium">
-                          {(p as any).childCategoryName || p.category}
+                        <div className="text-[#292524] font-medium flex flex-wrap items-center gap-1.5">
+                          <span>{(p as any).childCategoryName || p.category}</span>
+                          {(p as any).categoryHierarchyActive === false && (
+                            <Badge variant="warning" size="sm">
+                              Category Inactive
+                            </Badge>
+                          )}
                         </div>
                         <div className="text-[11px] text-[#78716C]">
                           {((p as any).mainCategoryName || (p as any).department || '')}
@@ -1172,12 +1225,23 @@ export const VendorProductsPage: React.FC = () => {
           {/* STEP 1: CATEGORY SELECTION */}
           {wizardStep === 1 && (
             <div className="space-y-4">
+              {isAssignedCategoryInactive && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs space-y-1">
+                  <p className="font-bold">Assigned Category is Currently Inactive</p>
+                  <p>
+                    {editingProduct
+                      ? `This product's category (${(editingProduct as any).mainCategoryName || mainCategoryId} → ${(editingProduct as any).childCategoryName || editingProduct.category}) has been deactivated by Company Admin and is hidden from customers. Select an active category below to reassign, or update stock without changing category.`
+                      : 'The previously selected category is now inactive. Please choose an active category below.'}
+                  </p>
+                </div>
+              )}
+
               <div className="p-3 rounded-xl bg-[#FBF3F0] border border-[#943D24]/20 text-xs flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="font-bold text-[#943D24]">Selected Category Hierarchy</p>
                   <p className="text-[#292524] mt-0.5 font-medium">
-                    Main Category: <strong>{selectedMainCatNode?.name || '—'}</strong> &rarr; Child Category:{' '}
-                    <strong>{selectedChildCatNode?.name || '—'}</strong>
+                    Main Category: <strong>{selectedMainCatNode?.name || 'Inactive / Select Active'}</strong> &rarr; Child Category:{' '}
+                    <strong>{selectedChildCatNode?.name || 'Inactive / Select Active'}</strong>
                     {selectedProductTypeNode ? ` → ${selectedProductTypeNode.name}` : ''}
                   </p>
                 </div>
@@ -1188,16 +1252,18 @@ export const VendorProductsPage: React.FC = () => {
                 <div>
                   <label className="portal-label">Main Category *</label>
                   <select
-                    value={selectedMainCatNode?.id || mainCategoryId}
+                    value={selectedMainCatNode?.id || ''}
                     onChange={(e) => {
                       const nextMainId = e.target.value;
                       setMainCategoryId(nextMainId);
-                      const nextChild =
-                        taxonomyState.childCategories.find((c) => c.mainCategoryId === nextMainId) ||
-                        CHILD_CATEGORIES_SEED.find((c) => c.mainCategoryId === nextMainId);
+                      const nextChild = (hasLoadedTaxonomy
+                        ? taxonomyState.childCategories
+                        : CHILD_CATEGORIES_SEED
+                      ).find((c) => c.mainCategoryId === nextMainId && c.isActive !== false);
                       const nextType = nextChild
-                        ? taxonomyState.productTypes.find((pt) => pt.childCategoryId === nextChild.id) ||
-                          PRODUCT_TYPES_SEED.find((pt) => pt.childCategoryId === nextChild.id)
+                        ? (hasLoadedTaxonomy ? taxonomyState.productTypes : PRODUCT_TYPES_SEED).find(
+                            (pt) => pt.childCategoryId === nextChild.id && pt.isActive !== false
+                          )
                         : undefined;
                       setChildCategoryId(nextChild?.id || '');
                       setProductTypeId(nextType?.id || '');
@@ -1209,6 +1275,11 @@ export const VendorProductsPage: React.FC = () => {
                     className="portal-input"
                     required
                   >
+                    {!selectedMainCatNode && (
+                      <option value="" disabled>
+                        Select an active Main Category...
+                      </option>
+                    )}
                     {availableMainCategories.map((mc) => (
                       <option key={mc.id} value={mc.id}>
                         {mc.name}
@@ -1220,13 +1291,14 @@ export const VendorProductsPage: React.FC = () => {
                 <div>
                   <label className="portal-label">Child Category *</label>
                   <select
-                    value={selectedChildCatNode?.id || childCategoryId}
+                    value={selectedChildCatNode?.id || ''}
                     onChange={(e) => {
                       const nextChildId = e.target.value;
                       const nextChild = availableChildCategories.find((c) => c.id === nextChildId);
-                      const nextType = taxonomyState.productTypes.find(
-                        (pt) => pt.childCategoryId === nextChildId
-                      );
+                      const nextType = (hasLoadedTaxonomy
+                        ? taxonomyState.productTypes
+                        : PRODUCT_TYPES_SEED
+                      ).find((pt) => pt.childCategoryId === nextChildId && pt.isActive !== false);
                       setChildCategoryId(nextChildId);
                       setProductTypeId(nextType?.id || '');
                       setCategory(nextChild?.name || '');
@@ -1237,6 +1309,11 @@ export const VendorProductsPage: React.FC = () => {
                     className="portal-input"
                     required
                   >
+                    {!selectedChildCatNode && (
+                      <option value="" disabled>
+                        Select an active Child Category...
+                      </option>
+                    )}
                     {availableChildCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}

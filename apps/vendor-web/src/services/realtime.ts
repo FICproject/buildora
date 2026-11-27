@@ -28,7 +28,7 @@ export function initVendorRealtime() {
     },
     reconnection: true,
     reconnectionDelay: 2000,
-    reconnectionAttempts: 10,
+    reconnectionAttempts: Infinity,
   });
 
   const refreshAll = (event: string, payload?: any) => {

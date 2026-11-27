@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Body,
+  Headers,
   Param,
   Query,
   BadRequestException,
@@ -18,8 +19,9 @@ import { vendorRecords, vendorProducts } from '../../vendors/controllers/vendor.
 import { taxonomyService } from '../../catalogue/services/taxonomy.service';
 import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
 
-export function isProductCustomerVisible(p: any): boolean {
+export function isProductCustomerVisible(p: any, tenantId = 'tenant-buildora-blr'): boolean {
   if (!p) return false;
+  if (p.tenantId && tenantId && p.tenantId !== tenantId) return false;
   if (p.isActive === false) return false;
   if (p.isSuspended === true) return false;
   if (p.approvalStatus && p.approvalStatus !== 'APPROVED') return false;
@@ -37,10 +39,14 @@ export function isProductCustomerVisible(p: any): boolean {
       return false;
     }
   }
+
+  if (!taxonomyService.isProductCategoryHierarchyActive(p, tenantId || 'tenant-buildora-blr')) {
+    return false;
+  }
   return true;
 }
 
-function enrichStorefrontProduct(p: any) {
+function enrichStorefrontProduct(p: any, tenantId = 'tenant-buildora-blr') {
   const vp = vendorProducts.find((v) => v.id === p.id || v.sku === p.sku) as any;
   const vendorId = p.vendorId || vp?.vendorId || 'vnd-apex-01';
   const vendor = vendorRecords.get(vendorId);
@@ -49,6 +55,7 @@ function enrichStorefrontProduct(p: any) {
   const availableStock = Math.max(0, totalStock - reserved);
   const hierarchy = taxonomyService.resolveAndValidateProductTaxonomy(p, {
     strictChildMatch: false,
+    tenantId,
   });
 
   const {
@@ -149,6 +156,7 @@ export class ProductsController {
   }
   @Get('products')
   getProducts(
+    @Headers('x-tenant-id') tenantId?: string,
     @Query('mainCategory') mainCategory?: string,
     @Query('childCategory') childCategory?: string,
     @Query('category') category?: string,
@@ -169,7 +177,10 @@ export class ProductsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string
   ) {
-    let result = dbStore.products.filter(isProductCustomerVisible).map(enrichStorefrontProduct);
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
+    let result = dbStore.products
+      .filter((p) => isProductCustomerVisible(p, cleanTenant))
+      .map((p) => enrichStorefrontProduct(p, cleanTenant));
 
     if (mainCategory) {
       const mains = mainCategory.split(',').map((m) => m.trim().toLowerCase()).filter(Boolean);
@@ -325,27 +336,35 @@ export class ProductsController {
   }
 
   @Get('products/:slug')
-  getProductBySlug(@Param('slug') slug: string) {
+  getProductBySlug(
+    @Param('slug') slug: string,
+    @Headers('x-tenant-id') tenantId?: string
+  ) {
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
     const raw = dbStore.products.find((p) => p.slug === slug || p.id === slug);
-    if (!raw || !isProductCustomerVisible(raw)) {
+    if (!raw || !isProductCustomerVisible(raw, cleanTenant)) {
       throw new NotFoundException('Product not found or currently unavailable.');
     }
     return {
       success: true,
-      data: enrichStorefrontProduct(raw)
+      data: enrichStorefrontProduct(raw, cleanTenant)
     };
   }
 
   @Get('search')
-  searchGlobal(@Query('q') q?: string) {
+  searchGlobal(
+    @Query('q') q?: string,
+    @Headers('x-tenant-id') tenantId?: string
+  ) {
     if (!q || !q.trim()) {
       return { success: true, data: { products: [], categories: [], brands: [] } };
     }
 
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
     const needle = q.toLowerCase().trim();
 
     const matchedProducts = dbStore.products
-      .filter(isProductCustomerVisible)
+      .filter((p) => isProductCustomerVisible(p, cleanTenant))
       .filter(
         (p) =>
           p.name.toLowerCase().includes(needle) ||
@@ -353,14 +372,20 @@ export class ProductsController {
           p.category.toLowerCase().includes(needle)
       )
       .slice(0, 6)
-      .map(enrichStorefrontProduct);
+      .map((p) => enrichStorefrontProduct(p, cleanTenant));
 
-    const matchedCategories = dbStore.categories.filter((c) =>
-      c.name.toLowerCase().includes(needle)
-    ).slice(0, 4);
+    const activePool = taxonomyService.getTenantPool(cleanTenant);
+    const matchedCategories = activePool.childCategories
+      .filter(
+        (c) =>
+          c.isActive !== false &&
+          taxonomyService.isMainCategoryActiveForPortals(cleanTenant, c.mainCategoryId) &&
+          c.name.toLowerCase().includes(needle)
+      )
+      .slice(0, 4);
 
-    const matchedBrands = dbStore.brands.filter((b) =>
-      b.name.toLowerCase().includes(needle)
+    const matchedBrands = dbStore.brands.filter(
+      (b: any) => b.isActive !== false && (!b.tenantId || b.tenantId === cleanTenant) && b.name.toLowerCase().includes(needle)
     ).slice(0, 4);
 
     return {
@@ -375,8 +400,9 @@ export class ProductsController {
 
   @Post('cart/validate')
   validateCartItems(
+    @Headers('x-tenant-id') tenantId?: string,
     @Body()
-    body: {
+    body?: {
       items: Array<{
         productId: string;
         variantId?: string;
@@ -389,6 +415,7 @@ export class ProductsController {
       throw new BadRequestException('Items array is required for cart validation.');
     }
 
+    const cleanTenant = tenantId || 'tenant-buildora-blr';
     const issues: Array<{ productId: string; variantId?: string; code: string; message: string }> = [];
     const validatedItems: any[] = [];
 
@@ -396,7 +423,7 @@ export class ProductsController {
       const rawProd = dbStore.products.find(
         (p) => p.id === item.productId || p.sku === item.productId || `vp-${p.id}` === item.productId
       );
-      if (!rawProd || !isProductCustomerVisible(rawProd)) {
+      if (!rawProd || !isProductCustomerVisible(rawProd, cleanTenant)) {
         issues.push({
           productId: item.productId,
           variantId: item.variantId,
@@ -406,7 +433,7 @@ export class ProductsController {
         continue;
       }
 
-      const prod = enrichStorefrontProduct(rawProd);
+      const prod = enrichStorefrontProduct(rawProd, cleanTenant);
       if (!prod.inStock || prod.availableStock <= 0) {
         issues.push({
           productId: prod.id,

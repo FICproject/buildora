@@ -67,7 +67,7 @@ export const ProductListingPage: React.FC = () => {
 
   // Products and Category list state
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>(MASTER_CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() =>
@@ -82,7 +82,7 @@ export const ProductListingPage: React.FC = () => {
       try {
         const [cats, prods] = await Promise.all([api.getCategories(), api.getProducts()]);
         if (!active) return;
-        if (cats && cats.length) setCategories(cats);
+        setCategories(Array.isArray(cats) ? cats : []);
         setProducts(Array.isArray(prods) ? prods : []);
       } finally {
         if (active) setLoading(false);
@@ -93,10 +93,17 @@ export const ProductListingPage: React.FC = () => {
     const onRealtime = () => {
       void loadCatalog();
     };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void loadCatalog();
+    };
     window.addEventListener('buildora:realtime:catalog', onRealtime);
+    window.addEventListener('focus', onRealtime);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       active = false;
       window.removeEventListener('buildora:realtime:catalog', onRealtime);
+      window.removeEventListener('focus', onRealtime);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 

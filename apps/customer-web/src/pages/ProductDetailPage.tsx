@@ -108,39 +108,56 @@ export const ProductDetailPage: React.FC = () => {
   useEffect(() => {
     if (!slug) return;
     let active = true;
-    setLoadingProduct(true);
-    api
-      .getProductBySlug(slug)
-      .then((liveProd) => {
-        if (!active) return;
-        if (liveProd) {
-          setProduct(liveProd);
-          const initAttrs: Record<string, string> = {};
-          if (liveProd.attributes && liveProd.attributes.length > 0) {
-            for (const attr of liveProd.attributes) {
-              const firstOpt = getOptVal(attr.options[0]);
-              initAttrs[attr.name] = firstOpt;
-            }
-          } else if (liveProd.variants?.[0]?.attributes) {
-            Object.assign(initAttrs, liveProd.variants[0].attributes);
-          }
-          setSelectedAttributes(initAttrs);
-          const matched = findVariantForAttributes(initAttrs, liveProd.variants);
-          setSelectedVariant(matched || liveProd.variants?.[0]);
-          if (liveProd.categorySlug) {
-            api.getProducts({ category: liveProd.categorySlug }).then((rel) => {
-              if (active && Array.isArray(rel)) {
-                setRelatedProducts(rel.filter((r) => r.id !== liveProd.id).slice(0, 4));
+    const loadProductDetail = () => {
+      setLoadingProduct(true);
+      api
+        .getProductBySlug(slug)
+        .then((liveProd) => {
+          if (!active) return;
+          if (liveProd) {
+            setProduct(liveProd);
+            const initAttrs: Record<string, string> = {};
+            if (liveProd.attributes && liveProd.attributes.length > 0) {
+              for (const attr of liveProd.attributes) {
+                const firstOpt = getOptVal(attr.options[0]);
+                initAttrs[attr.name] = firstOpt;
               }
-            });
+            } else if (liveProd.variants?.[0]?.attributes) {
+              Object.assign(initAttrs, liveProd.variants[0].attributes);
+            }
+            setSelectedAttributes(initAttrs);
+            const matched = findVariantForAttributes(initAttrs, liveProd.variants);
+            setSelectedVariant(matched || liveProd.variants?.[0]);
+            if (liveProd.categorySlug) {
+              api.getProducts({ category: liveProd.categorySlug }).then((rel) => {
+                if (active && Array.isArray(rel)) {
+                  setRelatedProducts(rel.filter((r) => r.id !== liveProd.id).slice(0, 4));
+                }
+              });
+            }
+          } else {
+            setProduct(null);
+            setRelatedProducts([]);
           }
-        }
-      })
-      .finally(() => {
-        if (active) setLoadingProduct(false);
-      });
+        })
+        .finally(() => {
+          if (active) setLoadingProduct(false);
+        });
+    };
+
+    loadProductDetail();
+    const onRealtime = () => loadProductDetail();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') loadProductDetail();
+    };
+    window.addEventListener('buildora:realtime:catalog', onRealtime);
+    window.addEventListener('focus', onRealtime);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       active = false;
+      window.removeEventListener('buildora:realtime:catalog', onRealtime);
+      window.removeEventListener('focus', onRealtime);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [slug]);
 

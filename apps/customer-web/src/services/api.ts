@@ -280,20 +280,13 @@ export const api = {
   },
 
   async getCategoryBySlug(slug: string): Promise<any | undefined> {
-    const direct = await request<any | null>(`/categories/${encodeURIComponent(slug)}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }, null);
+    const direct = await request<any | null>(
+      `/categories/${encodeURIComponent(slug)}`,
+      { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } },
+      null
+    );
     if (direct && (direct.slug || direct.id)) {
       return direct;
-    }
-    const categories = await api.getCategories();
-    const child = categories.find((c) => c.slug === slug);
-    if (child) return { ...child, level: 'CHILD' };
-    const main = MAIN_CATEGORIES_SEED.find((m) => m.slug === slug);
-    if (main) {
-      return {
-        ...main,
-        level: 'MAIN',
-        childCategories: CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === main.id),
-      };
     }
     return undefined;
   },

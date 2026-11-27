@@ -101,33 +101,15 @@ export const CategoryPage: React.FC = () => {
     return LEGACY_CATEGORY_SLUG_ALIASES[base.toLowerCase()] || base;
   }, [slug]);
 
-  const initialMainMatch = useMemo(
-    () => MAIN_CATEGORIES_SEED.find((m) => m.slug === (effectiveCategorySlug || slug)),
-    [effectiveCategorySlug, slug]
-  );
-
-  const [category, setCategory] = useState<any>(() => {
-    const targetSlug = effectiveCategorySlug || slug;
-    if (initialMainMatch) {
-      return {
-        ...initialMainMatch,
-        level: 'MAIN',
-        childCategories: CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === initialMainMatch.id),
-      };
-    }
-    return (
-      MASTER_CATEGORIES.find((c) => c.slug === targetSlug) ||
-      MASTER_CATEGORIES[0]
-    );
-  });
+  const [category, setCategory] = useState<any>(null);
+  const [categoryUnavailable, setCategoryUnavailable] = useState(false);
   const [productList, setProductList] = useState<Product[]>([]);
   const [dynamicFilterDimensions, setDynamicFilterDimensions] = useState<CategoryFilterDimension[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
   const isMainCategoryPage = Boolean(
     category?.level === 'MAIN' ||
-      (Array.isArray(category?.childCategories) && !category?.mainCategoryId) ||
-      MAIN_CATEGORIES_SEED.some((m) => m.slug === (effectiveCategorySlug || slug))
+      (Array.isArray(category?.childCategories) && !category?.mainCategoryId)
   );
 
   const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() =>
@@ -140,29 +122,45 @@ export const CategoryPage: React.FC = () => {
     const targetSlug = effectiveCategorySlug || slug;
     if (!targetSlug) return;
 
-    const fallbackMain = MAIN_CATEGORIES_SEED.find((m) => m.slug === targetSlug);
-    const fallbackCat = MASTER_CATEGORIES.find((c) => c.slug === targetSlug);
-    if (fallbackMain) {
-      setCategory({
-        ...fallbackMain,
-        level: 'MAIN',
-        childCategories: CHILD_CATEGORIES_SEED.filter((c) => c.mainCategoryId === fallbackMain.id),
-      });
-    } else if (fallbackCat) {
-      setCategory(fallbackCat);
-    }
-
     const loadCategoryData = async () => {
       setLoadingProducts(true);
       try {
         const cat = await api.getCategoryBySlug(targetSlug);
-        const isMain = Boolean(cat?.level === 'MAIN' || (!cat && fallbackMain));
+        if (!active) return;
+
+        if (!cat || cat.isActive === false) {
+          setCategory(null);
+          setCategoryUnavailable(true);
+          setProductList([]);
+          setDynamicFilterDimensions([]);
+          return;
+        }
+
+        if (subcategorySlug) {
+          const subLow = subcategorySlug.toLowerCase();
+          const hasActiveSub = (cat.subcategories || []).some(
+            (s: any) =>
+              s.isActive !== false &&
+              (String(s.slug || '').toLowerCase() === subLow ||
+                String(s.name || '').toLowerCase() === subLow)
+          );
+          if (!hasActiveSub) {
+            setCategory(null);
+            setCategoryUnavailable(true);
+            setProductList([]);
+            setDynamicFilterDimensions([]);
+            return;
+          }
+        }
+
+        const isMain = Boolean(cat.level === 'MAIN' || (Array.isArray(cat.childCategories) && !cat.mainCategoryId));
         const [prods, filtersRes] = await Promise.all([
           api.getProducts(isMain ? { mainCategory: targetSlug } : { category: targetSlug }),
           api.getFilters(targetSlug, subcategorySlug),
         ]);
         if (!active) return;
-        if (cat) setCategory(cat);
+        setCategory(cat);
+        setCategoryUnavailable(false);
         setProductList(Array.isArray(prods) ? prods : []);
         const cfgs: CategoryFilterConfiguration[] = Array.isArray(filtersRes?.filterConfigs)
           ? filtersRes.filterConfigs
@@ -178,12 +176,19 @@ export const CategoryPage: React.FC = () => {
     const onRealtime = () => {
       void loadCategoryData();
     };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void loadCategoryData();
+    };
     window.addEventListener('buildora:realtime:catalog', onRealtime);
     window.addEventListener('buildora:realtime:config', onRealtime);
+    window.addEventListener('focus', onRealtime);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       active = false;
       window.removeEventListener('buildora:realtime:catalog', onRealtime);
       window.removeEventListener('buildora:realtime:config', onRealtime);
+      window.removeEventListener('focus', onRealtime);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [slug, effectiveCategorySlug, subcategorySlug]);
 
@@ -239,13 +244,13 @@ export const CategoryPage: React.FC = () => {
 
   const activeSubcategory =
     activeFilters.subcategories?.length === 1
-      ? category.subcategories?.find(
+      ? category?.subcategories?.find(
           (s: any) =>
             s.slug.toLowerCase() === activeFilters.subcategories[0].toLowerCase() ||
             s.name.toLowerCase() === activeFilters.subcategories[0].toLowerCase()
         )
       : subcategorySlug
-      ? category.subcategories?.find(
+      ? category?.subcategories?.find(
           (s: any) =>
             s.slug.toLowerCase() === subcategorySlug.toLowerCase() ||
             s.name.toLowerCase() === subcategorySlug.toLowerCase()
@@ -253,26 +258,22 @@ export const CategoryPage: React.FC = () => {
       : null;
 
   const mainChildCategories: Category[] = useMemo(() => {
-    if (!isMainCategoryPage) return [];
+    if (!isMainCategoryPage || !category) return [];
     if (Array.isArray(category?.childCategories) && category.childCategories.length > 0) {
       return category.childCategories;
     }
-    return CHILD_CATEGORIES_SEED.filter(
-      (c) => c.mainCategorySlug === category.slug || c.mainCategoryId === category.id
-    ) as unknown as Category[];
+    return [];
   }, [isMainCategoryPage, category]);
 
   const parentMainCategory = useMemo(() => {
-    if (isMainCategoryPage) return null;
+    if (isMainCategoryPage || !category) return null;
     if (category?.mainCategory?.slug) return category.mainCategory;
-    const mcSlug = category?.mainCategorySlug || category?.departmentSlug;
-    return MAIN_CATEGORIES_SEED.find(
-      (m) => m.slug === mcSlug || m.id === category?.mainCategoryId
-    ) || null;
+    return null;
   }, [isMainCategoryPage, category]);
 
   // All products belonging to this Main Category or Child Category
   const allCategoryProducts = useMemo(() => {
+    if (!category) return [];
     if (isMainCategoryPage) {
       const childSlugs = mainChildCategories.map((c) => c.slug.toLowerCase());
       return productList.filter(
@@ -287,25 +288,25 @@ export const CategoryPage: React.FC = () => {
         (p.childCategorySlug || p.categorySlug) === category.slug ||
         (p.childCategoryId || p.categoryId) === category.id
     );
-  }, [isMainCategoryPage, mainChildCategories, productList, category.slug, category.id]);
+  }, [isMainCategoryPage, mainChildCategories, productList, category]);
 
   // Compute Child Category / Subcategory + Admin-configured dynamic specification filters strictly scoped to current view
   const availableFilters = useMemo(() => {
     return getAvailableFiltersForCategory(
-      category.slug,
+      category?.slug || '',
       allCategoryProducts,
-      category.subcategories || [],
+      category?.subcategories || [],
       mainChildCategories,
       dynamicFilterDimensions
     );
-  }, [category.slug, category.subcategories, mainChildCategories, allCategoryProducts, dynamicFilterDimensions]);
+  }, [category, mainChildCategories, allCategoryProducts, dynamicFilterDimensions]);
 
   // Apply active filters and sorting
   const filteredProducts = useMemo(() => {
     let result = applyCategoryFilters(
       allCategoryProducts,
       activeFilters,
-      category.slug,
+      category?.slug || '',
       dynamicFilterDimensions
     );
 
@@ -327,7 +328,7 @@ export const CategoryPage: React.FC = () => {
     }
 
     return result;
-  }, [allCategoryProducts, activeFilters, category.slug]);
+  }, [allCategoryProducts, activeFilters, category]);
 
   // Filter change handlers
   const handleResetFilters = () => {
@@ -399,6 +400,53 @@ export const CategoryPage: React.FC = () => {
       asapOnly: false
     });
   };
+
+  if (loadingProducts && !category && !categoryUnavailable) {
+    return (
+      <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-10">
+        <div className="h-8 w-64 rounded-xl bg-slate-100 animate-pulse mb-6" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 animate-pulse">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div key={idx} className="h-72 rounded-2xl bg-slate-100" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (categoryUnavailable || !category) {
+    return (
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-16">
+        <div className="p-10 sm:p-14 bg-white rounded-3xl border border-slate-200 text-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
+            <PackageOpen className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900">
+              Category Currently Unavailable
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+              This category is currently inactive or unavailable. Please explore our active building material categories.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Link
+              to="/products"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-brand-blue-900 text-white hover:bg-brand-blue-950 transition-colors shadow-sm"
+            >
+              Browse Active Categories
+            </Link>
+            <Link
+              to="/"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+            >
+              Back to Home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-5">

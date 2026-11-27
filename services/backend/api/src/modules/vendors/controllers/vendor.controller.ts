@@ -3723,7 +3723,13 @@ export class VendorController implements OnModuleInit {
     return {
       success: true,
       total: prods.length,
-      data: prods
+      data: prods.map((p) => ({
+        ...p,
+        categoryHierarchyActive: taxonomyService.isProductCategoryHierarchyActive(
+          p,
+          vendor.tenantId || DEFAULT_TENANT_ID
+        ),
+      })),
     };
   }
 
@@ -3739,7 +3745,13 @@ export class VendorController implements OnModuleInit {
     }
     return {
       success: true,
-      data: prod
+      data: {
+        ...prod,
+        categoryHierarchyActive: taxonomyService.isProductCategoryHierarchyActive(
+          prod,
+          vendor.tenantId || DEFAULT_TENANT_ID
+        ),
+      },
     };
   }
 
@@ -3806,7 +3818,7 @@ export class VendorController implements OnModuleInit {
       matchedChild?.isActive === false ||
       matchedType?.isActive === false
     ) {
-      throw new BadRequestException('Selected category is inactive and cannot be selected for new products.');
+      throw new BadRequestException('This category is currently inactive and cannot be selected for new products.');
     }
     if (rawSubInput && !hierarchy.productTypeId) {
       throw new BadRequestException(
@@ -4002,6 +4014,74 @@ export class VendorController implements OnModuleInit {
     }
 
     const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    const categoryAssignmentInBody = [
+      'mainCategoryId',
+      'mainCategorySlug',
+      'mainCategoryName',
+      'childCategoryId',
+      'categoryId',
+      'categorySlug',
+      'category',
+      'productTypeId',
+      'productTypeSlug',
+      'subcategoryId',
+      'subcategorySlug',
+      'subcategory',
+      'subCategory',
+    ].some((k) => body[k] !== undefined);
+
+    const requestedMain = body.mainCategoryId || body.mainCategorySlug || body.mainCategoryName;
+    const requestedChild = body.childCategoryId || body.categorySlug || body.categoryId || body.category;
+    const requestedType =
+      body.productTypeId ||
+      body.productTypeSlug ||
+      body.subcategorySlug ||
+      body.subcategoryId ||
+      body.subcategory ||
+      (body as any).subCategory;
+
+    const categoryChanged =
+      (requestedMain &&
+        String(requestedMain) !== String(existing.mainCategoryId || '') &&
+        String(requestedMain) !== String(existing.mainCategorySlug || '')) ||
+      (requestedChild &&
+        String(requestedChild) !== String(existing.childCategoryId || existing.categoryId || '') &&
+        String(requestedChild) !== String(existing.childCategorySlug || existing.categorySlug || '')) ||
+      (requestedType &&
+        String(requestedType) !== String(existing.productTypeId || existing.subcategoryId || '') &&
+        String(requestedType) !== String(existing.productTypeSlug || existing.subcategorySlug || ''));
+
+    const isResubmittingForApproval =
+      (existing.approvalStatus === 'DRAFT' || existing.approvalStatus === 'REJECTED') &&
+      !body.isDraft &&
+      body.submitForApproval !== false;
+
+    if (categoryAssignmentInBody || isResubmittingForApproval) {
+      const checkHierarchy = taxonomyService.resolveAndValidateProductTaxonomy(
+        {
+          mainCategoryId: requestedMain || existing.mainCategoryId,
+          childCategoryId: requestedChild || existing.childCategoryId || existing.categorySlug,
+          productTypeId: requestedType || existing.productTypeId || existing.subcategorySlug,
+          brand: body.brand || existing.brand,
+          brandId: body.brandId || existing.brandId,
+        },
+        { strictChildMatch: Boolean(requestedMain), tenantId }
+      );
+      const hierarchyActive = taxonomyService.isProductCategoryHierarchyActive(
+        {
+          mainCategoryId: checkHierarchy.mainCategoryId || existing.mainCategoryId,
+          childCategoryId: checkHierarchy.childCategoryId || existing.childCategoryId,
+          productTypeId: checkHierarchy.productTypeId || existing.productTypeId,
+        },
+        tenantId
+      );
+      if (!hierarchyActive && (categoryChanged || isResubmittingForApproval)) {
+        throw new BadRequestException(
+          'This category is currently inactive and cannot be selected for new products.'
+        );
+      }
+    }
+
     const catalogFieldsChanged = [
       'name',
       'description',

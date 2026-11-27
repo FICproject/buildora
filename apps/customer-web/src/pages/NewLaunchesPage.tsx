@@ -129,11 +129,18 @@ export const NewLaunchesPage: React.FC = () => {
     const onRealtime = () => {
       void loadNewLaunchesData();
     };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void loadNewLaunchesData();
+    };
     window.addEventListener('buildora:realtime:catalog', onRealtime);
     window.addEventListener('buildora:realtime:config', onRealtime);
+    window.addEventListener('focus', onRealtime);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.removeEventListener('buildora:realtime:catalog', onRealtime);
       window.removeEventListener('buildora:realtime:config', onRealtime);
+      window.removeEventListener('focus', onRealtime);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [loadNewLaunchesData]);
 

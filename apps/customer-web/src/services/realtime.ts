@@ -40,7 +40,7 @@ export function initCustomerRealtime(queryClient?: QueryClient) {
     },
     reconnection: true,
     reconnectionDelay: 2000,
-    reconnectionAttempts: 10,
+    reconnectionAttempts: Infinity,
   });
 
   const refreshCatalog = (payload?: any) => {

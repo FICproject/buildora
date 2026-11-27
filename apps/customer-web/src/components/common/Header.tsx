@@ -164,8 +164,14 @@ export const Header: React.FC = () => {
     window.addEventListener('buildora:realtime:catalog', onRealtimeCatalog);
     window.addEventListener('focus', onRealtimeCatalog);
     document.addEventListener('visibilitychange', onFocusRefresh);
+    const syncTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void fetchHeaderCatalog();
+      }
+    }, 15000);
     return () => {
       active = false;
+      window.clearInterval(syncTimer);
       window.removeEventListener('buildora:realtime:catalog', onRealtimeCatalog);
       window.removeEventListener('focus', onRealtimeCatalog);
       document.removeEventListener('visibilitychange', onFocusRefresh);

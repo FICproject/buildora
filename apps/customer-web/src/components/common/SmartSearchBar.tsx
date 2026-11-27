@@ -46,13 +46,30 @@ export const SmartSearchBar: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
 
-  // Fetch real catalog entities from backend
+  // Fetch real catalog entities from backend & refresh on realtime catalog updates
   useEffect(() => {
-    Promise.all([api.getProducts(), api.getCategories(), api.getBrands()]).then(([p, c, b]) => {
-      if (Array.isArray(p)) setProducts(p);
-      if (Array.isArray(c)) setCategories(c);
-      if (Array.isArray(b)) setBrands(b);
-    });
+    let active = true;
+    const loadSearchCatalog = () => {
+      Promise.all([api.getProducts(), api.getCategories(), api.getBrands()]).then(([p, c, b]) => {
+        if (!active) return;
+        if (Array.isArray(p)) setProducts(p);
+        if (Array.isArray(c)) setCategories(c);
+        if (Array.isArray(b)) setBrands(b);
+      });
+    };
+    loadSearchCatalog();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') loadSearchCatalog();
+    };
+    window.addEventListener('buildora:realtime:catalog', loadSearchCatalog);
+    window.addEventListener('focus', loadSearchCatalog);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      active = false;
+      window.removeEventListener('buildora:realtime:catalog', loadSearchCatalog);
+      window.removeEventListener('focus', loadSearchCatalog);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   // Search History from LocalStorage

@@ -13,16 +13,34 @@ export const SearchPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
-    if (query) {
-      api.getProducts({ search: query }).then((prods) => {
-        setProducts(Array.isArray(prods) ? prods : []);
+    let active = true;
+    const loadSearch = () => {
+      if (query) {
+        api.getProducts({ search: query }).then((prods) => {
+          if (active) setProducts(Array.isArray(prods) ? prods : []);
+        });
+      } else {
+        api.getProducts().then((prods) => {
+          if (active) setProducts(Array.isArray(prods) ? prods : []);
+        });
+      }
+      api.getCategories().then((cats) => {
+        if (active) setCategories(Array.isArray(cats) ? cats : []);
       });
-    } else {
-      api.getProducts().then((prods) => setProducts(Array.isArray(prods) ? prods : []));
-    }
-    api.getCategories().then((cats) => {
-      setCategories(Array.isArray(cats) ? cats : []);
-    });
+    };
+    loadSearch();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') loadSearch();
+    };
+    window.addEventListener('buildora:realtime:catalog', loadSearch);
+    window.addEventListener('focus', loadSearch);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      active = false;
+      window.removeEventListener('buildora:realtime:catalog', loadSearch);
+      window.removeEventListener('focus', loadSearch);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [query]);
 
   const matchedProducts = useMemo(() => {

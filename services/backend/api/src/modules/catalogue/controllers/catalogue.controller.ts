@@ -9,7 +9,7 @@ import { vendorPromotions } from '../../vendors/controllers/vendor.controller';
 function buildTaxonomyData(tenantId?: string, includeHidden = false) {
   const cleanTenant = tenantId || 'tenant-buildora-blr';
   const pool = taxonomyService.getTenantPool(cleanTenant);
-  const visibleProducts = dbStore.products.filter(isProductCustomerVisible);
+  const visibleProducts = dbStore.products.filter((p) => isProductCustomerVisible(p, cleanTenant));
 
   const mainCounts = new Map<string, number>();
   const childCounts = new Map<string, number>();
@@ -79,11 +79,12 @@ function buildTaxonomyData(tenantId?: string, includeHidden = false) {
 }
 
 function resolveCustomerProductsWithTaxonomy(tenantId?: string) {
-  const visibleProducts = dbStore.products.filter(isProductCustomerVisible);
+  const cleanTenant = tenantId || 'tenant-buildora-blr';
+  const visibleProducts = dbStore.products.filter((p) => isProductCustomerVisible(p, cleanTenant));
   return visibleProducts.map((p) => {
     const taxonomy = taxonomyService.resolveAndValidateProductTaxonomy(p, {
       strictChildMatch: false,
-      tenantId,
+      tenantId: cleanTenant,
     });
     return { ...p, ...taxonomy };
   });
@@ -235,10 +236,7 @@ export class CatalogueController {
       };
     }
 
-    return {
-      success: false,
-      data: undefined,
-    };
+    throw new NotFoundException(`Category "${slug}" is currently inactive or unavailable.`);
   }
 
   @Get('new-launches')
@@ -435,10 +433,24 @@ export class CatalogueController {
     const fieldSchemas = taxonomyService.getTenantFieldSchemas(cleanTenant, canonicalSlug || category, false);
 
     // Filter customer-visible approved products scoped to matched category/subcategory
-    const visibleProducts = dbStore.products.filter(isProductCustomerVisible).map((p) => ({
-      ...p,
-      ...taxonomyService.resolveAndValidateProductTaxonomy(p, { strictChildMatch: false, tenantId: cleanTenant }),
-    }));
+    const visibleProducts = dbStore.products
+      .filter((p) => isProductCustomerVisible(p, cleanTenant))
+      .map((p) => ({
+        ...p,
+        ...taxonomyService.resolveAndValidateProductTaxonomy(p, { strictChildMatch: false, tenantId: cleanTenant }),
+      }));
+    if (canonicalSlug && !matchedChild && !matchedMain) {
+      return {
+        success: true,
+        data: {
+          filterConfigs: [],
+          availableFilters: [],
+          attributes: [],
+          fieldSchemas: [],
+          totalMatchingProducts: 0,
+        },
+      };
+    }
     const categoryProducts = matchedChild
       ? visibleProducts.filter((p) => {
           const sameChild = p.childCategoryId === matchedChild.id || p.childCategorySlug === matchedChild.slug;
@@ -488,7 +500,7 @@ export class CatalogueController {
     const cleanTenant = tenantId || 'tenant-buildora-blr';
     const coupons = companyAdminDataService.getActiveCoupons(cleanTenant);
     const activePromos = vendorPromotions.filter((p: any) => p.status === 'ACTIVE');
-    const visibleProducts = dbStore.products.filter(isProductCustomerVisible);
+    const visibleProducts = dbStore.products.filter((p) => isProductCustomerVisible(p, cleanTenant));
     const discountedProducts = visibleProducts.filter(
       (p) => Number(p.mrp || 0) > Number(p.price || 0)
     );
