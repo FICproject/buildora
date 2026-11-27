@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   CheckCircle2,
   Upload,
 } from 'lucide-react';
@@ -43,6 +44,157 @@ import {
   resolveFullTaxonomy,
 } from '@buildora/constants';
 import { vendorApi } from '../../services/vendorApi';
+
+const SearchableMultiSelectInput: React.FC<{
+  label: string;
+  options: string[];
+  value: string[];
+  allowCustom?: boolean;
+  onChange: (next: string[]) => void;
+}> = ({ label, options, value, allowCustom = true, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const normalizedSelected = useMemo(
+    () => (Array.isArray(value) ? value.map((v) => String(v).trim()).filter(Boolean) : []),
+    [value]
+  );
+
+  const mergedOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const opt of [...options, ...normalizedSelected]) {
+      const cleaned = String(opt || '').trim();
+      if (cleaned && !map.has(cleaned.toLowerCase())) {
+        map.set(cleaned.toLowerCase(), cleaned);
+      }
+    }
+    return Array.from(map.values());
+  }, [options, normalizedSelected]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return mergedOptions;
+    return mergedOptions.filter((opt) => opt.toLowerCase().includes(q));
+  }, [mergedOptions, query]);
+
+  const trimmedQuery = query.trim();
+  const canAddCustom =
+    allowCustom &&
+    trimmedQuery.length > 0 &&
+    !mergedOptions.some((o) => o.toLowerCase() === trimmedQuery.toLowerCase());
+
+  const toggleVal = (opt: string) => {
+    const exists = normalizedSelected.some((v) => v.toLowerCase() === opt.toLowerCase());
+    if (exists) {
+      onChange(normalizedSelected.filter((v) => v.toLowerCase() !== opt.toLowerCase()));
+    } else {
+      onChange([...normalizedSelected, opt]);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full min-h-[40px] px-3 py-1.5 bg-white border border-[#E7E5E4] rounded-lg flex items-center justify-between gap-2 text-left text-xs hover:border-[#943D24]/60 cursor-pointer"
+      >
+        <div className="flex flex-wrap gap-1.5 min-w-0">
+          {normalizedSelected.length === 0 ? (
+            <span className="text-[#78716C]">Select {label}...</span>
+          ) : (
+            normalizedSelected.map((item) => (
+              <span
+                key={item}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FBF3F0] border border-[#943D24]/30 text-[#943D24] font-semibold"
+              >
+                <span>{item}</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange(normalizedSelected.filter((v) => v !== item));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                      onChange(normalizedSelected.filter((v) => v !== item));
+                    }
+                  }}
+                  className="hover:text-red-700 font-bold"
+                >
+                  ×
+                </span>
+              </span>
+            ))
+          )}
+        </div>
+        <ChevronDown className={`w-4 h-4 text-[#78716C] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="mt-1.5 p-2.5 bg-white rounded-xl border border-[#E7E5E4] shadow-lg space-y-2 z-20">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-[#78716C] absolute left-2.5 top-2" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={`Search or type ${label}...`}
+              className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-[#F8F7F5] border border-[#E7E5E4] rounded-lg focus:outline-none focus:border-[#943D24]"
+            />
+          </div>
+          <div className="max-h-44 overflow-y-auto space-y-1">
+            {filtered.map((opt) => {
+              const checked = normalizedSelected.some((v) => v.toLowerCase() === opt.toLowerCase());
+              return (
+                <label
+                  key={opt}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer ${
+                    checked ? 'bg-[#FBF3F0] text-[#943D24] font-semibold' : 'hover:bg-[#F8F7F5] text-[#292524]'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleVal(opt)}
+                    className="w-3.5 h-3.5 rounded text-[#943D24]"
+                  />
+                  <span>{opt}</span>
+                </label>
+              );
+            })}
+            {filtered.length === 0 && !canAddCustom && (
+              <p className="text-[11px] text-[#78716C] px-2 py-2 text-center">No matching options</p>
+            )}
+          </div>
+          {canAddCustom && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange([...normalizedSelected, trimmedQuery]);
+                setQuery('');
+              }}
+              className="w-full flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#943D24] text-white text-xs font-semibold hover:bg-[#7A301B] cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add "{trimmedQuery}"
+            </button>
+          )}
+          <div className="flex justify-end pt-1 border-t border-[#E7E5E4]">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="px-2.5 py-1 text-[11px] font-semibold text-[#5E5946] hover:underline cursor-pointer"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 import { toast } from '../../store/useToastStore';
 
 interface FormAttribute {
@@ -102,6 +254,7 @@ export const VendorProductsPage: React.FC = () => {
     mainCategories: any[];
     childCategories: any[];
     productTypes: any[];
+    newLaunchCollections: any[];
     desktopNavigation?: any[];
     fieldSchemas: CategoryFieldSchema[];
     warehouses: any[];
@@ -112,6 +265,7 @@ export const VendorProductsPage: React.FC = () => {
     mainCategories: MAIN_CATEGORIES_SEED,
     childCategories: CHILD_CATEGORIES_SEED,
     productTypes: PRODUCT_TYPES_SEED,
+    newLaunchCollections: [],
     desktopNavigation: [],
     fieldSchemas: CATEGORY_FIELD_SCHEMAS_SEED,
     warehouses: [],
@@ -123,6 +277,7 @@ export const VendorProductsPage: React.FC = () => {
   const [mainCategoryId, setMainCategoryId] = useState(MAIN_CATEGORIES_SEED[0]?.id || 'mc-1');
   const [childCategoryId, setChildCategoryId] = useState(CHILD_CATEGORIES_SEED[0]?.id || 'cat-1');
   const [productTypeId, setProductTypeId] = useState(PRODUCT_TYPES_SEED[0]?.id || 'sub-1-1');
+  const [newLaunchCollectionId, setNewLaunchCollectionId] = useState('');
   const [category, setCategory] = useState('Cement & Concrete');
   const [subCategory, setSubCategory] = useState('OPC 53 Grade Cement');
   const [brand, setBrand] = useState('UltraTech Cement');
@@ -147,6 +302,9 @@ export const VendorProductsPage: React.FC = () => {
   const [size, setSize] = useState('');
   const [isNewLaunch, setIsNewLaunch] = useState(false);
   const [categoryAttributes, setCategoryAttributes] = useState<Record<string, any>>({});
+  const [fetchedFieldsByCatKey, setFetchedFieldsByCatKey] = useState<Record<string, CategoryFieldSchema[]>>({});
+  const [taxonomyRevision, setTaxonomyRevision] = useState(0);
+  const [configSyncNotice, setConfigSyncNotice] = useState<string | null>(null);
   const [extraSpecRows, setExtraSpecRows] = useState<Array<{ key: string; value: string }>>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -159,6 +317,8 @@ export const VendorProductsPage: React.FC = () => {
   const [formVariants, setFormVariants] = useState<FormVariant[]>([]);
 
   const refreshVendorTaxonomy = () => {
+    setFetchedFieldsByCatKey({});
+    setTaxonomyRevision((r) => r + 1);
     vendorApi.getTaxonomy().then((res) => {
       if (
         res &&
@@ -171,10 +331,11 @@ export const VendorProductsPage: React.FC = () => {
           mainCategories: res.mainCategories.filter((m: any) => m.isActive !== false),
           childCategories: res.childCategories.filter((c: any) => c.isActive !== false),
           productTypes: (res.productTypes || []).filter((pt: any) => pt.isActive !== false),
+          newLaunchCollections: (res.newLaunchCollections || []).filter((c: any) => c.isActive !== false),
           desktopNavigation: res.desktopNavigation || [],
-          fieldSchemas: (res.fieldSchemas && res.fieldSchemas.length > 0
-            ? res.fieldSchemas
-            : CATEGORY_FIELD_SCHEMAS_SEED).filter((f: any) => f.isActive !== false),
+          fieldSchemas: Array.isArray(res.fieldSchemas)
+            ? res.fieldSchemas.filter((f: any) => f.isActive !== false)
+            : [],
           warehouses: res.warehouses || [],
           brands: res.brands || [],
           gstSlabs: res.config?.gstSlabs?.length ? res.config.gstSlabs : [0, 5, 12, 18, 28],
@@ -194,6 +355,7 @@ export const VendorProductsPage: React.FC = () => {
         detail.event === 'taxonomy.published' ||
         detail.event === 'settings.updated' ||
         detail.event === 'filters.updated' ||
+        detail.event === 'newLaunches.updated' ||
         detail.event === 'product.approved' ||
         detail.event === 'product.rejected' ||
         detail.event === 'product.updated'
@@ -303,9 +465,28 @@ export const VendorProductsPage: React.FC = () => {
     return found || MASTER_CATEGORIES[0];
   }, [selectedChildCatNode, category]);
 
+  const selectedNewLaunchCollection = useMemo(
+    () =>
+      newLaunchCollectionId
+        ? taxonomyState.newLaunchCollections.find((c) => c.id === newLaunchCollectionId)
+        : undefined,
+    [taxonomyState.newLaunchCollections, newLaunchCollectionId]
+  );
+
   const activeCategoryFields = useMemo(() => {
     const cid = selectedChildCatNode?.id || childCategoryId;
     const cslug = selectedChildCatNode?.slug || '';
+    const ptId = selectedProductTypeNode?.id || productTypeId || '';
+    const colId = newLaunchCollectionId || '';
+    const cacheKey = `${cid}::${ptId}::${colId}`;
+    if (fetchedFieldsByCatKey[cacheKey] !== undefined) {
+      return [...fetchedFieldsByCatKey[cacheKey]]
+        .filter((f) => f.isActive !== false)
+        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+    }
+    if (colId) {
+      return [];
+    }
     const liveMatches = taxonomyState.fieldSchemas
       .filter(
         (f) =>
@@ -313,9 +494,18 @@ export const VendorProductsPage: React.FC = () => {
           (f.childCategoryId === cid || (cslug && f.childCategorySlug === cslug))
       )
       .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-    if (liveMatches.length > 0) return liveMatches;
+    if (hasLoadedTaxonomy) return liveMatches;
     return getDefaultFieldSchemasForCategory(cid || cslug);
-  }, [taxonomyState.fieldSchemas, selectedChildCatNode, childCategoryId]);
+  }, [
+    fetchedFieldsByCatKey,
+    taxonomyState.fieldSchemas,
+    hasLoadedTaxonomy,
+    selectedChildCatNode,
+    selectedProductTypeNode,
+    childCategoryId,
+    productTypeId,
+    newLaunchCollectionId,
+  ]);
 
   const groupedCategoryFields = useMemo(() => {
     const groups: Record<string, CategoryFieldSchema[]> = {};
@@ -327,21 +517,71 @@ export const VendorProductsPage: React.FC = () => {
     return Object.entries(groups);
   }, [activeCategoryFields]);
 
-  // Refresh dynamic field schema when vendor switches Child Category inside the modal
+  // Refresh dynamic field schema when vendor switches category/collection OR Admin updates filter config while modal is open
   useEffect(() => {
     if (!isModalOpen || !childCategoryId) return;
-    vendorApi.getCategoryFields(childCategoryId).then((fields) => {
-      if (Array.isArray(fields) && fields.length > 0) {
-        setTaxonomyState((prev) => ({
-          ...prev,
-          fieldSchemas: [
-            ...prev.fieldSchemas.filter((f) => f.childCategoryId !== childCategoryId),
-            ...fields,
-          ],
-        }));
+    let active = true;
+    const ptId = selectedProductTypeNode?.id || productTypeId || '';
+    const colId = newLaunchCollectionId || '';
+    const cacheKey = `${childCategoryId}::${ptId}::${colId}`;
+    vendorApi.getCategoryFields(childCategoryId, ptId || undefined, colId || undefined).then((fields) => {
+      if (!active) return;
+      const cleanFields = Array.isArray(fields) ? fields.filter((f) => f.isActive !== false) : [];
+      setFetchedFieldsByCatKey((prev) => ({ ...prev, [cacheKey]: cleanFields }));
+
+      // Safely validate already-entered attributes without silently deleting Vendor input
+      if (taxonomyRevision > 0) {
+        const cleanKeySet = new Set(cleanFields.map((f) => f.fieldKey.toLowerCase()));
+        const nextErrs: Record<string, string> = {};
+        let hasInvalidExisting = false;
+
+        for (const [k, rawVal] of Object.entries(categoryAttributes)) {
+          const isNonEmpty =
+            rawVal !== undefined &&
+            rawVal !== null &&
+            !(typeof rawVal === 'string' && rawVal.trim() === '') &&
+            !(Array.isArray(rawVal) && rawVal.length === 0);
+          if (isNonEmpty && !cleanKeySet.has(k.toLowerCase())) {
+            hasInvalidExisting = true;
+          }
+        }
+        for (const schema of cleanFields) {
+          const rawVal = categoryAttributes[schema.fieldKey];
+          const missing =
+            rawVal === undefined ||
+            rawVal === null ||
+            (typeof rawVal === 'string' && rawVal.trim() === '') ||
+            (Array.isArray(rawVal) && rawVal.length === 0);
+          if (missing && schema.required) {
+            nextErrs[schema.fieldKey] = `${schema.label} is now required by Company Admin.`;
+          } else if (
+            !missing &&
+            schema.allowCustomOption === false &&
+            Array.isArray(schema.options) &&
+            schema.options.length > 0
+          ) {
+            const allowedLower = new Set(schema.options.map((o) => o.toLowerCase()));
+            const vals = Array.isArray(rawVal) ? rawVal : [String(rawVal)];
+            const invalidOpt = vals.find((v) => !allowedLower.has(String(v).toLowerCase()));
+            if (invalidOpt) {
+              nextErrs[schema.fieldKey] = `Option "${invalidOpt}" is no longer permitted for ${schema.label}.`;
+            }
+          }
+        }
+        if (hasInvalidExisting || Object.keys(nextErrs).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...nextErrs }));
+          setConfigSyncNotice(
+            'Filter configuration was updated by Company Admin. Your entered values were preserved — please review highlighted or removed fields before submitting.'
+          );
+        } else {
+          setConfigSyncNotice(null);
+        }
       }
     }).catch(() => {});
-  }, [isModalOpen, childCategoryId]);
+    return () => {
+      active = false;
+    };
+  }, [isModalOpen, childCategoryId, selectedProductTypeNode?.id, productTypeId, newLaunchCollectionId, taxonomyRevision]);
 
   const validateDynamicFieldsClient = (): Record<string, string> => {
     const errs: Record<string, string> = {};
@@ -422,8 +662,10 @@ export const VendorProductsPage: React.FC = () => {
     setDescription('');
     setProductType('');
     setSize('');
+    setNewLaunchCollectionId('');
     setIsNewLaunch(false);
     setCategoryAttributes({});
+    setConfigSyncNotice(null);
     setExtraSpecRows([]);
     setHasVariants(false);
     setFormAttributes([
@@ -484,8 +726,10 @@ export const VendorProductsPage: React.FC = () => {
       (p as any).productType || p.specifications?.['Product Type'] || p.specifications?.['Type'] || ''
     );
     setSize((p as any).size || p.specifications?.['Size'] || p.packSize || p.unit || '');
+    setNewLaunchCollectionId((p as any).newLaunchCollectionId || '');
     setIsNewLaunch(Boolean(p.isNewLaunch));
     setCategoryAttributes((p as any).categoryAttributes || {});
+    setConfigSyncNotice(null);
     const specEntries = Object.entries(p.specifications || {}).filter(
       ([k]) => !['Product Type', 'Size', 'Packaging'].includes(k)
     );
@@ -766,10 +1010,17 @@ export const VendorProductsPage: React.FC = () => {
           }
         : resolvedType;
 
+      const activeFieldKeySet = new Set(activeCategoryFields.map((f) => f.fieldKey.toLowerCase()));
+      const sanitizedCategoryAttributes = editingProduct
+        ? categoryAttributes
+        : Object.fromEntries(
+            Object.entries(categoryAttributes).filter(([k]) => activeFieldKeySet.has(k.toLowerCase()))
+          );
+
       // Build human-readable specifications from dynamic CategoryFieldSchema + manual extra specs
       const dynamicSpecs: Record<string, string> = {};
       for (const f of activeCategoryFields) {
-        const val = categoryAttributes[f.fieldKey];
+        const val = sanitizedCategoryAttributes[f.fieldKey];
         if (val === undefined || val === null || val === '') continue;
         if (Array.isArray(val)) {
           if (val.length > 0) dynamicSpecs[f.label] = val.join(', ');
@@ -827,10 +1078,11 @@ export const VendorProductsPage: React.FC = () => {
         submitForApproval: !submitAsDraft,
         enforceCategoryFields: !submitAsDraft,
         isActive: resolvedStatus === 'ACTIVE',
-        isNewLaunch,
+        newLaunchCollectionId: newLaunchCollectionId || '',
+        isNewLaunch: Boolean(newLaunchCollectionId) || isNewLaunch,
         productType: productType || canonicalType?.name || '',
         size: size || unit,
-        categoryAttributes,
+        categoryAttributes: sanitizedCategoryAttributes,
         specifications: {
           ...dynamicSpecs,
           Packaging: unit.trim(),
@@ -1216,6 +1468,19 @@ export const VendorProductsPage: React.FC = () => {
             })}
           </div>
 
+          {configSyncNotice && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs font-medium flex items-center justify-between gap-2">
+              <span>{configSyncNotice}</span>
+              <button
+                type="button"
+                onClick={() => setConfigSyncNotice(null)}
+                className="text-amber-700 hover:text-amber-950 font-bold"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {formError && (
             <div className="p-3 rounded-lg bg-[#DC4545]/10 border border-[#DC4545]/20 text-[#DC4545] text-xs font-medium">
               {formError}
@@ -1240,9 +1505,10 @@ export const VendorProductsPage: React.FC = () => {
                 <div>
                   <p className="font-bold text-[#943D24]">Selected Category Hierarchy</p>
                   <p className="text-[#292524] mt-0.5 font-medium">
-                    Main Category: <strong>{selectedMainCatNode?.name || 'Inactive / Select Active'}</strong> &rarr; Child Category:{' '}
+                    Desktop Navigation: <strong>{selectedMainCatNode?.name || 'Inactive / Select Active'}</strong> &rarr; Main Category:{' '}
                     <strong>{selectedChildCatNode?.name || 'Inactive / Select Active'}</strong>
-                    {selectedProductTypeNode ? ` → ${selectedProductTypeNode.name}` : ''}
+                    {selectedProductTypeNode ? ` → Child Category: ${selectedProductTypeNode.name}` : ''}
+                    {selectedNewLaunchCollection ? ` → New Launches: ${selectedNewLaunchCollection.title}` : ''}
                   </p>
                 </div>
                 <Badge variant="info">{activeCategoryFields.length} Category Fields Loaded</Badge>
@@ -1250,7 +1516,7 @@ export const VendorProductsPage: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="portal-label">Main Category *</label>
+                  <label className="portal-label">Desktop Navigation *</label>
                   <select
                     value={selectedMainCatNode?.id || ''}
                     onChange={(e) => {
@@ -1277,19 +1543,25 @@ export const VendorProductsPage: React.FC = () => {
                   >
                     {!selectedMainCatNode && (
                       <option value="" disabled>
-                        Select an active Main Category...
+                        Select Desktop Navigation...
                       </option>
                     )}
-                    {availableMainCategories.map((mc) => (
-                      <option key={mc.id} value={mc.id}>
-                        {mc.name}
-                      </option>
-                    ))}
+                    {availableMainCategories.map((mc) => {
+                      const navLabel =
+                        taxonomyState.desktopNavigation?.find(
+                          (n: any) => n.itemType === 'MAIN_CATEGORY' && n.mainCategoryId === mc.id
+                        )?.label || mc.name;
+                      return (
+                        <option key={mc.id} value={mc.id}>
+                          {navLabel}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
                 <div>
-                  <label className="portal-label">Child Category *</label>
+                  <label className="portal-label">Main Category *</label>
                   <select
                     value={selectedChildCatNode?.id || ''}
                     onChange={(e) => {
@@ -1311,7 +1583,7 @@ export const VendorProductsPage: React.FC = () => {
                   >
                     {!selectedChildCatNode && (
                       <option value="" disabled>
-                        Select an active Child Category...
+                        Select an active Main Category...
                       </option>
                     )}
                     {availableChildCategories.map((c) => (
@@ -1322,8 +1594,8 @@ export const VendorProductsPage: React.FC = () => {
                   </select>
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="portal-label">Subcategory / Product Type (Optional)</label>
+                <div>
+                  <label className="portal-label">3. Child Category *</label>
                   <select
                     value={selectedProductTypeNode?.id || productTypeId}
                     onChange={(e) => {
@@ -1344,6 +1616,34 @@ export const VendorProductsPage: React.FC = () => {
                       ))
                     )}
                   </select>
+                </div>
+
+                <div>
+                  <label className="portal-label">4. New Launches Collection (Optional)</label>
+                  <select
+                    aria-label="New Launches Collection"
+                    value={newLaunchCollectionId}
+                    onChange={(e) => {
+                      const nextColId = e.target.value;
+                      setNewLaunchCollectionId(nextColId);
+                      setIsNewLaunch(Boolean(nextColId));
+                      if (!editingProduct) {
+                        setCategoryAttributes({});
+                      }
+                      setFieldErrors({});
+                    }}
+                    className="portal-input"
+                  >
+                    <option value="">None (Standard Category Product)</option>
+                    {taxonomyState.newLaunchCollections.map((col) => (
+                      <option key={col.id} value={col.id}>
+                        {col.title || col.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-[#78716C] mt-1">
+                    Selecting a New Launches Collection automatically loads its exact Admin-configured product fields.
+                  </p>
                 </div>
               </div>
             </div>
@@ -1398,7 +1698,10 @@ export const VendorProductsPage: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold uppercase tracking-wider text-[#943D24]">
-                        {selectedChildCatNode?.name} — {groupName}
+                        {selectedNewLaunchCollection
+                          ? `New Launches: ${selectedNewLaunchCollection.title}`
+                          : selectedChildCatNode?.name}{' '}
+                        — {groupName}
                       </h4>
                       <span className="text-[10px] text-[#78716C]">{fields.length} field(s)</span>
                     </div>
@@ -1433,36 +1736,22 @@ export const VendorProductsPage: React.FC = () => {
                                 ))}
                               </select>
                             ) : field.fieldType === 'multiselect' ? (
-                              <div className="flex flex-wrap gap-2 p-2.5 bg-white rounded-lg border border-[#E7E5E4]">
-                                {(field.options || []).map((opt) => {
-                                  const selectedArr: string[] = Array.isArray(val) ? val : [];
-                                  const checked = selectedArr.includes(opt);
-                                  return (
-                                    <label
-                                      key={opt}
-                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${
-                                        checked
-                                          ? 'bg-[#943D24] text-white border-[#943D24]'
-                                          : 'bg-[#F8F7F5] text-[#292524] border-[#E7E5E4]'
-                                      }`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        className="hidden"
-                                        checked={checked}
-                                        onChange={() => {
-                                          const next = checked
-                                            ? selectedArr.filter((x) => x !== opt)
-                                            : [...selectedArr, opt];
-                                          setCategoryAttributes((prev) => ({ ...prev, [field.fieldKey]: next }));
-                                          setFieldErrors((p) => ({ ...p, [field.fieldKey]: '' }));
-                                        }}
-                                      />
-                                      <span>{opt}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
+                              <SearchableMultiSelectInput
+                                label={field.label}
+                                options={field.options || []}
+                                value={
+                                  Array.isArray(val)
+                                    ? val
+                                    : typeof val === 'string' && val.trim()
+                                    ? val.split(',').map((s) => s.trim()).filter(Boolean)
+                                    : []
+                                }
+                                allowCustom={field.allowCustomOption !== false}
+                                onChange={(next) => {
+                                  setCategoryAttributes((prev) => ({ ...prev, [field.fieldKey]: next }));
+                                  setFieldErrors((p) => ({ ...p, [field.fieldKey]: '' }));
+                                }}
+                              />
                             ) : field.fieldType === 'checkbox' ? (
                               <label className="flex items-center gap-2 p-2.5 bg-white rounded-lg border border-[#E7E5E4] text-xs text-[#292524] cursor-pointer">
                                 <input

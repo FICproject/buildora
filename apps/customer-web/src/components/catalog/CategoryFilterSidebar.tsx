@@ -241,76 +241,53 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
 
                 {isOpen && (
                   <div className="pt-2 space-y-2.5 animate-in fade-in-0 duration-150">
-                    {/* Price Range Presets */}
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[
-                        { label: 'Under ₹500', min: undefined, max: 500 },
-                        { label: '₹500 - ₹2,000', min: 500, max: 2000 },
-                        { label: '₹2,000 - ₹5,000', min: 2000, max: 5000 },
-                        { label: 'Above ₹5,000', min: 5000, max: undefined }
-                      ].map((preset, idx) => {
-                        const isPresetActive =
-                          activeFilters.minPrice === preset.min && activeFilters.maxPrice === preset.max;
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              if (isPresetActive) {
-                                handleApplyPrice(undefined, undefined);
-                                setTempMinPrice('');
-                                setTempMaxPrice('');
-                              } else {
-                                handleApplyPrice(preset.min, preset.max);
-                                setTempMinPrice(preset.min !== undefined ? String(preset.min) : '');
-                                setTempMaxPrice(preset.max !== undefined ? String(preset.max) : '');
-                              }
-                            }}
-                            className={`p-1.5 text-[11px] font-semibold rounded-lg border text-center transition-all cursor-pointer ${
-                              isPresetActive
-                                ? 'bg-brand-blue-900 text-white border-brand-blue-900 shadow-2xs font-bold'
-                                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                            }`}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Min - Max Input Boxes */}
-                    <div className="flex items-center gap-1.5 pt-1">
-                      <div className="relative flex-1">
+                    {/* Numeric From - To Input Boxes */}
+                    <div className="grid grid-cols-2 gap-1.5 pt-1">
+                      <div className="relative">
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">₹</span>
                         <input
                           type="number"
-                          placeholder="Min"
+                          min={0}
+                          placeholder="From"
                           value={tempMinPrice}
                           onChange={(e) => setTempMinPrice(e.target.value)}
                           className="w-full pl-5 pr-1 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:border-brand-blue-500 bg-white"
                         />
                       </div>
-                      <span className="text-slate-400 font-bold">-</span>
-                      <div className="relative flex-1">
+                      <div className="relative">
                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">₹</span>
                         <input
                           type="number"
-                          placeholder="Max"
+                          min={0}
+                          placeholder="To"
                           value={tempMaxPrice}
                           onChange={(e) => setTempMaxPrice(e.target.value)}
                           className="w-full pl-5 pr-1 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:border-brand-blue-500 bg-white"
                         />
                       </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => {
-                          const min = tempMinPrice ? Number(tempMinPrice) : undefined;
-                          const max = tempMaxPrice ? Number(tempMaxPrice) : undefined;
+                          const min = tempMinPrice ? Math.max(0, Number(tempMinPrice)) : undefined;
+                          const max = tempMaxPrice ? Math.max(0, Number(tempMaxPrice)) : undefined;
                           handleApplyPrice(min, max);
                         }}
-                        className="px-2.5 py-1.5 bg-brand-blue-900 hover:bg-brand-blue-800 text-white rounded-lg font-bold text-xs shadow-2xs cursor-pointer transition-colors"
+                        className="flex-1 px-2.5 py-1.5 bg-brand-blue-900 hover:bg-brand-blue-800 text-white rounded-lg font-bold text-xs shadow-2xs cursor-pointer transition-colors"
                       >
-                        Go
+                        Apply
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempMinPrice('');
+                          setTempMaxPrice('');
+                          handleApplyPrice(undefined, undefined);
+                        }}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-xs cursor-pointer transition-colors"
+                      >
+                        Reset
                       </button>
                     </div>
                   </div>
@@ -345,8 +322,8 @@ export const CategoryFilterSidebar: React.FC<CategoryFilterSidebarProps> = ({
 
               {isOpen && (
                 <div className="pt-2 space-y-2 animate-in fade-in-0 duration-150">
-                  {/* Option search if more than 5 options */}
-                  {filter.options.length > 5 && (
+                  {/* Searchable option input */}
+                  {filter.options.length > 0 && (
                     <div className="relative">
                       <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input

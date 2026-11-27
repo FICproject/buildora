@@ -48,9 +48,14 @@ async function rawRequest<T = any>(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), ADMIN_APP_CONFIG.requestTimeoutMs);
   let res: Response;
+  const method = (options.method || 'GET').toUpperCase();
   try {
+    if (method === 'GET' && !headers['Cache-Control']) {
+      headers['Cache-Control'] = 'no-cache';
+    }
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
+      cache: options.cache || (method === 'GET' ? 'no-store' : undefined),
       signal: controller.signal,
       headers,
     });
@@ -389,12 +394,30 @@ export const adminApi = {
     rawRequest<any>(`/company-admin/catalog/fields/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     }),
-  getCategoryFilterConfigs: (childCategoryId?: string, useDraft = true) => {
+  getCategoryFilterConfigs: (
+    childCategoryId?: string,
+    useDraft = true,
+    productTypeId?: string,
+    newLaunchCollectionId?: string
+  ) => {
     const q = new URLSearchParams();
     if (childCategoryId) q.set('childCategoryId', childCategoryId);
+    if (newLaunchCollectionId) q.set('newLaunchCollectionId', newLaunchCollectionId);
+    if (productTypeId && productTypeId !== 'ALL') q.set('productTypeId', productTypeId);
     q.set('useDraft', String(useDraft));
     return rawRequest<any[]>(`/company-admin/catalog/filters?${q.toString()}`);
   },
+  syncCategoryFilters: (payload: {
+    childCategoryId?: string;
+    newLaunchCollectionId?: string;
+    productTypeId?: string;
+    resetOverride?: boolean;
+    filters: any[];
+  }) =>
+    rawRequest<any[]>('/company-admin/catalog/filters/sync', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
   createCategoryFilterConfig: (payload: any) =>
     rawRequest<any>('/company-admin/catalog/filters', {
       method: 'POST',

@@ -215,26 +215,60 @@ class PlatformPersistenceService {
     return mongoose.connection.readyState === 1;
   }
 
-  async upsert(model: Model<any>, record: any, idField = 'id'): Promise<void> {
+  async upsert(
+    model: Model<any>,
+    record: any,
+    idField = 'id',
+    options: { throwOnError?: boolean; retries?: number } = {}
+  ): Promise<void> {
     if (!this.isDbConnected() || !record || !record[idField]) return;
-    try {
-      const clean = { ...record };
-      delete clean._id;
-      delete clean.__v;
-      await model
-        .findOneAndUpdate({ [idField]: record[idField] }, { $set: clean }, { upsert: true, new: true })
-        .exec();
-    } catch (err: any) {
-      this.logger.warn(`MongoDB upsert failed (${model.modelName}): ${err.message}`);
+    const maxAttempts = Math.max(1, (options.retries ?? 2) + 1);
+    const clean = { ...record };
+    delete clean._id;
+    delete clean.__v;
+    let lastErr: any;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await model
+          .findOneAndUpdate({ [idField]: record[idField] }, { $set: clean }, { upsert: true, new: true })
+          .exec();
+        return;
+      } catch (err: any) {
+        lastErr = err;
+        this.logger.warn(`MongoDB upsert attempt ${attempt}/${maxAttempts} failed (${model.modelName}): ${err.message}`);
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 150 * attempt));
+        }
+      }
+    }
+    if (options.throwOnError) {
+      throw new Error(`Database save failed for ${model.modelName}: ${lastErr?.message || 'Unknown error'}`);
     }
   }
 
-  async remove(model: Model<any>, idValue: string, idField = 'id'): Promise<void> {
+  async remove(
+    model: Model<any>,
+    idValue: string,
+    idField = 'id',
+    options: { throwOnError?: boolean; retries?: number } = {}
+  ): Promise<void> {
     if (!this.isDbConnected() || !idValue) return;
-    try {
-      await model.deleteOne({ [idField]: idValue }).exec();
-    } catch (err: any) {
-      this.logger.warn(`MongoDB remove failed (${model.modelName}): ${err.message}`);
+    const maxAttempts = Math.max(1, (options.retries ?? 2) + 1);
+    let lastErr: any;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await model.deleteOne({ [idField]: idValue }).exec();
+        return;
+      } catch (err: any) {
+        lastErr = err;
+        this.logger.warn(`MongoDB remove attempt ${attempt}/${maxAttempts} failed (${model.modelName}): ${err.message}`);
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 150 * attempt));
+        }
+      }
+    }
+    if (options.throwOnError) {
+      throw new Error(`Database delete failed for ${model.modelName}: ${lastErr?.message || 'Unknown error'}`);
     }
   }
 

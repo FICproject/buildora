@@ -152,26 +152,29 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
   };
 
   const handleApplyCustomPrice = () => {
-    const min = tempMinPrice.trim() !== '' ? Number(tempMinPrice) : undefined;
-    const max = tempMaxPrice.trim() !== '' ? Number(tempMaxPrice) : undefined;
+    const parsedMin = tempMinPrice.trim() !== '' ? Math.max(0, Number(tempMinPrice)) : undefined;
+    const parsedMax = tempMaxPrice.trim() !== '' ? Math.max(0, Number(tempMaxPrice)) : undefined;
+    const min = parsedMin !== undefined && !Number.isNaN(parsedMin) ? parsedMin : undefined;
+    const max = parsedMax !== undefined && !Number.isNaN(parsedMax) ? parsedMax : undefined;
+    const finalMin = min !== undefined && max !== undefined && min > max ? max : min;
+    const finalMax = min !== undefined && max !== undefined && min > max ? min : max;
 
     onChangeFilters({
       ...activeFilters,
-      minPrice: min,
-      maxPrice: max
+      minPrice: finalMin,
+      maxPrice: finalMax
     });
     setOpenDropdownId(null);
   };
 
-  const handleApplyPresetPrice = (min?: number, max?: number) => {
-    setTempMinPrice(min !== undefined ? String(min) : '');
-    setTempMaxPrice(max !== undefined ? String(max) : '');
+  const handleResetCustomPrice = () => {
+    setTempMinPrice('');
+    setTempMaxPrice('');
     onChangeFilters({
       ...activeFilters,
-      minPrice: min,
-      maxPrice: max
+      minPrice: undefined,
+      maxPrice: undefined
     });
-    setOpenDropdownId(null);
   };
 
   // Check if a filter dimension has active selections
@@ -306,8 +309,8 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                     {/* Checkbox Options List */}
                     {filter.type === 'checkbox' && (
                       <div className="space-y-2">
-                        {/* Option Search Input (if > 5 options) */}
-                        {filter.options && filter.options.length > 5 && (
+                        {/* Searchable Option Input */}
+                        {filter.options && filter.options.length > 0 && (
                           <div className="relative mb-2">
                             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
@@ -394,55 +397,31 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                     {/* Price Range Selector */}
                     {filter.type === 'range' && (
                       <div className="space-y-3">
-                        {/* Quick Preset Buttons */}
-                        <div className="grid grid-cols-2 gap-1.5 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPresetPrice(undefined, 500)}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:border-brand-blue-400 hover:bg-brand-blue-50 text-[11px] font-semibold text-center transition-colors cursor-pointer"
-                          >
-                            Under ₹500
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPresetPrice(500, 2000)}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:border-brand-blue-400 hover:bg-brand-blue-50 text-[11px] font-semibold text-center transition-colors cursor-pointer"
-                          >
-                            ₹500 - ₹2,000
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPresetPrice(2000, 5000)}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:border-brand-blue-400 hover:bg-brand-blue-50 text-[11px] font-semibold text-center transition-colors cursor-pointer"
-                          >
-                            ₹2,000 - ₹5,000
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleApplyPresetPrice(5000, undefined)}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:border-brand-blue-400 hover:bg-brand-blue-50 text-[11px] font-semibold text-center transition-colors cursor-pointer"
-                          >
-                            Above ₹5,000
-                          </button>
+                        <div className="text-[10px] font-bold text-slate-500 uppercase">
+                          Price Range (₹)
                         </div>
-
-                        {/* Min / Max Inputs */}
-                        <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase">
-                            Custom Range (₹)
-                          </div>
-                          <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">
+                              From Amount (₹)
+                            </label>
                             <input
                               type="number"
-                              placeholder="Min"
+                              min={0}
+                              placeholder="From"
                               value={tempMinPrice}
                               onChange={(e) => setTempMinPrice(e.target.value)}
                               className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
                             />
-                            <span className="text-slate-400 text-xs">-</span>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">
+                              To Amount (₹)
+                            </label>
                             <input
                               type="number"
-                              placeholder="Max"
+                              min={0}
+                              placeholder="To"
                               value={tempMaxPrice}
                               onChange={(e) => setTempMaxPrice(e.target.value)}
                               className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
@@ -450,13 +429,22 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={handleApplyCustomPrice}
-                          className="w-full py-1.5 rounded-lg bg-brand-blue-900 text-white text-xs font-bold hover:bg-brand-blue-950 transition-colors cursor-pointer shadow-2xs"
-                        >
-                          Apply Price
-                        </button>
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleApplyCustomPrice}
+                            className="flex-1 py-1.5 rounded-lg bg-brand-blue-900 text-white text-xs font-bold hover:bg-brand-blue-950 transition-colors cursor-pointer shadow-2xs"
+                          >
+                            Apply
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleResetCustomPrice}
+                            className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -563,12 +551,8 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
               ) : (
                 <>
                   <option value="relevance">Relevance</option>
-                  <option value="latest">Latest Arrivals (Newest)</option>
                   <option value="price-low">Price: Low to High</option>
                   <option value="price-high">Price: High to Low</option>
-                  <option value="discount">Discount: High to Low</option>
-                  <option value="rating">Highest Rated</option>
-                  <option value="speed">Fastest Delivery (60 Mins)</option>
                 </>
               )}
             </select>

@@ -207,6 +207,7 @@ export interface CategoryFieldSchema {
   tenantId?: string;
   childCategoryId: string;
   childCategorySlug: string;
+  newLaunchCollectionId?: string;
   fieldKey: string;
   label: string;
   fieldType: CategoryFieldType;
@@ -222,6 +223,8 @@ export interface CategoryFieldSchema {
   showInVendor?: boolean;
   showInCustomer?: boolean;
   selectionMode?: 'SINGLE' | 'MULTI';
+  allowCustomOption?: boolean;
+  productTypeId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -245,6 +248,9 @@ export interface CategoryFilterConfiguration {
   childCategoryId: string;
   childCategorySlug?: string;
   childCategoryName?: string;
+  newLaunchCollectionId?: string;
+  newLaunchCollectionSlug?: string;
+  newLaunchCollectionTitle?: string;
   productTypeId?: string;
   productTypeSlug?: string;
   filterName: string;
@@ -267,6 +273,7 @@ export interface CategoryFilterConfiguration {
   showInVendor: boolean;
   showInCustomer: boolean;
   hideEmptyOptions?: boolean;
+  allowCustomOption?: boolean;
   sortOrder: number;
   isActive: boolean;
   publishedStatus: 'DRAFT' | 'PUBLISHED';
@@ -420,6 +427,9 @@ export interface Product {
   isTrending?: boolean;
   isDealOfTheDay?: boolean;
   isNewLaunch?: boolean;
+  newLaunchCollectionId?: string;
+  newLaunchCollectionSlug?: string;
+  newLaunchCollectionTitle?: string;
 }
 
 export interface NewLaunchCategory {
@@ -1078,6 +1088,9 @@ export interface VendorProduct {
   lowStockThreshold: number;
   isBulkEligible: boolean;
   isNewLaunch?: boolean;
+  newLaunchCollectionId?: string;
+  newLaunchCollectionSlug?: string;
+  newLaunchCollectionTitle?: string;
   productType?: string;
   size?: string;
   bulkPricing?: BulkPriceTier[];

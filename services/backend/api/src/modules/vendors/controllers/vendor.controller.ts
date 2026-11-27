@@ -4,6 +4,7 @@ import {
   Post,
   Put,
   Delete,
+  Header,
   Body,
   Param,
   Query,
@@ -1526,6 +1527,12 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
     if (vp.isNewLaunch !== undefined) {
       custProd.isNewLaunch = vp.isNewLaunch;
     }
+    if (anyVp.newLaunchCollectionId !== undefined) {
+      custProd.newLaunchCollectionId = anyVp.newLaunchCollectionId || undefined;
+      custProd.newLaunchCollectionSlug = anyVp.newLaunchCollectionSlug || undefined;
+      custProd.newLaunchCollectionTitle = anyVp.newLaunchCollectionTitle || undefined;
+      if (anyVp.newLaunchCollectionId) custProd.isNewLaunch = true;
+    }
     if (vp.specifications) {
       custProd.specifications = {
         ...custProd.specifications,
@@ -1612,7 +1619,10 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
       stockCount: vp.stockCount,
       moq: anyVp.moq ?? 1,
       isBulkEligible: vp.isBulkEligible,
-      isNewLaunch: Boolean(vp.isNewLaunch),
+      isNewLaunch: Boolean(vp.isNewLaunch || anyVp.newLaunchCollectionId),
+      newLaunchCollectionId: anyVp.newLaunchCollectionId || undefined,
+      newLaunchCollectionSlug: anyVp.newLaunchCollectionSlug || undefined,
+      newLaunchCollectionTitle: anyVp.newLaunchCollectionTitle || undefined,
       bulkPricing: vp.bulkPricing,
       variants: vp.variants,
       attributes: vp.attributes,
@@ -3594,6 +3604,7 @@ export class VendorController implements OnModuleInit {
   // 5. PRODUCTS MANAGEMENT (VENDOR-SCOPED + VERSIONING + APPROVAL SYNC)
   // ==========================================
   @Get('taxonomy')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   async getVendorTaxonomy(@Headers('authorization') authHeader?: string) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
@@ -3620,6 +3631,7 @@ export class VendorController implements OnModuleInit {
         mainCategories: activeMains,
         childCategories: activeChildren,
         productTypes: activeTypes,
+        newLaunchCollections: taxonomyService.getNewLaunchCollections(tenantId, true),
         desktopNavigation: taxonomyService.getPublishedDesktopNavigation(tenantId, false),
         fieldSchemas: taxonomyService.getVendorCombinedCategoryFields(tenantId, undefined),
         filterConfigs: taxonomyService.getCategoryFilterConfigs(tenantId, {
@@ -3628,6 +3640,7 @@ export class VendorController implements OnModuleInit {
           includeInactive: false,
         }),
         publishMetadata: taxonomyService.getPublishMetadata(tenantId),
+        filterConfigVersion: taxonomyService.getFilterSyncVersion(tenantId),
         warehouses: myWarehouses,
         brands,
         config: {
@@ -3644,14 +3657,26 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('taxonomy/fields/:childCategoryId')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   async getVendorCategoryFields(
     @Param('childCategoryId') childCategoryId: string,
+    @Query('productTypeId') productTypeId?: string,
+    @Query('newLaunchCollectionId') newLaunchCollectionId?: string,
     @Headers('authorization') authHeader?: string
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
-    const fields = taxonomyService.getVendorCombinedCategoryFields(tenantId, childCategoryId);
-    return { success: true, data: fields };
+    const fields = taxonomyService.getVendorCombinedCategoryFields(
+      tenantId,
+      childCategoryId,
+      productTypeId,
+      newLaunchCollectionId
+    );
+    return {
+      success: true,
+      data: fields,
+      filterConfigVersion: taxonomyService.getFilterSyncVersion(tenantId),
+    };
   }
 
   @Post('products/upload-image')
@@ -3828,6 +3853,16 @@ export class VendorController implements OnModuleInit {
     const resolvedFull = resolveCanonicalCategoryHierarchy(hierarchy.childCategorySlug, hierarchy.productTypeSlug);
     const defaultChild = resolvedFull.matchedChild || resolvedFull.matchedMain?.subcategories[0];
 
+    const requestedCollectionNeedle = String(
+      body.newLaunchCollectionId || body.newLaunchCollectionSlug || ''
+    ).trim();
+    const matchedNewLaunchCollection = requestedCollectionNeedle
+      ? taxonomyService.resolveNewLaunchCollectionScope(tenantId, requestedCollectionNeedle, false, true)
+      : undefined;
+    if (requestedCollectionNeedle && !matchedNewLaunchCollection) {
+      throw new BadRequestException('Selected New Launches collection is currently inactive or unavailable.');
+    }
+
     const shouldValidateDynamic = Boolean(
       !isDraft && (body.categoryAttributes !== undefined || body.enforceCategoryFields === true)
     );
@@ -3835,12 +3870,19 @@ export class VendorController implements OnModuleInit {
       tenantId,
       hierarchy.childCategoryId,
       body.categoryAttributes,
-      { strictRequired: shouldValidateDynamic }
+      {
+        strictRequired: shouldValidateDynamic,
+        productTypeId: hierarchy.productTypeId,
+        newLaunchCollectionId: matchedNewLaunchCollection?.id,
+      }
     );
     const mergedSpecifications = {
       ...fieldValidation.specificationEntries,
       ...(body.specifications || {}),
     };
+    const resolvedPackSize = Array.isArray(fieldValidation.validatedAttributes.packSize)
+      ? fieldValidation.validatedAttributes.packSize[0]
+      : fieldValidation.validatedAttributes.packSize;
 
     const id = `vp-prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const slugBase = body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -3885,7 +3927,7 @@ export class VendorController implements OnModuleInit {
       mrp: Number(body.mrp),
       discount: Math.round(((Number(body.mrp) - Number(body.price)) / Number(body.mrp)) * 100),
       unit: body.unit || 'Piece',
-      packSize: body.packSize || fieldValidation.specificationEntries['Pack Size'] || body.unit || '1 Unit',
+      packSize: body.packSize || resolvedPackSize || fieldValidation.specificationEntries['Pack Size'] || body.unit || '1 Unit',
       gstRate: Number(body.gstRate) || 18,
       rating: 5.0,
       reviewCount: 0,
@@ -3898,7 +3940,10 @@ export class VendorController implements OnModuleInit {
       warehouseLocation: body.warehouseLocation || 'WH-BLR-04 Peenya Hub',
       lowStockThreshold: Number(body.lowStockThreshold) || 10,
       isBulkEligible: Boolean(body.isBulkEligible ?? (Array.isArray(body.bulkPricing) && body.bulkPricing.length > 0)),
-      isNewLaunch: Boolean(body.isNewLaunch),
+      isNewLaunch: Boolean(matchedNewLaunchCollection || body.isNewLaunch),
+      newLaunchCollectionId: matchedNewLaunchCollection?.id || undefined,
+      newLaunchCollectionSlug: matchedNewLaunchCollection?.slug || undefined,
+      newLaunchCollectionTitle: matchedNewLaunchCollection?.title || undefined,
       productType: body.productType || '',
       size: body.size || body.unit || '',
       bulkPricing: body.bulkPricing || [
@@ -4088,10 +4133,13 @@ export class VendorController implements OnModuleInit {
       'price',
       'mrp',
       'images',
+      'categoryAttributes',
       'specifications',
       'variants',
       'categorySlug',
       'bulkPricing',
+      'newLaunchCollectionId',
+      'isNewLaunch',
     ].some((k) => body[k] !== undefined);
 
     const nextVersion = (Number(existing.version) || 1) + 1;
@@ -4104,6 +4152,48 @@ export class VendorController implements OnModuleInit {
       existing.stockCount = nextStock;
       existing.stock = nextStock;
       existing.inStock = nextStock > 0;
+    }
+
+    const updatedHierarchyPreview = taxonomyService.resolveAndValidateProductTaxonomy(
+      {
+        mainCategoryId: body.mainCategoryId || body.mainCategorySlug || existing.mainCategoryId,
+        childCategoryId: body.childCategoryId || body.categorySlug || body.categoryId || body.category || existing.childCategoryId || existing.categorySlug,
+        productTypeId: body.productTypeId || body.productTypeSlug || body.subcategorySlug || body.subcategoryId || body.subcategory || (body as any).subCategory || existing.productTypeId || existing.subcategorySlug,
+        brand: body.brand || existing.brand,
+        brandId: body.brandId || existing.brandId,
+      },
+      { strictChildMatch: Boolean(body.mainCategoryId), tenantId }
+    );
+
+    const requestedCollectionInUpdate =
+      body.newLaunchCollectionId !== undefined
+        ? String(body.newLaunchCollectionId || '').trim()
+        : existing.newLaunchCollectionId || '';
+    const matchedEditNewLaunchCol = requestedCollectionInUpdate
+      ? taxonomyService.resolveNewLaunchCollectionScope(tenantId, requestedCollectionInUpdate, false, true)
+      : undefined;
+    if (
+      body.newLaunchCollectionId !== undefined &&
+      String(body.newLaunchCollectionId || '').trim() &&
+      !matchedEditNewLaunchCol
+    ) {
+      throw new BadRequestException('Selected New Launches collection is currently inactive or unavailable.');
+    }
+
+    let validatedEditAttrs: { validatedAttributes: Record<string, any>; specificationEntries: Record<string, string> } | null = null;
+    if (body.categoryAttributes !== undefined || body.enforceCategoryFields === true) {
+      const targetChildId = updatedHierarchyPreview.childCategoryId || existing.childCategoryId || existing.categoryId || existing.categorySlug;
+      validatedEditAttrs = taxonomyService.validateAndNormalizeCategoryAttributes(
+        tenantId,
+        targetChildId,
+        body.categoryAttributes ?? existing.categoryAttributes,
+        {
+          strictRequired: !body.isDraft && (body.categoryAttributes !== undefined || body.enforceCategoryFields === true),
+          productTypeId: updatedHierarchyPreview.productTypeId || existing.productTypeId,
+          newLaunchCollectionId: matchedEditNewLaunchCol?.id,
+          existingAttributes: existing.categoryAttributes,
+        }
+      );
     }
 
     if (existing.approvalStatus === 'APPROVED' && catalogFieldsChanged && body.requiresApproval !== false) {
@@ -4132,8 +4222,24 @@ export class VendorController implements OnModuleInit {
         'packSize',
         'gstRate',
         'deliverySpeedAvailable',
+        'newLaunchCollectionId',
+        'isNewLaunch',
       ]) {
         if (body[k] !== undefined) staged[k] = body[k];
+      }
+      if (body.newLaunchCollectionId !== undefined) {
+        staged.newLaunchCollectionId = matchedEditNewLaunchCol?.id || undefined;
+        staged.newLaunchCollectionSlug = matchedEditNewLaunchCol?.slug || undefined;
+        staged.newLaunchCollectionTitle = matchedEditNewLaunchCol?.title || undefined;
+        if (matchedEditNewLaunchCol) staged.isNewLaunch = true;
+      }
+      if (validatedEditAttrs) {
+        staged.categoryAttributes = validatedEditAttrs.validatedAttributes;
+        staged.specifications = {
+          ...(existing.specifications || {}),
+          ...validatedEditAttrs.specificationEntries,
+          ...(body.specifications || {}),
+        };
       }
       existing.pendingRevision = { ...(existing.pendingRevision || {}), ...staged };
       existing.revisionStatus = 'PENDING_APPROVAL';
@@ -4210,19 +4316,38 @@ export class VendorController implements OnModuleInit {
         existing.subcategorySlug = updatedHierarchy.productTypeSlug;
       }
     }
-    if (body.categoryAttributes !== undefined || body.enforceCategoryFields === true) {
+    if (validatedEditAttrs) {
+      existing.categoryAttributes = validatedEditAttrs.validatedAttributes;
+      existing.specifications = {
+        ...(existing.specifications || {}),
+        ...validatedEditAttrs.specificationEntries,
+        ...(body.specifications || {}),
+      };
+    } else if (body.categoryAttributes !== undefined || body.enforceCategoryFields === true) {
       const targetChildId = existing.childCategoryId || existing.categoryId || existing.categorySlug;
       const fv = taxonomyService.validateAndNormalizeCategoryAttributes(
         tenantId,
         targetChildId,
         body.categoryAttributes ?? existing.categoryAttributes,
-        { strictRequired: !isDraft && (body.categoryAttributes !== undefined || body.enforceCategoryFields === true) }
+        {
+          strictRequired: !isDraft && (body.categoryAttributes !== undefined || body.enforceCategoryFields === true),
+          productTypeId: existing.productTypeId,
+          newLaunchCollectionId: matchedEditNewLaunchCol?.id,
+          existingAttributes: existing.categoryAttributes,
+        }
       );
       existing.categoryAttributes = fv.validatedAttributes;
       existing.specifications = {
+        ...(existing.specifications || {}),
         ...fv.specificationEntries,
-        ...(body.specifications || existing.specifications || {}),
+        ...(body.specifications || {}),
       };
+    }
+    if (body.newLaunchCollectionId !== undefined) {
+      existing.newLaunchCollectionId = matchedEditNewLaunchCol?.id || undefined;
+      existing.newLaunchCollectionSlug = matchedEditNewLaunchCol?.slug || undefined;
+      existing.newLaunchCollectionTitle = matchedEditNewLaunchCol?.title || undefined;
+      if (matchedEditNewLaunchCol) existing.isNewLaunch = true;
     }
     existing.vendorId = vendor.id;
     existing.sellingPrice = Number(existing.price);

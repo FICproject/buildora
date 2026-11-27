@@ -118,10 +118,11 @@ export const api = {
     return request<any>('/deals', { cache: 'no-store' }, { coupons: [], promotions: [], dealsContent: [], products: [] });
   },
 
-  async getFilters(category?: string, subcategory?: string): Promise<any> {
+  async getFilters(category?: string, subcategory?: string, collection?: string): Promise<any> {
     const q = new URLSearchParams();
     if (category) q.set('category', category);
     if (subcategory) q.set('subcategory', subcategory);
+    if (collection) q.set('collection', collection);
     const qs = q.toString() ? `?${q.toString()}` : '';
     return request<any>(`/filters${qs}`, { cache: 'no-store' }, { filterConfigs: [], availableFilters: [], attributes: [], brands: [], priceRange: null });
   },
@@ -240,18 +241,33 @@ export const api = {
 
   async getNewLaunchCollectionBySlug(
     slug: string,
-    params?: { child?: string; search?: string }
+    params?: {
+      child?: string;
+      search?: string;
+      brand?: string;
+      minPrice?: number;
+      maxPrice?: number;
+      specs?: Record<string, string[]>;
+      sort?: string;
+    }
   ): Promise<{
     collection: any | null;
     collections: any[];
     shortcuts: any[];
     activeShortcut: any | null;
+    filterConfigs?: any[];
+    availableFilters?: any[];
     products: Product[];
     notFound?: boolean;
   }> {
     const q = new URLSearchParams();
     if (params?.child) q.set('child', params.child);
     if (params?.search) q.set('search', params.search);
+    if (params?.brand) q.set('brand', params.brand);
+    if (params?.minPrice !== undefined) q.set('minPrice', String(params.minPrice));
+    if (params?.maxPrice !== undefined) q.set('maxPrice', String(params.maxPrice));
+    if (params?.specs && Object.keys(params.specs).length > 0) q.set('specs', JSON.stringify(params.specs));
+    if (params?.sort) q.set('sort', params.sort);
     const qs = q.toString() ? `?${q.toString()}` : '';
     try {
       const res = await fetch(`${API_BASE_URL}/new-launches/${encodeURIComponent(slug)}${qs}`, {
@@ -260,17 +276,37 @@ export const api = {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.success) {
-        return { collection: null, collections: [], shortcuts: [], activeShortcut: null, products: [], notFound: true };
+        return {
+          collection: null,
+          collections: [],
+          shortcuts: [],
+          activeShortcut: null,
+          filterConfigs: [],
+          availableFilters: [],
+          products: [],
+          notFound: true,
+        };
       }
       return {
         collection: json.data?.collection || null,
         collections: json.data?.collections || [],
         shortcuts: json.data?.shortcuts || [],
         activeShortcut: json.data?.activeShortcut || null,
+        filterConfigs: json.data?.filterConfigs || [],
+        availableFilters: json.data?.availableFilters || [],
         products: json.data?.products || [],
       };
     } catch {
-      return { collection: null, collections: [], shortcuts: [], activeShortcut: null, products: [], notFound: true };
+      return {
+        collection: null,
+        collections: [],
+        shortcuts: [],
+        activeShortcut: null,
+        filterConfigs: [],
+        availableFilters: [],
+        products: [],
+        notFound: true,
+      };
     }
   },
 

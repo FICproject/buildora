@@ -4,10 +4,13 @@ import { ChevronRight, RotateCcw, PackageOpen } from 'lucide-react';
 import {
   MASTER_CATEGORIES,
   getAvailableFiltersForCatalog,
+  getAvailableFiltersForCategory,
+  filterConfigsToDimensions,
   applyCategoryFilters,
-  ActiveCategoryFilters
+  ActiveCategoryFilters,
+  CategoryFilterDimension,
 } from '@buildora/constants';
-import { Category, Product } from '@buildora/types';
+import { Category, CategoryFilterConfiguration, Product } from '@buildora/types';
 import { api } from '../services/api';
 import { ProductCard } from '../components/common/ProductCard';
 import {
@@ -68,40 +71,49 @@ export const ProductListingPage: React.FC = () => {
   // Products and Category list state
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [dynamicFilterDimensions, setDynamicFilterDimensions] = useState<CategoryFilterDimension[]>([]);
+  const [hasConfiguredFilters, setHasConfiguredFilters] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [realtimeRevision, setRealtimeRevision] = useState(0);
 
   const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() =>
     parseCatalogUrlFilters(searchParams)
   );
 
-  // Fetch categories & live customer-visible products (updates automatically on admin approvals)
+  // Fetch categories & live customer-visible products (updates automatically on admin approvals & filter config edits)
   useEffect(() => {
     let active = true;
-    const loadCatalog = async () => {
-      setLoading(true);
+    const loadCatalog = async (silent = false) => {
+      if (!silent) setLoading(true);
       try {
         const [cats, prods] = await Promise.all([api.getCategories(), api.getProducts()]);
         if (!active) return;
         setCategories(Array.isArray(cats) ? cats : []);
         setProducts(Array.isArray(prods) ? prods : []);
       } finally {
-        if (active) setLoading(false);
+        if (active && !silent) setLoading(false);
       }
     };
-    void loadCatalog();
+    void loadCatalog(false);
 
     const onRealtime = () => {
-      void loadCatalog();
+      setRealtimeRevision((v) => v + 1);
+      void loadCatalog(true);
     };
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void loadCatalog();
+      if (document.visibilityState === 'visible') {
+        setRealtimeRevision((v) => v + 1);
+        void loadCatalog(true);
+      }
     };
     window.addEventListener('buildora:realtime:catalog', onRealtime);
+    window.addEventListener('buildora:realtime:config', onRealtime);
     window.addEventListener('focus', onRealtime);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       active = false;
       window.removeEventListener('buildora:realtime:catalog', onRealtime);
+      window.removeEventListener('buildora:realtime:config', onRealtime);
       window.removeEventListener('focus', onRealtime);
       document.removeEventListener('visibilitychange', onVisibility);
     };
@@ -158,18 +170,57 @@ export const ProductListingPage: React.FC = () => {
     return categories.find((c) => c.slug === activeCategorySlug) || null;
   }, [activeCategorySlug, categories]);
 
-  // Dynamically compute available filters for the catalog (with active Main Category's Child Categories when selected)
+  useEffect(() => {
+    let active = true;
+    if (!activeCategorySlug) {
+      setDynamicFilterDimensions([]);
+      setHasConfiguredFilters(false);
+      return;
+    }
+    api.getFilters(activeCategorySlug).then((res) => {
+      if (!active) return;
+      const cfgs: CategoryFilterConfiguration[] = Array.isArray(res?.filterConfigs) ? res.filterConfigs : [];
+      setDynamicFilterDimensions(filterConfigsToDimensions(cfgs));
+      setHasConfiguredFilters(Boolean(res?.hasFilterConfiguration ?? cfgs.length > 0));
+    }).catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [activeCategorySlug, realtimeRevision]);
+
+  // Dynamically compute available filters for the catalog (using live Admin configs when a category is selected)
   const availableFilters = useMemo(() => {
+    if (activeCategorySlug && hasConfiguredFilters) {
+      const catProducts = products.filter(
+        (p) =>
+          (p.childCategorySlug || p.categorySlug || '').toLowerCase() === activeCategorySlug.toLowerCase() ||
+          (p.mainCategorySlug || '').toLowerCase() === activeCategorySlug.toLowerCase()
+      );
+      return getAvailableFiltersForCategory(
+        activeCategorySlug,
+        catProducts,
+        activeCategory?.subcategories,
+        undefined,
+        dynamicFilterDimensions,
+        activeFilters,
+        true
+      );
+    }
     return getAvailableFiltersForCatalog(
       products,
       activeCategorySlug,
       activeCategory?.subcategories
     );
-  }, [products, activeCategorySlug, activeCategory?.subcategories]);
+  }, [products, activeCategorySlug, activeCategory?.subcategories, hasConfiguredFilters, dynamicFilterDimensions, activeFilters]);
 
   // Filter & Sort Products
   const filteredProducts = useMemo(() => {
-    let result = applyCategoryFilters(products, activeFilters, activeCategorySlug);
+    let result = applyCategoryFilters(
+      products,
+      activeFilters,
+      activeCategorySlug,
+      hasConfiguredFilters ? dynamicFilterDimensions : undefined
+    );
 
     // Sort
     if (activeFilters.sortBy === 'price-low') {
@@ -189,7 +240,7 @@ export const ProductListingPage: React.FC = () => {
     }
 
     return result;
-  }, [products, activeFilters, activeCategorySlug]);
+  }, [products, activeFilters, activeCategorySlug, hasConfiguredFilters, dynamicFilterDimensions]);
 
   // Filter change handlers
   const handleResetFilters = () => {

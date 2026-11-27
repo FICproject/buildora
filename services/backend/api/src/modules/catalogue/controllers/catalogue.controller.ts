@@ -1,5 +1,9 @@
-import { Controller, Get, Headers, NotFoundException, Param, Query } from '@nestjs/common';
-import { LEGACY_CATEGORY_SLUG_ALIASES } from '@buildora/constants';
+import { Controller, Get, Header, Headers, NotFoundException, Param, Query } from '@nestjs/common';
+import {
+  applyCategoryFilters,
+  filterConfigsToDimensions,
+  LEGACY_CATEGORY_SLUG_ALIASES,
+} from '@buildora/constants';
 import { dbStore } from '../../../database/store';
 import { isProductCustomerVisible } from '../../products/controllers/products.controller';
 import { taxonomyService } from '../services/taxonomy.service';
@@ -109,7 +113,10 @@ function buildHydratedNewLaunchCollections(tenantId?: string, preResolvedProduct
     });
     const mappedTypeIds = new Set(mappings.filter((m) => m.childCategoryId).map((m) => m.childCategoryId!));
     const colProducts = resolvedProducts.filter(
-      (p) => curatedSet.has(p.id) || (p.productTypeId && mappedTypeIds.has(p.productTypeId))
+      (p) =>
+        curatedSet.has(p.id) ||
+        p.newLaunchCollectionId === col.id ||
+        (p.productTypeId && mappedTypeIds.has(p.productTypeId))
     );
     return {
       ...col,
@@ -122,6 +129,7 @@ function buildHydratedNewLaunchCollections(tenantId?: string, preResolvedProduct
 @Controller('api/v1')
 export class CatalogueController {
   @Get('taxonomy')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   getTaxonomyTree(@Headers('x-tenant-id') tenantId?: string) {
     const cleanTenant = tenantId || 'tenant-buildora-blr';
     const { mainCategories, allChildren } = buildTaxonomyData(cleanTenant, false);
@@ -192,6 +200,7 @@ export class CatalogueController {
   }
 
   @Get('categories/:slug')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   getCategoryBySlug(
     @Param('slug') slug: string,
     @Headers('x-tenant-id') tenantId?: string
@@ -296,11 +305,16 @@ export class CatalogueController {
         return Boolean(matchedShortcut.childCategoryId && p.productTypeId === matchedShortcut.childCategoryId);
       }
       if (activeCollection) {
-        return curatedIdSet.has(p.id) || Boolean(p.productTypeId && allowedTypeIds.has(p.productTypeId));
+        return (
+          curatedIdSet.has(p.id) ||
+          p.newLaunchCollectionId === activeCollection.id ||
+          Boolean(p.productTypeId && allowedTypeIds.has(p.productTypeId))
+        );
       }
       return (
         p.isNewLaunch ||
         curatedIdSet.has(p.id) ||
+        Boolean(p.newLaunchCollectionId) ||
         Boolean(p.productTypeId && allowedTypeIds.has(p.productTypeId))
       );
     });
@@ -330,11 +344,17 @@ export class CatalogueController {
   }
 
   @Get('new-launches/:slug')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   getNewLaunchCollectionBySlug(
     @Param('slug') slug: string,
     @Headers('x-tenant-id') tenantId?: string,
     @Query('child') childNeedle?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('brand') brand?: string,
+    @Query('minPrice') minPrice?: string,
+    @Query('maxPrice') maxPrice?: string,
+    @Query('specs') specsRaw?: string,
+    @Query('sort') sort?: string
   ) {
     const cleanTenant = tenantId || 'tenant-buildora-blr';
     const resolvedProducts = resolveCustomerProductsWithTaxonomy(cleanTenant);
@@ -347,6 +367,56 @@ export class CatalogueController {
     }
 
     const res = this.getPromotionalNewLaunches(cleanTenant, collection.slug, childNeedle, search);
+    const baseProducts = res.data.products;
+
+    let parsedSpecs: Record<string, string[]> = {};
+    if (specsRaw) {
+      try {
+        const parsed = JSON.parse(specsRaw);
+        if (parsed && typeof parsed === 'object') parsedSpecs = parsed;
+      } catch {
+        parsedSpecs = {};
+      }
+    }
+
+    const activeFilters = {
+      brands: brand ? brand.split(',').map((b) => b.trim()).filter(Boolean) : [],
+      subcategories: [],
+      inStockOnly: false,
+      asapOnly: false,
+      minPrice: minPrice !== undefined && minPrice !== '' ? Number(minPrice) : undefined,
+      maxPrice: maxPrice !== undefined && maxPrice !== '' ? Number(maxPrice) : undefined,
+      specifications: parsedSpecs,
+      sortBy: sort || 'relevance',
+    };
+
+    const { filterConfigs, availableFilters } = taxonomyService.getCustomerAvailableFilters(
+      cleanTenant,
+      collection.slug,
+      baseProducts,
+      [],
+      [],
+      undefined,
+      collection.id,
+      activeFilters
+    );
+
+    const hasBackendFilters =
+      activeFilters.brands.length > 0 ||
+      activeFilters.minPrice !== undefined ||
+      activeFilters.maxPrice !== undefined ||
+      Object.keys(activeFilters.specifications).length > 0;
+
+    let finalProducts = hasBackendFilters
+      ? applyCategoryFilters(baseProducts, activeFilters, collection.slug, filterConfigsToDimensions(filterConfigs))
+      : baseProducts;
+
+    if (sort === 'price-low' || sort === 'price_asc') {
+      finalProducts = [...finalProducts].sort((a, b) => a.price - b.price);
+    } else if (sort === 'price-high' || sort === 'price_desc') {
+      finalProducts = [...finalProducts].sort((a, b) => b.price - a.price);
+    }
+
     return {
       success: true,
       data: {
@@ -354,7 +424,10 @@ export class CatalogueController {
         collections,
         shortcuts: collection.categoryMappings || [],
         activeShortcut: res.data.activeShortcut,
-        products: res.data.products,
+        filterConfigs,
+        availableFilters,
+        products: finalProducts,
+        allCollectionProductsCount: baseProducts.length,
       },
     };
   }
@@ -405,14 +478,76 @@ export class CatalogueController {
   }
 
   @Get('filters')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   getPublicFilters(
     @Headers('x-tenant-id') tenantId?: string,
     @Query('category') category?: string,
-    @Query('subcategory') subcategory?: string
+    @Query('subcategory') subcategory?: string,
+    @Query('collection') collectionSlug?: string,
+    @Query('newLaunchCollectionId') collectionId?: string,
+    @Query('child') childNeedle?: string
   ) {
     const cleanTenant = tenantId || 'tenant-buildora-blr';
     const rawNeedle = (category || '').trim().toLowerCase();
     const canonicalSlug = LEGACY_CATEGORY_SLUG_ALIASES[rawNeedle] || rawNeedle;
+
+    const collectionScope = taxonomyService.resolveNewLaunchCollectionScope(
+      cleanTenant,
+      collectionId || collectionSlug || category,
+      false,
+      true
+    );
+    if (collectionScope) {
+      const resolvedProducts = resolveCustomerProductsWithTaxonomy(cleanTenant);
+      const collections = buildHydratedNewLaunchCollections(cleanTenant, resolvedProducts);
+      const col = collections.find((c) => c.id === collectionScope.id) || collectionScope;
+      const curatedIdSet = new Set(col.productIds || []);
+      const shortcuts = col.categoryMappings || [];
+      const cleanChild = childNeedle?.trim().toLowerCase();
+      const matchedShortcut = cleanChild
+        ? shortcuts.find(
+            (m: any) =>
+              m.id.toLowerCase() === cleanChild ||
+              (m.childCategoryId || '').toLowerCase() === cleanChild ||
+              (m.childCategorySlug || '').toLowerCase() === cleanChild ||
+              m.displayLabel.trim().toLowerCase() === cleanChild
+          )
+        : undefined;
+      const allowedTypeIds = new Set(
+        (matchedShortcut ? [matchedShortcut] : shortcuts)
+          .filter((m: any) => m.childCategoryId)
+          .map((m: any) => m.childCategoryId!)
+      );
+      const colProducts = resolvedProducts.filter((p) =>
+        matchedShortcut
+          ? Boolean(matchedShortcut.childCategoryId && p.productTypeId === matchedShortcut.childCategoryId)
+          : curatedIdSet.has(p.id) ||
+            p.newLaunchCollectionId === col.id ||
+            Boolean(p.productTypeId && allowedTypeIds.has(p.productTypeId))
+      );
+      const { filterConfigs, availableFilters, hasFilterConfiguration } = taxonomyService.getCustomerAvailableFilters(
+        cleanTenant,
+        col.slug,
+        colProducts,
+        [],
+        [],
+        undefined,
+        col.id
+      );
+      return {
+        success: true,
+        data: {
+          filterConfigs,
+          availableFilters,
+          hasFilterConfiguration,
+          filterConfigVersion: taxonomyService.getFilterSyncVersion(cleanTenant),
+          attributes: [],
+          fieldSchemas: [],
+          totalMatchingProducts: colProducts.length,
+        },
+      };
+    }
+
     const { mainCategories, allChildren } = buildTaxonomyData(cleanTenant, false);
     const matchedChild = canonicalSlug
       ? allChildren.find((c) => c.slug.toLowerCase() === canonicalSlug || c.id.toLowerCase() === rawNeedle)
@@ -474,13 +609,24 @@ export class CatalogueController {
       ? matchedChild.productTypes || matchedChild.subcategories || []
       : [];
     const mainChildCategoriesForFilter = matchedMain ? matchedMain.childCategories || [] : [];
+    const subNeedle = subcategory ? subcategory.trim().toLowerCase() : '';
+    const matchedProductType =
+      subNeedle && matchedChild
+        ? childCategoriesForFilter.find(
+            (pt: any) =>
+              pt.id?.toLowerCase() === subNeedle ||
+              pt.slug?.toLowerCase() === subNeedle ||
+              pt.name?.toLowerCase() === subNeedle
+          )
+        : undefined;
 
-    const { filterConfigs, availableFilters } = taxonomyService.getCustomerAvailableFilters(
+    const { filterConfigs, availableFilters, hasFilterConfiguration } = taxonomyService.getCustomerAvailableFilters(
       cleanTenant,
       matchedChild?.slug || matchedMain?.slug || canonicalSlug,
       categoryProducts,
       childCategoriesForFilter,
-      mainChildCategoriesForFilter
+      mainChildCategoriesForFilter,
+      matchedProductType?.id
     );
 
     return {
@@ -488,6 +634,8 @@ export class CatalogueController {
       data: {
         filterConfigs,
         availableFilters,
+        hasFilterConfiguration,
+        filterConfigVersion: taxonomyService.getFilterSyncVersion(cleanTenant),
         attributes,
         fieldSchemas,
         totalMatchingProducts: categoryProducts.length,

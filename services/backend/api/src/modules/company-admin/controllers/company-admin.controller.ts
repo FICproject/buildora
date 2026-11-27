@@ -5,6 +5,7 @@ import {
   Patch,
   Put,
   Delete,
+  Header,
   Param,
   Query,
   Body,
@@ -861,6 +862,9 @@ export class CompanyAdminController {
     });
     product.updatedAt = new Date().toISOString();
     companyAdminDataService.syncCustomerPortalProduct(product);
+    if (product.newLaunchCollectionId) {
+      await taxonomyService.attachProductToNewLaunchCollection(tenantId, product);
+    }
     await platformPersistenceService.upsert(PlatformProductModel, product);
 
     companyAdminDataService.recordAuditLog({
@@ -891,6 +895,9 @@ export class CompanyAdminController {
       realtimeBus.emitVendorAndAdmin(product.vendorId, 'product.approved', { product }, tenantId);
     }
     realtimeBus.emitPublic('product.approved', { product }, tenantId);
+    if (product.newLaunchCollectionId) {
+      realtimeBus.emitPublic('newLaunches.updated', { collectionId: product.newLaunchCollectionId }, tenantId);
+    }
 
     return {
       success: true,
@@ -1085,6 +1092,10 @@ export class CompanyAdminController {
       product.isSuspended = false;
       product.updatedAt = new Date().toISOString();
       companyAdminDataService.syncCustomerPortalProduct(product);
+      if (product.newLaunchCollectionId) {
+        await taxonomyService.attachProductToNewLaunchCollection(tenantId, product);
+        realtimeBus.emitPublic('newLaunches.updated', { collectionId: product.newLaunchCollectionId }, tenantId);
+      }
       await platformPersistenceService.upsert(PlatformProductModel, product);
       if (product.vendorId) {
         realtimeBus.emitVendorAndAdmin(product.vendorId, 'product.approved', { product }, tenantId);
@@ -1261,6 +1272,7 @@ export class CompanyAdminController {
   }
 
   @Get('catalog/categories')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   listCategories(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string
@@ -1789,24 +1801,94 @@ export class CompanyAdminController {
   }
 
   @Get('catalog/filters')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   listCategoryFilterConfigs(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
     @Query('childCategoryId') childCategoryId?: string,
+    @Query('newLaunchCollectionId') newLaunchCollectionId?: string,
+    @Query('productTypeId') productTypeId?: string,
     @Query('useDraft') useDraft?: string,
     @Query('includeInactive') includeInactive?: string
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:read', headerTenantId);
     const configs = taxonomyService.getCategoryFilterConfigs(tenantId, {
       childCategoryId,
+      newLaunchCollectionId,
+      productTypeId,
       useDraft: useDraft !== 'false',
       includeInactive: includeInactive !== 'false',
     });
+    const catalogOptions =
+      childCategoryId || newLaunchCollectionId
+        ? taxonomyService.getRealCatalogOptionsMap(tenantId, childCategoryId, productTypeId, newLaunchCollectionId)
+        : {};
     return {
       success: true,
       data: configs,
+      catalogOptions,
+      filterConfigVersion: taxonomyService.getFilterSyncVersion(tenantId),
       metadata: taxonomyService.getPublishMetadata(tenantId),
       civilMigrationReport: taxonomyService.civilMigrationReport,
+    };
+  }
+
+  private emitFilterSyncSafe(
+    tenantId: string,
+    payload: { childCategoryId?: string; newLaunchCollectionId?: string; productTypeId?: string; filterId?: string; deletedFilterId?: string }
+  ) {
+    const version = taxonomyService.getFilterSyncVersion(tenantId);
+    const enriched = { ...payload, filterConfigVersion: version, taxonomyUpdated: true, filtersUpdated: true };
+    const attempts = 2;
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        realtimeBus.emitPublic('taxonomy.published', enriched, tenantId);
+        realtimeBus.emitPublic('filters.updated', enriched, tenantId);
+        realtimeBus.emitToAdmin('filters.updated', enriched, tenantId);
+        if (payload.newLaunchCollectionId) {
+          realtimeBus.emitPublic('newLaunches.updated', { collectionId: payload.newLaunchCollectionId, ...enriched }, tenantId);
+        }
+        return;
+      } catch (err: any) {
+        if (i === attempts) {
+          console.error(`[FilterSync] Socket.IO broadcast failed for tenant ${tenantId}:`, err?.message || err);
+        }
+      }
+    }
+  }
+
+  @Put('catalog/filters/sync')
+  async syncCategoryFilters(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: any,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const saved = await taxonomyService.syncCategoryFilters(tenantId, body || {});
+    const colScope = body?.newLaunchCollectionId || saved[0]?.newLaunchCollectionId;
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'CATEGORY_FILTERS_SYNCHRONIZED',
+      module: 'Catalog',
+      entityType: 'CategoryFilterConfiguration',
+      entityId: colScope || body?.productTypeId || body?.childCategoryId || 'catalog-filters',
+      details: `Synchronized ${saved.length} filters for ${colScope || body?.childCategoryId || ''}${body?.productTypeId ? ` (${body.productTypeId})` : ''}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+    this.emitFilterSyncSafe(tenantId, {
+      childCategoryId: body?.childCategoryId,
+      newLaunchCollectionId: colScope,
+      productTypeId: body?.productTypeId,
+    });
+    return {
+      success: true,
+      data: saved,
+      filterConfigVersion: taxonomyService.getFilterSyncVersion(tenantId),
+      metadata: taxonomyService.getPublishMetadata(tenantId),
     };
   }
 
@@ -1834,10 +1916,18 @@ export class CompanyAdminController {
     if (body?.saveAsDraft) {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { filterId: created.id }, tenantId);
     } else {
-      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, filtersUpdated: true }, tenantId);
-      realtimeBus.emitPublic('filters.updated', { childCategoryId: created.childCategoryId, filterId: created.id }, tenantId);
+      this.emitFilterSyncSafe(tenantId, {
+        childCategoryId: created.childCategoryId,
+        newLaunchCollectionId: created.newLaunchCollectionId,
+        filterId: created.id,
+      });
     }
-    return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
+    return {
+      success: true,
+      data: created,
+      filterConfigVersion: taxonomyService.getFilterSyncVersion(tenantId),
+      metadata: taxonomyService.getPublishMetadata(tenantId),
+    };
   }
 
   @Patch('catalog/filters/:id')
@@ -1865,10 +1955,18 @@ export class CompanyAdminController {
     if (body?.saveAsDraft) {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { filterId: updated.id }, tenantId);
     } else {
-      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, filtersUpdated: true }, tenantId);
-      realtimeBus.emitPublic('filters.updated', { childCategoryId: updated.childCategoryId, filterId: updated.id }, tenantId);
+      this.emitFilterSyncSafe(tenantId, {
+        childCategoryId: updated.childCategoryId,
+        newLaunchCollectionId: updated.newLaunchCollectionId,
+        filterId: updated.id,
+      });
     }
-    return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
+    return {
+      success: true,
+      data: updated,
+      filterConfigVersion: taxonomyService.getFilterSyncVersion(tenantId),
+      metadata: taxonomyService.getPublishMetadata(tenantId),
+    };
   }
 
   @Delete('catalog/filters/:id')
@@ -1897,10 +1995,14 @@ export class CompanyAdminController {
     if (isDraft) {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedFilterId: id }, tenantId);
     } else {
-      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, filtersUpdated: true }, tenantId);
-      realtimeBus.emitPublic('filters.updated', { deletedFilterId: id }, tenantId);
+      this.emitFilterSyncSafe(tenantId, { deletedFilterId: id });
     }
-    return { success: true, data: result, metadata: taxonomyService.getPublishMetadata(tenantId) };
+    return {
+      success: true,
+      data: result,
+      filterConfigVersion: taxonomyService.getFilterSyncVersion(tenantId),
+      metadata: taxonomyService.getPublishMetadata(tenantId),
+    };
   }
 
   @Get('catalog/categories/:id/products')
@@ -1912,8 +2014,23 @@ export class CompanyAdminController {
     const { tenantId } = this.requireAdmin(authHeader, 'products:read', headerTenantId);
     const needle = id.trim().toLowerCase();
     const tenantProducts = companyAdminDataService.getTenantProducts(tenantId);
-    const matched = tenantProducts.filter(
-      (p: any) =>
+    const matched = tenantProducts.filter((p: any) => {
+      if (needle.startsWith('sub-')) {
+        return (
+          p.productTypeId?.toLowerCase() === needle ||
+          p.subcategoryId?.toLowerCase() === needle
+        );
+      }
+      if (needle.startsWith('cat-')) {
+        return (
+          p.childCategoryId?.toLowerCase() === needle ||
+          p.categoryId?.toLowerCase() === needle
+        );
+      }
+      if (needle.startsWith('mc-')) {
+        return p.mainCategoryId?.toLowerCase() === needle;
+      }
+      return (
         p.mainCategoryId?.toLowerCase() === needle ||
         p.mainCategorySlug?.toLowerCase() === needle ||
         p.childCategoryId?.toLowerCase() === needle ||
@@ -1922,7 +2039,8 @@ export class CompanyAdminController {
         p.categorySlug?.toLowerCase() === needle ||
         p.productTypeId?.toLowerCase() === needle ||
         p.subcategoryId?.toLowerCase() === needle
-    );
+      );
+    });
     return {
       success: true,
       data: matched,
@@ -2074,7 +2192,7 @@ export class CompanyAdminController {
     @Body() body?: any
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
-    const updated = await taxonomyService.updateProductType(tenantId, id, body || {});
+    const updated = await taxonomyService.updateProductType(tenantId, id, body || {}, vendorProducts);
     if (body?.saveAsDraft) {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { productTypeId: updated.id }, tenantId);
     } else {
@@ -2142,25 +2260,49 @@ export class CompanyAdminController {
     const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
     const state = taxonomyService.getNewLaunchAdminState(tenantId);
     const pool = taxonomyService.getTenantPool(tenantId);
+    const desktopNavigation = taxonomyService.getPublishedDesktopNavigation(tenantId, true);
     const approvedProducts = dbStore.products
-      .filter((p) => (p as any).approvalStatus !== 'REJECTED' && (p as any).approvalStatus !== 'PENDING_APPROVAL' && (p as any).isActive !== false)
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        sku: p.sku,
-        brand: p.brand,
-        price: p.price,
-        mainCategoryId: (p as any).mainCategoryId,
-        childCategoryId: (p as any).childCategoryId || (p as any).categoryId,
-        productTypeId: (p as any).productTypeId || (p as any).subcategoryId,
-        childCategoryName: (p as any).childCategoryName || (p as any).category,
-        productTypeName: (p as any).productTypeName || (p as any).subcategory,
-      }));
+      .filter((p) => {
+        const anyP = p as any;
+        if (anyP.tenantId && anyP.tenantId !== tenantId) return false;
+        const approvalStatus = anyP.approvalStatus || 'APPROVED';
+        if (approvalStatus !== 'APPROVED') return false;
+        if (anyP.isActive === false || anyP.isSuspended === true) return false;
+        return taxonomyService.isProductCategoryHierarchyActive(p, tenantId);
+      })
+      .map((p) => {
+        const anyP = p as any;
+        const mainCat = pool.mainCategories.find((m) => m.id === anyP.mainCategoryId);
+        const childCat = pool.childCategories.find(
+          (c) => c.id === (anyP.childCategoryId || anyP.categoryId)
+        );
+        const typeNode = pool.productTypes.find(
+          (pt) => pt.id === (anyP.productTypeId || anyP.subcategoryId)
+        );
+        return {
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          brand: p.brand,
+          price: p.price,
+          image: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : anyP.image || '',
+          images: Array.isArray(p.images) ? p.images : anyP.image ? [anyP.image] : [],
+          approvalStatus: anyP.approvalStatus || 'APPROVED',
+          isActive: anyP.isActive !== false && anyP.isSuspended !== true,
+          mainCategoryId: anyP.mainCategoryId || childCat?.mainCategoryId,
+          mainCategoryName: anyP.mainCategoryName || mainCat?.name || '',
+          childCategoryId: anyP.childCategoryId || anyP.categoryId || typeNode?.childCategoryId,
+          productTypeId: anyP.productTypeId || anyP.subcategoryId,
+          childCategoryName: anyP.childCategoryName || childCat?.name || anyP.category || '',
+          productTypeName: anyP.productTypeName || typeNode?.name || anyP.subcategory || '',
+        };
+      });
     return {
       success: true,
       data: {
         ...state,
         permanentTaxonomy: {
+          desktopNavigation,
           mainCategories: pool.mainCategories,
           childCategories: pool.childCategories,
           productTypes: pool.productTypes,

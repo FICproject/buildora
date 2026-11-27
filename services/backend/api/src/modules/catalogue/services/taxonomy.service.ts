@@ -5,10 +5,15 @@ import {
   PRODUCT_TYPES_SEED,
   CATEGORY_FIELD_SCHEMAS_SEED,
   CATEGORY_FILTER_CONFIGS_SEED,
+  NEW_LAUNCH_FILTER_CONFIGS_SEED,
+  STANDARD_CHECKLIST_FILTERS,
+  CIVIL_FILTER_KEYS_BY_CATEGORY,
   LEGACY_CATEGORY_SLUG_ALIASES,
   LEGACY_PRODUCT_TYPE_SLUG_ALIASES,
   filterConfigsToDimensions,
   getAvailableFiltersForCategory,
+  extractProductValuesForDimension,
+  normalizeFilterOptionLabel,
   MASTER_BRANDS,
   resolveFullTaxonomy,
   SUPPLIED_NEW_LAUNCH_DEFINITIONS,
@@ -145,6 +150,11 @@ export class TaxonomyService implements OnModuleInit {
   private baselineChildCategories: ChildCategory[] = [];
   private baselineProductTypes: ProductTypeNode[] = [];
   private baselineDesktopNav: DesktopNavItem[] = [];
+  private baselineFilterConfigs: CategoryFilterConfiguration[] = [];
+  private tenantFilterBootstrapped = new Set<string>();
+  private deletedFilterIdsByTenant = new Map<string, Set<string>>();
+  private filterSyncVersions = new Map<string, number>();
+  private filterConfigCache = new Map<string, { version: number; data: any }>();
   private tenantIsolatedPools = new Map<
     string,
     {
@@ -353,12 +363,27 @@ export class TaxonomyService implements OnModuleInit {
       }
     }
 
-    // Seed missing CategoryFilterConfiguration defaults for Civil & Interiors without overwriting customized rows
+    // Remove obsolete pre-migration static Civil & Interiors seed filter rows so exact Phase 2 configs apply
+    const legacyCivilFilterIds = new Set([
+      'cfc-cat-1-cementType', 'cfc-cat-1-rating',
+      'cfc-cat-2-application', 'cfc-cat-2-adhesiveType', 'cfc-cat-2-finish', 'cfc-cat-2-rating',
+      'cfc-cat-3-materialType', 'cfc-cat-3-finish', 'cfc-cat-3-waterproofRating', 'cfc-cat-3-rating',
+      'cfc-cat-4-adhesiveType', 'cfc-cat-4-bondingApplication', 'cfc-cat-4-waterResistance', 'cfc-cat-4-settingTime', 'cfc-cat-4-packSize', 'cfc-cat-4-rating',
+      'cfc-cat-5-waterproofingType', 'cfc-cat-5-applicationArea', 'cfc-cat-5-materialBase', 'cfc-cat-5-packSize', 'cfc-cat-5-rating',
+      'cfc-cat-6-paintType', 'cfc-cat-6-finish', 'cfc-cat-6-applicationSurface', 'cfc-cat-6-packSize', 'cfc-cat-6-rating',
+    ]);
+    if (!this.civilMigrationReport) {
+      this.categoryFilterConfigs = this.categoryFilterConfigs.filter((c) => !legacyCivilFilterIds.has(c.id));
+    }
+
+    // Seed missing CategoryFilterConfiguration defaults cleanly without overwriting customized rows
+    const deletedSet = this.deletedFilterIdsByTenant.get(tenantId === GLOBAL_TENANT ? DEFAULT_TENANT : tenantId);
     for (const seedCfg of CATEGORY_FILTER_CONFIGS_SEED) {
+      if (deletedSet?.has(seedCfg.id)) continue;
       const match = this.categoryFilterConfigs.find(
         (c) =>
           c.id === seedCfg.id ||
-          (c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
+          (!c.productTypeId && c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
       );
       if (match) {
         match.childCategorySlug = seedCfg.childCategorySlug;
@@ -522,12 +547,27 @@ export class TaxonomyService implements OnModuleInit {
       }
     }
 
+    // Remove obsolete pre-migration static Furniture & Hardware seed filter rows so exact Phase 1 configs apply
+    const legacyFurnitureFilterIds = new Set([
+      'cfc-cat-7-finish', 'cfc-cat-7-crankType', 'cfc-cat-7-loadCapacity', 'cfc-cat-7-rating',
+      'cfc-cat-8-cabinetSize', 'cfc-cat-8-weightRating', 'cfc-cat-8-damping', 'cfc-cat-8-rating',
+      'cfc-cat-9-finish', 'cfc-cat-9-loadCapacity', 'cfc-cat-9-mountingType', 'cfc-cat-9-rating',
+      'cfc-cat-10-lockType', 'cfc-cat-10-finish', 'cfc-cat-10-rating',
+    ]);
+    if (!this.furnitureMigrationReport) {
+      this.categoryFilterConfigs = this.categoryFilterConfigs.filter(
+        (c) => !legacyFurnitureFilterIds.has(c.id)
+      );
+    }
+
     // Ensure filter configs exist for cat-7..cat-10 without overwriting customized entries
+    const deletedFurnSet = this.deletedFilterIdsByTenant.get(tenantId === GLOBAL_TENANT ? DEFAULT_TENANT : tenantId);
     for (const seedCfg of CATEGORY_FILTER_CONFIGS_SEED.filter((fc) => fc.mainCategoryId === 'mc-2')) {
+      if (deletedFurnSet?.has(seedCfg.id)) continue;
       const match = this.categoryFilterConfigs.find(
         (c) =>
           c.id === seedCfg.id ||
-          (c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
+          (!c.productTypeId && c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
       );
       if (!match) {
         this.categoryFilterConfigs.push({ ...seedCfg, tenantId, createdAt: now, updatedAt: now });
@@ -690,12 +730,27 @@ export class TaxonomyService implements OnModuleInit {
       }
     }
 
+    // Remove obsolete pre-migration static Electrical seed filter rows so exact Phase 1 configs apply
+    const legacyElectricalFilterIds = new Set([
+      'cfc-cat-11-voltageOrRating', 'cfc-cat-11-electricalType', 'cfc-cat-11-rating',
+      'cfc-cat-12-moduleSize', 'cfc-cat-12-ampVoltageRating', 'cfc-cat-12-switchType',
+      'cfc-cat-13-nominalDiameter', 'cfc-cat-13-stressClass', 'cfc-cat-13-conduitType', 'cfc-cat-13-rating',
+      'cfc-cat-14-wattage', 'cfc-cat-14-colorTemperature', 'cfc-cat-14-cutoutSize', 'cfc-cat-14-lightingType', 'cfc-cat-14-rating',
+    ]);
+    if (!this.electricalMigrationReport) {
+      this.categoryFilterConfigs = this.categoryFilterConfigs.filter(
+        (c) => !legacyElectricalFilterIds.has(c.id)
+      );
+    }
+
     // Ensure filter configs exist for cat-11..cat-14 without overwriting customized entries
+    const deletedElecSet = this.deletedFilterIdsByTenant.get(tenantId === GLOBAL_TENANT ? DEFAULT_TENANT : tenantId);
     for (const seedCfg of CATEGORY_FILTER_CONFIGS_SEED.filter((fc) => fc.mainCategoryId === 'mc-3')) {
+      if (deletedElecSet?.has(seedCfg.id)) continue;
       const match = this.categoryFilterConfigs.find(
         (c) =>
           c.id === seedCfg.id ||
-          (c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
+          (!c.productTypeId && c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
       );
       if (!match) {
         this.categoryFilterConfigs.push({ ...seedCfg, tenantId, createdAt: now, updatedAt: now });
@@ -864,12 +919,26 @@ export class TaxonomyService implements OnModuleInit {
       }
     }
 
+    // Remove obsolete pre-migration static Plumbing, Sanitary & Bath seed filter rows so exact Phase 1 configs apply
+    const legacyPlumbingFilterIds = new Set([
+      'cfc-cat-16-diameter', 'cfc-cat-16-pressureRating', 'cfc-cat-16-pipeOrFittingType', 'cfc-cat-16-rating',
+      'cfc-cat-17-finishColour', 'cfc-cat-17-installationType', 'cfc-cat-17-fixtureType', 'cfc-cat-17-rating',
+      'cfc-cat-19-capacity', 'cfc-cat-19-layers', 'cfc-cat-19-shape', 'cfc-cat-19-rating',
+    ]);
+    if (!this.plumbingMigrationReport) {
+      this.categoryFilterConfigs = this.categoryFilterConfigs.filter(
+        (c) => !legacyPlumbingFilterIds.has(c.id)
+      );
+    }
+
     // Ensure filter configs exist for cat-16, cat-17, cat-19 without overwriting customized entries
+    const deletedPlumbSet = this.deletedFilterIdsByTenant.get(tenantId === GLOBAL_TENANT ? DEFAULT_TENANT : tenantId);
     for (const seedCfg of CATEGORY_FILTER_CONFIGS_SEED.filter((fc) => fc.mainCategoryId === 'mc-4')) {
+      if (deletedPlumbSet?.has(seedCfg.id)) continue;
       const match = this.categoryFilterConfigs.find(
         (c) =>
           c.id === seedCfg.id ||
-          (c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
+          (!c.productTypeId && c.childCategoryId === seedCfg.childCategoryId && c.fieldKey === seedCfg.fieldKey)
       );
       if (!match) {
         this.categoryFilterConfigs.push({ ...seedCfg, tenantId, createdAt: now, updatedAt: now });
@@ -1049,6 +1118,22 @@ export class TaxonomyService implements OnModuleInit {
           updatedAt: now,
         });
         createdCollections += 1;
+      }
+    }
+
+    // Seed missing New Launches collection FilterConfigurations without overwriting customized rows
+    const deletedNlSet = this.deletedFilterIdsByTenant.get(tenantId === GLOBAL_TENANT ? DEFAULT_TENANT : tenantId);
+    for (const seedCfg of NEW_LAUNCH_FILTER_CONFIGS_SEED) {
+      if (deletedNlSet?.has(seedCfg.id)) continue;
+      const match = this.categoryFilterConfigs.find(
+        (c) =>
+          c.id === seedCfg.id ||
+          (!c.productTypeId &&
+            (c.newLaunchCollectionId || c.childCategoryId) === seedCfg.newLaunchCollectionId &&
+            c.fieldKey === seedCfg.fieldKey)
+      );
+      if (!match) {
+        this.categoryFilterConfigs.push({ ...seedCfg, tenantId, createdAt: now, updatedAt: now });
       }
     }
 
@@ -1249,6 +1334,17 @@ export class TaxonomyService implements OnModuleInit {
       }
     }
 
+    // Restore deleted filter tombstones BEFORE seed reconciliation so deleted filters never resurrect on restart
+    if (dbSnapshots.length > 0) {
+      for (const snap of dbSnapshots) {
+        if (snap?.tenantId && Array.isArray(snap.deletedFilterConfigIds)) {
+          for (const delId of snap.deletedFilterConfigIds) {
+            this.recordDeletedFilterTombstone(snap.tenantId, undefined, delId);
+          }
+        }
+      }
+    }
+
     this.reconcileCivilAndInteriorsTaxonomySync(GLOBAL_TENANT);
     this.reconcileFurnitureHardwareTaxonomySync(GLOBAL_TENANT);
     this.reconcileElectricalTaxonomySync(GLOBAL_TENANT);
@@ -1331,6 +1427,89 @@ export class TaxonomyService implements OnModuleInit {
     this.baselineDesktopNav = this.cloneRecord(
       this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT)
     );
+    this.baselineFilterConfigs = this.cloneRecord(
+      this.categoryFilterConfigs.filter((fc) => !fc.tenantId || fc.tenantId === GLOBAL_TENANT)
+    );
+  }
+
+  public getFilterSyncVersion(tenantId = DEFAULT_TENANT): number {
+    const cleanTenant = tenantId || DEFAULT_TENANT;
+    return this.filterSyncVersions.get(cleanTenant) || 1;
+  }
+
+  public invalidateFilterCache(
+    tenantId = DEFAULT_TENANT,
+    scope?: { childCategoryId?: string; mainCategoryId?: string; newLaunchCollectionId?: string }
+  ): number {
+    const cleanTenant = tenantId || DEFAULT_TENANT;
+    const nextVersion = (this.filterSyncVersions.get(cleanTenant) || 1) + 1;
+    this.filterSyncVersions.set(cleanTenant, nextVersion);
+
+    const targetChild = scope?.childCategoryId?.toLowerCase();
+    const targetMain = scope?.mainCategoryId?.toLowerCase();
+    const targetCol = scope?.newLaunchCollectionId?.toLowerCase();
+
+    for (const key of Array.from(this.filterConfigCache.keys())) {
+      if (!key.startsWith(`${cleanTenant}::`)) continue;
+      if (
+        !scope ||
+        (!targetChild && !targetMain && !targetCol) ||
+        key.includes('::MAIN:') ||
+        (targetChild && key.includes(targetChild)) ||
+        (targetMain && key.includes(targetMain)) ||
+        (targetCol && key.includes(targetCol))
+      ) {
+        this.filterConfigCache.delete(key);
+      }
+    }
+    return nextVersion;
+  }
+
+  private ensureTenantScopedFilterConfigs(cleanTenant: string) {
+    if (!cleanTenant || cleanTenant === DEFAULT_TENANT || cleanTenant === GLOBAL_TENANT) {
+      return;
+    }
+    if (this.tenantFilterBootstrapped.has(cleanTenant)) {
+      return;
+    }
+    const hasOwn = this.categoryFilterConfigs.some((fc) => fc.tenantId === cleanTenant);
+    if (!hasOwn) {
+      if (this.baselineFilterConfigs.length === 0) {
+        this.captureBaselineSeedSnapshot();
+      }
+      const source =
+        this.baselineFilterConfigs.length > 0
+          ? this.baselineFilterConfigs
+          : this.categoryFilterConfigs.filter((fc) => !fc.tenantId || fc.tenantId === GLOBAL_TENANT);
+      const deletedSet = this.deletedFilterIdsByTenant.get(cleanTenant);
+      for (const baseCfg of source) {
+        const scopedId = `${cleanTenant}::${baseCfg.id}`;
+        if (deletedSet?.has(baseCfg.id) || deletedSet?.has(scopedId)) continue;
+        this.categoryFilterConfigs.push({
+          ...this.cloneRecord(baseCfg),
+          id: scopedId,
+          tenantId: cleanTenant,
+        });
+      }
+    }
+    this.tenantFilterBootstrapped.add(cleanTenant);
+  }
+
+  private recordDeletedFilterTombstone(tenantId: string, scopeId?: string, id?: string) {
+    const cleanTenant = tenantId || DEFAULT_TENANT;
+    let set = this.deletedFilterIdsByTenant.get(cleanTenant);
+    if (!set) {
+      set = new Set<string>();
+      this.deletedFilterIdsByTenant.set(cleanTenant, set);
+    }
+    if (id) set.add(id);
+    if (scopeId) set.add(`scope:${scopeId.toLowerCase()}`);
+  }
+
+  private hasDeletedFilterTombstones(tenantId: string, scopeId?: string): boolean {
+    if (!scopeId) return false;
+    const cleanTenant = tenantId || DEFAULT_TENANT;
+    return Boolean(this.deletedFilterIdsByTenant.get(cleanTenant)?.has(`scope:${scopeId.toLowerCase()}`));
   }
 
   private ensureTenantIsolatedPool(cleanTenant: string) {
@@ -1661,13 +1840,16 @@ export class TaxonomyService implements OnModuleInit {
 
   public getDraftState(tenantId = DEFAULT_TENANT): TenantCatalogDraft {
     const cleanTenant = tenantId || DEFAULT_TENANT;
+    this.ensureTenantScopedFilterConfigs(cleanTenant);
     const existing = this.drafts.get(cleanTenant);
     if (existing) return existing;
 
     const pool = this.getTenantPool(cleanTenant);
     const navs = this.getPublishedDesktopNavigation(cleanTenant, true);
-    const filterCfgs = this.categoryFilterConfigs.filter(
-      (fc) => !fc.tenantId || fc.tenantId === GLOBAL_TENANT || fc.tenantId === cleanTenant
+    const filterCfgs = this.categoryFilterConfigs.filter((fc) =>
+      cleanTenant === DEFAULT_TENANT
+        ? !fc.tenantId || fc.tenantId === GLOBAL_TENANT || fc.tenantId === cleanTenant
+        : fc.tenantId === cleanTenant
     );
     const meta = this.getPublishMetadata(cleanTenant);
     const draft: TenantCatalogDraft = {
@@ -2022,9 +2204,25 @@ export class TaxonomyService implements OnModuleInit {
       childCategoryId = undefined;
       productTypeId = undefined;
     } else {
-      if (!route || !route.startsWith('/')) {
-        throw new BadRequestException('Custom navigation route must start with "/".');
+      const isInternal = route.startsWith('/');
+      let isExternal = false;
+      if (!isInternal && /^https?:\/\//i.test(route)) {
+        try {
+          new URL(route);
+          isExternal = true;
+        } catch {
+          isExternal = false;
+        }
       }
+      if (!route || (!isInternal && !isExternal)) {
+        throw new BadRequestException(
+          'Custom navigation destination must start with "/" or be a valid http(s):// URL.'
+        );
+      }
+      mainCategoryId = undefined;
+      mainCategorySlug = undefined;
+      childCategoryId = undefined;
+      productTypeId = undefined;
     }
 
     const now = new Date().toISOString();
@@ -2042,8 +2240,8 @@ export class TaxonomyService implements OnModuleInit {
       icon: payload.icon?.trim() || (itemType === 'HOME' ? 'Home' : itemType === 'DEALS' ? 'Sparkles' : itemType === 'NEW_LAUNCHES' ? 'Rocket' : MAIN_CATEGORY_NAV_ICONS[mainCategorySlug || ''] || 'Layers'),
       hasDropdown: payload.hasDropdown !== undefined ? Boolean(payload.hasDropdown) : itemType === 'MAIN_CATEGORY' || itemType === 'NEW_LAUNCHES',
       highlight: payload.highlight !== undefined ? Boolean(payload.highlight) : itemType === 'DEALS',
-      displayOrder: Number(payload.displayOrder ?? draft.desktopNavigation.length + 1),
-      isVisible: payload.isVisible !== false,
+      displayOrder: Math.max(1, Number(payload.displayOrder ?? draft.desktopNavigation.length + 1)),
+      isVisible: payload.isVisible !== undefined ? Boolean(payload.isVisible) : payload.isActive !== false,
       isActive: payload.isActive !== false,
       createdAt: now,
       updatedAt: now,
@@ -2107,7 +2305,18 @@ export class TaxonomyService implements OnModuleInit {
       }
       existing.slug = nextSlug;
     }
-    if (updates.itemType !== undefined) existing.itemType = updates.itemType;
+    if (updates.itemType !== undefined) {
+      existing.itemType = updates.itemType;
+      if (updates.itemType === 'CUSTOM_LINK') {
+        existing.mainCategoryId = undefined;
+        existing.mainCategorySlug = undefined;
+        existing.childCategoryId = undefined;
+        existing.productTypeId = undefined;
+        existing.hasDropdown = false;
+      } else if (updates.itemType === 'MAIN_CATEGORY') {
+        existing.hasDropdown = true;
+      }
+    }
     if (updates.mainCategoryId !== undefined) {
       if (updates.mainCategoryId) {
         const mc = draft.mainCategories.find(
@@ -2116,6 +2325,8 @@ export class TaxonomyService implements OnModuleInit {
         if (!mc) throw new BadRequestException(`Main Category "${updates.mainCategoryId}" not found.`);
         existing.mainCategoryId = mc.id;
         existing.mainCategorySlug = mc.slug;
+        existing.childCategoryId = undefined;
+        existing.productTypeId = undefined;
         if (existing.itemType === 'MAIN_CATEGORY') {
           existing.route = `/categories/${mc.slug}`;
         }
@@ -2160,17 +2371,36 @@ export class TaxonomyService implements OnModuleInit {
         existing.productTypeId = undefined;
       }
     }
-    if (updates.route !== undefined && existing.itemType !== 'MAIN_CATEGORY') {
+    if (updates.route !== undefined && existing.itemType === 'CUSTOM_LINK') {
       const nextRoute = String(updates.route).trim();
-      if (!nextRoute.startsWith('/')) throw new BadRequestException('Navigation route must start with "/".');
+      const isInternal = nextRoute.startsWith('/');
+      let isExternal = false;
+      if (!isInternal && /^https?:\/\//i.test(nextRoute)) {
+        try {
+          new URL(nextRoute);
+          isExternal = true;
+        } catch {
+          isExternal = false;
+        }
+      }
+      if (!nextRoute || (!isInternal && !isExternal)) {
+        throw new BadRequestException(
+          'Custom navigation destination must start with "/" or be a valid http(s):// URL.'
+        );
+      }
       existing.route = nextRoute;
     }
     if (updates.icon !== undefined) existing.icon = updates.icon.trim();
     if (updates.hasDropdown !== undefined) existing.hasDropdown = Boolean(updates.hasDropdown);
     if (updates.highlight !== undefined) existing.highlight = Boolean(updates.highlight);
-    if (updates.displayOrder !== undefined) existing.displayOrder = Number(updates.displayOrder);
+    if (updates.displayOrder !== undefined) existing.displayOrder = Math.max(1, Number(updates.displayOrder) || 1);
+    if (updates.isActive !== undefined) {
+      existing.isActive = Boolean(updates.isActive);
+      if (updates.isVisible === undefined) {
+        existing.isVisible = Boolean(updates.isActive);
+      }
+    }
     if (updates.isVisible !== undefined) existing.isVisible = Boolean(updates.isVisible);
-    if (updates.isActive !== undefined) existing.isActive = Boolean(updates.isActive);
 
     const now = new Date().toISOString();
     existing.updatedAt = now;
@@ -3126,7 +3356,8 @@ export class TaxonomyService implements OnModuleInit {
   async updateProductType(
     tenantId: string,
     id: string,
-    updates: Partial<ProductTypeNode> & { saveAsDraft?: boolean }
+    updates: Partial<ProductTypeNode> & { saveAsDraft?: boolean },
+    extraVendorProducts: any[] = []
   ): Promise<ProductTypeNode> {
     const cleanTenant = this.resolveNavTenantId(tenantId);
     const draft = this.getDraftState(cleanTenant);
@@ -3184,6 +3415,16 @@ export class TaxonomyService implements OnModuleInit {
 
     this.upsertPublishedType(cleanTenant, existing);
     await platformPersistenceService.upsert(ProductTypeModel, existing);
+    for (const p of [...dbStore.products, ...extraVendorProducts] as any[]) {
+      if (p.productTypeId === existing.id || p.subcategoryId === existing.id) {
+        p.productTypeId = existing.id;
+        p.productTypeSlug = existing.slug;
+        p.productTypeName = existing.name;
+        p.subcategoryId = existing.id;
+        p.subcategorySlug = existing.slug;
+        p.subcategory = existing.name;
+      }
+    }
     this.syncDbStoreCategories(cleanTenant);
     draft.publishedVersion += 1;
     draft.lastPublishedAt = now;
@@ -4148,21 +4389,111 @@ export class TaxonomyService implements OnModuleInit {
    * Validates Vendor product categoryAttributes against Admin-configured CategoryFieldSchema
    * and normalizes values into Customer PDP-ready specifications entries.
    */
+  public resolveNewLaunchCollectionScope(
+    tenantId: string,
+    needle?: string,
+    useDraft = false,
+    onlyActive = false
+  ): NewLaunchCollection | undefined {
+    const cleanNeedle = String(needle || '').trim().toLowerCase();
+    if (!cleanNeedle) return undefined;
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const pool = useDraft && this.newLaunchDrafts.has(cleanTenant)
+      ? this.newLaunchDrafts.get(cleanTenant)!
+      : this.newLaunchCollections;
+    return pool.find((col) => {
+      if (col.tenantId && col.tenantId !== GLOBAL_TENANT && col.tenantId !== cleanTenant) return false;
+      if (onlyActive && (col.isActive === false || col.publishStatus === 'DRAFT')) return false;
+      return (
+        col.id.toLowerCase() === cleanNeedle ||
+        (col.slug || '').toLowerCase() === cleanNeedle ||
+        (col.title || col.name || '').trim().toLowerCase() === cleanNeedle
+      );
+    });
+  }
+
+  public async attachProductToNewLaunchCollection(tenantId: string, product: any): Promise<void> {
+    const colId = String(product?.newLaunchCollectionId || '').trim();
+    if (!colId || !product?.id) return;
+    const col = this.resolveNewLaunchCollectionScope(tenantId, colId, false, false);
+    if (!col) return;
+    const cleanProdId = String(product.id).replace(/^vp-/, '');
+    const ids = new Set(col.productIds || []);
+    let changed = false;
+    for (const candidate of [String(product.id), cleanProdId]) {
+      if (candidate && !ids.has(candidate)) {
+        ids.add(candidate);
+        changed = true;
+      }
+    }
+    if (changed) {
+      col.productIds = Array.from(ids);
+      col.updatedAt = new Date().toISOString();
+      await platformPersistenceService.upsert(NewLaunchCollectionModel, col);
+    }
+  }
+
   public validateAndNormalizeCategoryAttributes(
     tenantId: string,
     childCategoryIdOrSlug: string,
     rawAttributes: Record<string, any> | undefined,
-    options: { strictRequired?: boolean } = {}
+    options: {
+      strictRequired?: boolean;
+      productTypeId?: string;
+      newLaunchCollectionId?: string;
+      existingAttributes?: Record<string, any>;
+    } = {}
   ): {
     validatedAttributes: Record<string, any>;
     specificationEntries: Record<string, string>;
     fieldErrors: Record<string, string>;
   } {
-    const schemas = this.getVendorCombinedCategoryFields(tenantId, childCategoryIdOrSlug);
+    const matchedCollection = options.newLaunchCollectionId
+      ? this.resolveNewLaunchCollectionScope(tenantId, options.newLaunchCollectionId, false, true)
+      : undefined;
+    if (options.newLaunchCollectionId && !matchedCollection) {
+      throw new BadRequestException('Selected New Launches collection is currently inactive or unavailable.');
+    }
+
+    const allFilterConfigs = this.getCategoryFilterConfigs(tenantId, {
+      childCategoryId: matchedCollection ? undefined : childCategoryIdOrSlug,
+      newLaunchCollectionId: matchedCollection?.id,
+      productTypeId: matchedCollection ? undefined : options.productTypeId,
+      useDraft: false,
+      includeInactive: true,
+    });
+    const schemas = this.getVendorCombinedCategoryFields(
+      tenantId,
+      childCategoryIdOrSlug,
+      options.productTypeId,
+      matchedCollection?.id
+    );
     const input = rawAttributes && typeof rawAttributes === 'object' ? rawAttributes : {};
+    const existingInput =
+      options.existingAttributes && typeof options.existingAttributes === 'object' ? options.existingAttributes : {};
     const validatedAttributes: Record<string, any> = {};
     const specificationEntries: Record<string, string> = {};
     const fieldErrors: Record<string, string> = {};
+    const activeSchemaKeys = new Set(schemas.map((s) => s.fieldKey.toLowerCase()));
+
+    // Reject newly submitted or modified values targeting an explicitly inactive/disabled or unconfigured filter rule
+    for (const [k, v] of Object.entries(input)) {
+      const isNonEmpty =
+        v !== undefined &&
+        v !== null &&
+        !(typeof v === 'string' && v.trim() === '') &&
+        !(Array.isArray(v) && v.length === 0);
+      if (!isNonEmpty) continue;
+      if (JSON.stringify(v) === JSON.stringify(existingInput[k])) continue;
+      const inactiveRule = allFilterConfigs.find(
+        (fc) => fc.fieldKey.toLowerCase() === k.toLowerCase() && (fc.isActive === false || fc.showInVendor === false)
+      );
+      if (inactiveRule) {
+        fieldErrors[k] = `${inactiveRule.filterName} is inactive for this ${matchedCollection ? 'collection' : 'category'} and cannot be submitted.`;
+      } else if (matchedCollection && !activeSchemaKeys.has(k.toLowerCase())) {
+        fieldErrors[k] = `Field "${k}" is not configured for New Launches collection "${matchedCollection.title}".`;
+      }
+    }
 
     for (const schema of schemas) {
       const rawVal = input[schema.fieldKey];
@@ -4203,17 +4534,35 @@ export class TaxonomyService implements OnModuleInit {
         }
       } else if (schema.fieldType === 'multiselect') {
         const list = Array.isArray(rawVal)
-          ? rawVal.map((v) => String(v).trim()).filter(Boolean)
-          : String(rawVal).split(',').map((v) => v.trim()).filter(Boolean);
-        if (options.strictRequired && schema.required && list.length === 0) {
+          ? rawVal.map((v) => normalizeFilterOptionLabel(String(v))).filter(Boolean)
+          : String(rawVal).split(',').map((v) => normalizeFilterOptionLabel(v)).filter(Boolean);
+        const deduped = Array.from(new Map(list.map((v) => [v.toLowerCase(), v])).values());
+        if (options.strictRequired && schema.required && deduped.length === 0) {
           fieldErrors[schema.fieldKey] = `Select at least one option for ${schema.label}.`;
           continue;
         }
-        validatedAttributes[schema.fieldKey] = list;
-        specificationEntries[schema.label] = list.join(', ');
+        if (
+          schema.allowCustomOption === false &&
+          Array.isArray(schema.options) &&
+          schema.options.length > 0
+        ) {
+          const allowedLower = new Set(schema.options.map((o) => o.toLowerCase()));
+          const invalidItem = deduped.find((item) => !allowedLower.has(item.toLowerCase()));
+          if (invalidItem) {
+            fieldErrors[schema.fieldKey] = `Option "${invalidItem}" is not permitted for ${schema.label}.`;
+            continue;
+          }
+        }
+        validatedAttributes[schema.fieldKey] = deduped;
+        specificationEntries[schema.label] = deduped.join(', ');
       } else if (schema.fieldType === 'dropdown') {
-        const str = String(rawVal).trim();
-        if (schema.options && schema.options.length > 0 && !schema.options.includes(str)) {
+        const str = normalizeFilterOptionLabel(String(rawVal));
+        if (
+          schema.allowCustomOption === false &&
+          schema.options &&
+          schema.options.length > 0 &&
+          !schema.options.some((o) => o.toLowerCase() === str.toLowerCase())
+        ) {
           fieldErrors[schema.fieldKey] = `Invalid option "${str}" for ${schema.label}.`;
           continue;
         }
@@ -4245,6 +4594,13 @@ export class TaxonomyService implements OnModuleInit {
       }
     }
 
+    // Preserve historical attribute entries on product edit when Admin deactivated a filter later
+    for (const [oldKey, oldVal] of Object.entries(existingInput)) {
+      if (validatedAttributes[oldKey] === undefined && !fieldErrors[oldKey]) {
+        validatedAttributes[oldKey] = oldVal;
+      }
+    }
+
     if (Object.keys(fieldErrors).length > 0) {
       const firstErr = Object.values(fieldErrors)[0];
       throw new BadRequestException({
@@ -4270,6 +4626,8 @@ export class TaxonomyService implements OnModuleInit {
     tenantId = DEFAULT_TENANT,
     options: {
       childCategoryId?: string;
+      newLaunchCollectionId?: string;
+      productTypeId?: string;
       useDraft?: boolean;
       showInCustomer?: boolean;
       showInVendor?: boolean;
@@ -4277,9 +4635,47 @@ export class TaxonomyService implements OnModuleInit {
     } = {}
   ): CategoryFilterConfiguration[] {
     const cleanTenant = this.resolveNavTenantId(tenantId);
+    this.ensureTenantScopedFilterConfigs(cleanTenant);
     const source = options.useDraft
       ? this.getDraftState(cleanTenant).categoryFilterConfigs || this.categoryFilterConfigs
       : this.categoryFilterConfigs;
+
+    const matchedCollection =
+      this.resolveNewLaunchCollectionScope(
+        cleanTenant,
+        options.newLaunchCollectionId || options.childCategoryId,
+        options.useDraft,
+        false
+      );
+
+    if (options.newLaunchCollectionId && !matchedCollection) {
+      return [];
+    }
+
+    const matchesTenant = (fc: CategoryFilterConfiguration) =>
+      cleanTenant === DEFAULT_TENANT
+        ? !fc.tenantId || fc.tenantId === GLOBAL_TENANT || fc.tenantId === cleanTenant
+        : fc.tenantId === cleanTenant;
+
+    if (matchedCollection) {
+      const colIdLow = matchedCollection.id.toLowerCase();
+      const colSlugLow = (matchedCollection.slug || '').toLowerCase();
+      const tenantScoped = [...source]
+        .filter(matchesTenant)
+        .filter((fc) => options.useDraft || fc.publishedStatus === 'PUBLISHED')
+        .filter(
+          (fc) =>
+            (fc.newLaunchCollectionId && fc.newLaunchCollectionId.toLowerCase() === colIdLow) ||
+            (fc.childCategoryId && fc.childCategoryId.toLowerCase() === colIdLow) ||
+            (fc.newLaunchCollectionSlug && fc.newLaunchCollectionSlug.toLowerCase() === colSlugLow)
+        );
+      return tenantScoped
+        .filter((fc) => !fc.productTypeId)
+        .filter((fc) => options.includeInactive || fc.isActive !== false)
+        .filter((fc) => options.showInCustomer === undefined || fc.showInCustomer === options.showInCustomer)
+        .filter((fc) => options.showInVendor === undefined || fc.showInVendor === options.showInVendor)
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    }
 
     let targetChildId = '';
     let targetChildSlug = '';
@@ -4288,7 +4684,7 @@ export class TaxonomyService implements OnModuleInit {
       const needle = LEGACY_CATEGORY_SLUG_ALIASES[rawNeedle] || rawNeedle;
       const pool = options.useDraft
         ? this.getDraftState(cleanTenant).childCategories
-        : this.childCategories;
+        : this.getTenantPool(cleanTenant).childCategories;
       const child = pool.find(
         (c) =>
           (c.id.toLowerCase() === needle || c.slug.toLowerCase() === needle || c.name.trim().toLowerCase() === needle) &&
@@ -4298,20 +4694,118 @@ export class TaxonomyService implements OnModuleInit {
       targetChildSlug = child?.slug || needle;
     }
 
-    return [...source]
-      .filter((fc) => !fc.tenantId || fc.tenantId === GLOBAL_TENANT || fc.tenantId === cleanTenant)
+    const tenantScoped = [...source]
+      .filter(matchesTenant)
       .filter((fc) => options.useDraft || fc.publishedStatus === 'PUBLISHED')
-      .filter((fc) => options.includeInactive || fc.isActive !== false)
-      .filter((fc) => options.showInCustomer === undefined || fc.showInCustomer === options.showInCustomer)
-      .filter((fc) => options.showInVendor === undefined || fc.showInVendor === options.showInVendor)
       .filter((fc) => {
         if (!options.childCategoryId) return true;
+        if (fc.newLaunchCollectionId) return false;
         return (
           fc.childCategoryId.toLowerCase() === targetChildId.toLowerCase() ||
           (fc.childCategorySlug && fc.childCategorySlug.toLowerCase() === targetChildSlug.toLowerCase())
         );
-      })
+      });
+
+    let scopedBySubLevel = tenantScoped;
+    if (options.productTypeId && options.productTypeId !== 'ALL') {
+      const ptLow = options.productTypeId.trim().toLowerCase();
+      const hasSubOverrides = tenantScoped.some((fc) => (fc.productTypeId || '').toLowerCase() === ptLow);
+      scopedBySubLevel = hasSubOverrides
+        ? tenantScoped.filter((fc) => (fc.productTypeId || '').toLowerCase() === ptLow)
+        : tenantScoped.filter((fc) => !fc.productTypeId);
+    } else if (options.childCategoryId) {
+      scopedBySubLevel = tenantScoped.filter((fc) => !fc.productTypeId);
+    }
+
+    return scopedBySubLevel
+      .filter((fc) => options.includeInactive || fc.isActive !== false)
+      .filter((fc) => options.showInCustomer === undefined || fc.showInCustomer === options.showInCustomer)
+      .filter((fc) => options.showInVendor === undefined || fc.showInVendor === options.showInVendor)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }
+
+  getRealCatalogOptionsMap(
+    tenantId = DEFAULT_TENANT,
+    childCategoryId?: string,
+    productTypeId?: string,
+    newLaunchCollectionId?: string
+  ): Record<string, string[]> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const matchedCollection = this.resolveNewLaunchCollectionScope(
+      cleanTenant,
+      newLaunchCollectionId || childCategoryId,
+      false,
+      false
+    );
+    const pool = this.getTenantPool(cleanTenant);
+    const matchedChild =
+      !matchedCollection && childCategoryId
+        ? pool.childCategories.find(
+            (c) => c.id.toLowerCase() === childCategoryId.toLowerCase() || c.slug.toLowerCase() === childCategoryId.toLowerCase()
+          )
+        : undefined;
+
+    const curatedSet = matchedCollection ? new Set(matchedCollection.productIds || []) : null;
+    const mappedTypeIds = matchedCollection
+      ? new Set((matchedCollection.categoryMappings || []).filter((m) => m.childCategoryId).map((m) => m.childCategoryId!))
+      : null;
+
+    const matchingProducts = dbStore.products.filter((p: any) => {
+      if (p.approvalStatus === 'REJECTED' || p.approvalStatus === 'PENDING_APPROVAL') return false;
+      if (p.isActive === false || p.isSuspended === true) return false;
+      if (matchedCollection) {
+        return Boolean(
+          curatedSet?.has(p.id) ||
+            p.newLaunchCollectionId === matchedCollection.id ||
+            (p.productTypeId && mappedTypeIds?.has(p.productTypeId))
+        );
+      }
+      if (!matchedChild) return true;
+      const sameChild =
+        p.childCategoryId === matchedChild.id ||
+        p.categoryId === matchedChild.id ||
+        p.childCategorySlug === matchedChild.slug ||
+        p.categorySlug === matchedChild.slug;
+      if (!sameChild) return false;
+      if (productTypeId && productTypeId !== 'ALL') {
+        const ptLow = productTypeId.toLowerCase();
+        return (
+          (p.productTypeId || '').toLowerCase() === ptLow ||
+          (p.subcategoryId || '').toLowerCase() === ptLow
+        );
+      }
+      return true;
+    });
+
+    const configs = this.getCategoryFilterConfigs(cleanTenant, {
+      childCategoryId: matchedCollection ? undefined : matchedChild?.id || childCategoryId,
+      newLaunchCollectionId: matchedCollection?.id,
+      productTypeId,
+      useDraft: true,
+      includeInactive: true,
+    });
+    const dimensions = filterConfigsToDimensions(configs.map((c) => ({ ...c, isActive: true, showInCustomer: true, publishedStatus: 'PUBLISHED' })));
+    const dimByKey = new Map(dimensions.map((d) => [d.id, d]));
+
+    const result: Record<string, string[]> = {};
+    for (const fc of configs) {
+      const dim = dimByKey.get(fc.fieldKey === 'category' ? 'subcategory' : fc.fieldKey);
+      const uniqueMap = new Map<string, string>();
+      for (const opt of fc.options || []) {
+        const norm = normalizeFilterOptionLabel(opt);
+        if (norm && !uniqueMap.has(norm.toLowerCase())) uniqueMap.set(norm.toLowerCase(), norm);
+      }
+      if (dim && fc.fieldKey !== 'category' && fc.fieldKey !== 'price') {
+        for (const prod of matchingProducts) {
+          for (const val of extractProductValuesForDimension(prod, dim)) {
+            const norm = normalizeFilterOptionLabel(val);
+            if (norm && !uniqueMap.has(norm.toLowerCase())) uniqueMap.set(norm.toLowerCase(), norm);
+          }
+        }
+      }
+      result[fc.fieldKey] = Array.from(uniqueMap.values()).sort((a, b) => a.localeCompare(b));
+    }
+    return result;
   }
 
   async createCategoryFilterConfig(
@@ -4323,87 +4817,114 @@ export class TaxonomyService implements OnModuleInit {
     draft.categoryFilterConfigs = draft.categoryFilterConfigs || this.cloneRecord(this.categoryFilterConfigs);
     draft.deletedFilterConfigIds = draft.deletedFilterConfigIds || [];
 
+    const colNeedle = String(payload.newLaunchCollectionId || payload.childCategoryId || payload.childCategorySlug || '').trim();
+    const matchedCollection = this.resolveNewLaunchCollectionScope(cleanTenant, colNeedle, true, false);
     const childNeedle = String(payload.childCategoryId || payload.childCategorySlug || '').trim().toLowerCase();
-    if (!childNeedle) throw new BadRequestException('Child Category is required for filter configuration.');
-    const child = draft.childCategories.find(
-      (c) => c.id.toLowerCase() === childNeedle || c.slug.toLowerCase() === childNeedle
-    );
-    if (!child) throw new BadRequestException(`Category "${childNeedle}" not found.`);
+    if (!childNeedle && !matchedCollection) {
+      throw new BadRequestException('Main Category or New Launches Collection is required for filter configuration.');
+    }
+    const child = !matchedCollection
+      ? draft.childCategories.find(
+          (c) => c.id.toLowerCase() === childNeedle || c.slug.toLowerCase() === childNeedle
+        )
+      : undefined;
+    if (!matchedCollection && !child) throw new BadRequestException(`Category "${childNeedle}" not found.`);
+
+    const cleanPtId =
+      !matchedCollection && payload.productTypeId && payload.productTypeId !== 'ALL' ? payload.productTypeId.trim() : undefined;
+    const pt = cleanPtId && child ? draft.productTypes.find((t) => t.id === cleanPtId && t.childCategoryId === child.id) : undefined;
+    if (cleanPtId && !pt && child) throw new BadRequestException(`Child Category "${cleanPtId}" does not belong to ${child.name}.`);
 
     const filterName = String(payload.filterName || '').trim();
     if (!filterName) throw new BadRequestException('Filter name is required.');
     const fieldKey = this.deriveFieldKey(payload.fieldKey || filterName);
     if (!fieldKey) throw new BadRequestException('Valid field key could not be derived.');
 
-    const existingForCat = draft.categoryFilterConfigs.filter((f) => f.childCategoryId === child.id);
-    if (existingForCat.some((f) => f.fieldKey.toLowerCase() === fieldKey.toLowerCase())) {
-      throw new BadRequestException(`Filter "${filterName}" (${fieldKey}) already exists for ${child.name}.`);
+    const scopeId = matchedCollection ? matchedCollection.id : child!.id;
+    const existingForScope = draft.categoryFilterConfigs.filter(
+      (f) =>
+        (matchedCollection
+          ? (f.newLaunchCollectionId || f.childCategoryId) === matchedCollection.id
+          : f.childCategoryId === child!.id && !f.newLaunchCollectionId) &&
+        (f.productTypeId || undefined) === (pt?.id || undefined)
+    );
+    if (existingForScope.some((f) => f.fieldKey.toLowerCase() === fieldKey.toLowerCase())) {
+      throw new BadRequestException(`Filter "${filterName}" (${fieldKey}) already exists for this scope.`);
     }
 
     const validFieldTypes: FilterFieldType[] = ['CHECKBOX', 'MULTISELECT', 'DROPDOWN', 'RANGE', 'TEXT', 'NUMBER', 'BOOLEAN'];
     const fieldType: FilterFieldType = validFieldTypes.includes(payload.fieldType as FilterFieldType)
       ? (payload.fieldType as FilterFieldType)
-      : 'DROPDOWN';
+      : 'MULTISELECT';
 
-    const optionsList = Array.isArray(payload.options)
-      ? payload.options.map((o) => String(o).trim()).filter(Boolean)
+    const rawOpts = Array.isArray(payload.options)
+      ? payload.options.map((o) => normalizeFilterOptionLabel(String(o))).filter(Boolean)
       : [];
-    if (
-      ['DROPDOWN', 'MULTISELECT', 'CHECKBOX'].includes(fieldType) &&
-      !payload.isStandardField &&
-      optionsList.length === 0
-    ) {
-      throw new BadRequestException('Dropdown, Multi-Select, and Checkbox filter configurations require at least one option.');
-    }
+    const optionsList = Array.from(new Map(rawOpts.map((o) => [o.toLowerCase(), o])).values());
 
-    const parentMain = draft.mainCategories.find((m) => m.id === child.mainCategoryId);
+    const tmpl = STANDARD_CHECKLIST_FILTERS.find((t) => t.fieldKey === fieldKey);
+    const parentMain = matchedCollection
+      ? draft.mainCategories.find((m) => m.id === matchedCollection.mainCategoryId)
+      : draft.mainCategories.find((m) => m.id === child!.mainCategoryId);
     const now = new Date().toISOString();
     const saveAsDraft = payload.saveAsDraft === true;
+    const isCoreField = ['category', 'subcategory', 'brand', 'price'].includes(fieldKey);
 
     const record: CategoryFilterConfiguration = {
-      id: `cfc-${child.id}-${fieldKey}-${Date.now()}`,
+      id: `cfc-${scopeId}${pt ? `-${pt.id}` : ''}-${fieldKey}-${Date.now()}`,
       tenantId: cleanTenant,
-      mainCategoryId: child.mainCategoryId,
-      mainCategoryName: parentMain?.name || 'Civil & Interiors',
-      childCategoryId: child.id,
-      childCategorySlug: child.slug,
-      childCategoryName: child.name,
-      productTypeId: payload.productTypeId || undefined,
-      productTypeSlug: payload.productTypeSlug || undefined,
+      mainCategoryId: matchedCollection?.mainCategoryId || child?.mainCategoryId || 'mc-new-launches',
+      mainCategoryName: matchedCollection?.mainCategoryName || parentMain?.name || 'New Launches',
+      childCategoryId: scopeId,
+      childCategorySlug: matchedCollection?.slug || child!.slug,
+      childCategoryName: matchedCollection?.title || child!.name,
+      newLaunchCollectionId: matchedCollection?.id,
+      newLaunchCollectionSlug: matchedCollection?.slug,
+      newLaunchCollectionTitle: matchedCollection?.title,
+      productTypeId: pt?.id || undefined,
+      productTypeSlug: pt?.slug || undefined,
       filterName,
       fieldKey,
-      fieldType,
+      fieldType: fieldKey === 'price' ? 'RANGE' : fieldType,
       options: optionsList,
-      specKeys: Array.isArray(payload.specKeys) && payload.specKeys.length > 0 ? payload.specKeys : [filterName],
-      catAttrKeys: Array.isArray(payload.catAttrKeys) && payload.catAttrKeys.length > 0 ? payload.catAttrKeys : [fieldKey],
-      isStandardField: payload.isStandardField,
-      selectionMode: payload.selectionMode === 'SINGLE' ? 'SINGLE' : 'MULTI',
+      specKeys: Array.isArray(payload.specKeys) && payload.specKeys.length > 0 ? payload.specKeys : tmpl?.specKeys || [filterName],
+      catAttrKeys: Array.isArray(payload.catAttrKeys) && payload.catAttrKeys.length > 0 ? payload.catAttrKeys : tmpl?.catAttrKeys || [fieldKey],
+      isStandardField: payload.isStandardField || tmpl?.isStandardField,
+      selectionMode: fieldType === 'RANGE' ? 'SINGLE' : payload.selectionMode === 'SINGLE' ? 'SINGLE' : 'MULTI',
       isRequired: Boolean(payload.isRequired),
-      showInVendor: payload.showInVendor !== false,
+      showInVendor: isCoreField ? false : payload.showInVendor !== false,
       showInCustomer: payload.showInCustomer !== false,
       hideEmptyOptions: payload.hideEmptyOptions !== false,
-      sortOrder: Number(payload.sortOrder ?? existingForCat.length + 1),
+      allowCustomOption: payload.allowCustomOption !== false,
+      sortOrder: Number(payload.sortOrder ?? existingForScope.length + 1),
       isActive: payload.isActive !== false,
       publishedStatus: saveAsDraft ? 'DRAFT' : 'PUBLISHED',
       createdAt: now,
       updatedAt: now,
     };
 
-    draft.categoryFilterConfigs.push(record);
-    draft.draftVersion += 1;
-    draft.lastDraftSavedAt = now;
-
     if (saveAsDraft) {
+      draft.categoryFilterConfigs.push(record);
+      draft.draftVersion += 1;
+      draft.lastDraftSavedAt = now;
       draft.hasUnpublishedChanges = true;
       await this.persistDraftSnapshot(draft);
       return this.cloneRecord(record);
     }
 
+    await platformPersistenceService.upsert(CategoryFilterConfigModel, record, 'id', { throwOnError: true });
+    draft.categoryFilterConfigs.push(record);
     this.upsertArrayById(this.categoryFilterConfigs, record);
-    await platformPersistenceService.upsert(CategoryFilterConfigModel, record);
+    draft.draftVersion += 1;
     draft.publishedVersion += 1;
+    draft.lastDraftSavedAt = now;
     draft.lastPublishedAt = now;
     await this.persistDraftSnapshot(draft);
+    this.invalidateFilterCache(cleanTenant, {
+      childCategoryId: record.childCategoryId,
+      mainCategoryId: record.mainCategoryId,
+      newLaunchCollectionId: record.newLaunchCollectionId,
+    });
     return this.cloneRecord(record);
   }
 
@@ -4415,60 +4936,245 @@ export class TaxonomyService implements OnModuleInit {
     const cleanTenant = this.resolveNavTenantId(tenantId);
     const draft = this.getDraftState(cleanTenant);
     draft.categoryFilterConfigs = draft.categoryFilterConfigs || this.cloneRecord(this.categoryFilterConfigs);
-    const existing = draft.categoryFilterConfigs.find((f) => f.id === id);
+    const existing = draft.categoryFilterConfigs.find(
+      (f) => f.id === id || (cleanTenant !== DEFAULT_TENANT && f.id === `${cleanTenant}::${id}`)
+    );
     if (!existing) throw new BadRequestException(`Filter configuration ${id} not found.`);
 
+    const updated = this.cloneRecord(existing);
     if (updates.filterName !== undefined) {
       const nextName = String(updates.filterName).trim();
       if (!nextName) throw new BadRequestException('Filter name cannot be empty.');
-      existing.filterName = nextName;
-      if (!existing.isStandardField) {
-        existing.specKeys = Array.isArray(updates.specKeys) && updates.specKeys.length > 0 ? updates.specKeys : [nextName];
+      const prevName = updated.filterName;
+      updated.filterName = nextName;
+      if (!updated.isStandardField) {
+        updated.specKeys =
+          Array.isArray(updates.specKeys) && updates.specKeys.length > 0
+            ? updates.specKeys
+            : Array.from(new Set([...(updated.specKeys || []), prevName, nextName].filter(Boolean)));
       }
     }
-    if (updates.fieldType !== undefined) existing.fieldType = updates.fieldType;
+    if (updates.fieldType !== undefined) updated.fieldType = updates.fieldType;
     if (updates.options !== undefined) {
-      existing.options = Array.isArray(updates.options)
-        ? updates.options.map((o) => String(o).trim()).filter(Boolean)
+      const rawOpts = Array.isArray(updates.options)
+        ? updates.options.map((o) => normalizeFilterOptionLabel(String(o))).filter(Boolean)
         : [];
-    }
-    if (
-      ['DROPDOWN', 'MULTISELECT', 'CHECKBOX'].includes(existing.fieldType) &&
-      !existing.isStandardField &&
-      existing.options.length === 0
-    ) {
-      throw new BadRequestException('Options list cannot be empty for selection filters.');
+      updated.options = Array.from(new Map(rawOpts.map((o) => [o.toLowerCase(), o])).values());
     }
     if (updates.selectionMode !== undefined) {
-      existing.selectionMode = updates.selectionMode === 'SINGLE' ? 'SINGLE' : 'MULTI';
+      updated.selectionMode = updates.selectionMode === 'SINGLE' ? 'SINGLE' : 'MULTI';
     }
-    if (updates.isRequired !== undefined) existing.isRequired = Boolean(updates.isRequired);
-    if (updates.showInVendor !== undefined) existing.showInVendor = Boolean(updates.showInVendor);
-    if (updates.showInCustomer !== undefined) existing.showInCustomer = Boolean(updates.showInCustomer);
-    if (updates.hideEmptyOptions !== undefined) existing.hideEmptyOptions = Boolean(updates.hideEmptyOptions);
-    if (updates.sortOrder !== undefined) existing.sortOrder = Number(updates.sortOrder);
-    if (updates.isActive !== undefined) existing.isActive = Boolean(updates.isActive);
+    if (updated.fieldType === 'RANGE') {
+      updated.selectionMode = 'SINGLE';
+    }
+    if (updates.isRequired !== undefined) updated.isRequired = Boolean(updates.isRequired);
+    if (updates.showInVendor !== undefined) updated.showInVendor = Boolean(updates.showInVendor);
+    if (updates.showInCustomer !== undefined) updated.showInCustomer = Boolean(updates.showInCustomer);
+    if (updates.hideEmptyOptions !== undefined) updated.hideEmptyOptions = Boolean(updates.hideEmptyOptions);
+    if (updates.allowCustomOption !== undefined) updated.allowCustomOption = Boolean(updates.allowCustomOption);
+    if (updates.sortOrder !== undefined) updated.sortOrder = Number(updates.sortOrder);
+    if (updates.isActive !== undefined) updated.isActive = Boolean(updates.isActive);
 
     const now = new Date().toISOString();
-    existing.updatedAt = now;
+    updated.updatedAt = now;
     const saveAsDraft = updates.saveAsDraft === true;
-    existing.publishedStatus = saveAsDraft ? 'DRAFT' : 'PUBLISHED';
-
-    draft.draftVersion += 1;
-    draft.lastDraftSavedAt = now;
+    updated.publishedStatus = saveAsDraft ? 'DRAFT' : 'PUBLISHED';
 
     if (saveAsDraft) {
+      Object.assign(existing, updated);
+      draft.draftVersion += 1;
+      draft.lastDraftSavedAt = now;
       draft.hasUnpublishedChanges = true;
       await this.persistDraftSnapshot(draft);
-      return this.cloneRecord(existing);
+      return this.cloneRecord(updated);
     }
 
-    this.upsertArrayById(this.categoryFilterConfigs, existing);
-    await platformPersistenceService.upsert(CategoryFilterConfigModel, existing);
+    await platformPersistenceService.upsert(CategoryFilterConfigModel, updated, 'id', { throwOnError: true });
+    Object.assign(existing, updated);
+    this.upsertArrayById(this.categoryFilterConfigs, updated);
+    draft.draftVersion += 1;
     draft.publishedVersion += 1;
+    draft.lastDraftSavedAt = now;
     draft.lastPublishedAt = now;
     await this.persistDraftSnapshot(draft);
-    return this.cloneRecord(existing);
+    this.invalidateFilterCache(cleanTenant, {
+      childCategoryId: updated.childCategoryId,
+      mainCategoryId: updated.mainCategoryId,
+      newLaunchCollectionId: updated.newLaunchCollectionId,
+    });
+    return this.cloneRecord(updated);
+  }
+
+  async syncCategoryFilters(
+    tenantId: string,
+    payload: {
+      childCategoryId?: string;
+      newLaunchCollectionId?: string;
+      productTypeId?: string;
+      resetOverride?: boolean;
+      filters: Array<Partial<CategoryFilterConfiguration> & { fieldKey: string; filterName: string }>;
+    }
+  ): Promise<CategoryFilterConfiguration[]> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const draft = this.getDraftState(cleanTenant);
+    draft.categoryFilterConfigs = draft.categoryFilterConfigs || this.cloneRecord(this.categoryFilterConfigs);
+
+    const matchedCollection = this.resolveNewLaunchCollectionScope(
+      cleanTenant,
+      payload.newLaunchCollectionId || payload.childCategoryId,
+      true,
+      false
+    );
+
+    const childNeedle = String(payload.childCategoryId || '').trim().toLowerCase();
+    const child = !matchedCollection
+      ? draft.childCategories.find(
+          (c) => c.id.toLowerCase() === childNeedle || c.slug.toLowerCase() === childNeedle
+        )
+      : undefined;
+    if (!matchedCollection && !child) {
+      throw new BadRequestException(`Category "${payload.newLaunchCollectionId || payload.childCategoryId}" not found.`);
+    }
+
+    const cleanPtId =
+      !matchedCollection && payload.productTypeId && payload.productTypeId !== 'ALL' ? payload.productTypeId.trim() : undefined;
+    const pt = cleanPtId && child ? draft.productTypes.find((t) => t.id === cleanPtId && t.childCategoryId === child.id) : undefined;
+    if (cleanPtId && !pt && child) throw new BadRequestException(`Child Category "${cleanPtId}" not found under ${child.name}.`);
+
+    const parentMain = matchedCollection
+      ? draft.mainCategories.find((m) => m.id === matchedCollection.mainCategoryId)
+      : draft.mainCategories.find((m) => m.id === child!.mainCategoryId);
+    const now = new Date().toISOString();
+    const scopeId = matchedCollection ? matchedCollection.id : child!.id;
+
+    const scopeMatch = (fc: CategoryFilterConfiguration) =>
+      (matchedCollection
+        ? (fc.newLaunchCollectionId || fc.childCategoryId) === matchedCollection.id
+        : fc.childCategoryId === child!.id && !fc.newLaunchCollectionId) &&
+      (fc.productTypeId || undefined) === (pt?.id || undefined);
+
+    const existingScoped = draft.categoryFilterConfigs.filter(scopeMatch);
+
+    if (pt && payload.resetOverride === true) {
+      for (const old of existingScoped) {
+        await platformPersistenceService.remove(CategoryFilterConfigModel, old.id, 'id', { throwOnError: true });
+        draft.categoryFilterConfigs = draft.categoryFilterConfigs.filter((f) => f.id !== old.id);
+        this.categoryFilterConfigs = this.categoryFilterConfigs.filter((f) => f.id !== old.id);
+      }
+      draft.draftVersion += 1;
+      draft.publishedVersion += 1;
+      draft.lastDraftSavedAt = now;
+      draft.lastPublishedAt = now;
+      await this.persistDraftSnapshot(draft);
+      this.invalidateFilterCache(cleanTenant, {
+        childCategoryId: scopeId,
+        mainCategoryId: child?.mainCategoryId,
+      });
+      return [];
+    }
+
+    const incomingList = Array.isArray(payload.filters) ? payload.filters : [];
+    const incomingKeys = new Set(incomingList.map((f) => this.deriveFieldKey(f.fieldKey || f.filterName).toLowerCase()));
+
+    // Remove deselected filters for this exact scope
+    for (const old of existingScoped) {
+      if (!incomingKeys.has(old.fieldKey.toLowerCase())) {
+        await platformPersistenceService.remove(CategoryFilterConfigModel, old.id, 'id', { throwOnError: true });
+        draft.categoryFilterConfigs = draft.categoryFilterConfigs.filter((f) => f.id !== old.id);
+        this.categoryFilterConfigs = this.categoryFilterConfigs.filter((f) => f.id !== old.id);
+        draft.deletedFilterConfigIds = draft.deletedFilterConfigIds || [];
+        if (!draft.deletedFilterConfigIds.includes(old.id)) draft.deletedFilterConfigIds.push(old.id);
+        this.recordDeletedFilterTombstone(cleanTenant, scopeId, old.id);
+      }
+    }
+
+    const savedRecords: CategoryFilterConfiguration[] = [];
+    for (let i = 0; i < incomingList.length; i++) {
+      const item = incomingList[i];
+      const fieldKey = this.deriveFieldKey(item.fieldKey || item.filterName);
+      if (!fieldKey) continue;
+      const tmpl = STANDARD_CHECKLIST_FILTERS.find((t) => t.fieldKey === fieldKey);
+      const isCoreField = ['category', 'subcategory', 'brand', 'price'].includes(fieldKey);
+      const prev = existingScoped.find((f) => f.fieldKey.toLowerCase() === fieldKey.toLowerCase());
+
+      const rawOpts = Array.isArray(item.options)
+        ? item.options.map((o) => normalizeFilterOptionLabel(String(o))).filter(Boolean)
+        : prev?.options || [];
+      const dedupOpts = Array.from(new Map(rawOpts.map((o) => [o.toLowerCase(), o])).values());
+
+      const record: CategoryFilterConfiguration = {
+        id:
+          prev?.id ||
+          item.id ||
+          (cleanTenant !== DEFAULT_TENANT
+            ? `${cleanTenant}::cfc-${scopeId}${pt ? `-${pt.id}` : ''}-${fieldKey}`
+            : `cfc-${scopeId}${pt ? `-${pt.id}` : ''}-${fieldKey}`),
+        tenantId: cleanTenant,
+        mainCategoryId: matchedCollection?.mainCategoryId || child?.mainCategoryId || 'mc-new-launches',
+        mainCategoryName: matchedCollection?.mainCategoryName || parentMain?.name || 'New Launches',
+        childCategoryId: scopeId,
+        childCategorySlug: matchedCollection?.slug || child!.slug,
+        childCategoryName: matchedCollection?.title || child!.name,
+        newLaunchCollectionId: matchedCollection?.id,
+        newLaunchCollectionSlug: matchedCollection?.slug,
+        newLaunchCollectionTitle: matchedCollection?.title,
+        productTypeId: pt?.id || undefined,
+        productTypeSlug: pt?.slug || undefined,
+        filterName: String(item.filterName || tmpl?.filterName || fieldKey).trim(),
+        fieldKey,
+        fieldType:
+          fieldKey === 'price'
+            ? 'RANGE'
+            : (item.fieldType as FilterFieldType) || prev?.fieldType || tmpl?.fieldType || 'MULTISELECT',
+        options: dedupOpts,
+        specKeys:
+          item.specKeys && item.specKeys.length > 0
+            ? item.specKeys
+            : prev?.specKeys || tmpl?.specKeys || [String(item.filterName || fieldKey)],
+        catAttrKeys:
+          item.catAttrKeys && item.catAttrKeys.length > 0
+            ? item.catAttrKeys
+            : prev?.catAttrKeys || tmpl?.catAttrKeys || [fieldKey],
+        isStandardField: item.isStandardField || prev?.isStandardField || tmpl?.isStandardField,
+        selectionMode:
+          fieldKey === 'price'
+            ? 'SINGLE'
+            : item.selectionMode === 'SINGLE'
+            ? 'SINGLE'
+            : 'MULTI',
+        isRequired: Boolean(item.isRequired ?? prev?.isRequired ?? false),
+        showInVendor: isCoreField ? false : item.showInVendor !== undefined ? Boolean(item.showInVendor) : true,
+        showInCustomer: item.showInCustomer !== undefined ? Boolean(item.showInCustomer) : true,
+        hideEmptyOptions: true,
+        allowCustomOption: item.allowCustomOption !== undefined ? Boolean(item.allowCustomOption) : prev?.allowCustomOption !== false,
+        sortOrder: Number(item.sortOrder ?? i + 1),
+        isActive: item.isActive !== undefined ? Boolean(item.isActive) : true,
+        publishedStatus: 'PUBLISHED',
+        createdAt: prev?.createdAt || now,
+        updatedAt: now,
+      };
+
+      this.upsertArrayById(draft.categoryFilterConfigs, record);
+      this.upsertArrayById(this.categoryFilterConfigs, record);
+      await platformPersistenceService.upsert(CategoryFilterConfigModel, record, 'id', { throwOnError: true });
+      this.upsertArrayById(draft.categoryFilterConfigs, record);
+      this.upsertArrayById(this.categoryFilterConfigs, record);
+      savedRecords.push(this.cloneRecord(record));
+    }
+
+    draft.draftVersion += 1;
+    draft.publishedVersion += 1;
+    draft.lastDraftSavedAt = now;
+    draft.lastPublishedAt = now;
+    draft.hasUnpublishedChanges = false;
+    await this.persistDraftSnapshot(draft);
+    this.invalidateFilterCache(cleanTenant, {
+      childCategoryId: scopeId,
+      mainCategoryId: matchedCollection?.mainCategoryId || child?.mainCategoryId,
+      newLaunchCollectionId: matchedCollection?.id,
+    });
+
+    return savedRecords.sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   async deleteCategoryFilterConfig(
@@ -4480,91 +5186,162 @@ export class TaxonomyService implements OnModuleInit {
     const draft = this.getDraftState(cleanTenant);
     draft.categoryFilterConfigs = draft.categoryFilterConfigs || this.cloneRecord(this.categoryFilterConfigs);
     draft.deletedFilterConfigIds = draft.deletedFilterConfigIds || [];
-    const idx = draft.categoryFilterConfigs.findIndex((f) => f.id === id);
+    const idx = draft.categoryFilterConfigs.findIndex(
+      (f) => f.id === id || (cleanTenant !== DEFAULT_TENANT && f.id === `${cleanTenant}::${id}`)
+    );
     if (idx < 0) throw new BadRequestException(`Filter configuration ${id} not found.`);
 
-    draft.categoryFilterConfigs.splice(idx, 1);
-    if (!draft.deletedFilterConfigIds.includes(id)) draft.deletedFilterConfigIds.push(id);
+    const target = draft.categoryFilterConfigs[idx];
     const now = new Date().toISOString();
-    draft.draftVersion += 1;
-    draft.lastDraftSavedAt = now;
 
     if (options.saveAsDraft) {
+      draft.categoryFilterConfigs.splice(idx, 1);
+      if (!draft.deletedFilterConfigIds.includes(target.id)) draft.deletedFilterConfigIds.push(target.id);
+      draft.draftVersion += 1;
+      draft.lastDraftSavedAt = now;
       draft.hasUnpublishedChanges = true;
       await this.persistDraftSnapshot(draft);
-      return { id, deleted: true };
+      return { id: target.id, deleted: true };
     }
 
-    this.categoryFilterConfigs = this.categoryFilterConfigs.filter((f) => f.id !== id);
-    await platformPersistenceService.remove(CategoryFilterConfigModel, id);
+    await platformPersistenceService.remove(CategoryFilterConfigModel, target.id, 'id', { throwOnError: true });
+    draft.categoryFilterConfigs.splice(idx, 1);
+    if (!draft.deletedFilterConfigIds.includes(target.id)) draft.deletedFilterConfigIds.push(target.id);
+    this.recordDeletedFilterTombstone(cleanTenant, target.newLaunchCollectionId || target.childCategoryId, target.id);
+    this.categoryFilterConfigs = this.categoryFilterConfigs.filter((f) => f.id !== target.id);
+    draft.draftVersion += 1;
     draft.publishedVersion += 1;
+    draft.lastDraftSavedAt = now;
     draft.lastPublishedAt = now;
     await this.persistDraftSnapshot(draft);
-    return { id, deleted: true };
+    this.invalidateFilterCache(cleanTenant, {
+      childCategoryId: target.childCategoryId,
+      mainCategoryId: target.mainCategoryId,
+      newLaunchCollectionId: target.newLaunchCollectionId,
+    });
+    return { id: target.id, deleted: true };
   }
 
   /**
-   * Merges published CategoryFieldSchema definitions with Admin-published CategoryFilterConfiguration
-   * items where showInVendor === true so Vendor forms & product validators always reflect Admin filter config.
+   * Resolves Vendor dynamic fields strictly from Admin-published CategoryFilterConfiguration
+   * combined with live catalog-backed option values (preventing obsolete static defaults from leaking).
    */
   getVendorCombinedCategoryFields(
     tenantId = DEFAULT_TENANT,
-    childCategoryIdOrSlug?: string
+    childCategoryIdOrSlug?: string,
+    productTypeId?: string,
+    newLaunchCollectionId?: string
   ): CategoryFieldSchema[] {
-    const baseSchemas = this.getTenantFieldSchemas(tenantId, childCategoryIdOrSlug, false);
-    const filterConfigs = this.getCategoryFilterConfigs(tenantId, {
-      childCategoryId: childCategoryIdOrSlug,
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const matchedCollection = newLaunchCollectionId
+      ? this.resolveNewLaunchCollectionScope(cleanTenant, newLaunchCollectionId, false, true)
+      : undefined;
+    if (newLaunchCollectionId && !matchedCollection) {
+      return [];
+    }
+
+    const rawConfigs = this.getCategoryFilterConfigs(cleanTenant, {
+      childCategoryId: matchedCollection ? undefined : childCategoryIdOrSlug,
+      newLaunchCollectionId: matchedCollection?.id,
+      productTypeId: matchedCollection ? undefined : productTypeId,
       useDraft: false,
-      showInVendor: true,
-      includeInactive: false,
+      includeInactive: true,
     });
+    const allConfigsForCat = childCategoryIdOrSlug || matchedCollection
+      ? rawConfigs
+      : rawConfigs.filter((fc) => !fc.productTypeId && !fc.newLaunchCollectionId);
+
+    const activeVendorConfigs = allConfigsForCat.filter(
+      (fc) =>
+        fc.isActive !== false &&
+        fc.showInVendor !== false &&
+        !['category', 'subcategory', 'brand', 'price', 'rating'].includes(fc.fieldKey)
+    );
 
     const mapFilterType = (ft: FilterFieldType, mode: FilterSelectionMode): CategoryFieldType => {
       if (ft === 'NUMBER' || ft === 'RANGE') return 'number';
       if (ft === 'BOOLEAN') return 'checkbox';
-      if (ft === 'MULTISELECT' || (ft === 'CHECKBOX' && mode === 'MULTI')) return 'multiselect';
-      if (ft === 'DROPDOWN' || ft === 'CHECKBOX') return 'dropdown';
-      return 'text';
+      if (ft === 'DROPDOWN' && mode === 'SINGLE') return 'dropdown';
+      if (ft === 'TEXT') return 'text';
+      return 'multiselect';
     };
 
     const byKey = new Map<string, CategoryFieldSchema>();
-    for (const bs of baseSchemas) {
-      byKey.set(`${bs.childCategoryId}::${bs.fieldKey.toLowerCase()}`, { ...bs });
-    }
 
-    for (const fc of filterConfigs) {
-      if (fc.isStandardField === 'brand' || fc.isStandardField === 'price' || fc.isStandardField === 'rating') {
-        continue;
-      }
-      const key = `${fc.childCategoryId}::${fc.fieldKey.toLowerCase()}`;
-      const existing = byKey.get(key);
-      if (existing) {
-        existing.required = fc.isRequired || existing.required;
-        existing.selectionMode = fc.selectionMode;
-        if (Array.isArray(fc.options) && fc.options.length > 0 && (!existing.options || existing.options.length === 0)) {
-          existing.options = fc.options;
+    if (allConfigsForCat.length > 0) {
+      const catalogOptsByCat = new Map<string, Record<string, string[]>>();
+      const getOpts = (catId: string, fKey: string) => {
+        if (!catalogOptsByCat.has(catId)) {
+          catalogOptsByCat.set(
+            catId,
+            this.getRealCatalogOptionsMap(cleanTenant, catId, matchedCollection ? undefined : productTypeId, matchedCollection?.id)
+          );
         }
-        existing.label = fc.filterName || existing.label;
-      } else {
+        return catalogOptsByCat.get(catId)?.[fKey] || [];
+      };
+
+      for (const fc of activeVendorConfigs) {
+        const mergedOptions = Array.from(
+          new Map(
+            [...getOpts(fc.childCategoryId, fc.fieldKey), ...(fc.options || [])]
+              .map((o) => normalizeFilterOptionLabel(o))
+              .filter(Boolean)
+              .map((o) => [o.toLowerCase(), o])
+          ).values()
+        );
+        const key = `${fc.childCategoryId}::${fc.fieldKey.toLowerCase()}`;
         byKey.set(key, {
           id: fc.id,
           tenantId: fc.tenantId,
           childCategoryId: fc.childCategoryId,
           childCategorySlug: fc.childCategorySlug || '',
+          newLaunchCollectionId: fc.newLaunchCollectionId,
+          productTypeId: fc.productTypeId,
           fieldKey: fc.fieldKey,
           label: fc.filterName,
           fieldType: mapFilterType(fc.fieldType, fc.selectionMode),
-          options: fc.options && fc.options.length > 0 ? fc.options : undefined,
+          options: mergedOptions,
           required: Boolean(fc.isRequired),
           selectionMode: fc.selectionMode,
+          allowCustomOption: fc.allowCustomOption !== false,
           showInVendor: true,
           showInCustomer: fc.showInCustomer,
-          group: 'Filter & Specification Attributes',
-          displayOrder: fc.sortOrder + 50,
+          group: matchedCollection ? `${matchedCollection.title} Attributes` : 'Category Filter Attributes',
+          displayOrder: fc.sortOrder,
           isActive: fc.isActive,
           createdAt: fc.createdAt,
           updatedAt: fc.updatedAt,
         });
+      }
+
+      if (!matchedCollection) {
+        // Include any manual Admin custom CategoryFieldSchemas (non-seed) whose key is not inactive
+        const inactiveKeys = new Set(
+          allConfigsForCat.filter((f) => f.isActive === false || f.showInVendor === false).map((f) => f.fieldKey.toLowerCase())
+        );
+        const customSchemas = this.getTenantFieldSchemas(cleanTenant, childCategoryIdOrSlug, false).filter(
+          (bs) => !bs.id.startsWith('cfs-') && !inactiveKeys.has(bs.fieldKey.toLowerCase())
+        );
+        for (const cs of customSchemas) {
+          const key = `${cs.childCategoryId}::${cs.fieldKey.toLowerCase()}`;
+          if (!byKey.has(key)) byKey.set(key, { ...cs });
+        }
+      }
+    } else if (!matchedCollection) {
+      const pool = this.getTenantPool(cleanTenant);
+      const needleLow = (childCategoryIdOrSlug || '').trim().toLowerCase();
+      const resolvedChild = needleLow
+        ? pool.childCategories.find((c) => c.id.toLowerCase() === needleLow || c.slug.toLowerCase() === needleLow)
+        : undefined;
+      const scopeId = resolvedChild?.id || childCategoryIdOrSlug;
+      const isSeedManaged =
+        scopeId ? CATEGORY_FILTER_CONFIGS_SEED.some((s) => s.childCategoryId === scopeId) : false;
+      const hasTombstones = scopeId ? this.hasDeletedFilterTombstones(cleanTenant, scopeId) : false;
+      if (!isSeedManaged && !hasTombstones) {
+        const baseSchemas = this.getTenantFieldSchemas(cleanTenant, childCategoryIdOrSlug, false);
+        for (const bs of baseSchemas) {
+          byKey.set(`${bs.childCategoryId}::${bs.fieldKey.toLowerCase()}`, { ...bs });
+        }
       }
     }
 
@@ -4572,41 +5349,160 @@ export class TaxonomyService implements OnModuleInit {
   }
 
   /**
-   * Computes dynamic Customer PLP filters from Admin-published CategoryFilterConfiguration
-   * paired with live approved/published product counts.
+   * Computes dynamic Customer PLP filters strictly from Admin-published CategoryFilterConfiguration
+   * paired with live approved/published product counts (supporting Main Categories, Child Categories,
+   * Product Type overrides, and New Launches Collections).
    */
   getCustomerAvailableFilters(
     tenantId = DEFAULT_TENANT,
     categorySlugOrId: string,
     matchingProducts: any[],
     childCategories: any[] = [],
-    mainChildCategories: any[] = []
+    mainChildCategories: any[] = [],
+    productTypeId?: string,
+    newLaunchCollectionId?: string,
+    activeFilters?: any
   ) {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    const matchedCollection = this.resolveNewLaunchCollectionScope(
+      cleanTenant,
+      newLaunchCollectionId || categorySlugOrId,
+      false,
+      true
+    );
+
+    if (matchedCollection) {
+      const allColConfigs = this.getCategoryFilterConfigs(cleanTenant, {
+        newLaunchCollectionId: matchedCollection.id,
+        useDraft: false,
+        includeInactive: true,
+      });
+      const configs = allColConfigs.filter((c) => c.isActive !== false && c.showInCustomer !== false);
+      const dimensions = filterConfigsToDimensions(configs);
+      const computedFilters = getAvailableFiltersForCategory(
+        matchedCollection.slug,
+        matchingProducts,
+        [],
+        [],
+        dimensions,
+        activeFilters,
+        true
+      );
+      return {
+        filterConfigs: configs,
+        availableFilters: computedFilters,
+        hasFilterConfiguration: true,
+      };
+    }
+
     const rawNeedle = (categorySlugOrId || '').trim().toLowerCase();
     const canonicalSlug = LEGACY_CATEGORY_SLUG_ALIASES[rawNeedle] || rawNeedle;
-    const pool = this.getTenantPool(tenantId);
+    const pool = this.getTenantPool(cleanTenant);
     const matchedChild = pool.childCategories.find(
       (c) => c.id.toLowerCase() === rawNeedle || c.slug.toLowerCase() === canonicalSlug
     );
-    const configs = matchedChild
-      ? this.getCategoryFilterConfigs(tenantId, {
-          childCategoryId: matchedChild.id,
-          useDraft: false,
-          showInCustomer: true,
-          includeInactive: false,
-        })
-      : [];
-    const dimensions = filterConfigsToDimensions(configs);
+    if (matchedChild) {
+      const allCatConfigs = this.getCategoryFilterConfigs(cleanTenant, {
+        childCategoryId: matchedChild.id,
+        productTypeId,
+        useDraft: false,
+        includeInactive: true,
+      });
+      const hasManagedConfig =
+        allCatConfigs.length > 0 ||
+        this.hasDeletedFilterTombstones(cleanTenant, matchedChild.id) ||
+        CATEGORY_FILTER_CONFIGS_SEED.some((s) => s.childCategoryId === matchedChild.id);
+      const configs = allCatConfigs.filter((c) => c.isActive !== false && c.showInCustomer !== false);
+      const dimensions = filterConfigsToDimensions(configs);
+      const computedFilters = getAvailableFiltersForCategory(
+        matchedChild.slug,
+        matchingProducts,
+        childCategories,
+        mainChildCategories,
+        dimensions,
+        activeFilters,
+        hasManagedConfig
+      );
+      return {
+        filterConfigs: configs,
+        availableFilters: computedFilters,
+        hasFilterConfiguration: hasManagedConfig,
+      };
+    }
+
+    const matchedMain = pool.mainCategories.find(
+      (m) => m.id.toLowerCase() === rawNeedle || m.slug.toLowerCase() === canonicalSlug
+    );
+    if (matchedMain) {
+      const activeChildren = pool.childCategories.filter(
+        (c) => c.mainCategoryId === matchedMain.id && c.isActive !== false
+      );
+      const activeChildIds = new Set(activeChildren.map((c) => c.id));
+      const allMainConfigs = this.getCategoryFilterConfigs(cleanTenant, {
+        useDraft: false,
+        includeInactive: false,
+        showInCustomer: true,
+      }).filter((fc) => !fc.newLaunchCollectionId && !fc.productTypeId && activeChildIds.has(fc.childCategoryId));
+
+      const mergedByKey = new Map<string, CategoryFilterConfiguration>();
+      for (const fc of allMainConfigs) {
+        const key = fc.fieldKey.toLowerCase();
+        const existing = mergedByKey.get(key);
+        if (!existing) {
+          mergedByKey.set(key, {
+            ...this.cloneRecord(fc),
+            specKeys: [...(fc.specKeys || [fc.filterName])],
+            catAttrKeys: [...(fc.catAttrKeys || [fc.fieldKey])],
+            options: [...(fc.options || [])],
+          });
+        } else {
+          existing.specKeys = Array.from(new Set([...(existing.specKeys || []), ...(fc.specKeys || [fc.filterName])]));
+          existing.catAttrKeys = Array.from(new Set([...(existing.catAttrKeys || []), ...(fc.catAttrKeys || [fc.fieldKey])]));
+          existing.options = Array.from(new Set([...(existing.options || []), ...(fc.options || [])]));
+          if ((fc.sortOrder || 999) < (existing.sortOrder || 999)) {
+            existing.sortOrder = fc.sortOrder;
+          }
+        }
+      }
+
+      const configs = Array.from(mergedByKey.values()).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      const hasManagedMain =
+        configs.length > 0 ||
+        activeChildren.some(
+          (c) =>
+            this.hasDeletedFilterTombstones(cleanTenant, c.id) ||
+            CATEGORY_FILTER_CONFIGS_SEED.some((s) => s.childCategoryId === c.id)
+        );
+      const dimensions = filterConfigsToDimensions(configs);
+      const computedFilters = getAvailableFiltersForCategory(
+        matchedMain.slug,
+        matchingProducts,
+        childCategories,
+        mainChildCategories.length > 0 ? mainChildCategories : activeChildren,
+        dimensions,
+        activeFilters,
+        hasManagedMain
+      );
+      return {
+        filterConfigs: configs,
+        availableFilters: computedFilters,
+        hasFilterConfiguration: hasManagedMain,
+      };
+    }
+
     const computedFilters = getAvailableFiltersForCategory(
-      matchedChild?.slug || canonicalSlug,
+      canonicalSlug,
       matchingProducts,
       childCategories,
       mainChildCategories,
-      dimensions
+      undefined,
+      activeFilters,
+      false
     );
     return {
-      filterConfigs: configs,
+      filterConfigs: [],
       availableFilters: computedFilters,
+      hasFilterConfiguration: false,
     };
   }
 }

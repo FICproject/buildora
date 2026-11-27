@@ -912,6 +912,7 @@ export const vendorApi = {
     mainCategories: any[];
     childCategories: any[];
     productTypes: any[];
+    newLaunchCollections?: any[];
     desktopNavigation?: any[];
     fieldSchemas: CategoryFieldSchema[];
     warehouses: any[];
@@ -930,6 +931,7 @@ export const vendorApi = {
       mainCategories: [],
       childCategories: [],
       productTypes: [],
+      newLaunchCollections: [],
       desktopNavigation: [],
       fieldSchemas: [],
       warehouses: [],
@@ -937,9 +939,17 @@ export const vendorApi = {
     });
   },
 
-  async getCategoryFields(childCategoryId: string): Promise<CategoryFieldSchema[]> {
+  async getCategoryFields(
+    childCategoryId: string,
+    productTypeId?: string,
+    newLaunchCollectionId?: string
+  ): Promise<CategoryFieldSchema[]> {
+    const q = new URLSearchParams();
+    if (productTypeId) q.set('productTypeId', productTypeId);
+    if (newLaunchCollectionId) q.set('newLaunchCollectionId', newLaunchCollectionId);
+    const qs = q.toString() ? `?${q.toString()}` : '';
     return request<CategoryFieldSchema[]>(
-      `/vendor/taxonomy/fields/${encodeURIComponent(childCategoryId)}`,
+      `/vendor/taxonomy/fields/${encodeURIComponent(childCategoryId)}${qs}`,
       {},
       getDefaultFieldSchemasForCategory(childCategoryId)
     );

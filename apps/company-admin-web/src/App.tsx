@@ -45,16 +45,18 @@ export function App() {
           <Route path="products/approved" element={<CatalogProductsPage initialSection="PRODUCTS" initialStatusFilter="APPROVED" />} />
           <Route path="products/rejected" element={<CatalogProductsPage initialSection="PRODUCTS" initialStatusFilter="REJECTED" />} />
           <Route path="products/navigation" element={<CatalogProductsPage initialSection="NAVIGATION" />} />
-          <Route path="products/main-categories" element={<CatalogProductsPage initialSection="MAIN_CATEGORIES" />} />
-          <Route path="products/child-categories" element={<CatalogProductsPage initialSection="CHILD_CATEGORIES" />} />
+          <Route path="products/categories" element={<CatalogProductsPage initialSection="CATEGORY_MANAGEMENT" />} />
+          <Route path="products/main-categories" element={<Navigate to="/products/categories" replace />} />
+          <Route path="products/child-categories" element={<Navigate to="/products/categories" replace />} />
           <Route path="products/product-types" element={<CatalogProductsPage initialSection="PRODUCT_TYPES" />} />
           <Route path="products/filters" element={<CatalogProductsPage initialSection="FILTERS" />} />
           <Route path="products/new-launches" element={<CatalogProductsPage initialSection="NEW_LAUNCHES" />} />
           {/* Legacy /catalog/* route redirects */}
           <Route path="catalog" element={<Navigate to="/products" replace />} />
           <Route path="catalog/navigation" element={<Navigate to="/products/navigation" replace />} />
-          <Route path="catalog/main-categories" element={<Navigate to="/products/main-categories" replace />} />
-          <Route path="catalog/child-categories" element={<Navigate to="/products/child-categories" replace />} />
+          <Route path="catalog/categories" element={<Navigate to="/products/categories" replace />} />
+          <Route path="catalog/main-categories" element={<Navigate to="/products/categories" replace />} />
+          <Route path="catalog/child-categories" element={<Navigate to="/products/categories" replace />} />
           <Route path="catalog/product-types" element={<Navigate to="/products/product-types" replace />} />
           <Route path="catalog/filters" element={<Navigate to="/products/filters" replace />} />
           <Route path="catalog/new-launches" element={<Navigate to="/products/new-launches" replace />} />

@@ -105,12 +105,20 @@ export const CategoryPage: React.FC = () => {
   const [categoryUnavailable, setCategoryUnavailable] = useState(false);
   const [productList, setProductList] = useState<Product[]>([]);
   const [dynamicFilterDimensions, setDynamicFilterDimensions] = useState<CategoryFilterDimension[]>([]);
+  const [hasConfiguredFilters, setHasConfiguredFilters] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
   const isMainCategoryPage = Boolean(
     category?.level === 'MAIN' ||
       (Array.isArray(category?.childCategories) && !category?.mainCategoryId)
   );
+
+  const subQueryParam = useMemo(() => {
+    if (subcategorySlug) return subcategorySlug;
+    const raw = searchParams.get('sub') || '';
+    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    return parts.length === 1 ? parts[0] : undefined;
+  }, [subcategorySlug, searchParams]);
 
   const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() =>
     parseCategoryPageUrlFilters(searchParams, subcategorySlug)
@@ -122,8 +130,8 @@ export const CategoryPage: React.FC = () => {
     const targetSlug = effectiveCategorySlug || slug;
     if (!targetSlug) return;
 
-    const loadCategoryData = async () => {
-      setLoadingProducts(true);
+    const loadCategoryData = async (silent = false) => {
+      if (!silent) setLoadingProducts(true);
       try {
         const cat = await api.getCategoryBySlug(targetSlug);
         if (!active) return;
@@ -133,6 +141,7 @@ export const CategoryPage: React.FC = () => {
           setCategoryUnavailable(true);
           setProductList([]);
           setDynamicFilterDimensions([]);
+          setHasConfiguredFilters(false);
           return;
         }
 
@@ -149,6 +158,7 @@ export const CategoryPage: React.FC = () => {
             setCategoryUnavailable(true);
             setProductList([]);
             setDynamicFilterDimensions([]);
+            setHasConfiguredFilters(false);
             return;
           }
         }
@@ -156,7 +166,7 @@ export const CategoryPage: React.FC = () => {
         const isMain = Boolean(cat.level === 'MAIN' || (Array.isArray(cat.childCategories) && !cat.mainCategoryId));
         const [prods, filtersRes] = await Promise.all([
           api.getProducts(isMain ? { mainCategory: targetSlug } : { category: targetSlug }),
-          api.getFilters(targetSlug, subcategorySlug),
+          api.getFilters(targetSlug, subQueryParam),
         ]);
         if (!active) return;
         setCategory(cat);
@@ -165,19 +175,42 @@ export const CategoryPage: React.FC = () => {
         const cfgs: CategoryFilterConfiguration[] = Array.isArray(filtersRes?.filterConfigs)
           ? filtersRes.filterConfigs
           : [];
-        setDynamicFilterDimensions(filterConfigsToDimensions(cfgs));
+        const nextDims = filterConfigsToDimensions(cfgs);
+        setDynamicFilterDimensions(nextDims);
+        setHasConfiguredFilters(
+          typeof filtersRes?.hasFilterConfiguration === 'boolean'
+            ? filtersRes.hasFilterConfiguration
+            : !isMain && cfgs.length > 0
+        );
+        if (silent) {
+          const activeDimIds = new Set(nextDims.map((d) => d.id.toLowerCase()));
+          setActiveFilters((prev) => {
+            const nextSpecs: Record<string, string[]> = {};
+            let changed = false;
+            for (const [k, vals] of Object.entries(prev.specifications || {})) {
+              if (activeDimIds.has(k.toLowerCase())) {
+                nextSpecs[k] = vals;
+              } else {
+                changed = true;
+              }
+            }
+            const nextBrands = activeDimIds.has('brand') || !cfgs.length ? prev.brands : [];
+            if (nextBrands.length !== prev.brands.length) changed = true;
+            return changed ? { ...prev, brands: nextBrands, specifications: nextSpecs } : prev;
+          });
+        }
       } finally {
-        if (active) setLoadingProducts(false);
+        if (active && !silent) setLoadingProducts(false);
       }
     };
 
-    void loadCategoryData();
+    void loadCategoryData(false);
 
     const onRealtime = () => {
-      void loadCategoryData();
+      void loadCategoryData(true);
     };
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void loadCategoryData();
+      if (document.visibilityState === 'visible') void loadCategoryData(true);
     };
     window.addEventListener('buildora:realtime:catalog', onRealtime);
     window.addEventListener('buildora:realtime:config', onRealtime);
@@ -190,7 +223,7 @@ export const CategoryPage: React.FC = () => {
       window.removeEventListener('focus', onRealtime);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [slug, effectiveCategorySlug, subcategorySlug]);
+  }, [slug, effectiveCategorySlug, subcategorySlug, subQueryParam]);
 
   // Synchronize URL changes (initial load + browser Back/Forward navigation) into filter state
   useEffect(() => {
@@ -290,16 +323,18 @@ export const CategoryPage: React.FC = () => {
     );
   }, [isMainCategoryPage, mainChildCategories, productList, category]);
 
-  // Compute Child Category / Subcategory + Admin-configured dynamic specification filters strictly scoped to current view
+  // Compute Child Category + Admin-configured dynamic specification filters with live faceted option counts
   const availableFilters = useMemo(() => {
     return getAvailableFiltersForCategory(
       category?.slug || '',
       allCategoryProducts,
       category?.subcategories || [],
       mainChildCategories,
-      dynamicFilterDimensions
+      dynamicFilterDimensions,
+      activeFilters,
+      hasConfiguredFilters
     );
-  }, [category, mainChildCategories, allCategoryProducts, dynamicFilterDimensions]);
+  }, [category, mainChildCategories, allCategoryProducts, dynamicFilterDimensions, activeFilters, hasConfiguredFilters]);
 
   // Apply active filters and sorting
   const filteredProducts = useMemo(() => {
@@ -328,7 +363,7 @@ export const CategoryPage: React.FC = () => {
     }
 
     return result;
-  }, [allCategoryProducts, activeFilters, category]);
+  }, [allCategoryProducts, activeFilters, category, dynamicFilterDimensions]);
 
   // Filter change handlers
   const handleResetFilters = () => {

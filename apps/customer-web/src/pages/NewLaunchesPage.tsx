@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight,
@@ -13,9 +13,10 @@ import {
 import {
   getAvailableFiltersForCategory,
   applyCategoryFilters,
+  filterConfigsToDimensions,
   ActiveCategoryFilters,
 } from '@buildora/constants';
-import { Product } from '@buildora/types';
+import { CategoryFilterConfiguration, Product } from '@buildora/types';
 import { api } from '../services/api';
 import { ProductCard } from '../components/common/ProductCard';
 import {
@@ -26,10 +27,8 @@ import {
 
 const NEW_LAUNCHES_SORT_OPTIONS: SortOption[] = [
   { value: 'relevance', label: 'Relevance' },
-  { value: 'latest', label: 'Latest Arrivals (Newest)' },
   { value: 'price-low', label: 'Price: Low to High' },
   { value: 'price-high', label: 'Price: High to Low' },
-  { value: 'discount', label: 'Discount: High to Low' },
 ];
 
 const PAGE_SIZE = 24;
@@ -48,11 +47,13 @@ export const NewLaunchesPage: React.FC = () => {
   const [activeCollection, setActiveCollection] = useState<any | null>(null);
   const [shortcuts, setShortcuts] = useState<any[]>([]);
   const [activeShortcut, setActiveShortcut] = useState<any | null>(null);
+  const [collectionFilterConfigs, setCollectionFilterConfigs] = useState<CategoryFilterConfiguration[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchText, setSearchText] = useState(() => searchParams.get('q') || '');
   const [currentPage, setCurrentPage] = useState(1);
+  const prevCollectionSlugRef = useRef<string | undefined>(collectionSlug);
 
   const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() => {
     const brandParam = searchParams.get('brand');
@@ -61,12 +62,21 @@ export const NewLaunchesPage: React.FC = () => {
     const maxP = searchParams.get('maxPrice');
     const typeParam = searchParams.get('type');
     const sizeParam = searchParams.get('size');
+    const specsParam = searchParams.get('specs');
     const inStock = searchParams.get('inStock') === 'true';
     const asap = searchParams.get('asap') === 'true';
 
-    const specs: Record<string, string[]> = {};
-    if (typeParam) specs['type'] = typeParam.split(',').map((s) => s.trim()).filter(Boolean);
-    if (sizeParam) specs['size'] = sizeParam.split(',').map((s) => s.trim()).filter(Boolean);
+    let specs: Record<string, string[]> = {};
+    if (specsParam) {
+      try {
+        const parsed = JSON.parse(specsParam);
+        if (parsed && typeof parsed === 'object') specs = parsed;
+      } catch {
+        specs = {};
+      }
+    }
+    if (typeParam && !specs['type']) specs['type'] = typeParam.split(',').map((s) => s.trim()).filter(Boolean);
+    if (sizeParam && !specs['size']) specs['size'] = sizeParam.split(',').map((s) => s.trim()).filter(Boolean);
 
     return {
       brands: brandParam ? brandParam.split(',').map((b) => b.trim()).filter(Boolean) : [],
@@ -76,12 +86,29 @@ export const NewLaunchesPage: React.FC = () => {
       minPrice: minP ? Number(minP) : undefined,
       maxPrice: maxP ? Number(maxP) : undefined,
       specifications: specs,
-      sortBy: sortParam || 'latest',
+      sortBy: sortParam || 'relevance',
     };
   });
 
-  const loadNewLaunchesData = useCallback(async () => {
-    setIsLoading(true);
+  useEffect(() => {
+    if (prevCollectionSlugRef.current !== collectionSlug) {
+      prevCollectionSlugRef.current = collectionSlug;
+      setActiveFilters({
+        brands: [],
+        subcategories: [],
+        inStockOnly: false,
+        asapOnly: false,
+        minPrice: undefined,
+        maxPrice: undefined,
+        specifications: {},
+        sortBy: 'relevance',
+      });
+      setCurrentPage(1);
+    }
+  }, [collectionSlug]);
+
+  const loadNewLaunchesData = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setErrorMsg(null);
     try {
       if (collectionSlug) {
@@ -93,6 +120,7 @@ export const NewLaunchesPage: React.FC = () => {
           setActiveCollection(null);
           setCollections(res.collections || []);
           setShortcuts([]);
+          setCollectionFilterConfigs([]);
           setProducts([]);
           setErrorMsg('This New Launches promotional collection is unavailable or unpublished.');
         } else {
@@ -100,7 +128,25 @@ export const NewLaunchesPage: React.FC = () => {
           setActiveCollection(res.collection);
           setShortcuts(res.shortcuts || []);
           setActiveShortcut(res.activeShortcut || null);
+          const nextCfgs = Array.isArray(res.filterConfigs) ? res.filterConfigs : [];
+          setCollectionFilterConfigs(nextCfgs);
           setProducts(res.products || []);
+          if (silent) {
+            const activeKeys = new Set(
+              filterConfigsToDimensions(nextCfgs).map((d) => d.id.toLowerCase())
+            );
+            setActiveFilters((prev) => {
+              const nextSpecs: Record<string, string[]> = {};
+              let changed = false;
+              for (const [k, vals] of Object.entries(prev.specifications || {})) {
+                if (activeKeys.has(k.toLowerCase())) nextSpecs[k] = vals;
+                else changed = true;
+              }
+              const nextBrands = activeKeys.has('brand') || !nextCfgs.length ? prev.brands : [];
+              if (nextBrands.length !== prev.brands.length) changed = true;
+              return changed ? { ...prev, brands: nextBrands, specifications: nextSpecs } : prev;
+            });
+          }
         }
       } else {
         const res = await api.getNewLaunches({
@@ -111,26 +157,27 @@ export const NewLaunchesPage: React.FC = () => {
         setActiveCollection(null);
         setShortcuts([]);
         setActiveShortcut(null);
+        setCollectionFilterConfigs([]);
         setProducts(res.products || []);
       }
     } catch {
       setErrorMsg('Unable to load New Launches collections at the moment.');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [collectionSlug, selectedChildQuery, searchText]);
 
   useEffect(() => {
     setCurrentPage(1);
-    void loadNewLaunchesData();
+    void loadNewLaunchesData(false);
   }, [loadNewLaunchesData]);
 
   useEffect(() => {
     const onRealtime = () => {
-      void loadNewLaunchesData();
+      void loadNewLaunchesData(true);
     };
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void loadNewLaunchesData();
+      if (document.visibilityState === 'visible') void loadNewLaunchesData(true);
     };
     window.addEventListener('buildora:realtime:catalog', onRealtime);
     window.addEventListener('buildora:realtime:config', onRealtime);
@@ -151,17 +198,17 @@ export const NewLaunchesPage: React.FC = () => {
       if (nextChild && !childSlug) params.set('child', nextChild);
       if (nextSearch.trim()) params.set('q', nextSearch.trim());
       if (next.brands.length > 0) params.set('brand', next.brands.join(','));
-      if (next.specifications?.['type']?.length > 0) {
-        params.set('type', next.specifications['type'].join(','));
-      }
-      if (next.specifications?.['size']?.length > 0) {
-        params.set('size', next.specifications['size'].join(','));
+      const nonEmptySpecs = Object.fromEntries(
+        Object.entries(next.specifications || {}).filter(([, vals]) => Array.isArray(vals) && vals.length > 0)
+      );
+      if (Object.keys(nonEmptySpecs).length > 0) {
+        params.set('specs', JSON.stringify(nonEmptySpecs));
       }
       if (next.minPrice !== undefined) params.set('minPrice', String(next.minPrice));
       if (next.maxPrice !== undefined) params.set('maxPrice', String(next.maxPrice));
       if (next.inStockOnly) params.set('inStock', 'true');
       if (next.asapOnly) params.set('asap', 'true');
-      if (next.sortBy && next.sortBy !== 'latest') params.set('sort', next.sortBy);
+      if (next.sortBy && next.sortBy !== 'relevance') params.set('sort', next.sortBy);
       setSearchParams(params, { replace: true });
     },
     [selectedChildQuery, childSlug, searchText, setSearchParams]
@@ -173,24 +220,44 @@ export const NewLaunchesPage: React.FC = () => {
     syncFilterUrl(next);
   };
 
+  const searchScopedProducts = useMemo(() => {
+    if (!searchText.trim()) return products;
+    const q = searchText.trim().toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name?.toLowerCase().includes(q) ||
+        p.brand?.toLowerCase().includes(q) ||
+        p.sku?.toLowerCase().includes(q) ||
+        p.childCategoryName?.toLowerCase().includes(q) ||
+        p.productTypeName?.toLowerCase().includes(q)
+    );
+  }, [products, searchText]);
+
+  const dynamicFilterDimensions = useMemo(
+    () =>
+      collectionFilterConfigs.length > 0 ? filterConfigsToDimensions(collectionFilterConfigs) : undefined,
+    [collectionFilterConfigs]
+  );
+
   const availableFilters = useMemo(() => {
-    return getAvailableFiltersForCategory('new-launches', products);
-  }, [products]);
+    const scopeSlug = activeCollection?.slug || collectionSlug || 'new-launches';
+    const strictCol = Boolean(collectionSlug && collectionFilterConfigs.length > 0);
+    return getAvailableFiltersForCategory(
+      scopeSlug,
+      searchScopedProducts,
+      [],
+      [],
+      dynamicFilterDimensions,
+      activeFilters,
+      strictCol
+    );
+  }, [activeCollection?.slug, collectionSlug, collectionFilterConfigs.length, searchScopedProducts, dynamicFilterDimensions, activeFilters]);
 
   const filteredProducts = useMemo(() => {
-    let result = applyCategoryFilters(products, activeFilters, 'new-launches');
-    if (searchText.trim()) {
-      const q = searchText.trim().toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.name?.toLowerCase().includes(q) ||
-          p.brand?.toLowerCase().includes(q) ||
-          p.sku?.toLowerCase().includes(q) ||
-          p.childCategoryName?.toLowerCase().includes(q)
-      );
-    }
+    const scopeSlug = activeCollection?.slug || collectionSlug || 'new-launches';
+    let result = applyCategoryFilters(searchScopedProducts, activeFilters, scopeSlug, dynamicFilterDimensions);
 
-    const sort = activeFilters.sortBy || 'latest';
+    const sort = activeFilters.sortBy || 'relevance';
     if (sort === 'price-low' || sort === 'price_asc') {
       result = [...result].sort((a, b) => a.price - b.price);
     } else if (sort === 'price-high' || sort === 'price_desc') {
@@ -213,7 +280,7 @@ export const NewLaunchesPage: React.FC = () => {
       });
     }
     return result;
-  }, [products, activeFilters, searchText]);
+  }, [searchScopedProducts, activeFilters, activeCollection?.slug, collectionSlug, dynamicFilterDimensions]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice(
@@ -230,7 +297,7 @@ export const NewLaunchesPage: React.FC = () => {
       minPrice: undefined,
       maxPrice: undefined,
       specifications: {},
-      sortBy: 'latest',
+      sortBy: 'relevance',
     };
     setSearchText('');
     setActiveFilters(empty);
