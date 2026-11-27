@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Trash2,
   Edit3,
-  Send,
   Link2,
   ExternalLink,
   Search,
@@ -29,7 +28,6 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
   const pushToast = useToastStore((s) => s.push);
   const [loading, setLoading] = useState(true);
   const [collections, setCollections] = useState<any[]>([]);
-  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
   const [migrationReport, setMigrationReport] = useState<any>(null);
   const [permanentTaxonomy, setPermanentTaxonomy] = useState<{
     mainCategories: any[];
@@ -38,7 +36,6 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
   }>({ mainCategories: [], childCategories: [], productTypes: [] });
   const [approvedProducts, setApprovedProducts] = useState<any[]>([]);
 
-  const [workInDraftMode, setWorkInDraftMode] = useState(true);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
@@ -77,7 +74,6 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
       const data = await adminApi.getNewLaunchesAdmin();
       const cols = Array.isArray(data?.collections) ? data.collections : [];
       setCollections(cols);
-      setHasUnpublishedChanges(Boolean(data?.hasUnpublishedChanges));
       setMigrationReport(data?.migrationReport || null);
       setPermanentTaxonomy(
         data?.permanentTaxonomy || { mainCategories: [], childCategories: [], productTypes: [] }
@@ -148,13 +144,13 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
     ids.splice(toIdx, 0, draggedId);
     setDraggedId(null);
     try {
-      await adminApi.reorderNewLaunchCollections(ids, workInDraftMode);
+      await adminApi.reorderNewLaunchCollections(ids, false);
       pushToast({
-        title: workInDraftMode ? 'Order Saved in Draft' : 'Display Order Published',
-        message: 'Promotional collection order updated.',
+        title: 'Saved & Synchronized',
+        message: 'Changes saved and synchronized successfully.',
       });
       await loadState();
-      if (!workInDraftMode) await onRefreshParentTaxonomy();
+      await onRefreshParentTaxonomy();
     } catch (err: any) {
       pushToast({ title: 'Reorder Failed', message: err.message, variant: 'error' });
     }
@@ -166,51 +162,6 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
       setPreviewCollections(res?.collections || []);
     } catch (err: any) {
       pushToast({ title: 'Preview Failed', message: err.message, variant: 'error' });
-    }
-  };
-
-  const handlePublishAll = async (confirmIncomplete = false) => {
-    try {
-      await adminApi.publishAllNewLaunches(confirmIncomplete);
-      pushToast({
-        title: 'New Launches Published',
-        message: 'Customer Website navigation & collections updated live.',
-      });
-      await loadState();
-      await onRefreshParentTaxonomy();
-    } catch (err: any) {
-      if (!confirmIncomplete && String(err.message || '').toLowerCase().includes('unmapped')) {
-        if (
-          window.confirm(
-            `${err.message}\n\nProceed with publishing active mapped shortcuts while keeping unmapped items hidden on Customer Web?`
-          )
-        ) {
-          await handlePublishAll(true);
-        }
-      } else {
-        pushToast({ title: 'Publish Blocked', message: err.message, variant: 'error' });
-      }
-    }
-  };
-
-  const handlePublishSingle = async (colId: string, confirmIncomplete = false) => {
-    try {
-      await adminApi.publishOneNewLaunch(colId, confirmIncomplete);
-      pushToast({ title: 'Collection Published', message: 'Now live on Customer Website.' });
-      await loadState();
-      await onRefreshParentTaxonomy();
-    } catch (err: any) {
-      if (!confirmIncomplete && String(err.message || '').toLowerCase().includes('unmapped')) {
-        if (
-          window.confirm(
-            `${err.message}\n\nConfirm publishing anyway? Only mapped shortcuts will display to customers.`
-          )
-        ) {
-          await handlePublishSingle(colId, true);
-        }
-      } else {
-        pushToast({ title: 'Publish Blocked', message: err.message, variant: 'error' });
-      }
     }
   };
 
@@ -230,37 +181,22 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                 <Badge variant="success">{migrationReport.mappedShortcuts} Mapped Shortcuts</Badge>
                 {migrationReport.unmappedShortcuts + migrationReport.groupMatchedShortcuts > 0 && (
                   <Badge variant="warning">
-                    {migrationReport.unmappedShortcuts + migrationReport.groupMatchedShortcuts} Unmapped / Needs Review
+                    {migrationReport.unmappedShortcuts + migrationReport.groupMatchedShortcuts} Unmapped
                   </Badge>
                 )}
               </>
             )}
-            {hasUnpublishedChanges && <Badge variant="warning">Unpublished Draft Changes</Badge>}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#FAF7F4] border border-[#E5DCD3] cursor-pointer font-semibold text-[#5E5946]">
-              <input
-                type="checkbox"
-                checked={workInDraftMode}
-                onChange={(e) => setWorkInDraftMode(e.target.checked)}
-              />
-              <span>Draft Mode</span>
-            </label>
             <Button size="sm" variant="outline" onClick={openPreview}>
-              <Eye className="w-3.5 h-3.5" /> Preview Customer View
+              <Eye className="w-3.5 h-3.5" /> Preview
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
-              <Plus className="w-3.5 h-3.5" /> New Collection
-            </Button>
-            <Button size="sm" onClick={() => handlePublishAll(false)}>
-              <Send className="w-3.5 h-3.5" /> Publish New Launches
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-3.5 h-3.5" /> Add Collection
             </Button>
           </div>
         </div>
-        <p className="text-[11px] text-[#6E6859] mt-2">
-          Promotional navigation layer mapped to permanent Catalog categories without altering Vendor categories or product IDs. Unmapped labels are flagged below so Admin can map them or create permanent categories via Catalog Management.
-        </p>
       </Card>
 
       {/* Main Split Workspace */}
@@ -279,7 +215,7 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                   const mappings = col.categoryMappings || [];
                   const mappedCount = mappings.filter((m: any) => m.mappingStatus === 'MAPPED').length;
                   const unmappedCount = mappings.length - mappedCount;
-                  const isLive = col.isActive !== false && col.publishStatus !== 'DRAFT';
+                  const isLive = col.isActive !== false;
 
                   return (
                     <div
@@ -303,8 +239,8 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                               <span className="font-bold text-[#5E5946]">
                                 #{col.displayOrder} {col.title || col.name}
                               </span>
-                              <Badge variant={isLive ? 'success' : 'warning'} className="text-[10px]">
-                                {isLive ? 'PUBLISHED' : 'DRAFT / HIDDEN'}
+                              <Badge variant={isLive ? 'success' : 'error'} className="text-[10px]">
+                                {isLive ? 'Active' : 'Inactive'}
                               </Badge>
                             </div>
                             <p className="text-[11px] text-[#6E6859] truncate">
@@ -315,24 +251,26 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                          {isLive ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={async () => {
-                                await adminApi.unpublishOneNewLaunch(col.id);
-                                pushToast({ title: 'Collection Unpublished', message: `${col.title} hidden from Customer Web.` });
-                                await loadState();
-                                await onRefreshParentTaxonomy();
-                              }}
-                            >
-                              Unpublish
-                            </Button>
-                          ) : (
-                            <Button size="sm" onClick={() => handlePublishSingle(col.id, false)}>
-                              Publish
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant={isLive ? 'success' : 'outline'}
+                            onClick={async () => {
+                              await adminApi.updateNewLaunchCollection(col.id, {
+                                isActive: !isLive,
+                                publishStatus: !isLive ? 'PUBLISHED' : col.publishStatus,
+                                saveAsDraft: false,
+                                confirmIncompleteMappings: true,
+                              });
+                              pushToast({
+                                title: 'Saved & Synchronized',
+                                message: 'Changes saved and synchronized successfully.',
+                              });
+                              await loadState();
+                              await onRefreshParentTaxonomy();
+                            }}
+                          >
+                            {isLive ? 'Active' : 'Inactive'}
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -411,14 +349,16 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                         endDate: editMeta.endDate || undefined,
                         displayOrder: Number(editMeta.displayOrder || 1),
                         productIds: editMeta.productIds,
-                        saveAsDraft: workInDraftMode,
+                        publishStatus: 'PUBLISHED',
+                        saveAsDraft: false,
+                        confirmIncompleteMappings: true,
                       });
                       pushToast({
-                        title: workInDraftMode ? 'Saved to Draft' : 'Collection Updated',
-                        message: workInDraftMode ? 'Click Publish New Launches to push live.' : 'Synced to Customer Website.',
+                        title: 'Saved & Synchronized',
+                        message: 'Changes saved and synchronized successfully.',
                       });
                       await loadState();
-                      if (!workInDraftMode) await onRefreshParentTaxonomy();
+                      await onRefreshParentTaxonomy();
                     } catch (err: any) {
                       pushToast({ title: 'Update Failed', message: err.message, variant: 'error' });
                     }
@@ -570,16 +510,16 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                       variant="danger"
                       onClick={async () => {
                         if (!window.confirm(`Remove promotional collection "${selectedCollection.title}"? Permanent categories and products will NOT be deleted.`)) return;
-                        await adminApi.deleteNewLaunchCollection(selectedCollection.id, workInDraftMode);
-                        pushToast({ title: 'Promotional Collection Removed', message: 'Permanent categories and products preserved.' });
+                        await adminApi.deleteNewLaunchCollection(selectedCollection.id, false);
+                        pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                         await loadState();
-                        if (!workInDraftMode) await onRefreshParentTaxonomy();
+                        await onRefreshParentTaxonomy();
                       }}
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Remove Collection
                     </Button>
                     <Button type="submit" size="sm">
-                      <Edit3 className="w-3.5 h-3.5" /> {workInDraftMode ? 'Save Draft' : 'Save & Sync Live'}
+                      <Edit3 className="w-3.5 h-3.5" /> Save
                     </Button>
                   </div>
                 </form>
@@ -680,13 +620,13 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                             size="sm"
                             variant="danger"
                             onClick={async () => {
-                              await adminApi.removeNewLaunchMapping(selectedCollection.id, m.id, workInDraftMode);
+                              await adminApi.removeNewLaunchMapping(selectedCollection.id, m.id, false);
                               pushToast({
-                                title: 'Shortcut Removed',
-                                message: 'Removed from New Launches only; original permanent category untouched.',
+                                title: 'Saved & Synchronized',
+                                message: 'Changes saved and synchronized successfully.',
                               });
                               await loadState();
-                              if (!workInDraftMode) await onRefreshParentTaxonomy();
+                              await onRefreshParentTaxonomy();
                             }}
                           >
                             <Trash2 className="w-3 h-3" />
@@ -711,7 +651,8 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
               const res = await adminApi.createNewLaunchCollection({
                 ...createForm,
                 displayOrder: Number(createForm.displayOrder) || collections.length + 1,
-                saveAsDraft: workInDraftMode,
+                saveAsDraft: false,
+                confirmIncompleteMappings: true,
               });
               setCreateOpen(false);
               setCreateForm({
@@ -727,9 +668,9 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                 productIds: [],
               });
               if (res?.id) setSelectedCollectionId(res.id);
-              pushToast({ title: 'Collection Created', message: workInDraftMode ? 'Saved to Draft.' : 'Published live.' });
+              pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
               await loadState();
-              if (!workInDraftMode) await onRefreshParentTaxonomy();
+              await onRefreshParentTaxonomy();
             } catch (err: any) {
               pushToast({ title: 'Create Failed', message: err.message, variant: 'error' });
             }
@@ -793,7 +734,7 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
             <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">{workInDraftMode ? 'Create Draft' : 'Create & Publish'}</Button>
+            <Button type="submit">Save</Button>
           </div>
         </form>
       </Modal>
@@ -815,15 +756,15 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                   mainCategoryId: mappingModal.mainCategoryId,
                   categoryGroupId: mappingModal.categoryGroupId,
                   childCategoryId: mappingModal.childCategoryId,
-                  saveAsDraft: workInDraftMode,
+                  saveAsDraft: false,
                 });
                 pushToast({
-                  title: 'Shortcut Mapped',
-                  message: `"${mappingModal.displayLabel}" linked to permanent taxonomy.`,
+                  title: 'Saved & Synchronized',
+                  message: 'Changes saved and synchronized successfully.',
                 });
                 setMappingModal(null);
                 await loadState();
-                if (!workInDraftMode) await onRefreshParentTaxonomy();
+                await onRefreshParentTaxonomy();
               } catch (err: any) {
                 pushToast({ title: 'Mapping Failed', message: err.message, variant: 'error' });
               }

@@ -23,13 +23,11 @@ import {
   RotateCcw,
   Monitor,
   Compass,
-  Send,
   Home,
 } from 'lucide-react';
 import { adminApi, formatINR, formatDate } from '../services/adminApi';
 import { NewLaunchesAdminSection } from '../components/NewLaunchesAdminSection';
 import {
-  PageHeader,
   Card,
   Badge,
   Button,
@@ -46,7 +44,6 @@ export type CatalogSectionTab =
   | 'CHILD_CATEGORIES'
   | 'PRODUCT_TYPES'
   | 'FILTERS'
-  | 'FIELDS'
   | 'NEW_LAUNCHES';
 
 export const CatalogProductsPage: React.FC<{
@@ -100,20 +97,15 @@ export const CatalogProductsPage: React.FC<{
     attributes: [],
   });
 
-  // Draft / Publish Workflow state (default: Save & Publish live immediately)
-  const [workInDraftMode, setWorkInDraftMode] = useState(false);
   const [showNavPreview, setShowNavPreview] = useState(true);
   const [previewHoveredMainSlug, setPreviewHoveredMainSlug] = useState<string | null>(null);
   const [previewHoveredChildSlug, setPreviewHoveredChildSlug] = useState<string | null>(null);
-  const [draggedNavId, setDraggedNavId] = useState<string | null>(null);
   const [draggedMainId, setDraggedMainId] = useState<string | null>(null);
   const [draggedChildId, setDraggedChildId] = useState<string | null>(null);
   const [draggedTypeId, setDraggedTypeId] = useState<string | null>(null);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Record<string, boolean>>({});
   const [selectedMainHierarchyFilter, setSelectedMainHierarchyFilter] = useState('ALL');
   const [filterMainId, setFilterMainId] = useState('ALL');
-  const [fieldMainId, setFieldMainId] = useState('ALL');
-  const [publishing, setPublishing] = useState(false);
 
   // Desktop Navigation & Product Type modals
   const [navModal, setNavModal] = useState<any>(null);
@@ -123,7 +115,9 @@ export const CatalogProductsPage: React.FC<{
     item: any;
     reassignToId: string;
   } | null>(null);
+  const [ptMainFilter, setPtMainFilter] = useState('ALL');
   const [ptChildFilter, setPtChildFilter] = useState('ALL');
+  const [ptSearch, setPtSearch] = useState('');
 
   // Category search/filter & modals
   const [catSearch, setCatSearch] = useState('');
@@ -132,9 +126,7 @@ export const CatalogProductsPage: React.FC<{
   const [childEditModal, setChildEditModal] = useState<any>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Dynamic Field & Filter Configurator state
-  const [selectedFieldChildId, setSelectedFieldChildId] = useState('cat-1');
-  const [fieldModal, setFieldModal] = useState<any>(null);
+  // Filter Configurator state
   const [selectedFilterChildId, setSelectedFilterChildId] = useState('cat-1');
   const [filterConfigModal, setFilterConfigModal] = useState<any>(null);
   const [categoryProductsModal, setCategoryProductsModal] = useState<{
@@ -150,11 +142,6 @@ export const CatalogProductsPage: React.FC<{
 
   const [mainForm, setMainForm] = useState({ name: '', slug: '', sortOrder: '6', description: '', image: '', showInNavigation: true });
   const [childForm, setChildForm] = useState({ mainCategoryId: 'mc-1', name: '', slug: '', sortOrder: '1', description: '', image: '' });
-  const [typeForm, setTypeForm] = useState({ childCategoryId: 'cat-1', name: '', slug: '', sortOrder: '1' });
-  const [brandForm, setBrandForm] = useState({ name: '', description: '' });
-  const [attrForm, setAttrForm] = useState({ name: '', categoryName: 'Cement & Concrete', valuesCsv: '' });
-  const [brandEditModal, setBrandEditModal] = useState<any>(null);
-  const [attrEditModal, setAttrEditModal] = useState<any>(null);
 
   useEffect(() => {
     setSectionTab(initialSection);
@@ -171,7 +158,6 @@ export const CatalogProductsPage: React.FC<{
     CHILD_CATEGORIES: '/products/child-categories',
     PRODUCT_TYPES: '/products/product-types',
     FILTERS: '/products/filters',
-    FIELDS: '/products/fields',
     NEW_LAUNCHES: '/products/new-launches',
   };
 
@@ -344,83 +330,6 @@ export const CatalogProductsPage: React.FC<{
     }
   };
 
-  const handlePublishCatalog = async () => {
-    setPublishing(true);
-    try {
-      const res = await adminApi.publishCatalogChanges();
-      pushToast({
-        title: 'Published Successfully',
-        message: `Catalog & Desktop Navigation v${res?.metadata?.publishedVersion || ''} is now live on Vendor & Customer apps.`,
-      });
-      await loadTaxonomy();
-    } catch (err: any) {
-      pushToast({ title: 'Publish Failed', message: err.message, variant: 'error' });
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  const handleDiscardDraft = async () => {
-    try {
-      await adminApi.discardCatalogDraft();
-      pushToast({ title: 'Draft Discarded', message: 'Reverted to last published catalog state.' });
-      await loadTaxonomy();
-    } catch (err: any) {
-      pushToast({ title: 'Discard Failed', message: err.message, variant: 'error' });
-    }
-  };
-
-  const handleMoveNavOrder = async (navId: string, direction: 'UP' | 'DOWN') => {
-    const ordered = [...taxonomy.desktopNavigation].sort((a, b) => a.displayOrder - b.displayOrder);
-    const idx = ordered.findIndex((n) => n.id === navId);
-    if (idx < 0) return;
-    const swapIdx = direction === 'UP' ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= ordered.length) return;
-    const next = [...ordered];
-    const [moved] = next.splice(idx, 1);
-    next.splice(swapIdx, 0, moved);
-    const orderedIds = next.map((n) => n.id);
-    setTaxonomy((prev) => ({
-      ...prev,
-      desktopNavigation: next.map((n, i) => ({ ...n, displayOrder: i + 1 })),
-    }));
-    try {
-      await adminApi.reorderDesktopNav(orderedIds, workInDraftMode);
-      pushToast({
-        title: workInDraftMode ? 'Navigation Order Saved as Draft' : 'Navigation Order Published',
-      });
-      await loadTaxonomy();
-    } catch (err: any) {
-      pushToast({ title: 'Reorder Failed', message: err.message, variant: 'error' });
-    }
-  };
-
-  const handleDropNav = async (targetNavId: string) => {
-    if (!draggedNavId || draggedNavId === targetNavId) return;
-    const ordered = [...taxonomy.desktopNavigation].sort((a, b) => a.displayOrder - b.displayOrder);
-    const fromIdx = ordered.findIndex((n) => n.id === draggedNavId);
-    const toIdx = ordered.findIndex((n) => n.id === targetNavId);
-    if (fromIdx < 0 || toIdx < 0) return;
-    const next = [...ordered];
-    const [moved] = next.splice(fromIdx, 1);
-    next.splice(toIdx, 0, moved);
-    setDraggedNavId(null);
-    const orderedIds = next.map((n) => n.id);
-    setTaxonomy((prev) => ({
-      ...prev,
-      desktopNavigation: next.map((n, i) => ({ ...n, displayOrder: i + 1 })),
-    }));
-    try {
-      await adminApi.reorderDesktopNav(orderedIds, workInDraftMode);
-      pushToast({
-        title: workInDraftMode ? 'Drag & Drop Order Saved to Draft' : 'Desktop Navigation Published',
-      });
-      await loadTaxonomy();
-    } catch (err: any) {
-      pushToast({ title: 'Reorder Failed', message: err.message, variant: 'error' });
-    }
-  };
-
   const handleDropMainCategory = async (targetMainId: string) => {
     if (!draggedMainId || draggedMainId === targetMainId) return;
     const ordered = [...taxonomy.mainCategories].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -432,9 +341,10 @@ export const CatalogProductsPage: React.FC<{
     const [moved] = next.splice(fromIdx, 1);
     next.splice(toIdx, 0, moved);
     try {
-      await adminApi.reorderMainCategories(next.map((m) => m.id), workInDraftMode);
+      await adminApi.reorderMainCategories(next.map((m) => m.id), false);
       pushToast({
-        title: workInDraftMode ? 'Main Category Order Saved to Draft' : 'Main Category Order Published',
+        title: 'Saved & Synchronized',
+        message: 'Changes saved and synchronized successfully.',
       });
       await loadTaxonomy();
     } catch (err: any) {
@@ -452,9 +362,10 @@ export const CatalogProductsPage: React.FC<{
     const [moved] = next.splice(idx, 1);
     next.splice(swapIdx, 0, moved);
     try {
-      await adminApi.reorderMainCategories(next.map((m) => m.id), workInDraftMode);
+      await adminApi.reorderMainCategories(next.map((m) => m.id), false);
       pushToast({
-        title: workInDraftMode ? 'Main Category Order Saved to Draft' : 'Main Category Order Published',
+        title: 'Saved & Synchronized',
+        message: 'Changes saved and synchronized successfully.',
       });
       await loadTaxonomy();
     } catch (err: any) {
@@ -476,9 +387,10 @@ export const CatalogProductsPage: React.FC<{
     next.splice(toIdx, 0, moved);
     const orderedIds = next.map((c) => c.id);
     try {
-      await adminApi.reorderChildCategories(orderedIds, workInDraftMode);
+      await adminApi.reorderChildCategories(orderedIds, false);
       pushToast({
-        title: workInDraftMode ? 'Category Group Order Saved to Draft' : 'Category Group Order Published',
+        title: 'Saved & Synchronized',
+        message: 'Changes saved and synchronized successfully.',
       });
       await loadTaxonomy();
     } catch (err: any) {
@@ -500,9 +412,10 @@ export const CatalogProductsPage: React.FC<{
     next.splice(toIdx, 0, moved);
     const orderedIds = next.map((pt) => pt.id);
     try {
-      await adminApi.reorderProductTypes(orderedIds, workInDraftMode);
+      await adminApi.reorderProductTypes(orderedIds, false);
       pushToast({
-        title: workInDraftMode ? 'Child Category Order Saved to Draft' : 'Child Category Order Published',
+        title: 'Saved & Synchronized',
+        message: 'Changes saved and synchronized successfully.',
       });
       await loadTaxonomy();
     } catch (err: any) {
@@ -526,38 +439,43 @@ export const CatalogProductsPage: React.FC<{
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="Products & Catalog Management"
-        description="Single centralized source of truth for Products, Customer Desktop Navigation, Main Categories, Category Groups, Child Categories, Product Types, Filters, Dynamic Fields & New Launches."
-        actions={
-          <div className="flex flex-wrap gap-1.5">
-            <Button variant={sectionTab === 'PRODUCTS' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('PRODUCTS')}>
-              <Package className="w-4 h-4" /> Products
-            </Button>
-            <Button variant={sectionTab === 'NAVIGATION' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('NAVIGATION')}>
-              <Monitor className="w-4 h-4" /> Desktop Navigation
-            </Button>
-            <Button variant={sectionTab === 'MAIN_CATEGORIES' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('MAIN_CATEGORIES')}>
-              <Layers className="w-4 h-4" /> Main Categories
-            </Button>
-            <Button variant={sectionTab === 'CHILD_CATEGORIES' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('CHILD_CATEGORIES')}>
-              <FolderTree className="w-4 h-4" /> Child Categories
-            </Button>
-            <Button variant={sectionTab === 'PRODUCT_TYPES' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('PRODUCT_TYPES')}>
-              <Compass className="w-4 h-4" /> Product Types
-            </Button>
-            <Button variant={sectionTab === 'FILTERS' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('FILTERS')}>
-              <Sliders className="w-4 h-4" /> Filter Configuration
-            </Button>
-            <Button variant={sectionTab === 'FIELDS' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('FIELDS')}>
-              <Sliders className="w-4 h-4" /> Dynamic Fields
-            </Button>
-            <Button variant={sectionTab === 'NEW_LAUNCHES' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('NEW_LAUNCHES')}>
-              <Sparkles className="w-4 h-4" /> New Launches
-            </Button>
-          </div>
-        }
-      />
+      <div className="space-y-3">
+        <h1 className="text-xl sm:text-2xl font-bold text-[#5E5946] tracking-tight">
+          Products & Catalog Management
+        </h1>
+
+        <nav
+          aria-label="Products & Catalog sections"
+          className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-[#E5DCD3] whitespace-nowrap"
+        >
+          {[
+            { id: 'PRODUCTS' as CatalogSectionTab, label: 'Products', icon: <Package className="w-3.5 h-3.5" /> },
+            { id: 'NAVIGATION' as CatalogSectionTab, label: 'Desktop Navigation', icon: <Monitor className="w-3.5 h-3.5" /> },
+            { id: 'MAIN_CATEGORIES' as CatalogSectionTab, label: 'Main Categories', icon: <Layers className="w-3.5 h-3.5" /> },
+            { id: 'CHILD_CATEGORIES' as CatalogSectionTab, label: 'Child Categories', icon: <FolderTree className="w-3.5 h-3.5" /> },
+            { id: 'PRODUCT_TYPES' as CatalogSectionTab, label: 'Product Types', icon: <Compass className="w-3.5 h-3.5" /> },
+            { id: 'FILTERS' as CatalogSectionTab, label: 'Filter Configuration', icon: <Sliders className="w-3.5 h-3.5" /> },
+            { id: 'NEW_LAUNCHES' as CatalogSectionTab, label: 'New Launches', icon: <Sparkles className="w-3.5 h-3.5" /> },
+          ].map((tab) => {
+            const active = sectionTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleSelectSectionTab(tab.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shrink-0 transition-colors ${
+                  active
+                    ? 'bg-[#5E5946] text-white border-[#5E5946] shadow-xs'
+                    : 'bg-white text-[#5E5946] border-[#E5DCD3] hover:bg-[#FAF7F4]'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
       {taxonomyError && (
         <div className="p-3.5 rounded-xl border border-red-200 bg-red-50 text-red-900 text-xs flex items-center justify-between gap-3">
@@ -570,61 +488,6 @@ export const CatalogProductsPage: React.FC<{
           </Button>
         </div>
       )}
-
-      {/* Centralized Draft & Publish Synchronization Bar */}
-      {(sectionTab === 'NAVIGATION' ||
-        sectionTab === 'MAIN_CATEGORIES' ||
-        sectionTab === 'CHILD_CATEGORIES' ||
-        sectionTab === 'PRODUCT_TYPES' ||
-        sectionTab === 'FILTERS') && (
-          <div
-            className={`p-3.5 rounded-xl border text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${taxonomy.publishMetadata?.hasUnpublishedChanges
-              ? 'bg-amber-50 border-amber-300 text-amber-950'
-              : 'bg-[#FAF7F4] border-[#E5DCD3] text-[#5E5946]'
-              }`}
-          >
-            <div className="space-y-0.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={taxonomy.publishMetadata?.hasUnpublishedChanges ? 'warning' : 'success'}>
-                  {taxonomy.publishMetadata?.hasUnpublishedChanges ? 'Unpublished Draft Changes' : `Published Live (v${taxonomy.publishMetadata?.publishedVersion || 1})`}
-                </Badge>
-                <Badge variant={workInDraftMode ? 'warning' : 'info'}>
-                  {workInDraftMode ? 'Draft Staging Mode' : 'Live Sync Mode (Save & Publish)'}
-                </Badge>
-                {taxonomy.publishMetadata?.lastPublishedAt && (
-                  <span className="text-[11px] text-[#6E6859]">
-                    Last published: {new Date(taxonomy.publishMetadata.lastPublishedAt).toLocaleString()}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-[#6E6859]">
-                {workInDraftMode
-                  ? 'Draft Staging enabled: edits stay in Draft until you click Publish to Vendor & Customer.'
-                  : 'Save & Publish enabled: every add, edit, disable or reorder updates Vendor Portal & Customer Website immediately.'}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-[#E5DCD3] cursor-pointer font-medium">
-                <input
-                  type="checkbox"
-                  checked={workInDraftMode}
-                  onChange={(e) => setWorkInDraftMode(e.target.checked)}
-                />
-                <span>Stage as Draft First</span>
-              </label>
-              {taxonomy.publishMetadata?.hasUnpublishedChanges && (
-                <Button size="sm" variant="outline" onClick={handleDiscardDraft}>
-                  <RotateCcw className="w-3.5 h-3.5" /> Discard Draft
-                </Button>
-              )}
-              <Button size="sm" variant="dark" onClick={handlePublishCatalog} disabled={publishing}>
-                <Send className="w-3.5 h-3.5" />
-                {publishing ? 'Publishing...' : 'Publish to Vendor & Customer'}
-              </Button>
-            </div>
-          </div>
-        )}
 
       {sectionTab === 'PRODUCTS' ? (
         <>
@@ -990,10 +853,10 @@ export const CatalogProductsPage: React.FC<{
             )}
           </Card>
 
-          {/* Drag & Drop Desktop Navigation Order Manager */}
+          {/* Desktop Navigation Order Manager */}
           <Card
             title="Desktop Header Navigation Items"
-            subtitle="Drag and drop rows (or use arrows) to reorder Customer website navigation, edit labels, assign Main Categories, or toggle visibility"
+            subtitle="Manage Customer website navigation labels, Main Category links, and Active / Inactive status"
             action={
               <Button
                 size="sm"
@@ -1061,7 +924,7 @@ export const CatalogProductsPage: React.FC<{
             <div className="space-y-2 text-xs">
               {[...taxonomy.desktopNavigation]
                 .sort((a, b) => a.displayOrder - b.displayOrder)
-                .map((nav, idx, arr) => {
+                .map((nav) => {
                   const linkedMain = nav.mainCategoryId
                     ? taxonomy.mainCategories.find((m) => m.id === nav.mainCategoryId)
                     : null;
@@ -1072,19 +935,13 @@ export const CatalogProductsPage: React.FC<{
                   return (
                     <div
                       key={nav.id}
-                      draggable
-                      onDragStart={() => setDraggedNavId(nav.id)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => handleDropNav(nav.id)}
-                      className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 transition-colors cursor-move ${draggedNavId === nav.id
-                        ? 'bg-[#F0DED0]/60 border-[#AE887B]'
-                        : effectivelyVisible
+                      className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 transition-colors ${
+                        effectivelyVisible
                           ? 'bg-white border-[#E5DCD3] hover:bg-[#FAF7F4]'
                           : 'bg-slate-50 border-slate-200 opacity-75'
                         }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <GripVertical className="w-4 h-4 text-[#8E8777] shrink-0" />
                         <span className="w-7 h-7 rounded-lg bg-[#F0DED0] text-[#5E5946] font-bold flex items-center justify-center shrink-0">
                           #{nav.displayOrder}
                         </span>
@@ -1108,44 +965,13 @@ export const CatalogProductsPage: React.FC<{
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Button
                           size="sm"
-                          variant="outline"
-                          disabled={idx === 0}
-                          onClick={() => handleMoveNavOrder(nav.id, 'UP')}
-                          title="Move Up"
-                        >
-                          <ArrowUp className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={idx === arr.length - 1}
-                          onClick={() => handleMoveNavOrder(nav.id, 'DOWN')}
-                          title="Move Down"
-                        >
-                          <ArrowDown className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            await adminApi.updateDesktopNavItem(nav.id, {
-                              isVisible: !(nav.isVisible !== false),
-                              saveAsDraft: workInDraftMode,
-                            });
-                            loadTaxonomy();
-                          }}
-                          title="Toggle Header Visibility"
-                        >
-                          {nav.isVisible !== false ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                        </Button>
-                        <Button
-                          size="sm"
                           variant={nav.isActive !== false ? 'success' : 'outline'}
                           onClick={async () => {
                             await adminApi.updateDesktopNavItem(nav.id, {
                               isActive: !(nav.isActive !== false),
-                              saveAsDraft: workInDraftMode,
+                              saveAsDraft: false,
                             });
+                            pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                             loadTaxonomy();
                           }}
                         >
@@ -1159,8 +985,8 @@ export const CatalogProductsPage: React.FC<{
                           variant="danger"
                           onClick={async () => {
                             try {
-                              await adminApi.deleteDesktopNavItem(nav.id, workInDraftMode);
-                              pushToast({ title: 'Navigation Item Removed' });
+                              await adminApi.deleteDesktopNavItem(nav.id, false);
+                              pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                               loadTaxonomy();
                             } catch (err: any) {
                               pushToast({ title: 'Delete Failed', message: err.message, variant: 'error' });
@@ -1243,7 +1069,6 @@ export const CatalogProductsPage: React.FC<{
                     .map((mc, idx, arr) => {
                       const groupCount = mc.groupCount ?? mc.childCount ?? taxonomy.childCategories.filter((c) => c.mainCategoryId === mc.id).length;
                       const childCatCount = mc.childCategoryCount ?? taxonomy.productTypes.filter((pt) => pt.mainCategoryId === mc.id).length;
-                      const pubStatus = mc.publishStatus || (taxonomy.publishMetadata?.hasUnpublishedChanges ? 'DRAFT' : 'PUBLISHED');
                       return (
                       <div
                         key={mc.id}
@@ -1276,9 +1101,6 @@ export const CatalogProductsPage: React.FC<{
                               </code>
                               <Badge variant={mc.isActive !== false ? 'success' : 'error'}>
                                 {mc.isActive !== false ? 'Active' : 'Inactive'}
-                              </Badge>
-                              <Badge variant={pubStatus === 'PUBLISHED' ? 'info' : 'warning'}>
-                                {pubStatus === 'PUBLISHED' ? 'Published' : 'Draft'}
                               </Badge>
                             </div>
                             {mc.description && (
@@ -1325,8 +1147,9 @@ export const CatalogProductsPage: React.FC<{
                             onClick={async () => {
                               await adminApi.updateMainCategory(mc.id, {
                                 showInNavigation: !(mc.showInNavigation !== false),
-                                saveAsDraft: workInDraftMode,
+                                saveAsDraft: false,
                               });
+                              pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                               loadTaxonomy();
                             }}
                           >
@@ -1338,8 +1161,9 @@ export const CatalogProductsPage: React.FC<{
                             onClick={async () => {
                               await adminApi.updateMainCategory(mc.id, {
                                 isActive: !(mc.isActive !== false),
-                                saveAsDraft: workInDraftMode,
+                                saveAsDraft: false,
                               });
+                              pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                               loadTaxonomy();
                             }}
                           >
@@ -1384,7 +1208,7 @@ export const CatalogProductsPage: React.FC<{
                         description: mainForm.description,
                         image: mainForm.image,
                         showInNavigation: mainForm.showInNavigation,
-                        saveAsDraft: workInDraftMode,
+                        saveAsDraft: false,
                       });
                       setMainForm({
                         name: '',
@@ -1395,7 +1219,8 @@ export const CatalogProductsPage: React.FC<{
                         showInNavigation: true,
                       });
                       pushToast({
-                        title: workInDraftMode ? 'Main Category Staged in Draft' : 'Main Category Published',
+                        title: 'Saved & Synchronized',
+                        message: 'Changes saved and synchronized successfully.',
                       });
                       loadTaxonomy();
                     } catch (err: any) {
@@ -1469,7 +1294,7 @@ export const CatalogProductsPage: React.FC<{
                     </label>
                   </div>
                   <Button size="sm" type="submit" className="w-full">
-                    <Plus className="w-3.5 h-3.5" /> {workInDraftMode ? 'Save Main Category Draft' : 'Add & Publish Main Category'}
+                    <Plus className="w-3.5 h-3.5" /> Add Category
                   </Button>
                 </form>
               </Card>
@@ -1482,16 +1307,10 @@ export const CatalogProductsPage: React.FC<{
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <p className="font-semibold text-[#5E5946]">
-                  Full Hierarchy: {taxonomy.mainCategories.length} Main Categories •{' '}
+                  {taxonomy.mainCategories.length} Main Categories •{' '}
                   {taxonomy.childCategories.length} Category Groups •{' '}
                   {taxonomy.productTypes.length} Child Categories
                 </p>
-                {taxonomy.migrationSummary && (
-                  <p className="text-[#6E6859]">
-                    Catalog Synced: <strong>{taxonomy.migrationSummary.migrated}</strong> /{' '}
-                    {taxonomy.migrationSummary.totalRecords} records (Unmapped: {taxonomy.migrationSummary.unmapped})
-                  </p>
-                )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative">
@@ -1737,17 +1556,6 @@ export const CatalogProductsPage: React.FC<{
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          onClick={() => {
-                                            setFieldMainId(cc.mainCategoryId || 'ALL');
-                                            setSelectedFieldChildId(cc.id);
-                                            handleSelectSectionTab('FIELDS');
-                                          }}
-                                        >
-                                          <Sliders className="w-3 h-3" /> Fields
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
                                           onClick={() => setChildEditModal({ ...cc, originalMainId: cc.mainCategoryId })}
                                         >
                                           <Edit3 className="w-3 h-3" /> Edit / Move
@@ -1758,8 +1566,9 @@ export const CatalogProductsPage: React.FC<{
                                           onClick={async () => {
                                             await adminApi.updateChildCategory(cc.id, {
                                               isActive: !(cc.isActive !== false),
-                                              saveAsDraft: workInDraftMode,
+                                              saveAsDraft: false,
                                             });
+                                            pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                                             loadTaxonomy();
                                           }}
                                         >
@@ -1812,8 +1621,9 @@ export const CatalogProductsPage: React.FC<{
                                                   onClick={async () => {
                                                     await adminApi.updateProductType(subPt.id, {
                                                       isActive: !(subPt.isActive !== false),
-                                                      saveAsDraft: workInDraftMode,
+                                                      saveAsDraft: false,
                                                     });
+                                                    pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                                                     loadTaxonomy();
                                                   }}
                                                 >
@@ -1869,11 +1679,12 @@ export const CatalogProductsPage: React.FC<{
                         sortOrder: Number(childForm.sortOrder) || 99,
                         description: childForm.description,
                         image: childForm.image,
-                        saveAsDraft: workInDraftMode,
+                        saveAsDraft: false,
                       });
                       setChildForm({ ...childForm, name: '', slug: '', description: '', image: '' });
                       pushToast({
-                        title: workInDraftMode ? 'Category Group Saved to Draft' : 'Category Group Published',
+                        title: 'Saved & Synchronized',
+                        message: 'Changes saved and synchronized successfully.',
                       });
                       loadTaxonomy();
                     } catch (err: any) {
@@ -1923,7 +1734,7 @@ export const CatalogProductsPage: React.FC<{
                       className="w-20 px-2 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
                     />
                     <Button size="sm" type="submit" className="flex-1">
-                      <Plus className="w-3.5 h-3.5" /> {workInDraftMode ? 'Save Group Draft' : 'Add & Publish Group'}
+                      <Plus className="w-3.5 h-3.5" /> Add Category Group
                     </Button>
                   </div>
                 </form>
@@ -1933,31 +1744,109 @@ export const CatalogProductsPage: React.FC<{
         </div>
       ) : sectionTab === 'PRODUCT_TYPES' ? (
         <div className="space-y-5">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <div className="lg:col-span-8">
+          {(() => {
+            const groupOptions = taxonomy.childCategories.filter(
+              (cc) => ptMainFilter === 'ALL' || cc.mainCategoryId === ptMainFilter
+            );
+            const q = ptSearch.trim().toLowerCase();
+            const filteredTypes = taxonomy.productTypes
+              .filter((pt) => {
+                if (ptMainFilter !== 'ALL' && pt.mainCategoryId !== ptMainFilter) return false;
+                if (ptChildFilter !== 'ALL' && pt.childCategoryId !== ptChildFilter) return false;
+                if (q) {
+                  const grp = taxonomy.childCategories.find((c) => c.id === pt.childCategoryId);
+                  return (
+                    pt.name.toLowerCase().includes(q) ||
+                    pt.slug.toLowerCase().includes(q) ||
+                    (grp?.name || '').toLowerCase().includes(q)
+                  );
+                }
+                return true;
+              })
+              .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+            return (
               <Card
-                title={`Product Type Management (${taxonomy.productTypes.length})`}
+                title={`Product Type Management (${filteredTypes.length}${filteredTypes.length !== taxonomy.productTypes.length ? ` of ${taxonomy.productTypes.length}` : ''})`}
                 subtitle="Manage child classifications displayed in navigation second column and product filtering"
                 action={
-                  <select
-                    value={ptChildFilter}
-                    onChange={(e) => setPtChildFilter(e.target.value)}
-                    className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
-                  >
-                    <option value="ALL">All Child Categories ({taxonomy.childCategories.length})</option>
-                    {taxonomy.childCategories.map((cc) => (
-                      <option key={cc.id} value={cc.id}>
-                        {cc.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
+                      <input
+                        type="text"
+                        placeholder="Search product types..."
+                        value={ptSearch}
+                        onChange={(e) => setPtSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-48"
+                      />
+                    </div>
+                    <select
+                      value={ptMainFilter}
+                      onChange={(e) => {
+                        const nextMain = e.target.value;
+                        setPtMainFilter(nextMain);
+                        setPtChildFilter('ALL');
+                      }}
+                      className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                    >
+                      <option value="ALL">All Main Categories ({taxonomy.mainCategories.length})</option>
+                      {taxonomy.mainCategories.map((mc) => (
+                        <option key={mc.id} value={mc.id}>
+                          {mc.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={ptChildFilter}
+                      onChange={(e) => setPtChildFilter(e.target.value)}
+                      className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                    >
+                      <option value="ALL">All Category Groups ({groupOptions.length})</option>
+                      {groupOptions.map((cc) => (
+                        <option key={cc.id} value={cc.id}>
+                          {cc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 }
               >
-                <div className="divide-y divide-[#E5DCD3] max-h-[520px] overflow-y-auto text-xs">
-                  {taxonomy.productTypes
-                    .filter((pt) => ptChildFilter === 'ALL' || pt.childCategoryId === ptChildFilter)
-                    .map((pt) => {
+                {taxonomyLoading && taxonomy.productTypes.length === 0 ? (
+                  <p className="text-xs text-[#6E6859] py-8 text-center">Loading product types...</p>
+                ) : filteredTypes.length === 0 ? (
+                  <EmptyState
+                    icon={<Compass className="w-6 h-6" />}
+                    title={taxonomyError ? 'Unable to load Product Types' : 'No matching Product Types'}
+                    description={
+                      taxonomyError ||
+                      'Try clearing your search or selecting a different Main Category / Category Group.'
+                    }
+                    action={
+                      taxonomyError ? (
+                        <Button size="sm" variant="outline" onClick={loadTaxonomy}>
+                          Retry
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setPtSearch('');
+                            setPtMainFilter('ALL');
+                            setPtChildFilter('ALL');
+                          }}
+                        >
+                          Reset Filters
+                        </Button>
+                      )
+                    }
+                  />
+                ) : (
+                  <div className="divide-y divide-[#E5DCD3] max-h-[620px] overflow-y-auto text-xs">
+                    {filteredTypes.map((pt) => {
                       const parentChild = taxonomy.childCategories.find((c) => c.id === pt.childCategoryId);
+                      const parentMain = taxonomy.mainCategories.find((m) => m.id === pt.mainCategoryId);
                       return (
                         <div
                           key={pt.id}
@@ -1965,23 +1854,29 @@ export const CatalogProductsPage: React.FC<{
                           onDragStart={() => setDraggedTypeId(pt.id)}
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={() => handleDropProductType(pt.id, pt.childCategoryId)}
-                          className={`py-2.5 px-1 flex flex-wrap items-center justify-between gap-2 cursor-move ${
-                            draggedTypeId === pt.id ? 'bg-[#F0DED0]/50' : ''
+                          className={`py-3 px-2 flex flex-wrap items-center justify-between gap-3 cursor-move ${
+                            draggedTypeId === pt.id ? 'bg-[#F0DED0]/50' : 'hover:bg-[#FAF7F4]/60'
                           }`}
                         >
-                          <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             <GripVertical className="w-3.5 h-3.5 text-[#8E8777] shrink-0" />
                             <div className="min-w-0">
-                              <p className="font-semibold text-[#5E5946] truncate">
-                                #{pt.sortOrder} {pt.name}{' '}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-semibold text-[#5E5946] truncate">
+                                  #{pt.sortOrder} {pt.name}
+                                </span>
                                 <code className="font-mono text-[10px] text-[#8E8777]">/{pt.slug}</code>
-                              </p>
-                              <p className="text-[11px] text-[#6E6859]">
+                                <Badge variant={pt.isActive !== false ? 'success' : 'error'}>
+                                  {pt.isActive !== false ? 'Active' : 'Inactive'}
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] text-[#6E6859] truncate">
+                                {parentMain ? `${parentMain.name} → ` : ''}
                                 Under: {parentChild?.name || pt.childCategorySlug} • {pt.productCount ?? 0} products
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <Button
                               size="sm"
                               variant="outline"
@@ -2001,8 +1896,9 @@ export const CatalogProductsPage: React.FC<{
                               onClick={async () => {
                                 await adminApi.updateProductType(pt.id, {
                                   isActive: !(pt.isActive !== false),
-                                  saveAsDraft: workInDraftMode,
+                                  saveAsDraft: false,
                                 });
+                                pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                                 loadTaxonomy();
                               }}
                             >
@@ -2031,244 +1927,14 @@ export const CatalogProductsPage: React.FC<{
                         </div>
                       );
                     })}
-                </div>
-              </Card>
-            </div>
-
-            <div className="lg:col-span-4 space-y-5">
-              <Card title="Add Product Type" subtitle="Create classification under a Child Category">
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    try {
-                      await adminApi.createProductType({
-                        childCategoryId: typeForm.childCategoryId,
-                        name: typeForm.name,
-                        slug: typeForm.slug || undefined,
-                        sortOrder: Number(typeForm.sortOrder) || 99,
-                        saveAsDraft: workInDraftMode,
-                      });
-                      setTypeForm({ ...typeForm, name: '', slug: '' });
-                      pushToast({ title: 'Product Type Added' });
-                      loadTaxonomy();
-                    } catch (err: any) {
-                      pushToast({ title: 'Error', message: err.message, variant: 'error' });
-                    }
-                  }}
-                  className="space-y-2.5 text-xs"
-                >
-                  <select
-                    value={typeForm.childCategoryId}
-                    onChange={(e) => setTypeForm({ ...typeForm, childCategoryId: e.target.value })}
-                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                  >
-                    {taxonomy.childCategories.map((cc) => (
-                      <option key={cc.id} value={cc.id}>
-                        Child: {cc.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    required
-                    placeholder="Product Type name *"
-                    value={typeForm.name}
-                    onChange={(e) => setTypeForm({ ...typeForm, name: e.target.value })}
-                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                  />
-                  <input
-                    placeholder="Custom slug (optional)"
-                    value={typeForm.slug}
-                    onChange={(e) => setTypeForm({ ...typeForm, slug: e.target.value })}
-                    className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg font-mono"
-                  />
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      placeholder="Order"
-                      value={typeForm.sortOrder}
-                      onChange={(e) => setTypeForm({ ...typeForm, sortOrder: e.target.value })}
-                      className="w-20 px-2 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                    />
-                    <Button size="sm" type="submit" className="flex-1">
-                      <Plus className="w-3.5 h-3.5" /> Add Product Type
-                    </Button>
                   </div>
-                </form>
+                )}
               </Card>
-
-              <Card title="Approved Brands" subtitle={`${taxonomy.brands.length} listed`}>
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    await adminApi.createBrand(brandForm);
-                    setBrandForm({ name: '', description: '' });
-                    pushToast({ title: 'Brand Added' });
-                    loadTaxonomy();
-                  }}
-                  className="flex gap-2 mb-3"
-                >
-                  <input
-                    required
-                    placeholder="Brand name (e.g. ACC, Finolex)"
-                    value={brandForm.name}
-                    onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })}
-                    className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
-                  />
-                  <Button size="sm" type="submit">
-                    <Plus className="w-3.5 h-3.5" /> Add
-                  </Button>
-                </form>
-                <div className="divide-y divide-[#E5DCD3] max-h-56 overflow-y-auto text-xs">
-                  {taxonomy.brands.map((b) => (
-                    <div key={b.id} className="py-2 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-[#5E5946] truncate">{b.name}</p>
-                        <p className="text-[10px] font-mono text-[#6E6859]">{b.slug}</p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Badge variant={b.isActive !== false ? 'success' : 'error'}>
-                          {b.isActive !== false ? 'Active' : 'Inactive'}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setBrandEditModal({ ...b })}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            await adminApi.deleteBrand(b.id);
-                            pushToast({ title: 'Brand Removed' });
-                            loadTaxonomy();
-                          }}
-                        >
-                          Del
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card title="Product Attributes & Filters" subtitle={`${(taxonomy.attributes || []).length} filter attributes`}>
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    await adminApi.createAttribute({
-                      name: attrForm.name,
-                      categoryName: attrForm.categoryName,
-                      values: attrForm.valuesCsv.split(',').map((s) => s.trim()).filter(Boolean),
-                      isFilterable: true,
-                    });
-                    setAttrForm({ name: '', categoryName: 'Cement & Concrete', valuesCsv: '' });
-                    pushToast({ title: 'Attribute Created', message: 'Synced to Customer filters & Vendor product forms.' });
-                    loadTaxonomy();
-                  }}
-                  className="space-y-2 mb-3 text-xs"
-                >
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      required
-                      placeholder="Attribute (e.g. Grade, Finish)"
-                      value={attrForm.name}
-                      onChange={(e) => setAttrForm({ ...attrForm, name: e.target.value })}
-                      className="px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                    />
-                    <input
-                      required
-                      placeholder="Category (e.g. Cement & Concrete)"
-                      value={attrForm.categoryName}
-                      onChange={(e) => setAttrForm({ ...attrForm, categoryName: e.target.value })}
-                      className="px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      required
-                      placeholder="Values comma separated (e.g. OPC 53, PPC, PSC)"
-                      value={attrForm.valuesCsv}
-                      onChange={(e) => setAttrForm({ ...attrForm, valuesCsv: e.target.value })}
-                      className="flex-1 px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
-                    />
-                    <Button size="sm" type="submit">
-                      <Plus className="w-3.5 h-3.5" /> Add
-                    </Button>
-                  </div>
-                </form>
-                <div className="divide-y divide-[#E5DCD3] max-h-56 overflow-y-auto text-xs">
-                  {(taxonomy.attributes || []).map((a) => (
-                    <div key={a.id} className="py-2 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-[#5E5946] truncate">
-                          {a.name} <span className="text-[#6E6859]">({a.categoryName})</span>
-                        </p>
-                        <p className="text-[10px] text-[#6E6859] truncate">
-                          {(a.values || []).join(', ')}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setAttrEditModal({ ...a, valuesCsv: (a.values || []).join(', ') })
-                          }
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            await adminApi.deleteAttribute(a.id);
-                            pushToast({ title: 'Attribute Deleted' });
-                            loadTaxonomy();
-                          }}
-                        >
-                          Del
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       ) : sectionTab === 'FILTERS' ? (
         <div className="space-y-4">
-          {taxonomy.civilMigrationReport && (
-            <div className="p-3 rounded-xl border border-[#E5DCD3] bg-[#FAF7F4] flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="success">Civil &amp; Interiors Sync Active</Badge>
-                <span className="text-[#5E5946]">
-                  <strong>{taxonomy.civilMigrationReport.matchedExistingCategories}</strong> categories matched •{' '}
-                  <strong>{taxonomy.civilMigrationReport.matchedSubcategories + taxonomy.civilMigrationReport.createdSubcategories}</strong> child categories synced •{' '}
-                  <strong>{taxonomy.civilMigrationReport.productsPreserved}</strong> products preserved
-                </span>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    await adminApi.reconcileCivilTaxonomy();
-                    pushToast({ title: 'Taxonomy Reconciled', message: 'Civil & Interiors hierarchy & products verified.' });
-                    loadTaxonomy();
-                  } catch (err: any) {
-                    pushToast({ title: 'Reconcile Failed', message: err.message, variant: 'error' });
-                  }
-                }}
-              >
-                <RotateCcw className="w-3.5 h-3.5" /> Reconcile Civil &amp; Interiors
-              </Button>
-            </div>
-          )}
-
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <div className="lg:col-span-4">
               <Card title="1. Main Category → Category Group" subtitle="Select Main Category, then Category Group to configure filters">
@@ -2431,9 +2097,6 @@ export const CatalogProductsPage: React.FC<{
                                 {fc.isRequired && <Badge variant="warning">Required</Badge>}
                                 {fc.showInVendor && <Badge variant="success">Vendor Form</Badge>}
                                 {fc.showInCustomer && <Badge variant="info">Customer Filter</Badge>}
-                                <Badge variant={fc.publishedStatus === 'DRAFT' ? 'warning' : 'success'}>
-                                  {fc.publishedStatus || 'PUBLISHED'}
-                                </Badge>
                               </div>
                               {Array.isArray(fc.options) && fc.options.length > 0 && (
                                 <p className="text-[11px] text-[#6E6859] truncate">
@@ -2449,8 +2112,9 @@ export const CatalogProductsPage: React.FC<{
                                 onClick={async () => {
                                   await adminApi.updateCategoryFilterConfig(fc.id, {
                                     isActive: !(fc.isActive !== false),
-                                    saveAsDraft: workInDraftMode,
+                                    saveAsDraft: false,
                                   });
+                                  pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                                   loadTaxonomy();
                                 }}
                               >
@@ -2473,9 +2137,10 @@ export const CatalogProductsPage: React.FC<{
                                 size="sm"
                                 variant="danger"
                                 onClick={async () => {
-                                  await adminApi.deleteCategoryFilterConfig(fc.id, workInDraftMode);
+                                  await adminApi.deleteCategoryFilterConfig(fc.id, false);
                                   pushToast({
-                                    title: workInDraftMode ? 'Filter Deletion Staged' : 'Filter Deleted',
+                                    title: 'Saved & Synchronized',
+                                    message: 'Changes saved and synchronized successfully.',
                                   });
                                   loadTaxonomy();
                                 }}
@@ -2491,206 +2156,6 @@ export const CatalogProductsPage: React.FC<{
                 );
               })()}
             </div>
-          </div>
-        </div>
-      ) : sectionTab === 'FIELDS' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left: Select Main Category -> Category Group */}
-          <div className="lg:col-span-4">
-            <Card title="Main Category → Category Group" subtitle="Select a Category Group to configure its dynamic Vendor fields">
-              <div className="mb-3">
-                <select
-                  value={fieldMainId}
-                  onChange={(e) => {
-                    const mid = e.target.value;
-                    setFieldMainId(mid);
-                    const firstGrp = taxonomy.childCategories.find(
-                      (c) => mid === 'ALL' || c.mainCategoryId === mid
-                    );
-                    if (firstGrp) setSelectedFieldChildId(firstGrp.id);
-                  }}
-                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg font-medium text-[#5E5946]"
-                >
-                  <option value="ALL">All Main Categories ({taxonomy.mainCategories.length})</option>
-                  {taxonomy.mainCategories.map((mc) => (
-                    <option key={mc.id} value={mc.id}>
-                      {mc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5 max-h-[500px] overflow-y-auto text-xs">
-                {taxonomy.childCategories
-                  .filter((cc) => fieldMainId === 'ALL' || cc.mainCategoryId === fieldMainId)
-                  .map((cc) => {
-                  const count = (taxonomy.fieldSchemas || []).filter(
-                    (f) => f.childCategoryId === cc.id || f.childCategorySlug === cc.slug
-                  ).length;
-                  const active = selectedFieldChildId === cc.id;
-                  return (
-                    <button
-                      key={cc.id}
-                      type="button"
-                      onClick={() => setSelectedFieldChildId(cc.id)}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors flex items-center justify-between gap-2 ${active
-                        ? 'bg-[#943D24] text-white border-[#943D24]'
-                        : 'bg-white text-[#5E5946] border-[#E5DCD3] hover:bg-[#FAF7F4]'
-                        }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="font-semibold truncate">{cc.name}</p>
-                        <p className={`text-[10px] truncate ${active ? 'text-white/80' : 'text-[#8E8777]'}`}>
-                          {cc.mainCategoryName || cc.mainCategorySlug}
-                        </p>
-                      </div>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-[#FAF7F4] text-[#6E6859]'
-                          }`}
-                      >
-                        {count} fields
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Card>
-          </div>
-
-          {/* Right: Fields List + Add/Edit/Delete */}
-          <div className="lg:col-span-8">
-            {(() => {
-              const selectedChild =
-                taxonomy.childCategories.find((c) => c.id === selectedFieldChildId) ||
-                taxonomy.childCategories[0];
-              const fieldsForChild = (taxonomy.fieldSchemas || [])
-                .filter(
-                  (f) =>
-                    selectedChild &&
-                    (f.childCategoryId === selectedChild.id || f.childCategorySlug === selectedChild.slug)
-                )
-                .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-
-              return (
-                <Card
-                  title={`Dynamic Form Fields — ${selectedChild?.name || ''}`}
-                  subtitle="Changes sync immediately to Vendor Product Creation Step 2 without code deployments"
-                >
-                  <div className="flex items-center justify-between gap-2 mb-4">
-                    <span className="text-xs text-[#6E6859]">
-                      Showing <strong>{fieldsForChild.length}</strong> configured fields for{' '}
-                      <strong>{selectedChild?.name}</strong>
-                    </span>
-                    {selectedChild && (
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          setFieldModal({
-                            isNew: true,
-                            childCategoryId: selectedChild.id,
-                            childCategorySlug: selectedChild.slug,
-                            label: '',
-                            fieldKey: '',
-                            fieldType: 'text',
-                            optionsCsv: '',
-                            required: false,
-                            placeholder: '',
-                            helpText: '',
-                            unitSuffix: '',
-                            group: 'Core Product Attributes',
-                            displayOrder: fieldsForChild.length + 1,
-                            validation: {},
-                            isActive: true,
-                          })
-                        }
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add Field
-                      </Button>
-                    )}
-                  </div>
-
-                  {fieldsForChild.length === 0 ? (
-                    <EmptyState
-                      icon={<Sliders className="w-5 h-5" />}
-                      title="No fields configured yet"
-                      description="Click Add Field to configure category-specific fields for Vendors."
-                    />
-                  ) : (
-                    <div className="space-y-2.5 text-xs">
-                      {fieldsForChild.map((f) => (
-                        <div
-                          key={f.id}
-                          className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${f.isActive !== false ? 'bg-white border-[#E5DCD3]' : 'bg-slate-50 border-slate-200 opacity-70'
-                            }`}
-                        >
-                          <div className="space-y-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#FAF7F4] border border-[#E5DCD3] text-[#6E6859]">
-                                #{f.displayOrder}
-                              </span>
-                              <span className="font-bold text-[#5E5946]">{f.label}</span>
-                              <Badge variant="info">{f.fieldType}</Badge>
-                              {f.required ? <Badge variant="warning">Required</Badge> : <Badge variant="default">Optional</Badge>}
-                              {f.isActive === false && <Badge variant="error">Inactive</Badge>}
-                            </div>
-                            <p className="text-[11px] text-[#6E6859]">
-                              Key: <code className="font-mono">{f.fieldKey}</code> • Section: {f.group || 'Core Product Attributes'}
-                              {f.unitSuffix ? ` • Unit: ${f.unitSuffix}` : ''}
-                            </p>
-                            {Array.isArray(f.options) && f.options.length > 0 && (
-                              <p className="text-[11px] text-[#8E8777] truncate">
-                                Options: {f.options.join(', ')}
-                              </p>
-                            )}
-                            {f.validation && Object.keys(f.validation).length > 0 && (
-                              <p className="text-[11px] text-[#8E8777]">
-                                Validation: {JSON.stringify(f.validation)}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                setFieldModal({
-                                  ...f,
-                                  optionsCsv: Array.isArray(f.options) ? f.options.join(', ') : '',
-                                  validation: f.validation || {},
-                                })
-                              }
-                            >
-                              <Edit3 className="w-3.5 h-3.5" /> Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={f.isActive !== false ? 'success' : 'outline'}
-                              onClick={async () => {
-                                await adminApi.updateCategoryField(f.id, { isActive: !(f.isActive !== false) });
-                                loadTaxonomy();
-                              }}
-                            >
-                              {f.isActive !== false ? 'Active' : 'Off'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={async () => {
-                                await adminApi.deleteCategoryField(f.id);
-                                pushToast({ title: 'Field Removed', message: `${f.label} deleted.` });
-                                loadTaxonomy();
-                              }}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              );
-            })()}
           </div>
         </div>
       ) : (
@@ -2858,10 +2323,11 @@ export const CatalogProductsPage: React.FC<{
                   sortOrder: Number(mainEditModal.sortOrder) || 1,
                   isActive: mainEditModal.isActive !== false,
                   showInNavigation: mainEditModal.showInNavigation !== false,
-                  saveAsDraft: workInDraftMode,
+                  saveAsDraft: false,
                 });
                 pushToast({
-                  title: workInDraftMode ? 'Main Category Staged in Draft' : 'Main Category Published',
+                  title: 'Saved & Synchronized',
+                  message: 'Changes saved and synchronized successfully.',
                 });
                 setMainEditModal(null);
                 loadTaxonomy();
@@ -2991,9 +2457,9 @@ export const CatalogProductsPage: React.FC<{
                     image: childEditModal.image,
                     sortOrder: Number(childEditModal.sortOrder) || 1,
                     isActive: childEditModal.isActive !== false,
-                    saveAsDraft: workInDraftMode,
+                    saveAsDraft: false,
                   });
-                  pushToast({ title: workInDraftMode ? 'Child Category Staged in Draft' : 'Child Category Created' });
+                  pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                 } else {
                   const updated = await adminApi.updateChildCategory(childEditModal.id, {
                     mainCategoryId: childEditModal.mainCategoryId,
@@ -3003,14 +2469,14 @@ export const CatalogProductsPage: React.FC<{
                     image: childEditModal.image,
                     sortOrder: Number(childEditModal.sortOrder) || 1,
                     isActive: childEditModal.isActive !== false,
-                    saveAsDraft: workInDraftMode,
+                    saveAsDraft: false,
                   });
                   pushToast({
-                    title: workInDraftMode ? 'Child Category Staged in Draft' : 'Child Category Updated',
+                    title: 'Saved & Synchronized',
                     message:
                       updated?.migratedProductsCount > 0
-                        ? `Updated ${updated.migratedProductsCount} linked products cleanly.`
-                        : 'Saved cleanly.',
+                        ? `Changes saved and synchronized successfully (${updated.migratedProductsCount} products updated).`
+                        : 'Changes saved and synchronized successfully.',
                   });
                 }
                 setChildEditModal(null);
@@ -3138,239 +2604,6 @@ export const CatalogProductsPage: React.FC<{
         )}
       </Modal>
 
-      {/* Add / Edit Dynamic Category Field Schema Modal */}
-      <Modal
-        open={Boolean(fieldModal)}
-        onClose={() => setFieldModal(null)}
-        title={fieldModal?.isNew ? 'Add Dynamic Category Field' : `Edit Field — ${fieldModal?.label || ''}`}
-      >
-        {fieldModal && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                const payload = {
-                  childCategoryId: fieldModal.childCategoryId,
-                  label: fieldModal.label,
-                  fieldKey: fieldModal.fieldKey || undefined,
-                  fieldType: fieldModal.fieldType,
-                  options:
-                    fieldModal.fieldType === 'dropdown' || fieldModal.fieldType === 'multiselect'
-                      ? String(fieldModal.optionsCsv || '')
-                        .split(',')
-                        .map((s) => s.trim())
-                        .filter(Boolean)
-                      : undefined,
-                  required: Boolean(fieldModal.required),
-                  placeholder: fieldModal.placeholder || undefined,
-                  helpText: fieldModal.helpText || undefined,
-                  unitSuffix: fieldModal.unitSuffix || undefined,
-                  group: fieldModal.group || 'Core Product Attributes',
-                  displayOrder: Number(fieldModal.displayOrder) || 1,
-                  isActive: fieldModal.isActive !== false,
-                  validation: {
-                    ...(fieldModal.validation?.min !== undefined && fieldModal.validation?.min !== '' ? { min: Number(fieldModal.validation.min) } : {}),
-                    ...(fieldModal.validation?.max !== undefined && fieldModal.validation?.max !== '' ? { max: Number(fieldModal.validation.max) } : {}),
-                    ...(fieldModal.validation?.minLength !== undefined && fieldModal.validation?.minLength !== '' ? { minLength: Number(fieldModal.validation.minLength) } : {}),
-                    ...(fieldModal.validation?.maxLength !== undefined && fieldModal.validation?.maxLength !== '' ? { maxLength: Number(fieldModal.validation.maxLength) } : {}),
-                    ...(fieldModal.validation?.pattern ? { pattern: fieldModal.validation.pattern } : {}),
-                  },
-                };
-                if (fieldModal.isNew) {
-                  await adminApi.createCategoryField(payload);
-                  pushToast({ title: 'Dynamic Field Added', message: 'Reflected immediately in Vendor product form.' });
-                } else {
-                  await adminApi.updateCategoryField(fieldModal.id, payload);
-                  pushToast({ title: 'Dynamic Field Updated' });
-                }
-                setFieldModal(null);
-                loadTaxonomy();
-              } catch (err: any) {
-                pushToast({ title: 'Save Failed', message: err.message, variant: 'error' });
-              }
-            }}
-            className="space-y-3 text-xs"
-          >
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Field Label *</label>
-                <input
-                  required
-                  value={fieldModal.label || ''}
-                  onChange={(e) => setFieldModal({ ...fieldModal, label: e.target.value })}
-                  placeholder="e.g. Compressive Strength"
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Field Type *</label>
-                <select
-                  value={fieldModal.fieldType || 'text'}
-                  onChange={(e) => setFieldModal({ ...fieldModal, fieldType: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                >
-                  <option value="text">Text</option>
-                  <option value="number">Number</option>
-                  <option value="dropdown">Dropdown</option>
-                  <option value="multiselect">Multi-Select</option>
-                  <option value="checkbox">Checkbox (Yes / No)</option>
-                  <option value="textarea">Multi-line Text</option>
-                </select>
-              </div>
-            </div>
-
-            {(fieldModal.fieldType === 'dropdown' || fieldModal.fieldType === 'multiselect') && (
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Options (comma separated) *</label>
-                <input
-                  required
-                  value={fieldModal.optionsCsv || ''}
-                  onChange={(e) => setFieldModal({ ...fieldModal, optionsCsv: e.target.value })}
-                  placeholder="e.g. Grade 43, Grade 53, PPC"
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Section Group</label>
-                <select
-                  value={fieldModal.group || 'Core Product Attributes'}
-                  onChange={(e) => setFieldModal({ ...fieldModal, group: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                >
-                  <option value="Core Product Attributes">Core Product Attributes</option>
-                  <option value="Dimensions & Packaging">Dimensions & Packaging</option>
-                  <option value="Performance & Compliance">Performance & Compliance</option>
-                </select>
-              </div>
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Display Order</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={fieldModal.displayOrder ?? 1}
-                  onChange={(e) => setFieldModal({ ...fieldModal, displayOrder: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Placeholder</label>
-                <input
-                  value={fieldModal.placeholder || ''}
-                  onChange={(e) => setFieldModal({ ...fieldModal, placeholder: e.target.value })}
-                  placeholder="Helpful vendor hint"
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Unit Suffix (optional)</label>
-                <input
-                  value={fieldModal.unitSuffix || ''}
-                  onChange={(e) => setFieldModal({ ...fieldModal, unitSuffix: e.target.value })}
-                  placeholder="e.g. Kg, mm, W"
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                />
-              </div>
-            </div>
-
-            {fieldModal.fieldType === 'number' ? (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-[#5E5946] mb-1">Min Value</label>
-                  <input
-                    type="number"
-                    value={fieldModal.validation?.min ?? ''}
-                    onChange={(e) =>
-                      setFieldModal({
-                        ...fieldModal,
-                        validation: { ...fieldModal.validation, min: e.target.value },
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-[#5E5946] mb-1">Max Value</label>
-                  <input
-                    type="number"
-                    value={fieldModal.validation?.max ?? ''}
-                    onChange={(e) =>
-                      setFieldModal({
-                        ...fieldModal,
-                        validation: { ...fieldModal.validation, max: e.target.value },
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-[#5E5946] mb-1">Min Length</label>
-                  <input
-                    type="number"
-                    value={fieldModal.validation?.minLength ?? ''}
-                    onChange={(e) =>
-                      setFieldModal({
-                        ...fieldModal,
-                        validation: { ...fieldModal.validation, minLength: e.target.value },
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-[#5E5946] mb-1">Regex Pattern (optional)</label>
-                  <input
-                    value={fieldModal.validation?.pattern || ''}
-                    onChange={(e) =>
-                      setFieldModal({
-                        ...fieldModal,
-                        validation: { ...fieldModal.validation, pattern: e.target.value },
-                      })
-                    }
-                    placeholder="e.g. ^[A-Z0-9-]+$"
-                    className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center gap-6 pt-1">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={Boolean(fieldModal.required)}
-                  onChange={(e) => setFieldModal({ ...fieldModal, required: e.target.checked })}
-                />
-                <span className="font-semibold text-[#5E5946]">Required Field</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={fieldModal.isActive !== false}
-                  onChange={(e) => setFieldModal({ ...fieldModal, isActive: e.target.checked })}
-                />
-                <span className="font-semibold text-[#5E5946]">Active</span>
-              </label>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setFieldModal(null)}>
-                Cancel
-              </Button>
-              <Button type="submit">{fieldModal.isNew ? 'Add Field' : 'Save Field'}</Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
       {/* Desktop Navigation Item Add / Edit Modal */}
       <Modal
         open={Boolean(navModal)}
@@ -3400,15 +2633,14 @@ export const CatalogProductsPage: React.FC<{
                   highlight: Boolean(navModal.highlight),
                   isVisible: navModal.isVisible !== false,
                   isActive: navModal.isActive !== false,
-                  saveAsDraft: workInDraftMode,
+                  saveAsDraft: false,
                 };
                 if (navModal.isNew) {
                   await adminApi.createDesktopNavItem(payload);
-                  pushToast({ title: workInDraftMode ? 'Navigation Item Added to Draft' : 'Navigation Item Published' });
                 } else {
                   await adminApi.updateDesktopNavItem(navModal.id, payload);
-                  pushToast({ title: workInDraftMode ? 'Navigation Draft Updated' : 'Navigation Updated' });
                 }
+                pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                 setNavModal(null);
                 loadTaxonomy();
               } catch (err: any) {
@@ -3590,7 +2822,7 @@ export const CatalogProductsPage: React.FC<{
               <Button type="button" variant="outline" onClick={() => setNavModal(null)}>
                 Cancel
               </Button>
-              <Button type="submit">{workInDraftMode ? 'Save Navigation Draft' : 'Save & Publish Nav'}</Button>
+              <Button type="submit">Save</Button>
             </div>
           </form>
         )}
@@ -3613,9 +2845,8 @@ export const CatalogProductsPage: React.FC<{
                     name: productTypeModal.name,
                     slug: productTypeModal.slug || undefined,
                     sortOrder: Number(productTypeModal.sortOrder) || 1,
-                    saveAsDraft: workInDraftMode,
+                    saveAsDraft: false,
                   });
-                  pushToast({ title: workInDraftMode ? 'Child Category Staged in Draft' : 'Child Category Created' });
                 } else {
                   await adminApi.updateProductType(productTypeModal.id, {
                     childCategoryId: productTypeModal.childCategoryId,
@@ -3623,10 +2854,10 @@ export const CatalogProductsPage: React.FC<{
                     slug: productTypeModal.slug,
                     sortOrder: Number(productTypeModal.sortOrder) || 1,
                     isActive: productTypeModal.isActive !== false,
-                    saveAsDraft: workInDraftMode,
+                    saveAsDraft: false,
                   });
-                  pushToast({ title: workInDraftMode ? 'Child Category Staged in Draft' : 'Child Category Updated' });
                 }
+                pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                 setProductTypeModal(null);
                 loadTaxonomy();
               } catch (err: any) {
@@ -3740,20 +2971,20 @@ export const CatalogProductsPage: React.FC<{
                     if (deleteTargetModal.kind === 'MAIN') {
                       await adminApi.deleteMainCategory(deleteTargetModal.item.id, {
                         reassignToMainId: deleteTargetModal.reassignToId || undefined,
-                        saveAsDraft: workInDraftMode,
+                        saveAsDraft: false,
                       });
                     } else if (deleteTargetModal.kind === 'CHILD') {
                       await adminApi.deleteChildCategory(deleteTargetModal.item.id, {
                         reassignToChildId: deleteTargetModal.reassignToId || undefined,
-                        saveAsDraft: workInDraftMode,
+                        saveAsDraft: false,
                       });
                     } else {
                       await adminApi.deleteProductType(deleteTargetModal.item.id, {
                         reassignToTypeId: deleteTargetModal.reassignToId || undefined,
-                        saveAsDraft: workInDraftMode,
+                        saveAsDraft: false,
                       });
                     }
-                    pushToast({ title: 'Removed & Migrated Safely' });
+                    pushToast({ title: 'Saved & Synchronized', message: 'Changes saved and synchronized successfully.' });
                     setDeleteTargetModal(null);
                     loadTaxonomy();
                   } catch (err: any) {
@@ -3797,104 +3028,6 @@ export const CatalogProductsPage: React.FC<{
         </form>
       </Modal>
 
-      <Modal open={Boolean(brandEditModal)} onClose={() => setBrandEditModal(null)} title="Edit Brand">
-        {brandEditModal && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              await adminApi.updateBrand(brandEditModal.id, {
-                name: brandEditModal.name,
-                description: brandEditModal.description,
-                isActive: brandEditModal.isActive !== false,
-              });
-              pushToast({ title: 'Brand Updated' });
-              setBrandEditModal(null);
-              loadTaxonomy();
-            }}
-            className="space-y-3 text-xs"
-          >
-            <input
-              required
-              value={brandEditModal.name || ''}
-              onChange={(e) => setBrandEditModal({ ...brandEditModal, name: e.target.value })}
-              placeholder="Brand Name"
-              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-            />
-            <textarea
-              value={brandEditModal.description || ''}
-              onChange={(e) => setBrandEditModal({ ...brandEditModal, description: e.target.value })}
-              placeholder="Description"
-              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-            />
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={brandEditModal.isActive !== false}
-                onChange={(e) => setBrandEditModal({ ...brandEditModal, isActive: e.target.checked })}
-              />
-              <span>Active Brand on Storefront</span>
-            </label>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setBrandEditModal(null)}>
-                Cancel
-              </Button>
-              <Button type="submit">Save Brand</Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      <Modal open={Boolean(attrEditModal)} onClose={() => setAttrEditModal(null)} title="Edit Product Attribute">
-        {attrEditModal && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              await adminApi.updateAttribute(attrEditModal.id, {
-                name: attrEditModal.name,
-                categoryName: attrEditModal.categoryName,
-                values: String(attrEditModal.valuesCsv || '')
-                  .split(',')
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-                isFilterable: attrEditModal.isFilterable !== false,
-              });
-              pushToast({ title: 'Attribute Updated' });
-              setAttrEditModal(null);
-              loadTaxonomy();
-            }}
-            className="space-y-3 text-xs"
-          >
-            <input
-              required
-              value={attrEditModal.name || ''}
-              onChange={(e) => setAttrEditModal({ ...attrEditModal, name: e.target.value })}
-              placeholder="Attribute Name"
-              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-            />
-            <input
-              required
-              value={attrEditModal.categoryName || ''}
-              onChange={(e) => setAttrEditModal({ ...attrEditModal, categoryName: e.target.value })}
-              placeholder="Category Name"
-              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-            />
-            <input
-              required
-              value={attrEditModal.valuesCsv || ''}
-              onChange={(e) => setAttrEditModal({ ...attrEditModal, valuesCsv: e.target.value })}
-              placeholder="Values (comma separated)"
-              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-            />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setAttrEditModal(null)}>
-                Cancel
-              </Button>
-              <Button type="submit">Save Attribute</Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
       {/* Add / Edit Centralized Category Filter Configuration Modal */}
       <Modal
         open={Boolean(filterConfigModal)}
@@ -3922,19 +3055,17 @@ export const CatalogProductsPage: React.FC<{
                   showInCustomer: filterConfigModal.showInCustomer !== false,
                   sortOrder: Number(filterConfigModal.sortOrder || 1),
                   isActive: filterConfigModal.isActive !== false,
-                  saveAsDraft: workInDraftMode,
+                  saveAsDraft: false,
                 };
                 if (filterConfigModal.isNew) {
                   await adminApi.createCategoryFilterConfig(payload);
-                  pushToast({
-                    title: workInDraftMode ? 'Filter Saved to Draft' : 'Filter Published Live',
-                  });
                 } else {
                   await adminApi.updateCategoryFilterConfig(filterConfigModal.id, payload);
-                  pushToast({
-                    title: workInDraftMode ? 'Filter Draft Updated' : 'Filter Updated Live',
-                  });
                 }
+                pushToast({
+                  title: 'Saved & Synchronized',
+                  message: 'Changes saved and synchronized successfully.',
+                });
                 setFilterConfigModal(null);
                 loadTaxonomy();
               } catch (err: any) {
@@ -4058,9 +3189,7 @@ export const CatalogProductsPage: React.FC<{
               <Button type="button" variant="outline" onClick={() => setFilterConfigModal(null)}>
                 Cancel
               </Button>
-              <Button type="submit">
-                {workInDraftMode ? 'Save Filter Draft' : 'Save & Publish Filter'}
-              </Button>
+              <Button type="submit">Save</Button>
             </div>
           </form>
         )}

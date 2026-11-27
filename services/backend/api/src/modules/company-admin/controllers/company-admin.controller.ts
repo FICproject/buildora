@@ -1399,6 +1399,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { navigationId: created.id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, navigationId: created.id }, tenantId);
+      realtimeBus.emitPublic('navigation.updated', { navigationId: created.id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
       realtimeBus.emitToAdmin('taxonomy.published', { taxonomyUpdated: true }, tenantId);
     }
@@ -1432,6 +1433,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { reordered: true }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('navigation.updated', { reordered: true }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
       realtimeBus.emitToAdmin('taxonomy.published', { taxonomyUpdated: true }, tenantId);
     }
@@ -1463,6 +1465,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { navigationId: updated.id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true, navigationId: updated.id }, tenantId);
+      realtimeBus.emitPublic('navigation.updated', { navigationId: updated.id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
       realtimeBus.emitToAdmin('taxonomy.published', { taxonomyUpdated: true }, tenantId);
     }
@@ -1483,6 +1486,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedNavId: id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('navigation.updated', { deletedNavId: id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
       realtimeBus.emitToAdmin('taxonomy.published', { taxonomyUpdated: true }, tenantId);
     }
@@ -1568,6 +1572,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { mainCategoryId: created.id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('category.updated', { mainCategoryId: created.id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -1586,6 +1591,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { mainCategoryId: updated.id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('category.updated', { mainCategoryId: updated.id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -1611,6 +1617,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedMainId: id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('category.updated', { deletedMainId: id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: res, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -1641,6 +1648,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { childCategoryId: created.id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('childCategory.updated', { childCategoryId: created.id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -1659,6 +1667,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { childCategoryId: updated.id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('childCategory.updated', { childCategoryId: updated.id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -1684,6 +1693,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedChildId: id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('childCategory.updated', { deletedChildId: id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: res, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -1997,6 +2007,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { reorderedChildCategories: true }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('childCategory.updated', { reordered: true }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: result, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -2031,6 +2042,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { reorderedProductTypes: true }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('productType.updated', { reordered: true }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: result, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -2048,6 +2060,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { productTypeId: created.id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('productType.updated', { productTypeId: created.id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: created, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -2066,6 +2079,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { productTypeId: updated.id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('productType.updated', { productTypeId: updated.id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: updated, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -2091,6 +2105,7 @@ export class CompanyAdminController {
       realtimeBus.emitToAdmin('taxonomy.draft_saved', { deletedProductTypeId: id }, tenantId);
     } else {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('productType.updated', { deletedProductTypeId: id }, tenantId);
       realtimeBus.emitPublic('product.updated', { taxonomyUpdated: true }, tenantId);
     }
     return { success: true, data: res, metadata: taxonomyService.getPublishMetadata(tenantId) };
@@ -2110,6 +2125,7 @@ export class CompanyAdminController {
     );
     if (!body?.saveAsDraft) {
       realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+      realtimeBus.emitPublic('category.updated', { reordered: true }, tenantId);
     }
     return {
       success: true,
@@ -2183,6 +2199,7 @@ export class CompanyAdminController {
     if (!body?.saveAsDraft) {
       realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
       realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('newLaunches.updated', { newLaunchesUpdated: true }, tenantId);
     }
     return { success: true, data: list };
   }
@@ -2224,6 +2241,7 @@ export class CompanyAdminController {
     if (!body?.saveAsDraft) {
       realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
       realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('newLaunches.updated', { newLaunchesUpdated: true }, tenantId);
     }
     return { success: true, data: created };
   }
@@ -2240,6 +2258,7 @@ export class CompanyAdminController {
     if (!body?.saveAsDraft) {
       realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
       realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('newLaunches.updated', { newLaunchesUpdated: true }, tenantId);
     }
     return { success: true, data: updated };
   }
@@ -2256,6 +2275,7 @@ export class CompanyAdminController {
     if (!body?.saveAsDraft) {
       realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
       realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('newLaunches.updated', { newLaunchesUpdated: true }, tenantId);
     }
     return { success: true, data: updated };
   }
@@ -2274,6 +2294,7 @@ export class CompanyAdminController {
     if (!isDraft) {
       realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
       realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('newLaunches.updated', { newLaunchesUpdated: true }, tenantId);
     }
     return { success: true, data: updated };
   }
@@ -2320,6 +2341,7 @@ export class CompanyAdminController {
     if (!isDraft) {
       realtimeBus.emitPublic('product.updated', { newLaunchesUpdated: true }, tenantId);
       realtimeBus.emitPublic('taxonomy.published', { newLaunchesUpdated: true }, tenantId);
+      realtimeBus.emitPublic('newLaunches.updated', { newLaunchesUpdated: true }, tenantId);
     }
     return { success: true, data: removed };
   }

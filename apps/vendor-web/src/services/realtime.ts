@@ -32,8 +32,19 @@ export function initVendorRealtime() {
   });
 
   const refreshAll = (event: string, payload?: any) => {
+    if (payload?.tenantId && payload.tenantId !== VENDOR_APP_CONFIG.defaultTenantId) {
+      return;
+    }
     window.dispatchEvent(new CustomEvent('buildora:vendor:realtime', { detail: { event, payload } }));
   };
+
+  let hasConnectedOnce = false;
+  socket.on('connect', () => {
+    if (hasConnectedOnce) {
+      refreshAll('taxonomy.published', { tenantId: VENDOR_APP_CONFIG.defaultTenantId, reconnected: true });
+    }
+    hasConnectedOnce = true;
+  });
 
   socket.on('vendor.application.approved', (payload) => {
     toast.success('Your vendor application was approved by Company Admin!');
@@ -63,6 +74,19 @@ export function initVendorRealtime() {
     toast.info('Catalog categories updated by Company Admin.');
     refreshAll('taxonomy.published', payload);
   });
+
+  for (const evt of [
+    'navigation.updated',
+    'category.updated',
+    'childCategory.updated',
+    'productType.updated',
+    'filters.updated',
+    'newLaunches.updated',
+  ]) {
+    socket.on(evt, (payload) => {
+      refreshAll('taxonomy.published', payload);
+    });
+  }
 
   socket.on('product.updated', (payload) => {
     if (payload?.taxonomyUpdated) {

@@ -49,7 +49,6 @@ export function App() {
           <Route path="products/child-categories" element={<CatalogProductsPage initialSection="CHILD_CATEGORIES" />} />
           <Route path="products/product-types" element={<CatalogProductsPage initialSection="PRODUCT_TYPES" />} />
           <Route path="products/filters" element={<CatalogProductsPage initialSection="FILTERS" />} />
-          <Route path="products/fields" element={<CatalogProductsPage initialSection="FIELDS" />} />
           <Route path="products/new-launches" element={<CatalogProductsPage initialSection="NEW_LAUNCHES" />} />
           {/* Legacy /catalog/* route redirects */}
           <Route path="catalog" element={<Navigate to="/products" replace />} />
@@ -58,7 +57,6 @@ export function App() {
           <Route path="catalog/child-categories" element={<Navigate to="/products/child-categories" replace />} />
           <Route path="catalog/product-types" element={<Navigate to="/products/product-types" replace />} />
           <Route path="catalog/filters" element={<Navigate to="/products/filters" replace />} />
-          <Route path="catalog/fields" element={<Navigate to="/products/fields" replace />} />
           <Route path="catalog/new-launches" element={<Navigate to="/products/new-launches" replace />} />
           <Route path="inventory" element={<InventoryPage defaultTab="INVENTORY" />} />
           <Route path="warehouses" element={<InventoryPage defaultTab="WAREHOUSES" />} />

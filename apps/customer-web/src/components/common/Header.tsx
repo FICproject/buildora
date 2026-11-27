@@ -173,14 +173,14 @@ export const Header: React.FC = () => {
   }, []);
 
   const visibleMainCategories = React.useMemo(() => {
-    const source = mainCategories.length > 0 ? mainCategories : MAIN_CATEGORIES_SEED;
+    const source = hasLoadedTaxonomy ? mainCategories : MAIN_CATEGORIES_SEED;
     return [...source]
       .filter((m) => m.isActive !== false && m.showInNavigation !== false)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-  }, [mainCategories]);
+  }, [hasLoadedTaxonomy, mainCategories]);
 
   const visibleDesktopNavigation = React.useMemo(() => {
-    if (desktopNavigation.length > 0) {
+    if (hasLoadedTaxonomy) {
       return [...desktopNavigation]
         .filter((nav) => nav.isActive !== false && nav.isVisible !== false)
         .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
@@ -203,7 +203,7 @@ export const Header: React.FC = () => {
       { id: 'nav-new-launches', label: 'New Launches', slug: 'new-launches', itemType: 'NEW_LAUNCHES', route: '/new-launches', hasDropdown: true, displayOrder: 98, isVisible: true, isActive: true },
       { id: 'nav-deals', label: 'Deals', slug: 'deals', itemType: 'DEALS', route: '/deals', hasDropdown: false, highlight: true, displayOrder: 99, isVisible: true, isActive: true },
     ] as DesktopNavItem[];
-  }, [desktopNavigation, visibleMainCategories]);
+  }, [hasLoadedTaxonomy, desktopNavigation, visibleMainCategories]);
 
   // Live Admin-published New Launches promotional collections
   const liveNewLaunchCollections = React.useMemo(() => {
@@ -1164,19 +1164,35 @@ export const Header: React.FC = () => {
               )}
             </div>
 
-            {/* Primary Mobile Navigation: Home */}
-            <Link
-              to="/"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={`flex items-center gap-2.5 p-3 rounded-xl text-xs font-black transition-colors ${
-                isHomeActive
-                  ? 'bg-brand-blue-900 text-white shadow-sm'
-                  : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200'
-              }`}
-            >
-              <Home className={`w-4 h-4 ${isHomeActive ? 'text-white' : 'text-brand-orange-500'}`} />
-              <span>Home</span>
-            </Link>
+            {/* Primary Mobile Navigation Links (Synced with Desktop Navigation) */}
+            <div className="space-y-1.5">
+              {visibleDesktopNavigation
+                .filter((nav) => nav.itemType === 'HOME' || nav.itemType === 'CUSTOM_LINK' || nav.itemType === 'DEALS')
+                .map((nav) => {
+                  const isLinkActive = nav.route === '/' ? isHomeActive : location.pathname === nav.route;
+                  return (
+                    <Link
+                      key={nav.id}
+                      to={nav.route || '/'}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center gap-2.5 p-3 rounded-xl text-xs font-black transition-colors ${
+                        isLinkActive
+                          ? 'bg-brand-blue-900 text-white shadow-sm'
+                          : nav.itemType === 'DEALS'
+                            ? 'bg-orange-50 hover:bg-orange-100 text-brand-orange-600 border border-orange-200/70'
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200'
+                      }`}
+                    >
+                      {nav.itemType === 'DEALS' ? (
+                        <Sparkles className={`w-4 h-4 ${isLinkActive ? 'text-white' : 'text-brand-orange-500'}`} />
+                      ) : (
+                        <Home className={`w-4 h-4 ${isLinkActive ? 'text-white' : 'text-brand-orange-500'}`} />
+                      )}
+                      <span>{nav.label}</span>
+                    </Link>
+                  );
+                })}
+            </div>
 
             {/* Main Categories Mobile Accordion */}
             <div className="space-y-1.5">
@@ -1184,7 +1200,15 @@ export const Header: React.FC = () => {
                 Main Categories
               </div>
               <div className="space-y-1">
-                {visibleMainCategories.map((dept) => {
+                {visibleMainCategories
+                  .filter(
+                    (dept) =>
+                      !hasLoadedTaxonomy ||
+                      visibleDesktopNavigation.some(
+                        (n) => n.itemType === 'MAIN_CATEGORY' && (n.mainCategoryId === dept.id || n.mainCategorySlug === dept.slug)
+                      )
+                  )
+                  .map((dept) => {
                   const Icon = DEPARTMENT_ICONS[dept.slug] || Building2;
                   const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === dept.slug);
                   const isActive = isDeptActive({ slug: dept.slug, categorySlugs: fallbackDept?.categorySlugs });

@@ -12,6 +12,11 @@ export type RealtimeEventName =
   | 'inventory.updated'
   | 'taxonomy.draft_saved'
   | 'taxonomy.published'
+  | 'navigation.updated'
+  | 'category.updated'
+  | 'childCategory.updated'
+  | 'productType.updated'
+  | 'newLaunches.updated'
   | 'content.published'
   | 'pricing.updated'
   | 'settings.updated'
@@ -42,7 +47,8 @@ class RealtimeBus {
   emitPublic(event: RealtimeEventName, data: Record<string, any>, tenantId = this.defaultTenant) {
     if (!this.server) return;
     const payload = this.wrapPayload(event, { tenantId, ...data });
-    this.server.to('public').to(`tenant:${tenantId}:public`).emit(event, payload);
+    // Scope public storefront/vendor broadcasts strictly to the target tenant room
+    this.server.to(`tenant:${tenantId}:public`).emit(event, payload);
   }
 
   emitToAdmin(event: RealtimeEventName, data: Record<string, any>, tenantId = this.defaultTenant) {

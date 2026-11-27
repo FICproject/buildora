@@ -7,7 +7,8 @@ import { companyAdminDataService } from '../../company-admin/services/company-ad
 import { vendorPromotions } from '../../vendors/controllers/vendor.controller';
 
 function buildTaxonomyData(tenantId?: string, includeHidden = false) {
-  const pool = taxonomyService.getTenantPool(tenantId);
+  const cleanTenant = tenantId || 'tenant-buildora-blr';
+  const pool = taxonomyService.getTenantPool(cleanTenant);
   const visibleProducts = dbStore.products.filter(isProductCustomerVisible);
 
   const mainCounts = new Map<string, number>();
@@ -31,7 +32,11 @@ function buildTaxonomyData(tenantId?: string, includeHidden = false) {
   }
 
   const mainCategories = pool.mainCategories
-    .filter((m) => includeHidden || m.isActive !== false)
+    .filter(
+      (m) =>
+        includeHidden ||
+        (m.isActive !== false && taxonomyService.isMainCategoryActiveForPortals(cleanTenant, m.id))
+    )
     .map((main) => {
       const childCategories = pool.childCategories
         .filter((c) => c.mainCategoryId === main.id && (includeHidden || c.isActive !== false))

@@ -44,6 +44,9 @@ export function initCustomerRealtime(queryClient?: QueryClient) {
   });
 
   const refreshCatalog = (payload?: any) => {
+    if (payload?.tenantId && payload.tenantId !== DEFAULT_TENANT_ID) {
+      return;
+    }
     queryClient?.invalidateQueries({ queryKey: ['taxonomy'] });
     queryClient?.invalidateQueries({ queryKey: ['categories'] });
     queryClient?.invalidateQueries({ queryKey: ['products'] });
@@ -52,6 +55,9 @@ export function initCustomerRealtime(queryClient?: QueryClient) {
   };
 
   const refreshConfig = (payload?: any) => {
+    if (payload?.tenantId && payload.tenantId !== DEFAULT_TENANT_ID) {
+      return;
+    }
     void useStoreConfigStore.getState().loadConfig(true);
     queryClient?.invalidateQueries({ queryKey: ['store-config'] });
     queryClient?.invalidateQueries({ queryKey: ['deals'] });
@@ -61,10 +67,31 @@ export function initCustomerRealtime(queryClient?: QueryClient) {
     window.dispatchEvent(new CustomEvent('buildora:realtime:config', { detail: payload }));
   };
 
+  let hasConnectedOnce = false;
+  socket.on('connect', () => {
+    if (hasConnectedOnce) {
+      refreshCatalog({ tenantId: DEFAULT_TENANT_ID, reconnected: true });
+      refreshConfig({ tenantId: DEFAULT_TENANT_ID, reconnected: true });
+    }
+    hasConnectedOnce = true;
+  });
+
   socket.on('taxonomy.published', (payload) => {
     refreshCatalog(payload);
     refreshConfig(payload);
   });
+  for (const evt of [
+    'navigation.updated',
+    'category.updated',
+    'childCategory.updated',
+    'productType.updated',
+    'newLaunches.updated',
+  ]) {
+    socket.on(evt, (payload) => {
+      refreshCatalog(payload);
+      refreshConfig(payload);
+    });
+  }
   socket.on('product.approved', refreshCatalog);
   socket.on('product.updated', refreshCatalog);
   socket.on('product.suspended', refreshCatalog);

@@ -141,6 +141,18 @@ export class TaxonomyService implements OnModuleInit {
   private publishMeta = new Map<string, CatalogPublishMetadata>();
   private newLaunchDrafts = new Map<string, NewLaunchCollection[]>();
   private newLaunchDraftDirty = new Set<string>();
+  private baselineMainCategories: MainCategory[] = [];
+  private baselineChildCategories: ChildCategory[] = [];
+  private baselineProductTypes: ProductTypeNode[] = [];
+  private baselineDesktopNav: DesktopNavItem[] = [];
+  private tenantIsolatedPools = new Map<
+    string,
+    {
+      mainCategories: MainCategory[];
+      childCategories: ChildCategory[];
+      productTypes: ProductTypeNode[];
+    }
+  >();
 
   constructor() {
     this.seedDefaultsIfEmpty();
@@ -1243,6 +1255,8 @@ export class TaxonomyService implements OnModuleInit {
     this.reconcilePlumbingTaxonomySync(GLOBAL_TENANT);
     this.reconcileNewLaunchesCollectionsSync(GLOBAL_TENANT);
 
+    this.captureBaselineSeedSnapshot();
+
     // Persist reconciled Civil, Furniture, Electrical, Plumbing & New Launches changes idempotently if MongoDB is connected
     if (platformPersistenceService.isDbConnected()) {
       for (const c of this.childCategories.filter((x) => ['mc-1', 'mc-2', 'mc-3', 'mc-4', 'mc-5'].includes(x.mainCategoryId))) {
@@ -1304,8 +1318,116 @@ export class TaxonomyService implements OnModuleInit {
     );
   }
 
+  private captureBaselineSeedSnapshot() {
+    this.baselineMainCategories = this.cloneRecord(
+      this.mainCategories.filter((m) => !m.tenantId || m.tenantId === GLOBAL_TENANT)
+    );
+    this.baselineChildCategories = this.cloneRecord(
+      this.childCategories.filter((c) => !c.tenantId || c.tenantId === GLOBAL_TENANT)
+    );
+    this.baselineProductTypes = this.cloneRecord(
+      this.productTypes.filter((pt) => !pt.tenantId || pt.tenantId === GLOBAL_TENANT)
+    );
+    this.baselineDesktopNav = this.cloneRecord(
+      this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT)
+    );
+  }
+
+  private ensureTenantIsolatedPool(cleanTenant: string) {
+    let existing = this.tenantIsolatedPools.get(cleanTenant);
+    if (existing) return existing;
+
+    if (this.baselineMainCategories.length === 0) {
+      this.captureBaselineSeedSnapshot();
+    }
+
+    const baseMains = this.cloneRecord(this.baselineMainCategories).map((m) => ({ ...m, tenantId: cleanTenant }));
+    const baseChildren = this.cloneRecord(this.baselineChildCategories).map((c) => ({ ...c, tenantId: cleanTenant }));
+    const baseTypes = this.cloneRecord(this.baselineProductTypes).map((pt) => ({ ...pt, tenantId: cleanTenant }));
+
+    for (const m of this.mainCategories.filter((x) => x.tenantId === cleanTenant)) {
+      this.upsertArrayById(baseMains, m);
+    }
+    for (const c of this.childCategories.filter((x) => x.tenantId === cleanTenant)) {
+      this.upsertArrayById(baseChildren, c);
+    }
+    for (const pt of this.productTypes.filter((x) => x.tenantId === cleanTenant)) {
+      this.upsertArrayById(baseTypes, pt);
+    }
+
+    existing = {
+      mainCategories: baseMains,
+      childCategories: baseChildren,
+      productTypes: baseTypes,
+    };
+    this.tenantIsolatedPools.set(cleanTenant, existing);
+    return existing;
+  }
+
+  private upsertPublishedMain(cleanTenant: string, record: MainCategory) {
+    if (cleanTenant !== DEFAULT_TENANT) {
+      const iso = this.ensureTenantIsolatedPool(cleanTenant);
+      this.upsertArrayById(iso.mainCategories, { ...record, tenantId: cleanTenant });
+      return;
+    }
+    this.upsertArrayById(this.mainCategories, record);
+  }
+
+  private upsertPublishedChild(cleanTenant: string, record: ChildCategory) {
+    if (cleanTenant !== DEFAULT_TENANT) {
+      const iso = this.ensureTenantIsolatedPool(cleanTenant);
+      this.upsertArrayById(iso.childCategories, { ...record, tenantId: cleanTenant });
+      return;
+    }
+    this.upsertArrayById(this.childCategories, record);
+  }
+
+  private removePublishedMain(cleanTenant: string, id: string) {
+    if (cleanTenant !== DEFAULT_TENANT) {
+      const iso = this.ensureTenantIsolatedPool(cleanTenant);
+      iso.mainCategories = iso.mainCategories.filter((m) => m.id !== id);
+      return;
+    }
+    this.mainCategories = this.mainCategories.filter((m) => m.id !== id);
+  }
+
+  private removePublishedChild(cleanTenant: string, id: string) {
+    if (cleanTenant !== DEFAULT_TENANT) {
+      const iso = this.ensureTenantIsolatedPool(cleanTenant);
+      iso.childCategories = iso.childCategories.filter((c) => c.id !== id);
+      return;
+    }
+    this.childCategories = this.childCategories.filter((c) => c.id !== id);
+  }
+
+  private removePublishedType(cleanTenant: string, id: string) {
+    if (cleanTenant !== DEFAULT_TENANT) {
+      const iso = this.ensureTenantIsolatedPool(cleanTenant);
+      iso.productTypes = iso.productTypes.filter((pt) => pt.id !== id);
+      return;
+    }
+    this.productTypes = this.productTypes.filter((pt) => pt.id !== id);
+  }
+
+  private upsertPublishedType(cleanTenant: string, record: ProductTypeNode) {
+    if (cleanTenant !== DEFAULT_TENANT) {
+      const iso = this.ensureTenantIsolatedPool(cleanTenant);
+      this.upsertArrayById(iso.productTypes, { ...record, tenantId: cleanTenant });
+      return;
+    }
+    this.upsertArrayById(this.productTypes, record);
+  }
+
   public getTenantPool(tenantId = DEFAULT_TENANT) {
     const cleanTenant = tenantId || DEFAULT_TENANT;
+    if (cleanTenant !== DEFAULT_TENANT) {
+      const iso = this.ensureTenantIsolatedPool(cleanTenant);
+      return {
+        mainCategories: [...iso.mainCategories].sort((a, b) => a.sortOrder - b.sortOrder),
+        childCategories: [...iso.childCategories].sort((a, b) => a.sortOrder - b.sortOrder),
+        productTypes: [...iso.productTypes].sort((a, b) => a.sortOrder - b.sortOrder),
+      };
+    }
     const mains = this.mainCategories.filter(
       (m) => !m.tenantId || m.tenantId === GLOBAL_TENANT || m.tenantId === cleanTenant
     );
@@ -1322,11 +1444,48 @@ export class TaxonomyService implements OnModuleInit {
     };
   }
 
+  public getInactiveNavMainCategoryIds(tenantId = DEFAULT_TENANT): Set<string> {
+    const navs = this.getPublishedDesktopNavigation(tenantId, true);
+    const byMain = new Map<string, DesktopNavItem[]>();
+    for (const n of navs) {
+      if (n.itemType === 'MAIN_CATEGORY' && n.mainCategoryId) {
+        const list = byMain.get(n.mainCategoryId) || [];
+        list.push(n);
+        byMain.set(n.mainCategoryId, list);
+      }
+    }
+    const disabledIds = new Set<string>();
+    for (const [mainId, list] of byMain.entries()) {
+      if (list.length > 0 && list.every((n) => n.isActive === false)) {
+        disabledIds.add(mainId);
+      }
+    }
+    return disabledIds;
+  }
+
+  public isMainCategoryActiveForPortals(tenantId = DEFAULT_TENANT, mainCategoryId?: string): boolean {
+    if (!mainCategoryId) return false;
+    const pool = this.getTenantPool(tenantId);
+    const mc = pool.mainCategories.find((m) => m.id === mainCategoryId);
+    if (!mc || mc.isActive === false) return false;
+    const inactiveByNav = this.getInactiveNavMainCategoryIds(tenantId);
+    return !inactiveByNav.has(mc.id);
+  }
+
   public getPublishedDesktopNavigation(tenantId = DEFAULT_TENANT, includeHidden = false): DesktopNavItem[] {
     const cleanTenant = tenantId || DEFAULT_TENANT;
     const pool = this.getTenantPool(cleanTenant);
-    const tenantSpecific = this.desktopNavigation.filter((n) => n.tenantId === cleanTenant);
-    const globalItems = this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT);
+    const sourceNavs =
+      cleanTenant === DEFAULT_TENANT
+        ? this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT || n.tenantId === cleanTenant)
+        : [
+            ...(this.baselineDesktopNav.length > 0
+              ? this.baselineDesktopNav
+              : this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT)),
+            ...this.desktopNavigation.filter((n) => n.tenantId === cleanTenant),
+          ];
+    const tenantSpecific = sourceNavs.filter((n) => n.tenantId === cleanTenant);
+    const globalItems = sourceNavs.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT);
     const mergedMap = new Map<string, DesktopNavItem>();
     for (const g of globalItems) {
       mergedMap.set(g.id, g);
@@ -1344,7 +1503,10 @@ export class TaxonomyService implements OnModuleInit {
           return {
             ...nav,
             mainCategorySlug: linkedMain.slug,
-            route: `/categories/${linkedMain.slug}`,
+            route:
+              nav.childCategoryId || nav.productTypeId
+                ? nav.route
+                : `/categories/${linkedMain.slug}`,
           };
         }
       }
@@ -1615,6 +1777,7 @@ export class TaxonomyService implements OnModuleInit {
    * so existing category endpoints remain live & consistent when Admin edits taxonomy.
    */
   public syncDbStoreCategories(tenantId = DEFAULT_TENANT) {
+    if (tenantId !== DEFAULT_TENANT) return;
     const pool = this.getTenantPool(tenantId);
     dbStore.categories = pool.childCategories
       .filter((c) => c.isActive !== false)
@@ -1659,10 +1822,13 @@ export class TaxonomyService implements OnModuleInit {
   }
 
   private ensureTenantScopedNavItemsPublished(cleanTenant: string) {
-    // Default tenant can edit global nav rows directly; non-default tenants clone into tenant-scoped rows
+    // Default tenant edits base nav rows directly; non-default tenants clone from baseline into tenant-scoped rows
     const hasOwn = this.desktopNavigation.some((n) => n.tenantId === cleanTenant);
     if (!hasOwn && cleanTenant !== DEFAULT_TENANT) {
-      const globals = this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT);
+      const globals =
+        this.baselineDesktopNav.length > 0
+          ? this.baselineDesktopNav
+          : this.desktopNavigation.filter((n) => !n.tenantId || n.tenantId === GLOBAL_TENANT);
       for (const g of globals) {
         const cloned: DesktopNavItem = {
           ...this.cloneRecord(g),
@@ -2093,25 +2259,16 @@ export class TaxonomyService implements OnModuleInit {
 
     // 2. Promote Deletions
     for (const delMainId of draft.deletedMainIds) {
-      const idx = this.mainCategories.findIndex((m) => m.id === delMainId);
-      if (idx >= 0) {
-        this.mainCategories.splice(idx, 1);
-        await platformPersistenceService.remove(MainCategoryModel, delMainId);
-      }
+      this.removePublishedMain(cleanTenant, delMainId);
+      await platformPersistenceService.remove(MainCategoryModel, delMainId);
     }
     for (const delChildId of draft.deletedChildIds) {
-      const idx = this.childCategories.findIndex((c) => c.id === delChildId);
-      if (idx >= 0) {
-        this.childCategories.splice(idx, 1);
-        await platformPersistenceService.remove(ChildCategoryModel, delChildId);
-      }
+      this.removePublishedChild(cleanTenant, delChildId);
+      await platformPersistenceService.remove(ChildCategoryModel, delChildId);
     }
     for (const delPtId of draft.deletedProductTypeIds) {
-      const idx = this.productTypes.findIndex((pt) => pt.id === delPtId);
-      if (idx >= 0) {
-        this.productTypes.splice(idx, 1);
-        await platformPersistenceService.remove(ProductTypeModel, delPtId);
-      }
+      this.removePublishedType(cleanTenant, delPtId);
+      await platformPersistenceService.remove(ProductTypeModel, delPtId);
     }
     for (const delNavId of draft.deletedNavIds) {
       const idx = this.desktopNavigation.findIndex(
@@ -2132,15 +2289,15 @@ export class TaxonomyService implements OnModuleInit {
 
     // 3. Promote Upserts cleanly into Live Pools
     for (const mc of draft.mainCategories) {
-      this.upsertArrayById(this.mainCategories, mc);
+      this.upsertPublishedMain(cleanTenant, mc);
       await platformPersistenceService.upsert(MainCategoryModel, mc);
     }
     for (const cc of draft.childCategories) {
-      this.upsertArrayById(this.childCategories, cc);
+      this.upsertPublishedChild(cleanTenant, cc);
       await platformPersistenceService.upsert(ChildCategoryModel, cc);
     }
     for (const pt of draft.productTypes) {
-      this.upsertArrayById(this.productTypes, pt);
+      this.upsertPublishedType(cleanTenant, pt);
       await platformPersistenceService.upsert(ProductTypeModel, pt);
     }
     for (const fc of draft.categoryFilterConfigs || []) {
@@ -2313,7 +2470,7 @@ export class TaxonomyService implements OnModuleInit {
       return this.cloneRecord(record);
     }
 
-    this.upsertArrayById(this.mainCategories, record);
+    this.upsertPublishedMain(cleanTenant, record);
     await platformPersistenceService.upsert(MainCategoryModel, record);
     if (autoNavItem) {
       this.ensureTenantScopedNavItemsPublished(cleanTenant);
@@ -2403,11 +2560,11 @@ export class TaxonomyService implements OnModuleInit {
       return this.cloneRecord(existing);
     }
 
-    this.upsertArrayById(this.mainCategories, existing);
+    this.upsertPublishedMain(cleanTenant, existing);
     await platformPersistenceService.upsert(MainCategoryModel, existing);
     for (const cc of draft.childCategories) {
       if (cc.mainCategoryId === existing.id) {
-        this.upsertArrayById(this.childCategories, cc);
+        this.upsertPublishedChild(cleanTenant, cc);
         await platformPersistenceService.upsert(ChildCategoryModel, cc);
       }
     }
@@ -2518,10 +2675,13 @@ export class TaxonomyService implements OnModuleInit {
       return { id: target.id, deleted: true, reassignedChildCount };
     }
 
-    this.mainCategories = this.mainCategories.filter((m) => m.id !== target.id);
+    this.removePublishedMain(cleanTenant, target.id);
     await platformPersistenceService.remove(MainCategoryModel, target.id);
+    this.ensureTenantScopedNavItemsPublished(cleanTenant);
     for (const nav of navIndices) {
-      this.desktopNavigation = this.desktopNavigation.filter((n) => n.id !== nav.id);
+      this.desktopNavigation = this.desktopNavigation.filter(
+        (n) => n.id !== nav.id && n.id !== `${cleanTenant}::${nav.id}`
+      );
       await platformPersistenceService.remove(DesktopNavItemModel, nav.id);
     }
     this.syncDbStoreCategories(cleanTenant);
@@ -2583,7 +2743,7 @@ export class TaxonomyService implements OnModuleInit {
       return this.cloneRecord(record);
     }
 
-    this.upsertArrayById(this.childCategories, record);
+    this.upsertPublishedChild(cleanTenant, record);
     await platformPersistenceService.upsert(ChildCategoryModel, record);
     this.syncDbStoreCategories(cleanTenant);
     draft.publishedVersion += 1;
@@ -2624,7 +2784,7 @@ export class TaxonomyService implements OnModuleInit {
         if (pt.childCategoryId === existing.id) {
           pt.mainCategoryId = parent.id;
           if (!updates.saveAsDraft) {
-            this.upsertArrayById(this.productTypes, pt);
+            this.upsertPublishedType(cleanTenant, pt);
             await platformPersistenceService.upsert(ProductTypeModel, pt);
           }
         }
@@ -2695,7 +2855,7 @@ export class TaxonomyService implements OnModuleInit {
       return { ...this.cloneRecord(existing), migratedProductsCount };
     }
 
-    this.upsertArrayById(this.childCategories, existing);
+    this.upsertPublishedChild(cleanTenant, existing);
     await platformPersistenceService.upsert(ChildCategoryModel, existing);
     for (const p of [...dbStore.products, ...extraVendorProducts] as any[]) {
       if (p.childCategoryId === existing.id || p.categoryId === existing.id || p.categorySlug === oldSlug) {
@@ -2783,7 +2943,7 @@ export class TaxonomyService implements OnModuleInit {
       return { id: target.id, deleted: true, reassignedProductsCount };
     }
 
-    this.childCategories = this.childCategories.filter((c) => c.id !== target.id);
+    this.removePublishedChild(cleanTenant, target.id);
     await platformPersistenceService.remove(ChildCategoryModel, target.id);
     this.syncDbStoreCategories(cleanTenant);
     draft.publishedVersion += 1;
@@ -2844,7 +3004,7 @@ export class TaxonomyService implements OnModuleInit {
       return this.cloneRecord(record);
     }
 
-    this.upsertArrayById(this.productTypes, record);
+    this.upsertPublishedType(cleanTenant, record);
     await platformPersistenceService.upsert(ProductTypeModel, record);
     this.syncDbStoreCategories(cleanTenant);
     draft.publishedVersion += 1;
@@ -2912,7 +3072,7 @@ export class TaxonomyService implements OnModuleInit {
       return this.cloneRecord(existing);
     }
 
-    this.upsertArrayById(this.productTypes, existing);
+    this.upsertPublishedType(cleanTenant, existing);
     await platformPersistenceService.upsert(ProductTypeModel, existing);
     this.syncDbStoreCategories(cleanTenant);
     draft.publishedVersion += 1;
@@ -2972,7 +3132,7 @@ export class TaxonomyService implements OnModuleInit {
       return { id: target.id, deleted: true, reassignedProductsCount };
     }
 
-    this.productTypes = this.productTypes.filter((pt) => pt.id !== target.id);
+    this.removePublishedType(cleanTenant, target.id);
     await platformPersistenceService.remove(ProductTypeModel, target.id);
     this.syncDbStoreCategories(cleanTenant);
     draft.publishedVersion += 1;
@@ -3014,7 +3174,7 @@ export class TaxonomyService implements OnModuleInit {
 
     for (const mc of draft.mainCategories) {
       if (orderMap.has(mc.id)) {
-        this.upsertArrayById(this.mainCategories, mc);
+        this.upsertPublishedMain(cleanTenant, mc);
         await platformPersistenceService.upsert(MainCategoryModel, mc);
       }
     }
@@ -3057,7 +3217,7 @@ export class TaxonomyService implements OnModuleInit {
 
     for (const cc of draft.childCategories) {
       if (orderMap.has(cc.id)) {
-        this.upsertArrayById(this.childCategories, cc);
+        this.upsertPublishedChild(cleanTenant, cc);
         await platformPersistenceService.upsert(ChildCategoryModel, cc);
       }
     }
@@ -3101,7 +3261,7 @@ export class TaxonomyService implements OnModuleInit {
 
     for (const pt of draft.productTypes) {
       if (orderMap.has(pt.id)) {
-        this.upsertArrayById(this.productTypes, pt);
+        this.upsertPublishedType(cleanTenant, pt);
         await platformPersistenceService.upsert(ProductTypeModel, pt);
       }
     }

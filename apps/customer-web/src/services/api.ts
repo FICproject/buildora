@@ -334,7 +334,11 @@ export const api = {
     if (params?.newLaunch) queryParts.push(`newLaunch=true`);
 
     const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
-    let products = await request<Product[]>(`/products${queryStr}`, {}, []);
+    let products = await request<Product[]>(
+      `/products${queryStr}`,
+      { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } },
+      []
+    );
     products = products.map((p) => {
       const resolved = resolveFullTaxonomy({
         mainInput: p.mainCategoryId || p.mainCategorySlug || p.mainCategoryName,

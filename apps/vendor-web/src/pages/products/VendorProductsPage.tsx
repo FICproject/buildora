@@ -97,10 +97,12 @@ export const VendorProductsPage: React.FC = () => {
 
   // Form states
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [hasLoadedTaxonomy, setHasLoadedTaxonomy] = useState(false);
   const [taxonomyState, setTaxonomyState] = useState<{
     mainCategories: any[];
     childCategories: any[];
     productTypes: any[];
+    desktopNavigation?: any[];
     fieldSchemas: CategoryFieldSchema[];
     warehouses: any[];
     brands: any[];
@@ -110,6 +112,7 @@ export const VendorProductsPage: React.FC = () => {
     mainCategories: MAIN_CATEGORIES_SEED,
     childCategories: CHILD_CATEGORIES_SEED,
     productTypes: PRODUCT_TYPES_SEED,
+    desktopNavigation: [],
     fieldSchemas: CATEGORY_FIELD_SCHEMAS_SEED,
     warehouses: [],
     brands: [],
@@ -162,11 +165,13 @@ export const VendorProductsPage: React.FC = () => {
         Array.isArray(res.mainCategories) &&
         Array.isArray(res.childCategories)
       ) {
+        setHasLoadedTaxonomy(true);
         setTaxonomyState((prev) => ({
           ...prev,
           mainCategories: res.mainCategories.filter((m: any) => m.isActive !== false),
           childCategories: res.childCategories.filter((c: any) => c.isActive !== false),
           productTypes: (res.productTypes || []).filter((pt: any) => pt.isActive !== false),
+          desktopNavigation: res.desktopNavigation || [],
           fieldSchemas: (res.fieldSchemas && res.fieldSchemas.length > 0
             ? res.fieldSchemas
             : CATEGORY_FIELD_SCHEMAS_SEED).filter((f: any) => f.isActive !== false),
@@ -227,10 +232,10 @@ export const VendorProductsPage: React.FC = () => {
 
   const availableMainCategories = useMemo(
     () =>
-      [...(taxonomyState.mainCategories.length > 0 ? taxonomyState.mainCategories : MAIN_CATEGORIES_SEED)]
+      [...(hasLoadedTaxonomy ? taxonomyState.mainCategories : MAIN_CATEGORIES_SEED)]
         .filter((m) => m.isActive !== false)
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)),
-    [taxonomyState.mainCategories]
+    [hasLoadedTaxonomy, taxonomyState.mainCategories]
   );
 
   const selectedMainCatNode = useMemo(
@@ -241,11 +246,11 @@ export const VendorProductsPage: React.FC = () => {
   );
 
   const availableChildCategories = useMemo(() => {
-    const source = taxonomyState.childCategories.length > 0 ? taxonomyState.childCategories : CHILD_CATEGORIES_SEED;
+    const source = hasLoadedTaxonomy ? taxonomyState.childCategories : CHILD_CATEGORIES_SEED;
     return source
       .filter((c) => c.mainCategoryId === selectedMainCatNode?.id && c.isActive !== false)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-  }, [taxonomyState.childCategories, selectedMainCatNode]);
+  }, [hasLoadedTaxonomy, taxonomyState.childCategories, selectedMainCatNode]);
 
   const selectedChildCatNode = useMemo(
     () =>
@@ -255,11 +260,11 @@ export const VendorProductsPage: React.FC = () => {
   );
 
   const availableProductTypes = useMemo(() => {
-    const source = taxonomyState.productTypes.length > 0 ? taxonomyState.productTypes : PRODUCT_TYPES_SEED;
+    const source = hasLoadedTaxonomy ? taxonomyState.productTypes : PRODUCT_TYPES_SEED;
     return source
       .filter((pt) => pt.childCategoryId === selectedChildCatNode?.id && pt.isActive !== false)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-  }, [taxonomyState.productTypes, selectedChildCatNode]);
+  }, [hasLoadedTaxonomy, taxonomyState.productTypes, selectedChildCatNode]);
 
   const selectedProductTypeNode = useMemo(
     () =>

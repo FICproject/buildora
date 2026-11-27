@@ -3598,7 +3598,9 @@ export class VendorController implements OnModuleInit {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
     const pool = taxonomyService.getTenantPool(tenantId);
-    const activeMains = pool.mainCategories.filter((m) => m.isActive !== false);
+    const activeMains = pool.mainCategories.filter(
+      (m) => m.isActive !== false && taxonomyService.isMainCategoryActiveForPortals(tenantId, m.id)
+    );
     const activeMainIds = new Set(activeMains.map((m) => m.id));
     const activeChildren = pool.childCategories.filter(
       (c) => c.isActive !== false && activeMainIds.has(c.mainCategoryId)
@@ -3618,6 +3620,7 @@ export class VendorController implements OnModuleInit {
         mainCategories: activeMains,
         childCategories: activeChildren,
         productTypes: activeTypes,
+        desktopNavigation: taxonomyService.getPublishedDesktopNavigation(tenantId, false),
         fieldSchemas: taxonomyService.getVendorCombinedCategoryFields(tenantId, undefined),
         filterConfigs: taxonomyService.getCategoryFilterConfigs(tenantId, {
           useDraft: false,
@@ -3797,7 +3800,12 @@ export class VendorController implements OnModuleInit {
     const matchedType = hierarchy.productTypeId
       ? activePool.productTypes.find((pt) => pt.id === hierarchy.productTypeId)
       : undefined;
-    if (matchedMain?.isActive === false || matchedChild?.isActive === false || matchedType?.isActive === false) {
+    if (
+      matchedMain?.isActive === false ||
+      !taxonomyService.isMainCategoryActiveForPortals(tenantId, matchedMain?.id || hierarchy.mainCategoryId) ||
+      matchedChild?.isActive === false ||
+      matchedType?.isActive === false
+    ) {
       throw new BadRequestException('Selected category is inactive and cannot be selected for new products.');
     }
     if (rawSubInput && !hierarchy.productTypeId) {

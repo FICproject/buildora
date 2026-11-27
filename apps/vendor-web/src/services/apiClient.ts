@@ -218,7 +218,11 @@ export async function apiRequest<T = any>(
         try {
           resp = await fetch(url, {
             ...restInit,
-            headers,
+            cache: restInit.cache || (method === 'GET' ? 'no-store' : undefined),
+            headers: {
+              ...(method === 'GET' ? { 'Cache-Control': 'no-cache' } : {}),
+              ...headers,
+            },
             body: isFormData ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
             signal: controller.signal
           });

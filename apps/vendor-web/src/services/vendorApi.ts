@@ -912,6 +912,7 @@ export const vendorApi = {
     mainCategories: any[];
     childCategories: any[];
     productTypes: any[];
+    desktopNavigation?: any[];
     fieldSchemas: CategoryFieldSchema[];
     warehouses: any[];
     brands: any[];
@@ -929,6 +930,7 @@ export const vendorApi = {
       mainCategories: [],
       childCategories: [],
       productTypes: [],
+      desktopNavigation: [],
       fieldSchemas: [],
       warehouses: [],
       brands: [],
