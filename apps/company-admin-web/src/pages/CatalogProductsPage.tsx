@@ -26,7 +26,7 @@ import {
   Send,
   Home,
 } from 'lucide-react';
-import { adminApi, formatINR } from '../services/adminApi';
+import { adminApi, formatINR, formatDate } from '../services/adminApi';
 import { NewLaunchesAdminSection } from '../components/NewLaunchesAdminSection';
 import {
   PageHeader,
@@ -100,8 +100,8 @@ export const CatalogProductsPage: React.FC<{
     attributes: [],
   });
 
-  // Draft / Publish Workflow state
-  const [workInDraftMode, setWorkInDraftMode] = useState(true);
+  // Draft / Publish Workflow state (default: Save & Publish live immediately)
+  const [workInDraftMode, setWorkInDraftMode] = useState(false);
   const [showNavPreview, setShowNavPreview] = useState(true);
   const [previewHoveredMainSlug, setPreviewHoveredMainSlug] = useState<string | null>(null);
   const [previewHoveredChildSlug, setPreviewHoveredChildSlug] = useState<string | null>(null);
@@ -196,21 +196,26 @@ export const CatalogProductsPage: React.FC<{
     setTaxonomyError(null);
     try {
       const res = await adminApi.getCatalogTaxonomy();
-      const childCats = res?.childCategories || [];
+      if (!res || !Array.isArray(res.mainCategories) || !Array.isArray(res.desktopNavigation)) {
+        throw new Error(
+          'Backend API returned an incomplete catalog taxonomy payload (missing mainCategories / desktopNavigation). Ensure the latest backend API is running and retry.'
+        );
+      }
+      const childCats = res.childCategories || [];
       setTaxonomy({
-        categories: res?.categories || [],
-        mainCategories: res?.mainCategories || [],
+        categories: res.categories || [],
+        mainCategories: res.mainCategories || [],
         childCategories: childCats,
-        productTypes: res?.productTypes || [],
-        desktopNavigation: res?.desktopNavigation || [],
-        publishMetadata: res?.publishMetadata,
-        fieldSchemas: res?.fieldSchemas || [],
-        filterConfigs: res?.filterConfigs || [],
-        civilMigrationReport: res?.civilMigrationReport,
-        newLaunchCollections: res?.newLaunchCollections || [],
-        migrationSummary: res?.migrationSummary,
-        brands: res?.brands || [],
-        attributes: res?.attributes || [],
+        productTypes: res.productTypes || [],
+        desktopNavigation: res.desktopNavigation || [],
+        publishMetadata: res.publishMetadata,
+        fieldSchemas: res.fieldSchemas || [],
+        filterConfigs: res.filterConfigs || [],
+        civilMigrationReport: res.civilMigrationReport,
+        newLaunchCollections: res.newLaunchCollections || [],
+        migrationSummary: res.migrationSummary,
+        brands: res.brands || [],
+        attributes: res.attributes || [],
       });
       setExpandedGroupIds((prev) => {
         if (Object.keys(prev).length > 0) return prev;
@@ -583,6 +588,9 @@ export const CatalogProductsPage: React.FC<{
                 <Badge variant={taxonomy.publishMetadata?.hasUnpublishedChanges ? 'warning' : 'success'}>
                   {taxonomy.publishMetadata?.hasUnpublishedChanges ? 'Unpublished Draft Changes' : `Published Live (v${taxonomy.publishMetadata?.publishedVersion || 1})`}
                 </Badge>
+                <Badge variant={workInDraftMode ? 'warning' : 'info'}>
+                  {workInDraftMode ? 'Draft Staging Mode' : 'Live Sync Mode (Save & Publish)'}
+                </Badge>
                 {taxonomy.publishMetadata?.lastPublishedAt && (
                   <span className="text-[11px] text-[#6E6859]">
                     Last published: {new Date(taxonomy.publishMetadata.lastPublishedAt).toLocaleString()}
@@ -590,7 +598,9 @@ export const CatalogProductsPage: React.FC<{
                 )}
               </div>
               <p className="text-[11px] text-[#6E6859]">
-                Changes saved in Draft Mode can be previewed in Desktop Navigation before publishing atomically to Vendor Portal & Customer Website.
+                {workInDraftMode
+                  ? 'Draft Staging enabled: edits stay in Draft until you click Publish to Vendor & Customer.'
+                  : 'Save & Publish enabled: every add, edit, disable or reorder updates Vendor Portal & Customer Website immediately.'}
               </p>
             </div>
 
@@ -804,6 +814,30 @@ export const CatalogProductsPage: React.FC<{
           >
             {showNavPreview && (
               <div className="rounded-xl border border-[#E5DCD3] bg-slate-50 p-3 relative">
+                {taxonomyLoading && navBarPreviewItems.length === 0 ? (
+                  <p className="text-xs text-[#6E6859] py-4 text-center">Loading desktop navigation preview...</p>
+                ) : navBarPreviewItems.length === 0 ? (
+                  <div className="py-5 px-4 text-center space-y-2.5 bg-white rounded-lg border border-dashed border-[#E5DCD3]">
+                    <p className="text-xs font-semibold text-[#5E5946]">
+                      {taxonomyError
+                        ? 'Unable to load Customer Desktop Navigation from the backend API.'
+                        : 'No visible Desktop Navigation items configured.'}
+                    </p>
+                    <p className="text-[11px] text-[#6E6859]">
+                      {taxonomyError
+                        ? 'Verify the backend server is up and retry, or check navigation configuration.'
+                        : 'Add a Main Category or Desktop Navigation item to populate the live two-panel customer header.'}
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-2 pt-1">
+                      <Button size="sm" variant="outline" onClick={loadTaxonomy}>
+                        <RotateCcw className="w-3.5 h-3.5" /> Retry
+                      </Button>
+                      <Button size="sm" onClick={() => handleSelectSectionTab('MAIN_CATEGORIES')}>
+                        <Plus className="w-3.5 h-3.5" /> Add Category
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs font-bold text-slate-700">
                   {navBarPreviewItems.map((nav) => {
                     const linkedMain = nav.mainCategoryId
@@ -951,6 +985,7 @@ export const CatalogProductsPage: React.FC<{
                     );
                   })}
                 </div>
+                )}
               </div>
             )}
           </Card>
@@ -969,6 +1004,8 @@ export const CatalogProductsPage: React.FC<{
                     slug: '',
                     itemType: 'MAIN_CATEGORY',
                     mainCategoryId: taxonomy.mainCategories[0]?.id || '',
+                    childCategoryId: '',
+                    productTypeId: '',
                     route: '',
                     hasDropdown: true,
                     highlight: false,
@@ -981,6 +1018,46 @@ export const CatalogProductsPage: React.FC<{
               </Button>
             }
           >
+            {taxonomyLoading && taxonomy.desktopNavigation.length === 0 ? (
+              <p className="text-xs text-[#6E6859] py-6 text-center">Loading desktop header navigation items...</p>
+            ) : taxonomy.desktopNavigation.length === 0 ? (
+              <EmptyState
+                icon={<Monitor className="w-6 h-6" />}
+                title={taxonomyError ? 'Navigation data failed to load' : 'No Desktop Navigation items configured'}
+                description={
+                  taxonomyError ||
+                  'Add navigation items or Main Categories to build the Customer desktop and mobile navigation.'
+                }
+                action={
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button size="sm" variant="outline" onClick={loadTaxonomy}>
+                      Retry
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        setNavModal({
+                          isNew: true,
+                          label: '',
+                          slug: '',
+                          itemType: 'MAIN_CATEGORY',
+                          mainCategoryId: taxonomy.mainCategories[0]?.id || '',
+                          childCategoryId: '',
+                          productTypeId: '',
+                          route: '',
+                          hasDropdown: true,
+                          highlight: false,
+                          isVisible: true,
+                          isActive: true,
+                        })
+                      }
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Navigation Item
+                    </Button>
+                  </div>
+                }
+              />
+            ) : (
             <div className="space-y-2 text-xs">
               {[...taxonomy.desktopNavigation]
                 .sort((a, b) => a.displayOrder - b.displayOrder)
@@ -1097,6 +1174,7 @@ export const CatalogProductsPage: React.FC<{
                   );
                 })}
             </div>
+            )}
           </Card>
         </div>
       ) : sectionTab === 'MAIN_CATEGORIES' ? (
@@ -1138,6 +1216,20 @@ export const CatalogProductsPage: React.FC<{
               >
                 {taxonomyLoading && taxonomy.mainCategories.length === 0 ? (
                   <p className="text-xs text-[#6E6859] py-8 text-center">Loading main categories...</p>
+                ) : taxonomy.mainCategories.length === 0 ? (
+                  <EmptyState
+                    icon={<Layers className="w-6 h-6" />}
+                    title={taxonomyError ? 'Unable to load Main Categories' : 'No Main Categories found'}
+                    description={
+                      taxonomyError ||
+                      'No Main Categories exist in the database yet. Retry or add your first Main Category on the right.'
+                    }
+                    action={
+                      <Button size="sm" variant="outline" onClick={loadTaxonomy}>
+                        Retry
+                      </Button>
+                    }
+                  />
                 ) : (
                 <div className="space-y-2.5 text-xs">
                   {taxonomy.mainCategories
@@ -1148,7 +1240,11 @@ export const CatalogProductsPage: React.FC<{
                       return !q || mc.name.toLowerCase().includes(q) || mc.slug.toLowerCase().includes(q);
                     })
                     .sort((a, b) => a.sortOrder - b.sortOrder)
-                    .map((mc, idx, arr) => (
+                    .map((mc, idx, arr) => {
+                      const groupCount = mc.groupCount ?? mc.childCount ?? taxonomy.childCategories.filter((c) => c.mainCategoryId === mc.id).length;
+                      const childCatCount = mc.childCategoryCount ?? taxonomy.productTypes.filter((pt) => pt.mainCategoryId === mc.id).length;
+                      const pubStatus = mc.publishStatus || (taxonomy.publishMetadata?.hasUnpublishedChanges ? 'DRAFT' : 'PUBLISHED');
+                      return (
                       <div
                         key={mc.id}
                         draggable
@@ -1161,7 +1257,7 @@ export const CatalogProductsPage: React.FC<{
                             : 'border-[#E5DCD3] bg-white hover:bg-[#FAF7F4]'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <GripVertical className="w-4 h-4 text-[#8E8777] shrink-0" />
                           {mc.image ? (
                             <img src={mc.image} alt={mc.name} className="w-10 h-10 rounded-lg object-cover border border-[#E5DCD3]" />
@@ -1170,7 +1266,7 @@ export const CatalogProductsPage: React.FC<{
                               #{mc.sortOrder}
                             </div>
                           )}
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-bold text-[#5E5946] truncate">
                                 #{mc.sortOrder} {mc.name}
@@ -1179,12 +1275,18 @@ export const CatalogProductsPage: React.FC<{
                                 /{mc.slug}
                               </code>
                               <Badge variant={mc.isActive !== false ? 'success' : 'error'}>
-                                {mc.isActive !== false ? 'Active' : 'Disabled'}
+                                {mc.isActive !== false ? 'Active' : 'Inactive'}
+                              </Badge>
+                              <Badge variant={pubStatus === 'PUBLISHED' ? 'info' : 'warning'}>
+                                {pubStatus === 'PUBLISHED' ? 'Published' : 'Draft'}
                               </Badge>
                             </div>
+                            {mc.description && (
+                              <p className="text-[11px] text-[#5E5946]/90 truncate mt-0.5">{mc.description}</p>
+                            )}
                             <p className="text-[11px] text-[#6E6859] truncate">
-                              {mc.childCount ?? 0} category groups • {mc.productCount ?? 0} products •{' '}
-                              {mc.showInNavigation !== false ? 'In Desktop Header' : 'Hidden from Header'}
+                              {groupCount} category groups • {childCatCount} child categories • {mc.productCount ?? 0} products •{' '}
+                              {mc.showInNavigation !== false ? 'In Desktop Header' : 'Hidden from Header'} • Created: {formatDate(mc.createdAt)}
                             </p>
                           </div>
                         </div>
@@ -1261,7 +1363,8 @@ export const CatalogProductsPage: React.FC<{
                           </Button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                 </div>
                 )}
               </Card>
@@ -1754,7 +1857,7 @@ export const CatalogProductsPage: React.FC<{
             </div>
 
             <div className="lg:col-span-4">
-              <Card title="Add Child Category" subtitle="Must belong to a Main Category">
+              <Card title="Add Category Group" subtitle="Assigns directly under a Main Category">
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
@@ -1770,7 +1873,7 @@ export const CatalogProductsPage: React.FC<{
                       });
                       setChildForm({ ...childForm, name: '', slug: '', description: '', image: '' });
                       pushToast({
-                        title: workInDraftMode ? 'Child Category Saved to Draft' : 'Child Category Published',
+                        title: workInDraftMode ? 'Category Group Saved to Draft' : 'Category Group Published',
                       });
                       loadTaxonomy();
                     } catch (err: any) {
@@ -1792,7 +1895,7 @@ export const CatalogProductsPage: React.FC<{
                   </select>
                   <input
                     required
-                    placeholder="New child category name *"
+                    placeholder="New category group name *"
                     value={childForm.name}
                     onChange={(e) => setChildForm({ ...childForm, name: e.target.value })}
                     className="w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
@@ -1820,7 +1923,7 @@ export const CatalogProductsPage: React.FC<{
                       className="w-20 px-2 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
                     />
                     <Button size="sm" type="submit" className="flex-1">
-                      <Plus className="w-3.5 h-3.5" /> Add Child Category
+                      <Plus className="w-3.5 h-3.5" /> {workInDraftMode ? 'Save Group Draft' : 'Add & Publish Group'}
                     </Button>
                   </div>
                 </form>
@@ -2868,11 +2971,11 @@ export const CatalogProductsPage: React.FC<{
         )}
       </Modal>
 
-      {/* Create / Edit / Move Child Category Modal */}
+      {/* Create / Edit / Move Category Group Modal */}
       <Modal
         open={Boolean(childEditModal)}
         onClose={() => setChildEditModal(null)}
-        title={childEditModal?.isNew ? 'Add Child Category' : `Edit / Move Child Category — ${childEditModal?.name || ''}`}
+        title={childEditModal?.isNew ? 'Add Category Group' : `Edit / Move Category Group — ${childEditModal?.name || ''}`}
       >
         {childEditModal && (
           <form
@@ -3284,6 +3387,14 @@ export const CatalogProductsPage: React.FC<{
                   slug: navModal.slug || undefined,
                   itemType: navModal.itemType,
                   mainCategoryId: navModal.itemType === 'MAIN_CATEGORY' ? navModal.mainCategoryId : undefined,
+                  childCategoryId:
+                    navModal.itemType === 'MAIN_CATEGORY' && navModal.childCategoryId
+                      ? navModal.childCategoryId
+                      : undefined,
+                  productTypeId:
+                    navModal.itemType === 'MAIN_CATEGORY' && navModal.productTypeId
+                      ? navModal.productTypeId
+                      : undefined,
                   route: navModal.route,
                   hasDropdown: Boolean(navModal.hasDropdown),
                   highlight: Boolean(navModal.highlight),
@@ -3340,29 +3451,100 @@ export const CatalogProductsPage: React.FC<{
             </div>
 
             {navModal.itemType === 'MAIN_CATEGORY' ? (
-              <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Assigned Main Category *</label>
-                <select
-                  required
-                  value={navModal.mainCategoryId || ''}
-                  onChange={(e) => {
-                    const mc = taxonomy.mainCategories.find((m) => m.id === e.target.value);
-                    setNavModal({
-                      ...navModal,
-                      mainCategoryId: e.target.value,
-                      label: navModal.label || mc?.name || '',
-                      route: mc ? `/categories/${mc.slug}` : navModal.route,
-                    });
-                  }}
-                  className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-                >
-                  <option value="">Select Main Category</option>
-                  {taxonomy.mainCategories.map((mc) => (
-                    <option key={mc.id} value={mc.id}>
-                      {mc.name} ({mc.isActive !== false ? 'Active' : 'Inactive'})
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-2.5">
+                <div>
+                  <label className="block font-semibold text-[#5E5946] mb-1">Assigned Main Category *</label>
+                  <select
+                    required
+                    value={navModal.mainCategoryId || ''}
+                    onChange={(e) => {
+                      const mc = taxonomy.mainCategories.find((m) => m.id === e.target.value);
+                      setNavModal({
+                        ...navModal,
+                        mainCategoryId: e.target.value,
+                        childCategoryId: '',
+                        productTypeId: '',
+                        label: navModal.label || mc?.name || '',
+                        route: mc ? `/categories/${mc.slug}` : navModal.route,
+                      });
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                  >
+                    <option value="">Select Main Category</option>
+                    {taxonomy.mainCategories.map((mc) => (
+                      <option key={mc.id} value={mc.id}>
+                        {mc.name} ({mc.isActive !== false ? 'Active' : 'Inactive'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {navModal.mainCategoryId && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-semibold text-[#5E5946] mb-1">Category Group (Optional)</label>
+                      <select
+                        value={navModal.childCategoryId || ''}
+                        onChange={(e) => {
+                          const grp = taxonomy.childCategories.find((c) => c.id === e.target.value);
+                          const mc = taxonomy.mainCategories.find((m) => m.id === navModal.mainCategoryId);
+                          setNavModal({
+                            ...navModal,
+                            childCategoryId: e.target.value,
+                            productTypeId: '',
+                            route: grp ? `/categories/${grp.slug}` : mc ? `/categories/${mc.slug}` : navModal.route,
+                          });
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                      >
+                        <option value="">All Groups under Main Category</option>
+                        {taxonomy.childCategories
+                          .filter((c) => c.mainCategoryId === navModal.mainCategoryId)
+                          .map((cc) => (
+                            <option key={cc.id} value={cc.id}>
+                              {cc.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-[#5E5946] mb-1">Child Category (Optional)</label>
+                      <select
+                        value={navModal.productTypeId || ''}
+                        onChange={(e) => {
+                          const pt = taxonomy.productTypes.find((p) => p.id === e.target.value);
+                          const grp = pt ? taxonomy.childCategories.find((c) => c.id === pt.childCategoryId) : undefined;
+                          const mc = taxonomy.mainCategories.find((m) => m.id === navModal.mainCategoryId);
+                          setNavModal({
+                            ...navModal,
+                            productTypeId: e.target.value,
+                            childCategoryId: pt?.childCategoryId || navModal.childCategoryId || '',
+                            route: pt
+                              ? `/categories/${grp?.slug || mc?.slug}?productType=${encodeURIComponent(pt.slug)}`
+                              : grp
+                                ? `/categories/${grp.slug}`
+                                : mc
+                                  ? `/categories/${mc.slug}`
+                                  : navModal.route,
+                          });
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                      >
+                        <option value="">All Child Categories</option>
+                        {taxonomy.productTypes
+                          .filter(
+                            (pt) =>
+                              pt.mainCategoryId === navModal.mainCategoryId &&
+                              (!navModal.childCategoryId || pt.childCategoryId === navModal.childCategoryId)
+                          )
+                          .map((pt) => (
+                            <option key={pt.id} value={pt.id}>
+                              {pt.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : navModal.itemType === 'CUSTOM_LINK' ? (
               <div>

@@ -1704,6 +1704,8 @@ export class TaxonomyService implements OnModuleInit {
     const itemType: DesktopNavItemType = payload.itemType || (payload.mainCategoryId ? 'MAIN_CATEGORY' : 'CUSTOM_LINK');
     let mainCategoryId = payload.mainCategoryId?.trim() || undefined;
     let mainCategorySlug = payload.mainCategorySlug?.trim() || undefined;
+    let childCategoryId = payload.childCategoryId?.trim() || undefined;
+    let productTypeId = payload.productTypeId?.trim() || undefined;
     let route = String(payload.route || '').trim();
 
     if (itemType === 'MAIN_CATEGORY') {
@@ -1712,13 +1714,38 @@ export class TaxonomyService implements OnModuleInit {
       if (!linkedMain) throw new BadRequestException(`Main Category "${mainCategoryId}" not found.`);
       mainCategoryId = linkedMain.id;
       mainCategorySlug = linkedMain.slug;
-      route = `/categories/${linkedMain.slug}`;
+      const linkedGroup = childCategoryId
+        ? draft.childCategories.find(
+            (c) => c.mainCategoryId === linkedMain.id && (c.id === childCategoryId || c.slug === childCategoryId)
+          )
+        : undefined;
+      childCategoryId = linkedGroup?.id;
+      const linkedType = productTypeId
+        ? draft.productTypes.find(
+            (pt) =>
+              pt.mainCategoryId === linkedMain.id &&
+              (!linkedGroup || pt.childCategoryId === linkedGroup.id) &&
+              (pt.id === productTypeId || pt.slug === productTypeId)
+          )
+        : undefined;
+      productTypeId = linkedType?.id;
+      route = linkedType
+        ? `/categories/${linkedGroup?.slug || linkedMain.slug}?productType=${encodeURIComponent(linkedType.slug)}`
+        : linkedGroup
+          ? `/categories/${linkedGroup.slug}`
+          : `/categories/${linkedMain.slug}`;
     } else if (itemType === 'HOME') {
       route = '/';
+      childCategoryId = undefined;
+      productTypeId = undefined;
     } else if (itemType === 'NEW_LAUNCHES') {
       route = '/new-launches';
+      childCategoryId = undefined;
+      productTypeId = undefined;
     } else if (itemType === 'DEALS') {
       route = '/deals';
+      childCategoryId = undefined;
+      productTypeId = undefined;
     } else {
       if (!route || !route.startsWith('/')) {
         throw new BadRequestException('Custom navigation route must start with "/".');
@@ -1734,6 +1761,8 @@ export class TaxonomyService implements OnModuleInit {
       itemType,
       mainCategoryId,
       mainCategorySlug,
+      childCategoryId,
+      productTypeId,
       route,
       icon: payload.icon?.trim() || (itemType === 'HOME' ? 'Home' : itemType === 'DEALS' ? 'Sparkles' : itemType === 'NEW_LAUNCHES' ? 'Rocket' : MAIN_CATEGORY_NAV_ICONS[mainCategorySlug || ''] || 'Layers'),
       hasDropdown: payload.hasDropdown !== undefined ? Boolean(payload.hasDropdown) : itemType === 'MAIN_CATEGORY' || itemType === 'NEW_LAUNCHES',
@@ -1818,6 +1847,42 @@ export class TaxonomyService implements OnModuleInit {
       } else {
         existing.mainCategoryId = undefined;
         existing.mainCategorySlug = undefined;
+        existing.childCategoryId = undefined;
+        existing.productTypeId = undefined;
+      }
+    }
+    if (updates.childCategoryId !== undefined) {
+      if (updates.childCategoryId && existing.mainCategoryId) {
+        const cc = draft.childCategories.find(
+          (c) => c.mainCategoryId === existing.mainCategoryId && (c.id === updates.childCategoryId || c.slug === updates.childCategoryId)
+        );
+        existing.childCategoryId = cc?.id;
+        if (cc && existing.itemType === 'MAIN_CATEGORY') {
+          existing.route = `/categories/${cc.slug}`;
+        }
+      } else {
+        existing.childCategoryId = undefined;
+        existing.productTypeId = undefined;
+        if (existing.itemType === 'MAIN_CATEGORY' && existing.mainCategorySlug) {
+          existing.route = `/categories/${existing.mainCategorySlug}`;
+        }
+      }
+    }
+    if (updates.productTypeId !== undefined) {
+      if (updates.productTypeId && existing.mainCategoryId) {
+        const pt = draft.productTypes.find(
+          (p) =>
+            p.mainCategoryId === existing.mainCategoryId &&
+            (!existing.childCategoryId || p.childCategoryId === existing.childCategoryId) &&
+            (p.id === updates.productTypeId || p.slug === updates.productTypeId)
+        );
+        existing.productTypeId = pt?.id;
+        const grp = pt ? draft.childCategories.find((c) => c.id === pt.childCategoryId) : undefined;
+        if (pt && existing.itemType === 'MAIN_CATEGORY') {
+          existing.route = `/categories/${grp?.slug || existing.mainCategorySlug}?productType=${encodeURIComponent(pt.slug)}`;
+        }
+      } else {
+        existing.productTypeId = undefined;
       }
     }
     if (updates.route !== undefined && existing.itemType !== 'MAIN_CATEGORY') {

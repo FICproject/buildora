@@ -79,7 +79,10 @@ export interface MainCategory {
   isActive: boolean;
   showInNavigation: boolean;
   childCount?: number;
+  groupCount?: number;
+  childCategoryCount?: number;
   productCount?: number;
+  publishStatus?: 'PUBLISHED' | 'DRAFT';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -281,6 +284,8 @@ export interface DesktopNavItem {
   itemType: DesktopNavItemType;
   mainCategoryId?: string;
   mainCategorySlug?: string;
+  childCategoryId?: string;
+  productTypeId?: string;
   route: string;
   icon?: string;
   hasDropdown: boolean;

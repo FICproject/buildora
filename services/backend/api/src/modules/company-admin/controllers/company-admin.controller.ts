@@ -1287,16 +1287,39 @@ export class CompanyAdminController {
     const sortedChildren = [...draft.childCategories].sort((a, b) => a.sortOrder - b.sortOrder);
     const sortedTypes = [...draft.productTypes].sort((a, b) => a.sortOrder - b.sortOrder);
     const sortedNav = [...draft.desktopNavigation].sort((a, b) => a.displayOrder - b.displayOrder);
+    const pubMainMap = new Map(publishedPool.mainCategories.map((m) => [m.id, m]));
+    const pubChildMap = new Map(publishedPool.childCategories.map((c) => [c.id, c]));
+    const pubTypeMap = new Map(publishedPool.productTypes.map((pt) => [pt.id, pt]));
+    const pubNavMap = new Map(
+      taxonomyService.getPublishedDesktopNavigation(tenantId, true).map((n) => [n.id, n])
+    );
+
+    const resolvePublishStatus = (draftItem: any, pubItem: any) => {
+      if (!pubItem) return 'DRAFT' as const;
+      if (!publishMetadata.hasUnpublishedChanges) return 'PUBLISHED' as const;
+      return JSON.stringify({ ...draftItem, updatedAt: undefined }) ===
+        JSON.stringify({ ...pubItem, updatedAt: undefined })
+        ? ('PUBLISHED' as const)
+        : ('DRAFT' as const);
+    };
 
     return {
       success: true,
       data: {
         categories: dbStore.categories,
-        mainCategories: sortedMains.map((m) => ({
-          ...m,
-          productCount: mainCounts.get(m.id) || 0,
-          childCount: sortedChildren.filter((c) => c.mainCategoryId === m.id).length,
-        })),
+        mainCategories: sortedMains.map((m) => {
+          const groupCount = sortedChildren.filter((c) => c.mainCategoryId === m.id).length;
+          const childCategoryCount = sortedTypes.filter((pt) => pt.mainCategoryId === m.id).length;
+          return {
+            ...m,
+            productCount: mainCounts.get(m.id) || 0,
+            childCount: groupCount,
+            groupCount,
+            childCategoryCount,
+            createdAt: m.createdAt || publishMetadata.lastPublishedAt,
+            publishStatus: resolvePublishStatus(m, pubMainMap.get(m.id)),
+          };
+        }),
         childCategories: sortedChildren.map((c) => ({
           ...c,
           productCount: childCounts.get(c.id) || 0,
@@ -1306,12 +1329,17 @@ export class CompanyAdminController {
             useDraft: true,
             includeInactive: true,
           }).length,
+          publishStatus: resolvePublishStatus(c, pubChildMap.get(c.id)),
         })),
         productTypes: sortedTypes.map((pt) => ({
           ...pt,
           productCount: typeCounts.get(pt.id) || 0,
+          publishStatus: resolvePublishStatus(pt, pubTypeMap.get(pt.id)),
         })),
-        desktopNavigation: sortedNav,
+        desktopNavigation: sortedNav.map((nav) => ({
+          ...nav,
+          publishStatus: resolvePublishStatus(nav, pubNavMap.get(nav.id)),
+        })),
         publishMetadata,
         publishedSummary: {
           mainCount: publishedPool.mainCategories.length,
