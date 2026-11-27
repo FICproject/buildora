@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   Package,
@@ -48,16 +49,23 @@ export type CatalogSectionTab =
   | 'FIELDS'
   | 'NEW_LAUNCHES';
 
-export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab }> = ({
+export const CatalogProductsPage: React.FC<{
+  initialSection?: CatalogSectionTab;
+  initialStatusFilter?: string;
+}> = ({
   initialSection = 'PRODUCTS',
+  initialStatusFilter = 'ALL',
 }) => {
+  const navigate = useNavigate();
   const pushToast = useToastStore((s) => s.push);
   const [sectionTab, setSectionTab] = useState<CatalogSectionTab>(initialSection);
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [taxonomyLoading, setTaxonomyLoading] = useState(true);
+  const [taxonomyError, setTaxonomyError] = useState<string | null>(null);
 
   const [taxonomy, setTaxonomy] = useState<{
     categories: any[];
@@ -98,9 +106,13 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
   const [previewHoveredMainSlug, setPreviewHoveredMainSlug] = useState<string | null>(null);
   const [previewHoveredChildSlug, setPreviewHoveredChildSlug] = useState<string | null>(null);
   const [draggedNavId, setDraggedNavId] = useState<string | null>(null);
+  const [draggedMainId, setDraggedMainId] = useState<string | null>(null);
   const [draggedChildId, setDraggedChildId] = useState<string | null>(null);
   const [draggedTypeId, setDraggedTypeId] = useState<string | null>(null);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Record<string, boolean>>({});
+  const [selectedMainHierarchyFilter, setSelectedMainHierarchyFilter] = useState('ALL');
+  const [filterMainId, setFilterMainId] = useState('ALL');
+  const [fieldMainId, setFieldMainId] = useState('ALL');
   const [publishing, setPublishing] = useState(false);
 
   // Desktop Navigation & Product Type modals
@@ -148,6 +160,27 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
     setSectionTab(initialSection);
   }, [initialSection]);
 
+  useEffect(() => {
+    setStatusFilter(initialStatusFilter || 'ALL');
+  }, [initialStatusFilter]);
+
+  const TAB_ROUTE_MAP: Record<CatalogSectionTab, string> = {
+    PRODUCTS: '/products',
+    NAVIGATION: '/products/navigation',
+    MAIN_CATEGORIES: '/products/main-categories',
+    CHILD_CATEGORIES: '/products/child-categories',
+    PRODUCT_TYPES: '/products/product-types',
+    FILTERS: '/products/filters',
+    FIELDS: '/products/fields',
+    NEW_LAUNCHES: '/products/new-launches',
+  };
+
+  const handleSelectSectionTab = (tab: CatalogSectionTab) => {
+    setSectionTab(tab);
+    const route = TAB_ROUTE_MAP[tab];
+    if (route) navigate(route);
+  };
+
   const loadProducts = async (st = statusFilter, q = search) => {
     setLoading(true);
     try {
@@ -159,22 +192,37 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
   };
 
   const loadTaxonomy = async () => {
-    const res = await adminApi.getCatalogTaxonomy();
-    setTaxonomy({
-      categories: res?.categories || [],
-      mainCategories: res?.mainCategories || [],
-      childCategories: res?.childCategories || [],
-      productTypes: res?.productTypes || [],
-      desktopNavigation: res?.desktopNavigation || [],
-      publishMetadata: res?.publishMetadata,
-      fieldSchemas: res?.fieldSchemas || [],
-      filterConfigs: res?.filterConfigs || [],
-      civilMigrationReport: res?.civilMigrationReport,
-      newLaunchCollections: res?.newLaunchCollections || [],
-      migrationSummary: res?.migrationSummary,
-      brands: res?.brands || [],
-      attributes: res?.attributes || [],
-    });
+    setTaxonomyLoading(true);
+    setTaxonomyError(null);
+    try {
+      const res = await adminApi.getCatalogTaxonomy();
+      const childCats = res?.childCategories || [];
+      setTaxonomy({
+        categories: res?.categories || [],
+        mainCategories: res?.mainCategories || [],
+        childCategories: childCats,
+        productTypes: res?.productTypes || [],
+        desktopNavigation: res?.desktopNavigation || [],
+        publishMetadata: res?.publishMetadata,
+        fieldSchemas: res?.fieldSchemas || [],
+        filterConfigs: res?.filterConfigs || [],
+        civilMigrationReport: res?.civilMigrationReport,
+        newLaunchCollections: res?.newLaunchCollections || [],
+        migrationSummary: res?.migrationSummary,
+        brands: res?.brands || [],
+        attributes: res?.attributes || [],
+      });
+      setExpandedGroupIds((prev) => {
+        if (Object.keys(prev).length > 0) return prev;
+        const initial: Record<string, boolean> = {};
+        for (const cc of childCats) initial[cc.id] = true;
+        return initial;
+      });
+    } catch (err: any) {
+      setTaxonomyError(err.message || 'Failed to load catalog taxonomy from backend.');
+    } finally {
+      setTaxonomyLoading(false);
+    }
   };
 
   const openCategoryProductsModal = async (nodeId: string, title: string, subtitle: string) => {
@@ -368,6 +416,47 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
     }
   };
 
+  const handleDropMainCategory = async (targetMainId: string) => {
+    if (!draggedMainId || draggedMainId === targetMainId) return;
+    const ordered = [...taxonomy.mainCategories].sort((a, b) => a.sortOrder - b.sortOrder);
+    const fromIdx = ordered.findIndex((m) => m.id === draggedMainId);
+    const toIdx = ordered.findIndex((m) => m.id === targetMainId);
+    setDraggedMainId(null);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = [...ordered];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    try {
+      await adminApi.reorderMainCategories(next.map((m) => m.id), workInDraftMode);
+      pushToast({
+        title: workInDraftMode ? 'Main Category Order Saved to Draft' : 'Main Category Order Published',
+      });
+      await loadTaxonomy();
+    } catch (err: any) {
+      pushToast({ title: 'Reorder Failed', message: err.message, variant: 'error' });
+    }
+  };
+
+  const handleMoveMainOrder = async (mainId: string, direction: 'UP' | 'DOWN') => {
+    const ordered = [...taxonomy.mainCategories].sort((a, b) => a.sortOrder - b.sortOrder);
+    const idx = ordered.findIndex((m) => m.id === mainId);
+    if (idx < 0) return;
+    const swapIdx = direction === 'UP' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= ordered.length) return;
+    const next = [...ordered];
+    const [moved] = next.splice(idx, 1);
+    next.splice(swapIdx, 0, moved);
+    try {
+      await adminApi.reorderMainCategories(next.map((m) => m.id), workInDraftMode);
+      pushToast({
+        title: workInDraftMode ? 'Main Category Order Saved to Draft' : 'Main Category Order Published',
+      });
+      await loadTaxonomy();
+    } catch (err: any) {
+      pushToast({ title: 'Reorder Failed', message: err.message, variant: 'error' });
+    }
+  };
+
   const handleDropChildCategory = async (targetChildId: string, mainCategoryId: string) => {
     if (!draggedChildId || draggedChildId === targetChildId) return;
     const siblingList = [...taxonomy.childCategories]
@@ -433,37 +522,49 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Centralized Catalog & Navigation Management"
-        description="Single source of truth for Customer Desktop Navigation, Main Categories, Child Categories, Product Types, Dynamic Fields & Vendor approvals."
+        title="Products & Catalog Management"
+        description="Single centralized source of truth for Products, Customer Desktop Navigation, Main Categories, Category Groups, Child Categories, Product Types, Filters, Dynamic Fields & New Launches."
         actions={
           <div className="flex flex-wrap gap-1.5">
-            <Button variant={sectionTab === 'NAVIGATION' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('NAVIGATION')}>
-              <Monitor className="w-4 h-4" /> Desktop Navigation
-            </Button>
-            <Button variant={sectionTab === 'MAIN_CATEGORIES' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('MAIN_CATEGORIES')}>
-              <Layers className="w-4 h-4" /> Main Categories
-            </Button>
-            <Button variant={sectionTab === 'CHILD_CATEGORIES' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('CHILD_CATEGORIES')}>
-              <FolderTree className="w-4 h-4" /> Child Categories
-            </Button>
-            <Button variant={sectionTab === 'PRODUCT_TYPES' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('PRODUCT_TYPES')}>
-              <Compass className="w-4 h-4" /> Product Types
-            </Button>
-            <Button variant={sectionTab === 'FILTERS' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('FILTERS')}>
-              <Sliders className="w-4 h-4" /> Filter Configuration
-            </Button>
-            <Button variant={sectionTab === 'FIELDS' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('FIELDS')}>
-              <Sliders className="w-4 h-4" /> Dynamic Fields
-            </Button>
-            <Button variant={sectionTab === 'PRODUCTS' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('PRODUCTS')}>
+            <Button variant={sectionTab === 'PRODUCTS' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('PRODUCTS')}>
               <Package className="w-4 h-4" /> Products
             </Button>
-            <Button variant={sectionTab === 'NEW_LAUNCHES' ? 'primary' : 'outline'} size="sm" onClick={() => setSectionTab('NEW_LAUNCHES')}>
+            <Button variant={sectionTab === 'NAVIGATION' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('NAVIGATION')}>
+              <Monitor className="w-4 h-4" /> Desktop Navigation
+            </Button>
+            <Button variant={sectionTab === 'MAIN_CATEGORIES' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('MAIN_CATEGORIES')}>
+              <Layers className="w-4 h-4" /> Main Categories
+            </Button>
+            <Button variant={sectionTab === 'CHILD_CATEGORIES' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('CHILD_CATEGORIES')}>
+              <FolderTree className="w-4 h-4" /> Child Categories
+            </Button>
+            <Button variant={sectionTab === 'PRODUCT_TYPES' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('PRODUCT_TYPES')}>
+              <Compass className="w-4 h-4" /> Product Types
+            </Button>
+            <Button variant={sectionTab === 'FILTERS' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('FILTERS')}>
+              <Sliders className="w-4 h-4" /> Filter Configuration
+            </Button>
+            <Button variant={sectionTab === 'FIELDS' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('FIELDS')}>
+              <Sliders className="w-4 h-4" /> Dynamic Fields
+            </Button>
+            <Button variant={sectionTab === 'NEW_LAUNCHES' ? 'primary' : 'outline'} size="sm" onClick={() => handleSelectSectionTab('NEW_LAUNCHES')}>
               <Sparkles className="w-4 h-4" /> New Launches
             </Button>
           </div>
         }
       />
+
+      {taxonomyError && (
+        <div className="p-3.5 rounded-xl border border-red-200 bg-red-50 text-red-900 text-xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{taxonomyError}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={loadTaxonomy}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {/* Centralized Draft & Publish Synchronization Bar */}
       {(sectionTab === 'NAVIGATION' ||
@@ -520,14 +621,17 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div className="flex flex-wrap gap-1.5">
               {[
-                { id: 'ALL', label: 'All Products' },
-                { id: 'PENDING_APPROVAL', label: 'Pending Approvals' },
-                { id: 'APPROVED', label: 'Approved' },
-                { id: 'REJECTED', label: 'Rejected' },
+                { id: 'ALL', label: 'All Products', path: '/products' },
+                { id: 'PENDING_APPROVAL', label: 'Pending Approvals', path: '/products/pending' },
+                { id: 'APPROVED', label: 'Approved', path: '/products/approved' },
+                { id: 'REJECTED', label: 'Rejected', path: '/products/rejected' },
               ].map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setStatusFilter(t.id)}
+                  onClick={() => {
+                    setStatusFilter(t.id);
+                    navigate(t.path);
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${statusFilter === t.id
                     ? 'bg-[#AE887B] text-white border-[#AE887B] shadow-sm'
                     : 'bg-white text-[#5E5946] border-[#E5DCD3] hover:bg-[#F0DED0]/45'
@@ -738,57 +842,108 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                           {nav.hasDropdown && <span className="text-[10px] opacity-70">▼</span>}
                         </div>
 
-                        {isOpen && linkedMain && (
+                        {isOpen && (linkedMain || nav.itemType === 'NEW_LAUNCHES') && (
                           <div className="absolute left-0 top-full pt-1.5 z-40">
                             <div className="w-[480px] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex text-xs">
-                              <div className="w-56 border-r border-slate-100 p-3 space-y-1 max-h-64 overflow-y-auto">
-                                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-2 mb-1">
-                                  Main Categories
-                                </p>
-                                {taxonomy.childCategories
-                                  .filter((c) => c.mainCategoryId === linkedMain.id && c.isActive !== false)
-                                  .map((cc) => (
-                                    <div
-                                      key={cc.id}
-                                      onMouseEnter={() => setPreviewHoveredChildSlug(cc.slug)}
-                                      className={`px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center justify-between ${previewHoveredChildSlug === cc.slug
-                                        ? 'bg-slate-900 text-white font-semibold'
-                                        : 'text-slate-700 hover:bg-slate-100'
-                                        }`}
-                                    >
-                                      <span className="truncate">{cc.name}</span>
-                                      <span>›</span>
-                                    </div>
-                                  ))}
-                              </div>
-                              <div className="flex-1 bg-slate-50/70 p-3 space-y-1 max-h-64 overflow-y-auto">
-                                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1 mb-1">
-                                  Child Categories
-                                </p>
-                                {(() => {
-                                  const activeChild =
-                                    taxonomy.childCategories.find((c) => c.slug === previewHoveredChildSlug) ||
-                                    taxonomy.childCategories.find(
-                                      (c) => c.mainCategoryId === linkedMain.id && c.isActive !== false
-                                    );
-                                  const pts = activeChild
-                                    ? taxonomy.productTypes.filter(
-                                      (pt) => pt.childCategoryId === activeChild.id && pt.isActive !== false
-                                    )
-                                    : [];
-                                  if (pts.length === 0) {
-                                    return <p className="text-[11px] text-slate-400 p-2">No active child types configured.</p>;
-                                  }
-                                  return pts.map((pt) => (
-                                    <div
-                                      key={pt.id}
-                                      className="px-2.5 py-1.5 rounded-lg text-slate-700 bg-white border border-slate-100 truncate"
-                                    >
-                                      {pt.name}
-                                    </div>
-                                  ));
-                                })()}
-                              </div>
+                              {nav.itemType === 'NEW_LAUNCHES' ? (
+                                <>
+                                  <div className="w-56 border-r border-slate-100 p-3 space-y-1 max-h-64 overflow-y-auto">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-2 mb-1">
+                                      Featured Collections
+                                    </p>
+                                    {taxonomy.newLaunchCollections
+                                      .filter((col) => col.isActive !== false && col.publishStatus !== 'DRAFT')
+                                      .map((col) => (
+                                        <div
+                                          key={col.id}
+                                          onMouseEnter={() => setPreviewHoveredChildSlug(col.slug)}
+                                          className={`px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center justify-between ${previewHoveredChildSlug === col.slug
+                                            ? 'bg-slate-900 text-white font-semibold'
+                                            : 'text-slate-700 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                          <span className="truncate">{col.title || col.name}</span>
+                                          <span>›</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                  <div className="flex-1 bg-slate-50/70 p-3 space-y-1 max-h-64 overflow-y-auto">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1 mb-1">
+                                      Mapped Shortcuts
+                                    </p>
+                                    {(() => {
+                                      const activeCol =
+                                        taxonomy.newLaunchCollections.find((c) => c.slug === previewHoveredChildSlug) ||
+                                        taxonomy.newLaunchCollections.find((c) => c.isActive !== false && c.publishStatus !== 'DRAFT');
+                                      const maps = (activeCol?.categoryMappings || []).filter(
+                                        (m: any) => m.isActive !== false && m.mappingStatus === 'MAPPED'
+                                      );
+                                      if (maps.length === 0) {
+                                        return <p className="text-[11px] text-slate-400 p-2">No mapped shortcuts.</p>;
+                                      }
+                                      return maps.map((m: any) => (
+                                        <div
+                                          key={m.id}
+                                          className="px-2.5 py-1.5 rounded-lg text-slate-700 bg-white border border-slate-100 truncate"
+                                        >
+                                          {m.displayLabel}
+                                        </div>
+                                      ));
+                                    })()}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="w-56 border-r border-slate-100 p-3 space-y-1 max-h-64 overflow-y-auto">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-2 mb-1">
+                                      Category Groups
+                                    </p>
+                                    {taxonomy.childCategories
+                                      .filter((c) => c.mainCategoryId === linkedMain!.id && c.isActive !== false)
+                                      .map((cc) => (
+                                        <div
+                                          key={cc.id}
+                                          onMouseEnter={() => setPreviewHoveredChildSlug(cc.slug)}
+                                          className={`px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center justify-between ${previewHoveredChildSlug === cc.slug
+                                            ? 'bg-slate-900 text-white font-semibold'
+                                            : 'text-slate-700 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                          <span className="truncate">{cc.name}</span>
+                                          <span>›</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                  <div className="flex-1 bg-slate-50/70 p-3 space-y-1 max-h-64 overflow-y-auto">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-1 mb-1">
+                                      Child Categories
+                                    </p>
+                                    {(() => {
+                                      const activeChild =
+                                        taxonomy.childCategories.find((c) => c.slug === previewHoveredChildSlug) ||
+                                        taxonomy.childCategories.find(
+                                          (c) => c.mainCategoryId === linkedMain!.id && c.isActive !== false
+                                        );
+                                      const pts = activeChild
+                                        ? taxonomy.productTypes.filter(
+                                          (pt) => pt.childCategoryId === activeChild.id && pt.isActive !== false
+                                        )
+                                        : [];
+                                      if (pts.length === 0) {
+                                        return <p className="text-[11px] text-slate-400 p-2">No active child categories configured.</p>;
+                                      }
+                                      return pts.map((pt) => (
+                                        <div
+                                          key={pt.id}
+                                          className="px-2.5 py-1.5 rounded-lg text-slate-700 bg-white border border-slate-100 truncate"
+                                        >
+                                          {pt.name}
+                                        </div>
+                                      ));
+                                    })()}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </div>
                         )}
@@ -951,33 +1106,63 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
             <div className="lg:col-span-8">
               <Card
                 title={`Main Categories (${taxonomy.mainCategories.length})`}
-                subtitle="Manage top-level categories, slugs, images, sort order, status & header visibility"
+                subtitle="Drag to reorder, edit images/slugs, toggle status & control Desktop Header visibility"
                 action={
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
-                    <input
-                      type="text"
-                      placeholder="Filter main categories..."
-                      value={catSearch}
-                      onChange={(e) => setCatSearch(e.target.value)}
-                      className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-48"
-                    />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
+                      <input
+                        type="text"
+                        placeholder="Filter main categories..."
+                        value={catSearch}
+                        onChange={(e) => setCatSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-44"
+                      />
+                    </div>
+                    {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setCatActiveFilter(st)}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-medium border ${
+                          catActiveFilter === st
+                            ? 'bg-[#AE887B] text-white border-[#AE887B]'
+                            : 'bg-white text-[#5E5946] border-[#E5DCD3]'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
                   </div>
                 }
               >
+                {taxonomyLoading && taxonomy.mainCategories.length === 0 ? (
+                  <p className="text-xs text-[#6E6859] py-8 text-center">Loading main categories...</p>
+                ) : (
                 <div className="space-y-2.5 text-xs">
                   {taxonomy.mainCategories
                     .filter((mc) => {
+                      if (catActiveFilter === 'ACTIVE' && mc.isActive === false) return false;
+                      if (catActiveFilter === 'INACTIVE' && mc.isActive !== false) return false;
                       const q = catSearch.trim().toLowerCase();
                       return !q || mc.name.toLowerCase().includes(q) || mc.slug.toLowerCase().includes(q);
                     })
                     .sort((a, b) => a.sortOrder - b.sortOrder)
-                    .map((mc) => (
+                    .map((mc, idx, arr) => (
                       <div
                         key={mc.id}
-                        className="p-3 rounded-xl border border-[#E5DCD3] bg-white flex flex-wrap items-center justify-between gap-3"
+                        draggable
+                        onDragStart={() => setDraggedMainId(mc.id)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => handleDropMainCategory(mc.id)}
+                        className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 cursor-move transition-colors ${
+                          draggedMainId === mc.id
+                            ? 'bg-[#F0DED0]/60 border-[#AE887B]'
+                            : 'border-[#E5DCD3] bg-white hover:bg-[#FAF7F4]'
+                        }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
+                          <GripVertical className="w-4 h-4 text-[#8E8777] shrink-0" />
                           {mc.image ? (
                             <img src={mc.image} alt={mc.name} className="w-10 h-10 rounded-lg object-cover border border-[#E5DCD3]" />
                           ) : (
@@ -986,19 +1171,52 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="font-bold text-[#5E5946] truncate">
-                              #{mc.sortOrder} {mc.name}{' '}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-bold text-[#5E5946] truncate">
+                                #{mc.sortOrder} {mc.name}
+                              </span>
                               <code className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#FAF7F4] border border-[#E5DCD3] text-[#6E6859]">
                                 /{mc.slug}
                               </code>
-                            </p>
+                              <Badge variant={mc.isActive !== false ? 'success' : 'error'}>
+                                {mc.isActive !== false ? 'Active' : 'Disabled'}
+                              </Badge>
+                            </div>
                             <p className="text-[11px] text-[#6E6859] truncate">
-                              {mc.childCount ?? 0} child categories • {mc.productCount ?? 0} products •{' '}
+                              {mc.childCount ?? 0} category groups • {mc.productCount ?? 0} products •{' '}
                               {mc.showInNavigation !== false ? 'In Desktop Header' : 'Hidden from Header'}
                             </p>
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={idx === 0}
+                            onClick={() => handleMoveMainOrder(mc.id, 'UP')}
+                            title="Move Up"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={idx === arr.length - 1}
+                            onClick={() => handleMoveMainOrder(mc.id, 'DOWN')}
+                            title="Move Down"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedMainHierarchyFilter(mc.id);
+                              handleSelectSectionTab('CHILD_CATEGORIES');
+                            }}
+                          >
+                            <FolderTree className="w-3.5 h-3.5" /> View Groups ({mc.childCount ?? 0})
+                          </Button>
                           <Button
                             size="sm"
                             variant={mc.showInNavigation !== false ? 'secondary' : 'outline'}
@@ -1045,6 +1263,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                       </div>
                     ))}
                 </div>
+                )}
               </Card>
             </div>
 
@@ -1156,63 +1375,116 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
         </div>
       ) : sectionTab === 'CHILD_CATEGORIES' ? (
         <div className="space-y-5">
-          <div className="p-3.5 rounded-xl bg-[#FAF7F4] border border-[#E5DCD3] text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <p className="font-semibold text-[#5E5946]">
-                Category Hierarchy: {taxonomy.mainCategories.length} Main Categories •{' '}
-                {taxonomy.childCategories.length} Child Categories
-              </p>
-              {taxonomy.migrationSummary && (
-                <p className="text-[#6E6859]">
-                  Catalog Synced: <strong>{taxonomy.migrationSummary.migrated}</strong> /{' '}
-                  {taxonomy.migrationSummary.totalRecords} records (Unmapped: {taxonomy.migrationSummary.unmapped})
+          <div className="p-3.5 rounded-xl bg-[#FAF7F4] border border-[#E5DCD3] text-xs space-y-3">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <p className="font-semibold text-[#5E5946]">
+                  Full Hierarchy: {taxonomy.mainCategories.length} Main Categories •{' '}
+                  {taxonomy.childCategories.length} Category Groups •{' '}
+                  {taxonomy.productTypes.length} Child Categories
                 </p>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
-                <input
-                  type="text"
-                  placeholder="Search main or child categories..."
-                  value={catSearch}
-                  onChange={(e) => setCatSearch(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-56"
-                />
+                {taxonomy.migrationSummary && (
+                  <p className="text-[#6E6859]">
+                    Catalog Synced: <strong>{taxonomy.migrationSummary.migrated}</strong> /{' '}
+                    {taxonomy.migrationSummary.totalRecords} records (Unmapped: {taxonomy.migrationSummary.unmapped})
+                  </p>
+                )}
               </div>
-              {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setCatActiveFilter(st)}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border ${catActiveFilter === st
-                    ? 'bg-[#AE887B] text-white border-[#AE887B]'
-                    : 'bg-white text-[#5E5946] border-[#E5DCD3]'
-                    }`}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
+                  <input
+                    type="text"
+                    placeholder="Search main, group or child..."
+                    value={catSearch}
+                    onChange={(e) => setCatSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-56"
+                  />
+                </div>
+                {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setCatActiveFilter(st)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border ${catActiveFilter === st
+                      ? 'bg-[#AE887B] text-white border-[#AE887B]'
+                      : 'bg-white text-[#5E5946] border-[#E5DCD3]'
+                      }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const allOpen = taxonomy.childCategories.every((c) => expandedGroupIds[c.id]);
+                    const next: Record<string, boolean> = {};
+                    for (const c of taxonomy.childCategories) next[c.id] = !allOpen;
+                    setExpandedGroupIds(next);
+                  }}
                 >
-                  {st}
-                </button>
-              ))}
+                  {taxonomy.childCategories.every((c) => expandedGroupIds[c.id]) ? 'Collapse All' : 'Expand All'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Main Category Cascading Selector Bar */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[#E5DCD3]/70">
+              <button
+                type="button"
+                onClick={() => setSelectedMainHierarchyFilter('ALL')}
+                className={`px-2.5 py-1 rounded-lg font-medium border transition-colors ${
+                  selectedMainHierarchyFilter === 'ALL'
+                    ? 'bg-[#5E5946] text-white border-[#5E5946]'
+                    : 'bg-white text-[#5E5946] border-[#E5DCD3] hover:bg-[#F0DED0]/40'
+                }`}
+              >
+                All Main Categories ({taxonomy.mainCategories.length})
+              </button>
+              {taxonomy.mainCategories.map((mc) => {
+                const grpCount = taxonomy.childCategories.filter((c) => c.mainCategoryId === mc.id).length;
+                return (
+                  <button
+                    key={mc.id}
+                    type="button"
+                    onClick={() => setSelectedMainHierarchyFilter(mc.id)}
+                    className={`px-2.5 py-1 rounded-lg font-medium border transition-colors ${
+                      selectedMainHierarchyFilter === mc.id
+                        ? 'bg-[#943D24] text-white border-[#943D24]'
+                        : 'bg-white text-[#5E5946] border-[#E5DCD3] hover:bg-[#F0DED0]/40'
+                    }`}
+                  >
+                    {mc.name} ({grpCount})
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <div className="lg:col-span-8">
               <Card
-                title="Main Category └── Child Categories Hierarchy"
-                subtitle="Assign Child Categories to Main Categories, edit images/order, move parents safely, or configure dynamic fields"
+                title="Main Category → Category Group → Child Categories Hierarchy"
+                subtitle="Expand groups to inspect & manage Child Categories (including repeated names with unique parent-scoped IDs), drag to reorder groups, or jump to Filters/Fields"
               >
                 <div className="space-y-3 text-xs">
                   {taxonomy.mainCategories
                     .filter((mc) => {
+                      if (selectedMainHierarchyFilter !== 'ALL' && mc.id !== selectedMainHierarchyFilter) return false;
                       if (catActiveFilter === 'ACTIVE' && mc.isActive === false) return false;
                       if (catActiveFilter === 'INACTIVE' && mc.isActive !== false) return false;
                       const q = catSearch.trim().toLowerCase();
                       if (!q) return true;
-                      const childMatches = taxonomy.childCategories.some(
-                        (c) => c.mainCategoryId === mc.id && c.name.toLowerCase().includes(q)
+                      const groupMatches = taxonomy.childCategories.some(
+                        (c) =>
+                          c.mainCategoryId === mc.id &&
+                          (c.name.toLowerCase().includes(q) ||
+                            taxonomy.productTypes.some(
+                              (pt) => pt.childCategoryId === c.id && pt.name.toLowerCase().includes(q)
+                            ))
                       );
-                      return mc.name.toLowerCase().includes(q) || childMatches;
+                      return mc.name.toLowerCase().includes(q) || groupMatches;
                     })
                     .map((mc) => {
                       const q = catSearch.trim().toLowerCase();
@@ -1220,8 +1492,11 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                         if (c.mainCategoryId !== mc.id) return false;
                         if (catActiveFilter === 'ACTIVE' && c.isActive === false) return false;
                         if (catActiveFilter === 'INACTIVE' && c.isActive !== false) return false;
-                        if (q && !c.name.toLowerCase().includes(q) && !mc.name.toLowerCase().includes(q)) return false;
-                        return true;
+                        if (!q) return true;
+                        const ptMatch = taxonomy.productTypes.some(
+                          (pt) => pt.childCategoryId === c.id && pt.name.toLowerCase().includes(q)
+                        );
+                        return c.name.toLowerCase().includes(q) || mc.name.toLowerCase().includes(q) || ptMatch;
                       });
                       return (
                         <div key={mc.id} className="rounded-xl border border-[#E5DCD3] bg-white overflow-hidden">
@@ -1232,7 +1507,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                               </div>
                               <div className="min-w-0">
                                 <p className="font-bold text-[#5E5946] truncate">
-                                  {mc.name} <span className="font-normal text-[#6E6859]">({children.length} child)</span>
+                                  {mc.name} <span className="font-normal text-[#6E6859]">({children.length} groups)</span>
                                 </p>
                                 <p className="text-[11px] text-[#6E6859] truncate">/{mc.slug}</p>
                               </div>
@@ -1253,18 +1528,26 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                 })
                               }
                             >
-                              <Plus className="w-3.5 h-3.5" /> Add Child
+                              <Plus className="w-3.5 h-3.5" /> Add Group
                             </Button>
                           </div>
                           <div className="p-2.5 pl-6 space-y-1.5">
                             {children.length === 0 ? (
-                              <p className="text-[#8E8777] italic py-1">No matching child categories under this Main Category.</p>
+                              <p className="text-[#8E8777] italic py-1">No matching category groups under this Main Category.</p>
                             ) : (
                               children.map((cc) => {
                                 const childSubItems = taxonomy.productTypes
-                                  .filter((pt) => pt.childCategoryId === cc.id)
+                                  .filter((pt) => {
+                                    if (pt.childCategoryId !== cc.id) return false;
+                                    if (catActiveFilter === 'ACTIVE' && pt.isActive === false) return false;
+                                    if (catActiveFilter === 'INACTIVE' && pt.isActive !== false) return false;
+                                    if (q && !cc.name.toLowerCase().includes(q) && !mc.name.toLowerCase().includes(q)) {
+                                      return pt.name.toLowerCase().includes(q);
+                                    }
+                                    return true;
+                                  })
                                   .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-                                const isExpanded = Boolean(expandedGroupIds[cc.id]);
+                                const isExpanded = Boolean(expandedGroupIds[cc.id]) || Boolean(q);
                                 return (
                                   <div
                                     key={cc.id}
@@ -1275,7 +1558,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                     className={`rounded-lg border transition-colors ${
                                       draggedChildId === cc.id
                                         ? 'bg-[#F0DED0]/50 border-[#AE887B]'
-                                        : 'border-transparent hover:bg-[#FAF7F4] hover:border-[#E5DCD3]'
+                                        : 'border-[#E5DCD3]/60 hover:bg-[#FAF7F4] hover:border-[#E5DCD3]'
                                     }`}
                                   >
                                     <div className="flex flex-wrap items-center justify-between gap-2 p-2 cursor-move">
@@ -1312,6 +1595,22 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                           size="sm"
                                           variant="outline"
                                           onClick={() =>
+                                            setProductTypeModal({
+                                              isNew: true,
+                                              childCategoryId: cc.id,
+                                              name: '',
+                                              slug: '',
+                                              sortOrder: childSubItems.length + 1,
+                                              isActive: true,
+                                            })
+                                          }
+                                        >
+                                          <Plus className="w-3 h-3" /> Add Child
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
                                             openCategoryProductsModal(
                                               cc.id,
                                               `Products in ${cc.name}`,
@@ -1325,8 +1624,9 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                           size="sm"
                                           variant="outline"
                                           onClick={() => {
+                                            setFilterMainId(cc.mainCategoryId || 'ALL');
                                             setSelectedFilterChildId(cc.id);
-                                            setSectionTab('FILTERS');
+                                            handleSelectSectionTab('FILTERS');
                                           }}
                                         >
                                           <Sliders className="w-3 h-3" /> Filters ({cc.filterCount ?? 0})
@@ -1335,8 +1635,9 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                           size="sm"
                                           variant="outline"
                                           onClick={() => {
+                                            setFieldMainId(cc.mainCategoryId || 'ALL');
                                             setSelectedFieldChildId(cc.id);
-                                            setSectionTab('FIELDS');
+                                            handleSelectSectionTab('FIELDS');
                                           }}
                                         >
                                           <Sliders className="w-3 h-3" /> Fields
@@ -1377,19 +1678,18 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                       </div>
                                     </div>
                                     {isExpanded && (
-                                      <div className="px-8 pb-2.5 pt-1 space-y-1 border-t border-[#E5DCD3]/70 bg-[#FAF7F4]/70">
+                                      <div className="px-6 pb-2.5 pt-1.5 space-y-1 border-t border-[#E5DCD3]/70 bg-[#FAF7F4]/70">
                                         {childSubItems.length === 0 ? (
                                           <p className="text-[11px] text-[#8E8777] italic">No child categories yet.</p>
                                         ) : (
                                           childSubItems.map((subPt) => (
-                                            <div key={subPt.id} className="flex items-center justify-between gap-2 py-1 text-[11px]">
+                                            <div key={subPt.id} className="flex flex-wrap items-center justify-between gap-2 py-1 px-2 rounded bg-white/80 border border-[#E5DCD3]/60 text-[11px]">
                                               <span className="text-[#5E5946] font-medium truncate">
-                                                • {subPt.name} <code className="text-[10px] text-[#8E8777]">/{subPt.slug}</code>
+                                                • {subPt.name}{' '}
+                                                <code className="text-[10px] text-[#8E8777]">/{subPt.slug}</code>{' '}
+                                                <span className="text-[10px] text-[#9E9689] font-mono">({subPt.id})</span>
                                               </span>
-                                              <div className="flex items-center gap-1.5 shrink-0">
-                                                <Badge variant={subPt.isActive !== false ? 'success' : 'error'}>
-                                                  {subPt.isActive !== false ? 'Active' : 'Disabled'}
-                                                </Badge>
+                                              <div className="flex items-center gap-1 shrink-0">
                                                 <Button
                                                   size="sm"
                                                   variant="outline"
@@ -1402,6 +1702,38 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                                                   }
                                                 >
                                                   {subPt.productCount ?? 0} prods
+                                                </Button>
+                                                <Button
+                                                  size="sm"
+                                                  variant={subPt.isActive !== false ? 'success' : 'outline'}
+                                                  onClick={async () => {
+                                                    await adminApi.updateProductType(subPt.id, {
+                                                      isActive: !(subPt.isActive !== false),
+                                                      saveAsDraft: workInDraftMode,
+                                                    });
+                                                    loadTaxonomy();
+                                                  }}
+                                                >
+                                                  {subPt.isActive !== false ? 'Active' : 'Disabled'}
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => setProductTypeModal({ ...subPt })}>
+                                                  <Edit3 className="w-3 h-3" />
+                                                </Button>
+                                                <Button
+                                                  size="sm"
+                                                  variant="danger"
+                                                  onClick={() =>
+                                                    setDeleteTargetModal({
+                                                      kind: 'TYPE',
+                                                      item: subPt,
+                                                      reassignToId:
+                                                        taxonomy.productTypes.find(
+                                                          (t) => t.id !== subPt.id && t.childCategoryId === subPt.childCategoryId
+                                                        )?.id || '',
+                                                    })
+                                                  }
+                                                >
+                                                  <Trash2 className="w-3 h-3" />
                                                 </Button>
                                               </div>
                                             </div>
@@ -1836,9 +2168,32 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <div className="lg:col-span-4">
-              <Card title="Categories" subtitle="Select a category to configure Customer & Vendor filters">
-                <div className="space-y-1.5 max-h-[560px] overflow-y-auto text-xs">
-                  {taxonomy.childCategories.map((cc) => {
+              <Card title="1. Main Category → Category Group" subtitle="Select Main Category, then Category Group to configure filters">
+                <div className="mb-3">
+                  <select
+                    value={filterMainId}
+                    onChange={(e) => {
+                      const mid = e.target.value;
+                      setFilterMainId(mid);
+                      const firstGrp = taxonomy.childCategories.find(
+                        (c) => mid === 'ALL' || c.mainCategoryId === mid
+                      );
+                      if (firstGrp) setSelectedFilterChildId(firstGrp.id);
+                    }}
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg font-medium text-[#5E5946]"
+                  >
+                    <option value="ALL">All Main Categories ({taxonomy.mainCategories.length})</option>
+                    {taxonomy.mainCategories.map((mc) => (
+                      <option key={mc.id} value={mc.id}>
+                        {mc.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5 max-h-[520px] overflow-y-auto text-xs">
+                  {taxonomy.childCategories
+                    .filter((cc) => filterMainId === 'ALL' || cc.mainCategoryId === filterMainId)
+                    .map((cc) => {
                     const count = (taxonomy.filterConfigs || []).filter(
                       (f) => f.childCategoryId === cc.id || f.childCategorySlug === cc.slug
                     ).length;
@@ -2037,11 +2392,34 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
         </div>
       ) : sectionTab === 'FIELDS' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left: Select Child Category */}
+          {/* Left: Select Main Category -> Category Group */}
           <div className="lg:col-span-4">
-            <Card title="Child Categories" subtitle="Select a category to configure its dynamic Vendor fields">
-              <div className="space-y-1.5 max-h-[540px] overflow-y-auto text-xs">
-                {taxonomy.childCategories.map((cc) => {
+            <Card title="Main Category → Category Group" subtitle="Select a Category Group to configure its dynamic Vendor fields">
+              <div className="mb-3">
+                <select
+                  value={fieldMainId}
+                  onChange={(e) => {
+                    const mid = e.target.value;
+                    setFieldMainId(mid);
+                    const firstGrp = taxonomy.childCategories.find(
+                      (c) => mid === 'ALL' || c.mainCategoryId === mid
+                    );
+                    if (firstGrp) setSelectedFieldChildId(firstGrp.id);
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg font-medium text-[#5E5946]"
+                >
+                  <option value="ALL">All Main Categories ({taxonomy.mainCategories.length})</option>
+                  {taxonomy.mainCategories.map((mc) => (
+                    <option key={mc.id} value={mc.id}>
+                      {mc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5 max-h-[500px] overflow-y-auto text-xs">
+                {taxonomy.childCategories
+                  .filter((cc) => fieldMainId === 'ALL' || cc.mainCategoryId === fieldMainId)
+                  .map((cc) => {
                   const count = (taxonomy.fieldSchemas || []).filter(
                     (f) => f.childCategoryId === cc.id || f.childCategorySlug === cc.slug
                   ).length;
@@ -2215,7 +2593,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
       ) : (
         <NewLaunchesAdminSection
           onRefreshParentTaxonomy={loadTaxonomy}
-          onJumpToCatalogTab={(tab) => setSectionTab(tab)}
+          onJumpToCatalogTab={(tab) => handleSelectSectionTab(tab)}
         />
       )}
 
@@ -3036,36 +3414,47 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
         )}
       </Modal>
 
-      {/* Product Type Edit Modal */}
+      {/* Child Category / Product Type Add & Edit Modal */}
       <Modal
         open={Boolean(productTypeModal)}
         onClose={() => setProductTypeModal(null)}
-        title={`Edit Product Type — ${productTypeModal?.name || ''}`}
+        title={productTypeModal?.isNew ? 'Add Child Category' : `Edit Child Category — ${productTypeModal?.name || ''}`}
       >
         {productTypeModal && (
           <form
             onSubmit={async (e) => {
               e.preventDefault();
               try {
-                await adminApi.updateProductType(productTypeModal.id, {
-                  childCategoryId: productTypeModal.childCategoryId,
-                  name: productTypeModal.name,
-                  slug: productTypeModal.slug,
-                  sortOrder: Number(productTypeModal.sortOrder) || 1,
-                  isActive: productTypeModal.isActive !== false,
-                  saveAsDraft: workInDraftMode,
-                });
-                pushToast({ title: workInDraftMode ? 'Product Type Staged in Draft' : 'Product Type Updated' });
+                if (productTypeModal.isNew) {
+                  await adminApi.createProductType({
+                    childCategoryId: productTypeModal.childCategoryId,
+                    name: productTypeModal.name,
+                    slug: productTypeModal.slug || undefined,
+                    sortOrder: Number(productTypeModal.sortOrder) || 1,
+                    saveAsDraft: workInDraftMode,
+                  });
+                  pushToast({ title: workInDraftMode ? 'Child Category Staged in Draft' : 'Child Category Created' });
+                } else {
+                  await adminApi.updateProductType(productTypeModal.id, {
+                    childCategoryId: productTypeModal.childCategoryId,
+                    name: productTypeModal.name,
+                    slug: productTypeModal.slug,
+                    sortOrder: Number(productTypeModal.sortOrder) || 1,
+                    isActive: productTypeModal.isActive !== false,
+                    saveAsDraft: workInDraftMode,
+                  });
+                  pushToast({ title: workInDraftMode ? 'Child Category Staged in Draft' : 'Child Category Updated' });
+                }
                 setProductTypeModal(null);
                 loadTaxonomy();
               } catch (err: any) {
-                pushToast({ title: 'Update Failed', message: err.message, variant: 'error' });
+                pushToast({ title: 'Save Failed', message: err.message, variant: 'error' });
               }
             }}
             className="space-y-3 text-xs"
           >
             <div>
-              <label className="block font-semibold text-[#5E5946] mb-1">Parent Child Category *</label>
+              <label className="block font-semibold text-[#5E5946] mb-1">Parent Category Group *</label>
               <select
                 value={productTypeModal.childCategoryId || ''}
                 onChange={(e) => setProductTypeModal({ ...productTypeModal, childCategoryId: e.target.value })}
@@ -3080,7 +3469,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Product Type Name *</label>
+                <label className="block font-semibold text-[#5E5946] mb-1">Child Category Name *</label>
                 <input
                   required
                   value={productTypeModal.name || ''}
@@ -3089,11 +3478,14 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
                 />
               </div>
               <div>
-                <label className="block font-semibold text-[#5E5946] mb-1">Slug *</label>
+                <label className="block font-semibold text-[#5E5946] mb-1">
+                  Slug {productTypeModal.isNew ? '(optional)' : '*'}
+                </label>
                 <input
-                  required
+                  required={!productTypeModal.isNew}
                   value={productTypeModal.slug || ''}
                   onChange={(e) => setProductTypeModal({ ...productTypeModal, slug: e.target.value })}
+                  placeholder={productTypeModal.isNew ? 'Auto-generated if blank' : ''}
                   className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
                 />
               </div>
@@ -3102,7 +3494,7 @@ export const CatalogProductsPage: React.FC<{ initialSection?: CatalogSectionTab 
               <Button type="button" variant="outline" onClick={() => setProductTypeModal(null)}>
                 Cancel
               </Button>
-              <Button type="submit">Save Product Type</Button>
+              <Button type="submit">{productTypeModal.isNew ? 'Add Child Category' : 'Save Changes'}</Button>
             </div>
           </form>
         )}

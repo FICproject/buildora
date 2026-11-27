@@ -2068,6 +2068,28 @@ export class CompanyAdminController {
     return { success: true, data: res, metadata: taxonomyService.getPublishMetadata(tenantId) };
   }
 
+  @Put('catalog/main-categories/reorder')
+  async reorderMainCategories(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { orderedIds?: string[]; saveAsDraft?: boolean }
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'products:manage', headerTenantId);
+    const list = await taxonomyService.reorderMainCategories(
+      tenantId,
+      Array.isArray(body?.orderedIds) ? body!.orderedIds : [],
+      { saveAsDraft: Boolean(body?.saveAsDraft) }
+    );
+    if (!body?.saveAsDraft) {
+      realtimeBus.emitPublic('taxonomy.published', { taxonomyUpdated: true }, tenantId);
+    }
+    return {
+      success: true,
+      data: list,
+      metadata: taxonomyService.getPublishMetadata(tenantId),
+    };
+  }
+
   @Get('catalog/new-launches')
   getNewLaunchesAdmin(
     @Headers('authorization') authHeader?: string,

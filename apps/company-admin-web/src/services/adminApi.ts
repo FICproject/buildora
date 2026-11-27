@@ -281,6 +281,11 @@ export const adminApi = {
       method: 'DELETE',
     });
   },
+  reorderMainCategories: (orderedIds: string[], saveAsDraft = false) =>
+    rawRequest<any>('/company-admin/catalog/main-categories/reorder', {
+      method: 'PUT',
+      body: JSON.stringify({ orderedIds, saveAsDraft }),
+    }),
   reorderChildCategories: (orderedIds: string[], saveAsDraft = false) =>
     rawRequest<any>('/company-admin/catalog/child-categories/reorder', {
       method: 'PUT',

@@ -1248,7 +1248,7 @@ export class TaxonomyService implements OnModuleInit {
       for (const c of this.childCategories.filter((x) => ['mc-1', 'mc-2', 'mc-3', 'mc-4', 'mc-5'].includes(x.mainCategoryId))) {
         await platformPersistenceService.upsert(ChildCategoryModel, c);
       }
-      for (const pt of this.productTypes.filter((x) => ['mc-1', 'mc-2', 'mc-3', 'mc-4'].includes(x.mainCategoryId))) {
+      for (const pt of this.productTypes.filter((x) => ['mc-1', 'mc-2', 'mc-3', 'mc-4', 'mc-5'].includes(x.mainCategoryId))) {
         await platformPersistenceService.upsert(ProductTypeModel, pt);
       }
       for (const fc of this.categoryFilterConfigs) {
@@ -1262,12 +1262,28 @@ export class TaxonomyService implements OnModuleInit {
     if (dbSnapshots.length > 0) {
       for (const snap of dbSnapshots) {
         if (snap?.tenantId) {
-          // If an old persisted draft still has pre-migration cement-concrete / legacy sub-7-1 / sub-11-1 / sub-16-1 slugs, refresh cleanly
+          // If an old persisted draft has pre-migration slugs or had no unpublished draft changes, refresh cleanly from reconciled live taxonomy
           const hasLegacyCement = Array.isArray(snap.childCategories) && snap.childCategories.some((c: any) => c.id === 'cat-1' && c.slug === 'cement-concrete');
           const hasLegacyFurniture = Array.isArray(snap.productTypes) && snap.productTypes.some((pt: any) => pt.id === 'sub-7-1');
           const hasLegacyElectrical = Array.isArray(snap.productTypes) && snap.productTypes.some((pt: any) => pt.id === 'sub-11-1');
-          const hasLegacyPlumbing = Array.isArray(snap.productTypes) && snap.productTypes.some((pt: any) => pt.id === 'sub-16-1');
-          if (!hasLegacyCement && !hasLegacyFurniture && !hasLegacyElectrical && !hasLegacyPlumbing) {
+          const hasLegacyPlumbing =
+            (Array.isArray(snap.productTypes) && snap.productTypes.some((pt: any) => pt.id === 'sub-16-1')) ||
+            (Array.isArray(snap.childCategories) &&
+              snap.childCategories.some(
+                (c: any) =>
+                  (c.id === 'cat-19' && c.slug === 'water-storage-tanks') ||
+                  (c.id === 'cat-18' && c.mainCategoryId === 'mc-4')
+              ));
+          this.publishMeta.set(snap.tenantId, {
+            tenantId: snap.tenantId,
+            hasUnpublishedChanges: Boolean(snap.hasUnpublishedChanges && !hasLegacyCement && !hasLegacyFurniture && !hasLegacyElectrical && !hasLegacyPlumbing),
+            publishedVersion: Number(snap.publishedVersion || 1),
+            draftVersion: Number(snap.draftVersion || 1),
+            lastPublishedAt: snap.lastPublishedAt,
+            lastPublishedBy: snap.lastPublishedBy,
+            lastDraftSavedAt: snap.lastDraftSavedAt,
+          });
+          if (snap.hasUnpublishedChanges && !hasLegacyCement && !hasLegacyFurniture && !hasLegacyElectrical && !hasLegacyPlumbing) {
             if (!Array.isArray(snap.categoryFilterConfigs)) {
               snap.categoryFilterConfigs = this.cloneRecord(this.categoryFilterConfigs);
             }
@@ -1275,15 +1291,6 @@ export class TaxonomyService implements OnModuleInit {
               snap.deletedFilterConfigIds = [];
             }
             this.drafts.set(snap.tenantId, snap);
-            this.publishMeta.set(snap.tenantId, {
-              tenantId: snap.tenantId,
-              hasUnpublishedChanges: Boolean(snap.hasUnpublishedChanges),
-              publishedVersion: Number(snap.publishedVersion || 1),
-              draftVersion: Number(snap.draftVersion || 1),
-              lastPublishedAt: snap.lastPublishedAt,
-              lastPublishedBy: snap.lastPublishedBy,
-              lastDraftSavedAt: snap.lastDraftSavedAt,
-            });
           }
         }
       }
@@ -2907,6 +2914,49 @@ export class TaxonomyService implements OnModuleInit {
     draft.lastPublishedAt = now;
     await this.persistDraftSnapshot(draft);
     return { id: target.id, deleted: true, reassignedProductsCount };
+  }
+
+  async reorderMainCategories(
+    tenantId: string,
+    orderedIds: string[],
+    options: { saveAsDraft?: boolean } = {}
+  ): Promise<MainCategory[]> {
+    const cleanTenant = this.resolveNavTenantId(tenantId);
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      throw new BadRequestException('orderedIds array is required.');
+    }
+    const draft = this.getDraftState(cleanTenant);
+    const orderMap = new Map<string, number>();
+    orderedIds.forEach((mid, idx) => orderMap.set(mid, idx + 1));
+    const now = new Date().toISOString();
+
+    for (const mc of draft.mainCategories) {
+      const nextOrder = orderMap.get(mc.id);
+      if (nextOrder !== undefined) {
+        mc.sortOrder = nextOrder;
+        mc.updatedAt = now;
+      }
+    }
+    draft.mainCategories.sort((a, b) => a.sortOrder - b.sortOrder);
+    draft.draftVersion += 1;
+    draft.lastDraftSavedAt = now;
+
+    if (options.saveAsDraft) {
+      draft.hasUnpublishedChanges = true;
+      await this.persistDraftSnapshot(draft);
+      return this.cloneRecord(draft.mainCategories);
+    }
+
+    for (const mc of draft.mainCategories) {
+      if (orderMap.has(mc.id)) {
+        this.upsertArrayById(this.mainCategories, mc);
+        await platformPersistenceService.upsert(MainCategoryModel, mc);
+      }
+    }
+    draft.publishedVersion += 1;
+    draft.lastPublishedAt = now;
+    await this.persistDraftSnapshot(draft);
+    return this.cloneRecord(draft.mainCategories);
   }
 
   async reorderChildCategories(

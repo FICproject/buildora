@@ -28,6 +28,14 @@ import {
   KeyRound,
   Building2,
   FolderTree,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Monitor,
+  Layers,
+  Compass,
+  Sliders,
+  Sparkles,
 } from 'lucide-react';
 import { useAdminAuthStore } from '../../store/useAdminAuthStore';
 import { ToastContainer, Modal, Button, useToastStore, inputClassName } from '../ui';
@@ -39,25 +47,30 @@ export interface NavItem {
   icon: React.ReactNode;
   permission: string;
   group: 'Command' | 'Supply & Orders' | 'Customers & Finance' | 'Administration';
-  children?: Array<{ path: string; label: string }>;
+  children?: Array<{ path: string; label: string; icon?: React.ReactNode; end?: boolean }>;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" />, permission: 'dashboard:read', group: 'Command' },
   { path: '/vendors', label: 'Vendors', icon: <Store className="w-4 h-4" />, permission: 'vendors:read', group: 'Supply & Orders' },
-  { path: '/products', label: 'Products & Catalog', icon: <Package className="w-4 h-4" />, permission: 'products:read', group: 'Supply & Orders' },
   {
-    path: '/catalog/navigation',
-    label: 'Catalog Management',
-    icon: <FolderTree className="w-4 h-4" />,
+    path: '/products',
+    label: 'Products & Catalog',
+    icon: <Package className="w-4 h-4" />,
     permission: 'products:read',
     group: 'Supply & Orders',
     children: [
-      { path: '/catalog/navigation', label: 'Desktop Navigation' },
-      { path: '/catalog/main-categories', label: 'Main Categories' },
-      { path: '/catalog/child-categories', label: 'Child Categories' },
-      { path: '/catalog/product-types', label: 'Product Type Management' },
-      { path: '/catalog/filters', label: 'Filter Configuration' },
+      { path: '/products', label: 'All Products', icon: <Package className="w-3.5 h-3.5" />, end: true },
+      { path: '/products/pending', label: 'Pending Approvals', icon: <Clock className="w-3.5 h-3.5" /> },
+      { path: '/products/approved', label: 'Approved Products', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+      { path: '/products/rejected', label: 'Rejected Products', icon: <XCircle className="w-3.5 h-3.5" /> },
+      { path: '/products/navigation', label: 'Desktop Navigation', icon: <Monitor className="w-3.5 h-3.5" /> },
+      { path: '/products/main-categories', label: 'Main Categories', icon: <Layers className="w-3.5 h-3.5" /> },
+      { path: '/products/child-categories', label: 'Child Categories', icon: <FolderTree className="w-3.5 h-3.5" /> },
+      { path: '/products/product-types', label: 'Product Types', icon: <Compass className="w-3.5 h-3.5" /> },
+      { path: '/products/filters', label: 'Filter Configuration', icon: <Sliders className="w-3.5 h-3.5" /> },
+      { path: '/products/fields', label: 'Dynamic Fields', icon: <Sliders className="w-3.5 h-3.5" /> },
+      { path: '/products/new-launches', label: 'New Launches', icon: <Sparkles className="w-3.5 h-3.5" /> },
     ],
   },
   { path: '/inventory', label: 'Inventory', icon: <Boxes className="w-4 h-4" />, permission: 'inventory:read', group: 'Supply & Orders' },
@@ -98,7 +111,7 @@ export const AdminLayout: React.FC = () => {
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [expandedMenu, setExpandedMenu] = useState<string | null>('/catalog/navigation');
+  const [expandedMenu, setExpandedMenu] = useState<string | null>('/products');
   const [globalSearch, setGlobalSearch] = useState('');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [pwdModalOpen, setPwdModalOpen] = useState(false);
@@ -237,7 +250,12 @@ export const AdminLayout: React.FC = () => {
                           if (collapsed && !isMobile) {
                             navigate(item.children![0].path);
                           } else {
-                            setExpandedMenu(isOpen && !childActive ? null : item.path);
+                            if (!childActive) {
+                              setExpandedMenu(item.path);
+                              navigate(item.children![0].path);
+                            } else {
+                              setExpandedMenu(isOpen ? null : item.path);
+                            }
                           }
                         }}
                         className={`w-full relative flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
@@ -263,21 +281,23 @@ export const AdminLayout: React.FC = () => {
                         )}
                       </button>
                       {(!collapsed || isMobile) && isOpen && (
-                        <div className="pl-7 pr-1 space-y-0.5">
+                        <div className="pl-6 pr-1 space-y-0.5">
                           {item.children.map((sub) => (
                             <NavLink
                               key={sub.path}
                               to={sub.path}
+                              end={Boolean(sub.end)}
                               onClick={() => isMobile && setMobileOpen(false)}
                               className={({ isActive }) =>
-                                `block px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                `flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                                   isActive
                                     ? 'bg-[#AE887B] text-white shadow-xs'
                                     : 'text-[#F0DED0]/80 hover:bg-[#F0DED0]/10 hover:text-white'
                                 }`
                               }
                             >
-                              {sub.label}
+                              {sub.icon && <span className="shrink-0 opacity-85">{sub.icon}</span>}
+                              <span className="truncate">{sub.label}</span>
                             </NavLink>
                           ))}
                         </div>
