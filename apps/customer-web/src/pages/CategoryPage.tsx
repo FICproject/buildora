@@ -151,7 +151,13 @@ export const CategoryPage: React.FC = () => {
 
         const isMain = Boolean(cat.level === 'MAIN' || (Array.isArray(cat.childCategories) && !cat.mainCategoryId));
         const [prods, filtersRes] = await Promise.all([
-          api.getProducts(isMain ? { mainCategory: targetSlug } : { category: targetSlug }),
+          api.getProducts(
+            isMain
+              ? { mainCategory: targetSlug, limit: 500 }
+              : subcategorySlug
+              ? { category: targetSlug, productType: subcategorySlug, limit: 500 }
+              : { category: targetSlug, limit: 500 }
+          ),
           api.getFilters(targetSlug, subQueryParam),
         ]);
         if (!active) return;
@@ -312,61 +318,81 @@ export const CategoryPage: React.FC = () => {
     return null;
   }, [isMainCategoryPage, category]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 24;
+
   // All products belonging to this Main Category, Child Category, or Route Product Type
   const allCategoryProducts = useMemo(() => {
     if (!category) return [];
+    let scoped: Product[] = [];
     if (isMainCategoryPage) {
+      const childIds = new Set(mainChildCategories.map((c) => c.id));
       const childSlugs = mainChildCategories.map((c) => c.slug.toLowerCase());
-      return productList.filter(
+      scoped = productList.filter(
         (p) =>
           p.mainCategorySlug?.toLowerCase() === category.slug?.toLowerCase() ||
           p.mainCategoryId === category.id ||
+          (p.childCategoryId && childIds.has(p.childCategoryId)) ||
           childSlugs.includes((p.childCategorySlug || p.categorySlug || '').toLowerCase())
       );
+    } else {
+      const childScoped = productList.filter(
+        (p) =>
+          (p.childCategorySlug || p.categorySlug || '').toLowerCase() === String(category.slug || '').toLowerCase() ||
+          (p.childCategoryId || p.categoryId) === category.id
+      );
+      if (!subcategorySlug) {
+        scoped = childScoped;
+      } else {
+        const normalizeSlug = (val?: string) =>
+          String(val || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)/g, '');
+        const routeNeedles = new Set(
+          [
+            subcategorySlug,
+            normalizeSlug(subcategorySlug),
+            activeSubcategory?.id,
+            activeSubcategory?.slug,
+            activeSubcategory?.name,
+            normalizeSlug(activeSubcategory?.name),
+          ]
+            .filter(Boolean)
+            .map((v) => String(v).toLowerCase())
+        );
+        scoped = childScoped.filter((p: any) => {
+          const candidates = [
+            p.productTypeId,
+            p.productTypeSlug,
+            p.productTypeName,
+            normalizeSlug(p.productTypeName),
+            p.subcategoryId,
+            p.subcategorySlug,
+            p.subcategory,
+            normalizeSlug(p.subcategory),
+            p.productType,
+            normalizeSlug(p.productType),
+          ]
+            .filter(Boolean)
+            .map((v) => String(v).toLowerCase());
+          return candidates.some((c) => routeNeedles.has(c));
+        });
+      }
     }
-    const childScoped = productList.filter(
-      (p) =>
-        (p.childCategorySlug || p.categorySlug || '').toLowerCase() === String(category.slug || '').toLowerCase() ||
-        (p.childCategoryId || p.categoryId) === category.id
-    );
-    if (!subcategorySlug) return childScoped;
 
-    const normalizeSlug = (val?: string) =>
-      String(val || '')
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-    const routeNeedles = new Set(
-      [
-        subcategorySlug,
-        normalizeSlug(subcategorySlug),
-        activeSubcategory?.id,
-        activeSubcategory?.slug,
-        activeSubcategory?.name,
-        normalizeSlug(activeSubcategory?.name),
-      ]
-        .filter(Boolean)
-        .map((v) => String(v).toLowerCase())
-    );
-    return childScoped.filter((p: any) => {
-      const candidates = [
-        p.productTypeId,
-        p.productTypeSlug,
-        p.productTypeName,
-        normalizeSlug(p.productTypeName),
-        p.subcategoryId,
-        p.subcategorySlug,
-        p.subcategory,
-        normalizeSlug(p.subcategory),
-        p.productType,
-        normalizeSlug(p.productType),
-      ]
-        .filter(Boolean)
-        .map((v) => String(v).toLowerCase());
-      return candidates.some((c) => routeNeedles.has(c));
+    const seen = new Set<string>();
+    return scoped.filter((p) => {
+      if (!p.id || seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
     });
   }, [isMainCategoryPage, mainChildCategories, productList, category, subcategorySlug, activeSubcategory]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [slug, subcategorySlug, activeFilters]);
 
   // Compute Child Category + Admin-configured dynamic specification filters with live faceted option counts
   const availableFilters = useMemo(() => {
@@ -633,11 +659,40 @@ export const CategoryPage: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
-          {filteredProducts.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+            {filteredProducts
+              .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+              .map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+          </div>
+          {filteredProducts.length > PAGE_SIZE && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-50 cursor-pointer disabled:cursor-default"
+              >
+                Previous
+              </button>
+              <span className="text-xs font-semibold text-slate-500 px-2">
+                Page {currentPage} of {Math.ceil(filteredProducts.length / PAGE_SIZE)}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage >= Math.ceil(filteredProducts.length / PAGE_SIZE)}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(Math.ceil(filteredProducts.length / PAGE_SIZE), p + 1))
+                }
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-50 cursor-pointer disabled:cursor-default"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

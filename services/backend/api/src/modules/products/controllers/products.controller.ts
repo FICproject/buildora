@@ -181,31 +181,77 @@ export class ProductsController {
     @Query('limit') limit?: string
   ) {
     const cleanTenant = tenantId || 'tenant-buildora-blr';
+    const pool = taxonomyService.getTenantPool(cleanTenant);
+
+    const seenIds = new Set<string>();
     let result = dbStore.products
       .filter((p) => isProductCustomerVisible(p, cleanTenant))
-      .map((p) => enrichStorefrontProduct(p, cleanTenant));
+      .map((p) => enrichStorefrontProduct(p, cleanTenant))
+      .filter((p) => {
+        if (!p.id || seenIds.has(p.id)) return false;
+        seenIds.add(p.id);
+        return true;
+      });
+
+    // Helper: collect active descendant child category IDs for a Main Category match
+    const resolveMainMatchIds = (needles: string[]) => {
+      const matchedMains = pool.mainCategories.filter(
+        (m) =>
+          taxonomyService.isMainCategoryActiveForPortals(cleanTenant, m.id) &&
+          (needles.includes(m.id.toLowerCase()) ||
+            needles.includes(m.slug.toLowerCase()) ||
+            needles.includes(m.name.trim().toLowerCase()))
+      );
+      const mainIds = new Set(matchedMains.map((m) => m.id));
+      const activeChildIds = new Set(
+        pool.childCategories
+          .filter((c) => mainIds.has(c.mainCategoryId) && c.isActive !== false)
+          .map((c) => c.id)
+      );
+      return { mainIds, activeChildIds };
+    };
+
+    const resolveChildMatchIds = (needles: string[]) => {
+      const matchedChildren = pool.childCategories.filter(
+        (c) =>
+          c.isActive !== false &&
+          taxonomyService.isMainCategoryActiveForPortals(cleanTenant, c.mainCategoryId) &&
+          (needles.includes(c.id.toLowerCase()) ||
+            needles.includes(c.slug.toLowerCase()) ||
+            needles.includes(c.name.trim().toLowerCase()))
+      );
+      return new Set(matchedChildren.map((c) => c.id));
+    };
 
     if (mainCategory) {
-      const mains = mainCategory.split(',').map((m) => m.trim().toLowerCase()).filter(Boolean);
-      result = result.filter(
-        (p) =>
-          mains.includes(String(p.mainCategorySlug || '').toLowerCase()) ||
-          mains.includes(String(p.mainCategoryName || '').toLowerCase()) ||
-          mains.includes(String(p.mainCategoryId || '').toLowerCase())
+      const rawMains = mainCategory.split(',').map((m) => m.trim().toLowerCase()).filter(Boolean);
+      const mains = Array.from(
+        new Set(rawMains.flatMap((m) => [m, LEGACY_CATEGORY_SLUG_ALIASES[m] || m]))
       );
+      const { mainIds, activeChildIds } = resolveMainMatchIds(mains);
+      if (mainIds.size === 0) {
+        result = [];
+      } else {
+        result = result.filter(
+          (p) =>
+            (p.mainCategoryId && mainIds.has(p.mainCategoryId)) ||
+            (p.childCategoryId && activeChildIds.has(p.childCategoryId))
+        );
+      }
     }
 
+    let scopedParentChildIds: Set<string> | null = null;
     if (childCategory) {
       const rawChildren = childCategory.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
       const children = Array.from(
         new Set(rawChildren.flatMap((c) => [c, LEGACY_CATEGORY_SLUG_ALIASES[c] || c]))
       );
-      result = result.filter(
-        (p) =>
-          children.includes(String(p.childCategorySlug || p.categorySlug || '').toLowerCase()) ||
-          children.includes(String(p.childCategoryName || p.category || '').toLowerCase()) ||
-          children.includes(String(p.childCategoryId || (p as any).categoryId || '').toLowerCase())
-      );
+      const childIds = resolveChildMatchIds(children);
+      scopedParentChildIds = childIds;
+      result =
+        childIds.size > 0
+          ? result.filter((p) => p.childCategoryId && childIds.has(p.childCategoryId))
+          : [];
     }
 
     if (category) {
@@ -213,19 +259,23 @@ export class ProductsController {
       const cats = Array.from(
         new Set(rawCats.flatMap((c) => [c, LEGACY_CATEGORY_SLUG_ALIASES[c] || c]))
       );
-      result = result.filter(
-        (p) =>
-          cats.includes((p.childCategorySlug || p.categorySlug || '').toLowerCase()) ||
-          cats.includes((p.childCategoryName || p.category || '').toLowerCase()) ||
-          cats.includes(String(p.childCategoryId || (p as any).categoryId || '').toLowerCase()) ||
-          cats.includes((p.categorySlug || '').toLowerCase()) ||
-          cats.includes((p.category || '').toLowerCase()) ||
-          cats.includes(String((p as any).categoryId || '').toLowerCase()) ||
-          cats.includes(String(p.mainCategorySlug || '').toLowerCase()) ||
-          cats.includes(String(p.mainCategoryName || '').toLowerCase()) ||
-          cats.includes(String(p.mainCategoryId || '').toLowerCase())
-      );
+      const childIds = resolveChildMatchIds(cats);
+      const { mainIds, activeChildIds } = resolveMainMatchIds(cats);
+
+      if (childIds.size > 0 || mainIds.size > 0) {
+        scopedParentChildIds = childIds.size > 0 ? childIds : activeChildIds;
+        result = result.filter(
+          (p) =>
+            (childIds.size > 0 && p.childCategoryId && childIds.has(p.childCategoryId)) ||
+            (mainIds.size > 0 &&
+              ((p.mainCategoryId && mainIds.has(p.mainCategoryId)) ||
+                (p.childCategoryId && activeChildIds.has(p.childCategoryId))))
+        );
+      } else {
+        result = [];
+      }
     }
+
     const effectiveSubOrType = productType || subcategory;
     if (effectiveSubOrType) {
       const rawSubs = effectiveSubOrType.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
@@ -233,12 +283,28 @@ export class ProductsController {
         new Set(
           rawSubs.flatMap((s) => {
             const alias = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[s];
-            return alias ? [s, alias.slug, alias.productTypeId.toLowerCase()] : [s];
+            return alias ? [s, alias.slug.toLowerCase(), alias.productTypeId.toLowerCase()] : [s];
           })
         )
       );
+      const matchedTypeIds = new Set(
+        pool.productTypes
+          .filter((pt) => {
+            if (pt.isActive === false) return false;
+            if (scopedParentChildIds && scopedParentChildIds.size > 0 && !scopedParentChildIds.has(pt.childCategoryId)) {
+              return false;
+            }
+            return (
+              subs.includes(pt.id.toLowerCase()) ||
+              subs.includes(pt.slug.toLowerCase()) ||
+              subs.includes(pt.name.trim().toLowerCase())
+            );
+          })
+          .map((pt) => pt.id)
+      );
       result = result.filter(
         (p) =>
+          (p.productTypeId && matchedTypeIds.has(p.productTypeId)) ||
           subs.includes((p.productTypeSlug || p.subcategorySlug || '').toLowerCase()) ||
           subs.includes((p.productTypeName || p.subcategory || '').toLowerCase()) ||
           subs.includes(String(p.productTypeId || (p as any).subcategoryId || '').toLowerCase())
@@ -347,8 +413,8 @@ export class ProductsController {
       });
     }
 
-    const pageNum = Number(page) || 1;
-    const limitNum = Number(limit) || 50;
+    const pageNum = Math.max(1, Number(page) || 1);
+    const limitNum = limit === 'all' ? Math.max(1, result.length) : Math.max(1, Number(limit) || 200);
     const startIndex = (pageNum - 1) * limitNum;
     const paginated = result.slice(startIndex, startIndex + limitNum);
 

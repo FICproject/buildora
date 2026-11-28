@@ -400,6 +400,7 @@ export const api = {
     bestSeller?: boolean;
     trending?: boolean;
     newLaunch?: boolean;
+    limit?: number | 'all';
   }): Promise<Product[]> {
     const queryParts: string[] = [];
     if (params?.mainCategory) queryParts.push(`mainCategory=${encodeURIComponent(params.mainCategory)}`);
@@ -410,6 +411,13 @@ export const api = {
     if (params?.brand) queryParts.push(`brand=${encodeURIComponent(params.brand)}`);
     if (params?.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
     if (params?.newLaunch) queryParts.push(`newLaunch=true`);
+    if (params?.limit !== undefined) {
+      queryParts.push(`limit=${encodeURIComponent(String(params.limit))}`);
+    } else if (params?.mainCategory || params?.category || params?.childCategory) {
+      queryParts.push('limit=500');
+    } else {
+      queryParts.push('limit=200');
+    }
 
     const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
     let products = await request<Product[]>(

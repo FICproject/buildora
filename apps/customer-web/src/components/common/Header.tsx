@@ -34,7 +34,8 @@ import {
   CONSTRUCTION_DEPARTMENTS,
   SUPPLIED_NEW_LAUNCH_DEFINITIONS,
   MAIN_CATEGORIES_SEED,
-  PRODUCT_TYPES_SEED
+  PRODUCT_TYPES_SEED,
+  LEGACY_CATEGORY_SLUG_ALIASES
 } from '@buildora/constants';
 import { Category, MainCategory, DesktopNavItem } from '@buildora/types';
 import { api } from '../../services/api';
@@ -266,7 +267,7 @@ export const Header: React.FC = () => {
     setIsMobileMenuOpen(false);
     setMobileExpandedDept(null);
     setMobileExpandedCat(null);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -336,25 +337,68 @@ export const Header: React.FC = () => {
     return etaMinutes > 0 ? `${etaMinutes} mins` : '60 mins';
   };
 
-  // Active navigation route helpers
-  const isHomeActive = location.pathname === '/';
-  const isNewLaunchesActive = location.pathname.startsWith('/new-launches');
-  const isBrandsActive = location.pathname.startsWith('/brands');
-  const isDealsActive = location.pathname.startsWith('/deals') || location.pathname.startsWith('/offers');
+  // Single-active navigation resolution (strictly at most ONE item highlighted at any time)
+  const routeActiveNavKey = React.useMemo<string | null>(() => {
+    const pathname = location.pathname;
+    if (pathname === '/') return 'home';
+    if (pathname.startsWith('/new-launches')) return 'new-launches';
+    if (pathname.startsWith('/deals') || pathname.startsWith('/offers')) return 'deals';
 
-  const isDeptActive = (dept: { slug: string; categorySlugs?: string[] }) => {
-    if (location.pathname === `/categories/${dept.slug}`) return true;
-    if (location.pathname.startsWith('/categories/')) {
-      const catSlug = location.pathname.split('/')[2];
-      const children = getMainChildCategories(dept.slug);
-      return (
-        dept.slug === catSlug ||
-        children.some((c) => c.slug === catSlug) ||
-        Boolean(dept.categorySlugs?.includes(catSlug))
-      );
+    // Determine category slug from /categories/:slug/* or /products?category=...
+    let rawCatSlug: string | null = null;
+    if (pathname.startsWith('/categories/')) {
+      rawCatSlug = pathname.split('/')[2] || null;
+    } else if (pathname === '/products') {
+      rawCatSlug = new URLSearchParams(location.search).get('category');
     }
-    return false;
-  };
+
+    if (rawCatSlug) {
+      const lowerRaw = rawCatSlug.toLowerCase();
+      const canonicalSlug = (LEGACY_CATEGORY_SLUG_ALIASES[lowerRaw] || lowerRaw).toLowerCase();
+
+      // Pass 1: exact match on a Main Category / top-level Desktop Nav item
+      for (const nav of visibleDesktopNavigation) {
+        if (nav.itemType === 'HOME' || nav.itemType === 'NEW_LAUNCHES' || nav.itemType === 'DEALS') continue;
+        const targetSlug = (nav.mainCategorySlug || nav.slug || '').toLowerCase();
+        if (targetSlug === canonicalSlug || targetSlug === lowerRaw) {
+          return nav.mainCategorySlug || nav.slug;
+        }
+      }
+
+      // Pass 2: match a Child Category belonging to a top-level Desktop Nav section
+      for (const nav of visibleDesktopNavigation) {
+        if (nav.itemType === 'HOME' || nav.itemType === 'NEW_LAUNCHES' || nav.itemType === 'DEALS') continue;
+        const key = nav.mainCategorySlug || nav.slug;
+        const children = getMainChildCategories(key);
+        const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === key);
+        if (
+          children.some(
+            (c: any) =>
+              String(c.slug || '').toLowerCase() === canonicalSlug ||
+              String(c.id || '').toLowerCase() === lowerRaw
+          ) ||
+          Boolean(fallbackDept?.categorySlugs?.some((s) => s.toLowerCase() === canonicalSlug))
+        ) {
+          return key;
+        }
+      }
+    }
+
+    return null;
+  }, [location.pathname, location.search, visibleDesktopNavigation, navigationSections, catalogCategories]);
+
+  // When a mega-menu dropdown is open, ONLY that clicked dropdown item stays highlighted;
+  // when closed, ONLY the routeActiveNavKey (e.g. Home on '/') is highlighted.
+  const highlightedNavKey = activeDepartment || routeActiveNavKey;
+  const isHomeActive = highlightedNavKey === 'home';
+  const isNewLaunchesActive = highlightedNavKey === 'new-launches';
+  const isDealsActive = highlightedNavKey === 'deals';
+  const isRouteHomeActive = routeActiveNavKey === 'home';
+  const isRouteNewLaunchesActive = routeActiveNavKey === 'new-launches';
+  const isRouteDealsActive = routeActiveNavKey === 'deals';
+
+  const isDeptActive = (dept: { slug: string }) => highlightedNavKey === dept.slug;
+  const isRouteDeptActive = (dept: { slug: string }) => routeActiveNavKey === dept.slug;
 
   return (
     <>
@@ -742,20 +786,26 @@ export const Header: React.FC = () => {
                 }
 
                 if (nav.itemType === 'DEALS' || (nav.highlight && !nav.hasDropdown)) {
+                  const isCustomRouteActive =
+                    !activeDepartment &&
+                    nav.itemType !== 'DEALS' &&
+                    nav.route &&
+                    location.pathname === nav.route;
+                  const dealsHighlight = isDealsActive || Boolean(isCustomRouteActive);
                   return (
                     <Link
                       key={nav.id}
                       to={nav.route || '/deals'}
                       onClick={() => setActiveDepartment(null)}
                       className={`py-1.5 px-2.5 xl:px-3 rounded-xl font-black text-xs flex items-center gap-1 transition-all ${
-                        isDealsActive || location.pathname === nav.route
+                        dealsHighlight
                           ? 'bg-brand-blue-900 text-white shadow-sm'
                           : 'text-brand-orange-600 hover:bg-orange-50'
                       }`}
                     >
                       <Sparkles
                         className={`w-3.5 h-3.5 fill-current ${
-                          isDealsActive ? 'text-white' : 'text-brand-orange-600'
+                          dealsHighlight ? 'text-white' : 'text-brand-orange-600'
                         }`}
                       />
                       <span>{nav.label}</span>
@@ -773,10 +823,7 @@ export const Header: React.FC = () => {
                 const Icon = DEPARTMENT_ICONS[dropdownKey] || Building2;
                 const hasDrop = Boolean(nav.hasDropdown && linkedMain);
                 const isOpen = hasDrop && activeDepartment === dropdownKey;
-                const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === dropdownKey);
-                const isActive =
-                  location.pathname === nav.route ||
-                  (linkedMain ? isDeptActive({ slug: dropdownKey, categorySlugs: fallbackDept?.categorySlugs }) : false);
+                const isActive = isDeptActive({ slug: dropdownKey });
                 const isExternalRoute = /^https?:\/\//i.test(String(nav.route || ''));
                 const resolvedHref = nav.route || `/categories/${dropdownKey}`;
                 const navLinkClass = `flex items-center gap-1.5 py-1.5 px-2.5 xl:px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
@@ -932,16 +979,18 @@ export const Header: React.FC = () => {
               <div className="absolute top-full left-0 right-0 pt-1.5 z-50 flex justify-center px-4 sm:px-6 lg:px-8 pointer-events-none">
                 <div className="w-full max-w-[1160px] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden transition-all duration-150 animate-in fade-in-0 slide-in-from-top-1 pointer-events-auto">
                   <div className="flex min-h-[260px] max-h-[min(410px,calc(100vh-130px))]">
-                    {/* LEFT PANEL: MAIN CATEGORIES (Click to select) */}
+                    {/* LEFT PANEL: MAIN CATEGORIES (Hover to preview Child Categories, Click to view Main Category PLP) */}
                     <div className="w-[260px] xl:w-[295px] flex-shrink-0 border-r border-slate-100 bg-white p-3.5 overflow-y-auto">
                       <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2 px-2.5">
                         {isNewLaunches ? 'FEATURED COLLECTIONS' : 'MAIN CATEGORIES'}
                       </div>
                       <div className="space-y-1">
                         {/* ALL option */}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedParentCategorySlug('all')}
+                        <Link
+                          to={isNewLaunches ? '/new-launches' : `/categories/${activeDept?.slug}`}
+                          onMouseEnter={() => setSelectedParentCategorySlug('all')}
+                          onFocus={() => setSelectedParentCategorySlug('all')}
+                          onClick={() => setActiveDepartment(null)}
                           className={`w-full group flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all text-left cursor-pointer ${
                             selectedParentCategorySlug === 'all'
                               ? 'bg-slate-900 text-white font-black shadow-xs'
@@ -958,22 +1007,27 @@ export const Header: React.FC = () => {
                                 : 'text-slate-300 group-hover:text-slate-500'
                             }`}
                           />
-                        </button>
+                        </Link>
 
                         {/* Main Category / Collection Items */}
                         {menuCategories.map((cat: any) => {
                           const isSelected = selectedParentCategorySlug === cat.slug;
+                          const mainCatUrl = isNewLaunches
+                            ? `/new-launches/${cat.slug}`
+                            : `/categories/${cat.slug}`;
                           return (
-                            <button
+                            <Link
                               key={cat.id}
-                              type="button"
-                              onClick={() => setSelectedParentCategorySlug(cat.slug)}
+                              to={mainCatUrl}
+                              onMouseEnter={() => setSelectedParentCategorySlug(cat.slug)}
+                              onFocus={() => setSelectedParentCategorySlug(cat.slug)}
+                              onClick={() => setActiveDepartment(null)}
                               className={`w-full group flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all text-left cursor-pointer ${
                                 isSelected
                                   ? 'bg-slate-900 text-white font-black shadow-xs'
                                   : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
                               }`}
-                              title={`Show child categories for ${cat.name}`}
+                              title={`Browse all products in ${cat.name}`}
                             >
                               <span className="truncate flex-1 min-w-0 pr-2">{cat.name}</span>
                               <ChevronRight
@@ -983,7 +1037,7 @@ export const Header: React.FC = () => {
                                     : 'text-slate-300 group-hover:text-slate-500'
                                 }`}
                               />
-                            </button>
+                            </Link>
                           );
                         })}
                       </div>
@@ -1179,8 +1233,7 @@ export const Header: React.FC = () => {
                   )
                   .map((dept) => {
                   const Icon = DEPARTMENT_ICONS[dept.slug] || Building2;
-                  const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === dept.slug);
-                  const isActive = isDeptActive({ slug: dept.slug, categorySlugs: fallbackDept?.categorySlugs });
+                  const isActive = isRouteDeptActive({ slug: dept.slug });
                   const isDeptExpanded = mobileExpandedDept === dept.slug;
                   const deptCats = getMainChildCategories(dept.slug);
 
