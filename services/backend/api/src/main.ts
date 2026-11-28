@@ -47,7 +47,7 @@ function buildAllowedOriginChecker() {
     }
 
     // Allow approved Vercel & Render HTTPS deployments for BUILDORA 60
-    if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin) || /^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)) {
+    if (/^https:\/\/[a-z0-9.-]+\.vercel\.app$/i.test(origin) || /^https:\/\/[a-z0-9.-]+\.onrender\.com$/i.test(origin)) {
       return callback(null, true);
     }
 
@@ -57,6 +57,13 @@ function buildAllowedOriginChecker() {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
+  const httpAdapter = app.getHttpAdapter();
+  if (httpAdapter && typeof httpAdapter.getInstance === 'function') {
+    const expressApp = httpAdapter.getInstance();
+    if (expressApp && typeof expressApp.set === 'function') {
+      expressApp.set('trust proxy', 1);
+    }
+  }
 
   // Enable strict origin-aware CORS with credentials and OPTIONS preflight support
   app.enableCors({

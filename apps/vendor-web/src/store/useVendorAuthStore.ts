@@ -8,6 +8,7 @@ interface VendorAuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  errorCode: string | null;
   redirectTo: string | null;
   
   // Actions
@@ -71,13 +72,17 @@ export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
     isAuthenticated: !!localStorage.getItem(TOKEN_KEY),
     isLoading: false,
     error: null,
+    errorCode: null,
     redirectTo: null,
 
     login: async (identifier: string, password?: string, rememberMe = true) => {
-      set({ isLoading: true, error: null });
+      set({ isLoading: true, error: null, errorCode: null });
       try {
         const response = await vendorApi.login(identifier, password, rememberMe);
         localStorage.setItem(TOKEN_KEY, response.token);
+        if (response.refreshToken) {
+          localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
+        }
         if (response.vendor) {
           localStorage.setItem(SAVED_VENDOR_KEY, JSON.stringify(response.vendor));
         }
@@ -86,12 +91,15 @@ export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
           token: response.token,
           isAuthenticated: true,
           isLoading: false,
+          error: null,
+          errorCode: null,
           redirectTo: response.redirectTo || '/dashboard'
         });
         return { success: true, redirectTo: response.redirectTo || '/dashboard' };
       } catch (err: any) {
         set({
           error: err.message || 'Login failed. Please check your credentials.',
+          errorCode: err?.code || null,
           isLoading: false,
         });
         return { success: false, error: err.message || 'Login failed.' };
@@ -99,10 +107,13 @@ export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
     },
 
     loginWithOtp: async (identifier: string, otp: string) => {
-      set({ isLoading: true, error: null });
+      set({ isLoading: true, error: null, errorCode: null });
       try {
         const response = await vendorApi.loginWithOtp(identifier, otp);
         localStorage.setItem(TOKEN_KEY, response.token);
+        if (response.refreshToken) {
+          localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
+        }
         if (response.vendor) {
           localStorage.setItem(SAVED_VENDOR_KEY, JSON.stringify(response.vendor));
         }
@@ -111,12 +122,15 @@ export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
           token: response.token,
           isAuthenticated: true,
           isLoading: false,
+          error: null,
+          errorCode: null,
           redirectTo: response.redirectTo || '/dashboard'
         });
         return { success: true, redirectTo: response.redirectTo || '/dashboard' };
       } catch (err: any) {
         set({
           error: err.message || 'OTP verification failed.',
+          errorCode: err?.code || null,
           isLoading: false,
         });
         return { success: false, error: err.message || 'OTP verification failed.' };
@@ -218,6 +232,6 @@ export const useVendorAuthStore = create<VendorAuthState>((set, get) => {
       }
     },
 
-    clearError: () => set({ error: null }),
+    clearError: () => set({ error: null, errorCode: null }),
   };
 });

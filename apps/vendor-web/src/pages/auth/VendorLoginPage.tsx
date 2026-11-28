@@ -28,7 +28,7 @@ import {
 
 export const VendorLoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, loginWithOtp, isLoading, error, clearError } = useVendorAuthStore();
+  const { login, loginWithOtp, isLoading, error, errorCode, clearError } = useVendorAuthStore();
 
   // Active Login Method Tab: 'password' | 'otp'
   const [loginMethod, setLoginMethod] = useState<'password' | 'otp'>('password');
@@ -388,7 +388,23 @@ export const VendorLoginPage: React.FC = () => {
             {error && (
               <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-in fade-in-0 duration-200">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <span className="flex-1 font-medium leading-snug">{error}</span>
+                <div className="flex-1 space-y-1">
+                  <p className="font-medium leading-snug">{error}</p>
+                  {errorCode === 'ACCOUNT_LOCKED' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotIdentifier(identifier);
+                        setIsForgotPasswordOpen(true);
+                        setForgotStep('IDENTIFIER');
+                        setForgotError(null);
+                      }}
+                      className="text-[11px] font-bold text-[#943D24] underline hover:no-underline cursor-pointer"
+                    >
+                      Unlock immediately via Forgot Password OTP →
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={clearError}

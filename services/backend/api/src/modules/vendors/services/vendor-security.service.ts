@@ -196,46 +196,75 @@ export class VendorSecurityService {
 
   /**
    * Check login rate limit and account lockout.
+   * Honors both in-memory attempt tracking and persisted vendor.lockedUntil.
    */
-  checkLoginLockout(identifier: string): void {
+  checkLoginLockout(identifier: string, vendorRecord?: { failedLoginAttempts?: number; lockedUntil?: number }): void {
     const cleanId = identifier.trim().toLowerCase();
     const entry = this.lockoutStore.get(cleanId);
-    if (!entry) return;
-
     const now = Date.now();
-    if (now < entry.lockedUntil) {
-      const minutesRemaining = Math.ceil((entry.lockedUntil - now) / 60000);
+    const persistedUntil = Number(vendorRecord?.lockedUntil || 0);
+    const activeLockedUntil = Math.max(entry?.lockedUntil || 0, persistedUntil);
+
+    if (activeLockedUntil > 0 && now < activeLockedUntil) {
+      const minutesRemaining = Math.max(1, Math.ceil((activeLockedUntil - now) / 60000));
       throw new HttpException(
         {
           success: false,
+          code: 'ACCOUNT_LOCKED',
           message: `Account is temporarily locked due to 5 consecutive failed login attempts. Please try again after ${minutesRemaining} minute(s) or reset your password.`,
           isLocked: true,
-          minutesRemaining
+          minutesRemaining,
+          lockedUntil: activeLockedUntil,
         },
         HttpStatus.TOO_MANY_REQUESTS
       );
     }
 
-    // If lockout period passed, reset
-    if (entry.lockedUntil > 0 && now >= entry.lockedUntil) {
+    // If lockout period passed, reset stale lockout state cleanly
+    if ((entry && entry.lockedUntil > 0 && now >= entry.lockedUntil) || (persistedUntil > 0 && now >= persistedUntil)) {
       this.lockoutStore.delete(cleanId);
+      if (vendorRecord) {
+        vendorRecord.failedLoginAttempts = 0;
+        vendorRecord.lockedUntil = 0;
+      }
     }
   }
 
   /**
-   * Record a failed login attempt. If >= 5 attempts, locks for 15 minutes.
+   * Record a failed login attempt for genuine credential mismatches only.
+   * Resets stale attempt counts if more than 15 minutes passed since the last failure.
+   * If >= 5 consecutive attempts within the 15-min window, locks for 15 minutes.
    */
-  recordFailedLogin(identifier: string): { remainingAttempts: number; isLocked: boolean } {
+  recordFailedLogin(
+    identifier: string,
+    vendorRecord?: { failedLoginAttempts?: number; lockedUntil?: number }
+  ): { remainingAttempts: number; isLocked: boolean; minutesRemaining?: number } {
     const cleanId = identifier.trim().toLowerCase();
     const now = Date.now();
+    const LOCK_WINDOW_MS = 15 * 60 * 1000;
     let entry = this.lockoutStore.get(cleanId);
+
+    // Seed from persisted vendorRecord if memory map was cleared on restart
+    if (!entry && vendorRecord && Number(vendorRecord.failedLoginAttempts || 0) > 0) {
+      entry = {
+        identifier: cleanId,
+        failedAttempts: Number(vendorRecord.failedLoginAttempts || 0),
+        lockedUntil: Number(vendorRecord.lockedUntil || 0),
+        lastAttemptAt: now,
+      };
+    }
+
+    // Reset stale failed attempts after 15 minutes of inactivity or expired lock
+    if (entry && ((entry.lockedUntil > 0 && now >= entry.lockedUntil) || now - entry.lastAttemptAt >= LOCK_WINDOW_MS)) {
+      entry = undefined;
+    }
 
     if (!entry) {
       entry = {
         identifier: cleanId,
         failedAttempts: 1,
         lockedUntil: 0,
-        lastAttemptAt: now
+        lastAttemptAt: now,
       };
     } else {
       entry.failedAttempts += 1;
@@ -243,20 +272,32 @@ export class VendorSecurityService {
     }
 
     if (entry.failedAttempts >= 5) {
-      entry.lockedUntil = now + 15 * 60 * 1000; // 15 mins
+      entry.lockedUntil = now + LOCK_WINDOW_MS;
       this.lockoutStore.set(cleanId, entry);
-      return { remainingAttempts: 0, isLocked: true };
+      if (vendorRecord) {
+        vendorRecord.failedLoginAttempts = entry.failedAttempts;
+        vendorRecord.lockedUntil = entry.lockedUntil;
+      }
+      return { remainingAttempts: 0, isLocked: true, minutesRemaining: 15 };
     }
 
     this.lockoutStore.set(cleanId, entry);
+    if (vendorRecord) {
+      vendorRecord.failedLoginAttempts = entry.failedAttempts;
+      vendorRecord.lockedUntil = 0;
+    }
     return { remainingAttempts: 5 - entry.failedAttempts, isLocked: false };
   }
 
   /**
-   * Clear failed login count upon successful authentication.
+   * Clear failed login count upon successful authentication or password reset.
    */
-  clearLoginAttempts(identifier: string): void {
+  clearLoginAttempts(identifier: string, vendorRecord?: { failedLoginAttempts?: number; lockedUntil?: number }): void {
     this.lockoutStore.delete(identifier.trim().toLowerCase());
+    if (vendorRecord) {
+      vendorRecord.failedLoginAttempts = 0;
+      vendorRecord.lockedUntil = 0;
+    }
   }
 
   /**

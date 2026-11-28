@@ -301,18 +301,32 @@ export async function apiRequest<T = any>(
             ? parsed.message[0]
             : parsed.message
           : undefined;
+      const backendCode =
+        typeof parsed === 'object' && parsed !== null && typeof parsed.code === 'string'
+          ? parsed.code
+          : undefined;
 
       if (response.status === 401) {
         throw new ApiClientError(rawMessage || 'Your session has expired. Please sign in again.', {
           status: 401,
-          code: 'SESSION_EXPIRED'
+          code: backendCode || 'SESSION_EXPIRED'
         });
+      }
+
+      if (response.status === 429) {
+        throw new ApiClientError(
+          rawMessage || 'Too many attempts. Please wait before trying again.',
+          {
+            status: 429,
+            code: backendCode || 'ACCOUNT_LOCKED'
+          }
+        );
       }
 
       if (response.status >= 500 && !rawMessage) {
         throw new ApiClientError(
           fallbackErrorMessage || 'Unable to connect to the server. Please try again.',
-          { status: response.status }
+          { status: response.status, code: backendCode || 'SERVER_ERROR' }
         );
       }
 
@@ -320,6 +334,7 @@ export async function apiRequest<T = any>(
         rawMessage || fallbackErrorMessage || `Request failed (${response.status}).`,
         {
           status: response.status,
+          code: backendCode,
           errors: typeof parsed === 'object' && parsed !== null ? parsed.errors : undefined
         }
       );

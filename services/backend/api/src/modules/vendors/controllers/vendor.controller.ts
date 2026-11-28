@@ -13,6 +13,7 @@ import {
   NotFoundException,
   UnauthorizedException,
   ForbiddenException,
+  ServiceUnavailableException,
   HttpException,
   HttpStatus,
   UseInterceptors,
@@ -56,6 +57,7 @@ import {
   resolveCanonicalCategoryHierarchy,
 } from '@buildora/constants';
 import { dbStore } from '../../../database/store';
+import { databaseService } from '../../../database/database.service';
 import { vendorSecurityService } from '../services/vendor-security.service';
 import { vendorNotificationService } from '../services/vendor-notification.service';
 import { postalLookupService } from '../services/postal-lookup.service';
@@ -595,6 +597,9 @@ export function getAuthenticatedVendor(authHeader?: string): BackendVendorRecord
   const verified = vendorSecurityService.verifyToken(token);
   if (verified?.vendorId && vendorRecords.has(verified.vendorId)) {
     return vendorRecords.get(verified.vendorId)!;
+  }
+  if (token.split('.').length === 3) {
+    return null;
   }
   for (const v of vendorRecords.values()) {
     if (token.includes(v.id) || token.includes(v.email)) {
@@ -1810,6 +1815,7 @@ export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
 @Controller('api/v1/vendor')
 export class VendorController implements OnModuleInit {
   async onModuleInit() {
+    await databaseService.ensureConnected();
     await vendorPersistenceService.loadAllVendorsIntoMap(vendorRecords);
 
     const mergeById = <T extends { id: string }>(target: T[], loaded: T[]) => {
@@ -2018,6 +2024,27 @@ export class VendorController implements OnModuleInit {
     };
   }
 
+  private async resolveVendorForAuth(cleanIdentifier: string): Promise<BackendVendorRecord | undefined> {
+    let vendor = findVendorByIdentifier(cleanIdentifier);
+    if (vendor) return vendor;
+
+    if (databaseService.isConfiguredAndUnreachable()) {
+      await databaseService.ensureConnected();
+      if (vendorPersistenceService.isDbConnected()) {
+        await vendorPersistenceService.loadAllVendorsIntoMap(vendorRecords);
+        vendor = findVendorByIdentifier(cleanIdentifier);
+        if (vendor) return vendor;
+      }
+    }
+
+    if (vendorPersistenceService.isDbConnected()) {
+      const fromDb = await vendorPersistenceService.loadVendorByIdentifier(cleanIdentifier, vendorRecords);
+      if (fromDb) return fromDb as BackendVendorRecord;
+    }
+
+    return undefined;
+  }
+
   @Post('auth/login')
   async login(@Body() body: { identifier: string; password?: string; rememberMe?: boolean }) {
     const { identifier, password } = body;
@@ -2032,35 +2059,64 @@ export class VendorController implements OnModuleInit {
 
     const clean = identifier.trim().toLowerCase();
 
-    // 1. Check account lockout
-    vendorSecurityService.checkLoginLockout(clean);
-
-    // 2. Find vendor
-    const vendor = findVendorByIdentifier(clean);
+    // 1. Resolve vendor from memory or MongoDB (without counting DB/unregistered errors against lockout)
+    const vendor = await this.resolveVendorForAuth(clean);
     if (!vendor) {
-      const lockResult = vendorSecurityService.recordFailedLogin(clean);
-      throw new UnauthorizedException(
-        lockResult.isLocked
-          ? 'Account is temporarily locked due to 5 consecutive failed login attempts. Please try again after 15 minutes or reset your password.'
-          : `Invalid email/mobile or password. ${lockResult.remainingAttempts} attempt(s) remaining before temporary account lockout.`
-      );
+      if (databaseService.isConfiguredAndUnreachable()) {
+        throw new ServiceUnavailableException({
+          success: false,
+          code: 'DATABASE_UNREACHABLE',
+          message: 'Database connection failed while verifying your vendor account. Please retry shortly or contact support.',
+        });
+      }
+      throw new UnauthorizedException({
+        success: false,
+        code: 'ACCOUNT_NOT_REGISTERED',
+        message: 'No registered vendor account found for this email or mobile number. Please verify your email/mobile or register as a vendor partner.',
+      });
     }
 
-    // 3. Verify password hash using PBKDF2
+    // 2. Enforce account lockout (only for existing accounts, syncing persisted lockouts)
+    vendorSecurityService.checkLoginLockout(clean, vendor);
+
+    // 3. Require password setup if none exists
+    if (!vendor.passwordHash) {
+      throw new UnauthorizedException({
+        success: false,
+        code: 'PASSWORD_RESET_REQUIRED',
+        message: 'Password setup is required for this vendor account. Please click Forgot Password to set a new password.',
+      });
+    }
+
+    // 4. Verify password hash using PBKDF2
     const passwordMatch = vendorSecurityService.verifyPassword(password, vendor.passwordHash);
     if (!passwordMatch) {
-      const lockResult = vendorSecurityService.recordFailedLogin(clean);
-      throw new UnauthorizedException(
-        lockResult.isLocked
-          ? 'Account is temporarily locked due to 5 consecutive failed login attempts. Please try again after 15 minutes or reset your password.'
-          : `Invalid credentials. ${lockResult.remainingAttempts} attempt(s) remaining before temporary account lockout.`
-      );
+      const lockResult = vendorSecurityService.recordFailedLogin(clean, vendor);
+      await vendorPersistenceService.saveVendorRecord(vendor);
+      if (lockResult.isLocked) {
+        throw new HttpException(
+          {
+            success: false,
+            code: 'ACCOUNT_LOCKED',
+            isLocked: true,
+            minutesRemaining: lockResult.minutesRemaining || 15,
+            message: 'Account is temporarily locked due to 5 consecutive failed login attempts. Please try again after 15 minutes or reset your password.',
+          },
+          HttpStatus.TOO_MANY_REQUESTS
+        );
+      }
+      throw new UnauthorizedException({
+        success: false,
+        code: 'INVALID_CREDENTIALS',
+        remainingAttempts: lockResult.remainingAttempts,
+        message: `Invalid password. ${lockResult.remainingAttempts} attempt(s) remaining before temporary 15-minute lockout.`,
+      });
     }
 
-    // 4. Successful login: clear failed attempts
-    vendorSecurityService.clearLoginAttempts(clean);
+    // 5. Successful login: clear failed attempts and persist cleared state
+    vendorSecurityService.clearLoginAttempts(clean, vendor);
 
-    // 5. Generate secure JWT tokens
+    // 6. Generate secure JWT tokens
     const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
     vendor.refreshToken = tokens.refreshToken;
     await vendorPersistenceService.saveVendorRecord(vendor);
@@ -2095,17 +2151,23 @@ export class VendorController implements OnModuleInit {
     }
 
     const clean = identifier.trim().toLowerCase();
-    vendorSecurityService.checkLoginLockout(clean);
-
-    const vendor = findVendorByIdentifier(clean);
+    const vendor = await this.resolveVendorForAuth(clean);
     if (!vendor) {
+      if (databaseService.isConfiguredAndUnreachable()) {
+        throw new ServiceUnavailableException({
+          success: false,
+          code: 'DATABASE_UNREACHABLE',
+          message: 'Database connection failed while verifying your vendor account.',
+        });
+      }
       throw new NotFoundException(`No registered vendor account found for "${identifier}".`);
     }
+    vendorSecurityService.checkLoginLockout(clean, vendor);
 
     // Verify OTP
     vendorSecurityService.verifyOtp(clean, 'LOGIN', otp);
     vendorSecurityService.consumeOtp(clean, 'LOGIN');
-    vendorSecurityService.clearLoginAttempts(clean);
+    vendorSecurityService.clearLoginAttempts(clean, vendor);
 
     const tokens = vendorSecurityService.generateTokens(vendor.id, vendor.email);
     vendor.refreshToken = tokens.refreshToken;
@@ -2117,6 +2179,7 @@ export class VendorController implements OnModuleInit {
       message: `Signed in successfully with verified mobile code.`,
       token: tokens.accessToken,
       refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
       status: vendor.status,
       redirectTo,
       vendor: serializeVendorProfile(vendor)
@@ -2124,7 +2187,7 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('auth/forgot-password/send-otp')
-  forgotPasswordSendOtp(@Body() body: { identifier: string }) {
+  async forgotPasswordSendOtp(@Body() body: { identifier: string }) {
     const { identifier } = body;
     if (!identifier) {
       throw new BadRequestException('Registered business email or mobile number is required.');
@@ -2136,8 +2199,15 @@ export class VendorController implements OnModuleInit {
     }
 
     const clean = identifier.trim().toLowerCase();
-    const vendor = findVendorByIdentifier(clean);
+    const vendor = await this.resolveVendorForAuth(clean);
     if (!vendor) {
+      if (databaseService.isConfiguredAndUnreachable()) {
+        throw new ServiceUnavailableException({
+          success: false,
+          code: 'DATABASE_UNREACHABLE',
+          message: 'Database connection failed while looking up your vendor account.',
+        });
+      }
       throw new NotFoundException(`No registered vendor account found for "${identifier}".`);
     }
 
@@ -2152,7 +2222,7 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('auth/forgot-password/reset')
-  forgotPasswordReset(
+  async forgotPasswordReset(
     @Body() body: { identifier: string; otp: string; newPassword: string; confirmPassword: string }
   ) {
     const { identifier, otp, newPassword, confirmPassword } = body;
@@ -2180,8 +2250,15 @@ export class VendorController implements OnModuleInit {
     }
 
     const clean = identifier.trim().toLowerCase();
-    const vendor = findVendorByIdentifier(clean);
+    const vendor = await this.resolveVendorForAuth(clean);
     if (!vendor) {
+      if (databaseService.isConfiguredAndUnreachable()) {
+        throw new ServiceUnavailableException({
+          success: false,
+          code: 'DATABASE_UNREACHABLE',
+          message: 'Database connection failed while resetting your password.',
+        });
+      }
       throw new NotFoundException(`Vendor account not found for "${identifier}".`);
     }
 
@@ -2202,9 +2279,9 @@ export class VendorController implements OnModuleInit {
 
     // 4. Invalidate single-use OTP & clear lockout
     vendorSecurityService.consumeOtp(clean, 'PASSWORD_RESET');
-    vendorSecurityService.clearLoginAttempts(clean);
+    vendorSecurityService.clearLoginAttempts(clean, vendor);
 
-    // 5. Audit log & notification
+    // 5. Audit log & persist to MongoDB
     if (!vendor.auditLogs) vendor.auditLogs = [];
     vendor.auditLogs.unshift({
       id: `audit-${Date.now()}`,
@@ -2213,6 +2290,8 @@ export class VendorController implements OnModuleInit {
       performedAt: new Date().toISOString(),
       details: 'Password was successfully reset using verified OTP code.'
     });
+
+    await vendorPersistenceService.saveVendorRecord(vendor);
 
     vendorNotificationService.notify(
       vendor.id,
@@ -2303,7 +2382,7 @@ export class VendorController implements OnModuleInit {
   // ==========================================
 
   @Post('registration/step1')
-  registrationStep1(
+  async registrationStep1(
     @Body()
     body: {
       ownerName: string;
@@ -2405,10 +2484,10 @@ export class VendorController implements OnModuleInit {
       ]
     };
 
-    vendorRecords.set(draftId, newDraft);
-    void vendorPersistenceService.saveVendorRecord(newDraft);
-
     const tokens = vendorSecurityService.generateTokens(newDraft.id, newDraft.email);
+    newDraft.refreshToken = tokens.refreshToken;
+    vendorRecords.set(draftId, newDraft);
+    await vendorPersistenceService.saveVendorRecord(newDraft);
 
     return {
       success: true,
@@ -2416,7 +2495,9 @@ export class VendorController implements OnModuleInit {
       vendorId: newDraft.id,
       step: 2,
       token: tokens.accessToken,
-      vendor: newDraft
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+      vendor: serializeVendorProfile(newDraft)
     };
   }
 

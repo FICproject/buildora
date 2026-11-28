@@ -142,6 +142,40 @@ class VendorPersistenceService {
   }
 
   /**
+   * Finds a vendor record by email or 10-digit mobile directly from MongoDB (case-insensitive)
+   * and hydrates the in-memory map if found.
+   */
+  async loadVendorByIdentifier(identifier: string, targetMap?: Map<string, any>): Promise<any | null> {
+    if (!this.isDbConnected() || !identifier) return null;
+    const clean = identifier.trim().toLowerCase();
+    const digitsOnly = clean.replace(/\D/g, '').slice(-10);
+    try {
+      const escapedEmail = clean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const emailRegex = new RegExp(`^${escapedEmail}$`, 'i');
+      const orClauses: any[] = [
+        { email: emailRegex },
+        { 'businessInfo.email': emailRegex },
+      ];
+      if (digitsOnly.length === 10) {
+        const phoneRegex = new RegExp(`${digitsOnly}$`);
+        orClauses.push({ phone: phoneRegex }, { 'businessInfo.phone': phoneRegex });
+      }
+      const doc = await VendorMongoModel.findOne({ $or: orClauses }).lean().exec();
+      if (!doc) return null;
+      const cleanDoc = { ...doc };
+      delete (cleanDoc as any)._id;
+      delete (cleanDoc as any).__v;
+      if (targetMap && cleanDoc.id) {
+        targetMap.set(cleanDoc.id, cleanDoc);
+      }
+      return cleanDoc;
+    } catch (err: any) {
+      this.logger.warn(`MongoDB loadVendorByIdentifier failed: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Finds a vendor record by persisted refresh token.
    */
   async loadVendorByRefreshToken(refreshToken: string, targetMap?: Map<string, any>): Promise<any | null> {
