@@ -52,14 +52,34 @@ const ipRateLimits = new Map<string, { count: number; windowStart: number }>();
 const revokedRefreshJtis = new Set<string>();
 
 /**
- * Development OTP mode is strictly limited to non-production backends with
- * CUSTOMER_OTP_MODE=development configured on the server. Client flags/headers
- * are never trusted to enable development OTP exposure.
+ * Development / Mock OTP mode is enabled ONLY when server config permits it:
+ * 1) Strict providers disabled AND otpMode is not explicitly 'sms'/'production', AND
+ * 2) Either non-production NODE_ENV (with CUSTOMER_OTP_MODE=development/mock or unset fallback)
+ *    OR explicitly authorized testing deployment with ALLOW_DEV_OTP_FALLBACK=true.
+ *
+ * Client headers/body flags are never trusted.
  */
 export function isCustomerDevOtpMode(env: NodeJS.ProcessEnv = process.env): boolean {
   const nodeEnv = String(env.NODE_ENV || 'development').trim().toLowerCase();
   const otpMode = String(env.CUSTOMER_OTP_MODE || '').trim().toLowerCase();
-  return nodeEnv !== 'production' && otpMode === 'development';
+  const strictProviders = String(env.STRICT_OTP_PROVIDERS || '').trim().toLowerCase() === 'true';
+  const allowTestingFallback =
+    String(env.ALLOW_DEV_OTP_FALLBACK || '').trim().toLowerCase() === 'true';
+
+  if (strictProviders || otpMode === 'sms' || otpMode === 'production') {
+    return false;
+  }
+
+  if (otpMode === 'development' || otpMode === 'mock') {
+    return nodeEnv !== 'production' || allowTestingFallback;
+  }
+
+  // Fallback when CUSTOMER_OTP_MODE is unset on an explicitly authorized Render testing server
+  if (nodeEnv === 'production') {
+    return allowTestingFallback;
+  }
+
+  return false;
 }
 
 export function generateCustomerOtp(): string {
@@ -202,21 +222,14 @@ export class AuthController {
       };
     }
 
-    // Never expose dev OTP if somehow evaluated under NODE_ENV=production
-    const exposeDevOtp = process.env.NODE_ENV !== 'production' && devOtpEnabled;
-
     return {
       success: true,
       message: `OTP sent successfully to +91 ${cleanPhone}`,
       cooldownSeconds: RESEND_COOLDOWN_SECONDS,
       expiresInSeconds: OTP_TTL_MS / 1000,
-      ...(exposeDevOtp
-        ? {
-            otpMode: 'development',
-            devOtp: otp,
-            devOtpHint: otp,
-          }
-        : {}),
+      otpMode: 'development',
+      devOtp: otp,
+      devOtpHint: otp,
     };
   }
 

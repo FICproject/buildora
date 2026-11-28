@@ -568,7 +568,7 @@ export function buildMainChildCategoryFilter(
     }
   }
 
-  const options = Array.from(countsMap.values());
+  const options = Array.from(countsMap.values()).filter((opt) => opt.count > 0);
   if (options.length === 0) return null;
   return {
     id: 'childCategory',

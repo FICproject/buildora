@@ -27,7 +27,21 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 const DEFAULT_TENANT_ID = import.meta.env.VITE_DEFAULT_TENANT_ID || 'tenant-buildora-blr';
 
+let accessTokenGetter: (() => string | null) | null = null;
+export function registerTokenAccessor(getter: () => string | null) {
+  accessTokenGetter = getter;
+}
+
+let refreshHandler: (() => Promise<string | null>) | null = null;
+export function registerRefreshHandler(handler: () => Promise<string | null>) {
+  refreshHandler = handler;
+}
+
 function getStoredToken(): string | null {
+  if (accessTokenGetter) {
+    const activeToken = accessTokenGetter();
+    if (activeToken) return activeToken;
+  }
   try {
     const raw = localStorage.getItem('buildora-auth-storage');
     if (raw) {
@@ -53,7 +67,7 @@ async function request<T>(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
 
-  const token = getStoredToken();
+  let token = getStoredToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-tenant-id': DEFAULT_TENANT_ID,
@@ -65,12 +79,24 @@ async function request<T>(
   }
 
   try {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    let res = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
       signal: controller.signal
     });
     clearTimeout(timeoutId);
+
+    if (res.status === 401 && token && !endpoint.startsWith('/auth/') && refreshHandler) {
+      const refreshedToken = await refreshHandler().catch(() => null);
+      if (refreshedToken) {
+        token = refreshedToken;
+        headers['Authorization'] = `Bearer ${refreshedToken}`;
+        res = await fetch(`${API_BASE_URL}${endpoint}`, {
+          ...options,
+          headers,
+        });
+      }
+    }
 
     if (res.status === 401 && token && unauthorizedHandler && !endpoint.startsWith('/auth/')) {
       unauthorizedHandler();
@@ -588,7 +614,12 @@ export const api = {
     );
   },
 
-  async getAuthSession(): Promise<{ authenticated: boolean; suspended?: boolean; user: CustomerProfile | null }> {
+  async getAuthSession(): Promise<{
+    authenticated: boolean;
+    suspended?: boolean;
+    offline?: boolean;
+    user: CustomerProfile | null;
+  }> {
     const token = getStoredToken();
     if (!token) return { authenticated: false, user: null };
     try {
@@ -603,7 +634,7 @@ export const api = {
       if (!res.ok) return { authenticated: false, user: null };
       return await res.json();
     } catch {
-      return { authenticated: true, user: null };
+      return { authenticated: false, offline: true, user: null };
     }
   },
 
@@ -671,10 +702,16 @@ export const api = {
 
   // Customer Profile & Address Book
   async getProfile(): Promise<CustomerProfile | null> {
+    if (!getStoredToken()) {
+      return null;
+    }
     return request<CustomerProfile | null>('/customer/profile', {}, null);
   },
 
   async updateProfile(profile: Partial<CustomerProfile>): Promise<CustomerProfile | null> {
+    if (!getStoredToken()) {
+      return null;
+    }
     return request<CustomerProfile | null>(
       '/customer/profile',
       {
@@ -746,10 +783,16 @@ export const api = {
   },
 
   async getAddresses(): Promise<Address[]> {
+    if (!getStoredToken()) {
+      return [];
+    }
     return request<Address[]>('/customer/addresses', {}, []);
   },
 
   async addAddress(address: Omit<Address, 'id'>): Promise<Address | null> {
+    if (!getStoredToken()) {
+      return null;
+    }
     return request<Address | null>(
       '/customer/addresses',
       {
@@ -761,6 +804,9 @@ export const api = {
   },
 
   async deleteAddress(id: string): Promise<boolean> {
+    if (!getStoredToken()) {
+      return true;
+    }
     return request<any>(
       `/customer/addresses/${id}`,
       {

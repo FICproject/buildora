@@ -40,6 +40,8 @@ services:
         sync: false
       - key: ALLOW_DEV_OTP_FALLBACK
         value: "true"
+      - key: CUSTOMER_OTP_MODE
+        value: development
 
   # Customer Web on Render Static Site
   - type: web

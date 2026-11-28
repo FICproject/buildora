@@ -306,38 +306,54 @@ export const NewLaunchesPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-6 animate-in fade-in-0 duration-200">
-      {/* 1. Breadcrumb Navigation */}
-      <nav className="flex items-center gap-1.5 text-xs text-slate-500 overflow-x-auto no-scrollbar whitespace-nowrap">
-        <Link to="/" className="hover:text-brand-blue-900 flex-shrink-0 transition-colors">
-          Home
-        </Link>
-        <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-        <Link
-          to="/new-launches"
-          className={`flex-shrink-0 transition-colors ${
-            !activeCollection ? 'font-semibold text-slate-800' : 'hover:text-brand-blue-900'
-          }`}
-        >
-          New Launches
-        </Link>
-        {activeCollection && (
-          <>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <span className="font-semibold text-slate-800 flex-shrink-0">
-              {activeCollection.title || activeCollection.name}
-            </span>
-          </>
-        )}
-        {activeShortcut && (
-          <>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <span className="font-semibold text-brand-orange-600 flex-shrink-0">
-              {activeShortcut.displayLabel}
-            </span>
-          </>
-        )}
-      </nav>
+    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-4 space-y-4">
+      {/* 1. Breadcrumb Navigation & Compact Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <nav className="flex items-center gap-1.5 text-xs text-slate-500 overflow-x-auto no-scrollbar whitespace-nowrap">
+          <Link to="/" className="hover:text-brand-blue-900 flex-shrink-0 transition-colors">
+            Home
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          <Link
+            to="/new-launches"
+            className={`flex-shrink-0 transition-colors ${
+              !activeCollection ? 'font-semibold text-slate-800' : 'hover:text-brand-blue-900'
+            }`}
+          >
+            New Launches
+          </Link>
+          {activeCollection && (
+            <>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <span className="font-semibold text-slate-800 flex-shrink-0">
+                {activeCollection.title || activeCollection.name}
+              </span>
+            </>
+          )}
+          {activeShortcut && (
+            <>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+              <span className="font-semibold text-brand-orange-600 flex-shrink-0">
+                {activeShortcut.displayLabel}
+              </span>
+            </>
+          )}
+        </nav>
+
+        <div className="relative w-full sm:w-64 flex-shrink-0">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => {
+              setSearchText(e.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Search in New Launches..."
+            className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-brand-blue-900/20"
+          />
+        </div>
+      </div>
 
       {/* Error / Unpublished Collection Guard */}
       {errorMsg && !isLoading ? (
@@ -367,43 +383,7 @@ export const NewLaunchesPage: React.FC = () => {
         </div>
       ) : (
         <>
-          {/* 2. Collection Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Rocket className="w-5 h-5 text-brand-orange-500" />
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                  {activeCollection
-                    ? activeCollection.title || activeCollection.name
-                    : 'New Launches Showcase'}
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
-                  {activeCollection?.badge || 'Promotional Collection'}
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-500 max-w-3xl">
-                {activeCollection?.description ||
-                  'Admin-curated promotional launch collections linking directly to our permanent category hierarchy and approved products.'}
-              </p>
-            </div>
-
-            {/* Inline collection search */}
-            <div className="relative w-full md:w-72">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchText}
-                onChange={(e) => {
-                  setSearchText(e.target.value);
-                  setCurrentPage(1);
-                }}
-                placeholder="Search in New Launches..."
-                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-brand-blue-900/20"
-              />
-            </div>
-          </div>
-
-          {/* 3. Promotional Collections Grid (shown on /new-launches root OR compact switcher) */}
+          {/* 2. Promotional Collections Grid (shown on /new-launches root OR compact switcher) */}
           {!activeCollection && collections.length > 0 && (
             <section className="space-y-3">
               <div className="flex items-center justify-between">

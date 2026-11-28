@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CustomerProfile, Address, Product } from '@buildora/types';
-import { api, registerUnauthorizedHandler } from '../services/api';
+import {
+  api,
+  registerUnauthorizedHandler,
+  registerTokenAccessor,
+  registerRefreshHandler,
+} from '../services/api';
 import { useCartStore } from './useCartStore';
 import { useWishlistStore } from './useWishlistStore';
 
@@ -118,11 +123,15 @@ export const useAuthStore = create<AuthStoreState>()(
         const { isAuthenticated, token, refreshToken } = get();
         if (!isAuthenticated || !token) return;
         let session = await api.getAuthSession();
+        if (session.offline) {
+          return;
+        }
         if (!session.authenticated && !session.suspended && refreshToken) {
           const refreshed = await api.refreshAuthSession(refreshToken);
           if (refreshed.success && refreshed.token) {
             set({ token: refreshed.token });
             session = await api.getAuthSession();
+            if (session.offline) return;
           }
         }
         if (!session.authenticated) {
@@ -362,6 +371,19 @@ export const useAuthStore = create<AuthStoreState>()(
     }
   )
 );
+
+registerTokenAccessor(() => useAuthStore.getState().token);
+
+registerRefreshHandler(async () => {
+  const { refreshToken } = useAuthStore.getState();
+  if (!refreshToken) return null;
+  const refreshed = await api.refreshAuthSession(refreshToken);
+  if (refreshed.success && refreshed.token) {
+    useAuthStore.setState({ token: refreshed.token });
+    return refreshed.token;
+  }
+  return null;
+});
 
 registerUnauthorizedHandler(() => {
   const store = useAuthStore.getState();

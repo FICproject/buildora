@@ -158,6 +158,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
     await sendOtpRequest();
   };
 
+  const handleFillDevOtp = () => {
+    if (!devOtp || !/^\d{4}$/.test(devOtp)) return;
+    setErrorMsg('');
+    setOtpDigits(devOtp.split(''));
+    otpInputRefs.current[3]?.focus();
+  };
+
   const handleOtpDigitChange = (index: number, rawValue: string) => {
     const digitsOnly = rawValue.replace(/\D/g, '');
     setErrorMsg('');
@@ -348,9 +355,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
             {devOtp && (
               <div
                 data-testid="dev-otp-banner"
-                className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-brand-blue-900 flex items-center justify-between gap-3"
+                className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-brand-blue-900 flex items-center justify-between gap-2.5"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <Terminal className="w-4 h-4 text-brand-blue-700 flex-shrink-0" />
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wider text-brand-blue-700">
@@ -367,6 +374,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
                     </p>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={handleFillDevOtp}
+                  disabled={isLoading}
+                  className="px-2.5 py-1.5 rounded-lg bg-brand-blue-900 hover:bg-brand-blue-800 text-white text-[11px] font-bold whitespace-nowrap flex-shrink-0 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Fill OTP
+                </button>
               </div>
             )}
 
@@ -410,7 +425,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
               disabled={isLoading || cleanOtp.length !== 4}
               leftIcon={<KeyRound className="w-4 h-4" />}
             >
-              Verify OTP &amp; Continue
+              Verify &amp; Login
             </Button>
 
             <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">

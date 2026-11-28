@@ -529,7 +529,7 @@ export const CategoryPage: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 space-y-5">
+    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-4 space-y-3.5">
       {/* 1. Breadcrumb Navigation (Main Category -> Child Category -> Product Type; No "Categories") */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500 overflow-x-auto no-scrollbar whitespace-nowrap">
         <Link to="/" className="hover:text-brand-blue-900 flex-shrink-0">
@@ -562,18 +562,6 @@ export const CategoryPage: React.FC = () => {
           </>
         )}
       </nav>
-
-      {/* 2. Category Title Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            {activeSubcategory ? activeSubcategory.name : category.name}
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl">
-            {category.description}
-          </p>
-        </div>
-      </div>
 
       {/* Child Category Quick Navigation Pills (on Main Category landing page) */}
       {isMainCategoryPage && mainChildCategories.length > 0 && (

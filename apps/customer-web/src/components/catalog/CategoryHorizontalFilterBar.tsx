@@ -1,13 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   Search,
-  X,
   RotateCcw,
   Zap,
   Check,
-  SlidersHorizontal,
-  ArrowUpDown
+  SlidersHorizontal
 } from 'lucide-react';
 import {
   AvailableCategoryFilter,
@@ -40,22 +39,44 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
 }) => {
   // Track which dropdown popover is currently open
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [alignRightId, setAlignRightId] = useState<string | null>(null);
 
   // Local search query per filter dimension
   const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
 
-  // Local price inputs
+  // Local price inputs + validation message
   const [tempMinPrice, setTempMinPrice] = useState<string>(
     activeFilters.minPrice !== undefined ? String(activeFilters.minPrice) : ''
   );
   const [tempMaxPrice, setTempMaxPrice] = useState<string>(
     activeFilters.maxPrice !== undefined ? String(activeFilters.maxPrice) : ''
   );
+  const [priceError, setPriceError] = useState<string | null>(null);
+
+  // Detect <640px mobile viewport so dropdowns render in a Portal bottom sheet above overflow containers
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
+  );
+
+  const barRef = useRef<HTMLDivElement>(null);
+  const portalPanelRef = useRef<HTMLDivElement>(null);
+  const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // Track viewport breakpoint for desktop popover vs mobile portal sheet
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = (e: MediaQueryListEvent) => setIsMobileViewport(e.matches);
+    setIsMobileViewport(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   // Sync temp price when activeFilters change externally
   useEffect(() => {
     setTempMinPrice(activeFilters.minPrice !== undefined ? String(activeFilters.minPrice) : '');
     setTempMaxPrice(activeFilters.maxPrice !== undefined ? String(activeFilters.maxPrice) : '');
+    setPriceError(null);
   }, [activeFilters.minPrice, activeFilters.maxPrice]);
 
   // Close dropdown on Escape key
@@ -69,8 +90,40 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Close dropdown on outside click (without an intercepting overlay blocking adjacent triggers)
+  useEffect(() => {
+    if (!openDropdownId) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (barRef.current?.contains(target)) return;
+      if (portalPanelRef.current?.contains(target)) return;
+      setOpenDropdownId(null);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, [openDropdownId]);
+
   const toggleDropdown = (id: string) => {
-    setOpenDropdownId((prev) => (prev === id ? null : id));
+    setPriceError(null);
+    setOpenDropdownId((prev) => {
+      const next = prev === id ? null : id;
+      if (next && typeof window !== 'undefined') {
+        const rect = triggerRefs.current[next]?.getBoundingClientRect();
+        if (rect && rect.left + 320 > window.innerWidth - 16) {
+          setAlignRightId(next);
+        } else {
+          setAlignRightId(null);
+        }
+      } else {
+        setAlignRightId(null);
+      }
+      return next;
+    });
   };
 
   const handleCategoryToggle = (catValue: string, selectionMode?: 'SINGLE' | 'MULTI') => {
@@ -151,18 +204,33 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     });
   };
 
-  const handleApplyCustomPrice = () => {
-    const parsedMin = tempMinPrice.trim() !== '' ? Math.max(0, Number(tempMinPrice)) : undefined;
-    const parsedMax = tempMaxPrice.trim() !== '' ? Math.max(0, Number(tempMaxPrice)) : undefined;
-    const min = parsedMin !== undefined && !Number.isNaN(parsedMin) ? parsedMin : undefined;
-    const max = parsedMax !== undefined && !Number.isNaN(parsedMax) ? parsedMax : undefined;
-    const finalMin = min !== undefined && max !== undefined && min > max ? max : min;
-    const finalMax = min !== undefined && max !== undefined && min > max ? min : max;
+  const parsePriceInput = (raw: string): number | undefined | 'invalid' => {
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 0) return 'invalid';
+    return parsed;
+  };
 
+  const handleApplyCustomPrice = () => {
+    const min = parsePriceInput(tempMinPrice);
+    const max = parsePriceInput(tempMaxPrice);
+
+    if (min === 'invalid' || max === 'invalid') {
+      setPriceError('Please enter valid non-negative numeric amounts.');
+      return;
+    }
+
+    if (min !== undefined && max !== undefined && min > max) {
+      setPriceError('From amount cannot be greater than To amount.');
+      return;
+    }
+
+    setPriceError(null);
     onChangeFilters({
       ...activeFilters,
-      minPrice: finalMin,
-      maxPrice: finalMax
+      minPrice: min,
+      maxPrice: max
     });
     setOpenDropdownId(null);
   };
@@ -170,6 +238,7 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
   const handleResetCustomPrice = () => {
     setTempMinPrice('');
     setTempMaxPrice('');
+    setPriceError(null);
     onChangeFilters({
       ...activeFilters,
       minPrice: undefined,
@@ -210,12 +279,29 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     } else if (filter.id === 'price') {
       setTempMinPrice('');
       setTempMaxPrice('');
+      setPriceError(null);
       onChangeFilters({ ...activeFilters, minPrice: undefined, maxPrice: undefined });
     } else {
       const copy = { ...activeFilters.specifications };
       delete copy[filter.id];
       onChangeFilters({ ...activeFilters, specifications: copy });
     }
+  };
+
+  const getPillLabel = (filter: AvailableCategoryFilter): string => {
+    if (
+      filter.id === 'price' &&
+      (activeFilters.minPrice !== undefined || activeFilters.maxPrice !== undefined)
+    ) {
+      if (activeFilters.minPrice !== undefined && activeFilters.maxPrice !== undefined) {
+        return `Price: ₹${activeFilters.minPrice} - ₹${activeFilters.maxPrice}`;
+      }
+      if (activeFilters.minPrice !== undefined) {
+        return `Price: ₹${activeFilters.minPrice}+`;
+      }
+      return `Price: ≤ ₹${activeFilters.maxPrice}`;
+    }
+    return filter.name;
   };
 
   const hasAnyActiveFilters =
@@ -229,17 +315,216 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
     activeFilters.maxPrice !== undefined ||
     Object.values(activeFilters.specifications || {}).some((v) => v && v.length > 0);
 
-  return (
-    <div className={`relative ${className}`}>
-      {/* Click-away backdrop overlay when a dropdown is open */}
-      {openDropdownId && (
-        <div
-          className="fixed inset-0 z-40 sm:z-20 bg-slate-900/25 sm:bg-transparent"
-          onClick={() => setOpenDropdownId(null)}
-          aria-hidden="true"
-        />
-      )}
+  const openFilterObj = openDropdownId
+    ? availableFilters.find((f) => f.id === openDropdownId) || null
+    : null;
 
+  const renderDropdownBody = (filter: AvailableCategoryFilter, activeCount: number) => {
+    const query = searchQueries[filter.id]?.toLowerCase().trim() || '';
+    const filteredOptions = (filter.options || []).filter(
+      (opt) => !query || opt.label.toLowerCase().includes(query)
+    );
+
+    return (
+      <>
+        {/* Popover Header */}
+        <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
+          <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+            <span>{filter.name}</span>
+            {activeCount > 0 && (
+              <span className="text-[11px] font-semibold text-brand-blue-900">
+                ({activeCount} selected)
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => handleClearDimension(filter)}
+            disabled={activeCount === 0}
+            className={`text-[11px] font-semibold transition-colors ${
+              activeCount > 0
+                ? 'text-brand-blue-900 hover:underline cursor-pointer'
+                : 'text-slate-300 cursor-default'
+            }`}
+          >
+            Reset
+          </button>
+        </div>
+
+        {/* Checkbox / Radio Options List */}
+        {filter.type === 'checkbox' && (
+          <div className="space-y-2">
+            {(filter.options || []).length > 0 && (
+              <div className="relative mb-2">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder={`Search ${filter.name}...`}
+                  value={searchQueries[filter.id] || ''}
+                  onChange={(e) =>
+                    setSearchQueries((prev) => ({
+                      ...prev,
+                      [filter.id]: e.target.value
+                    }))
+                  }
+                  className="w-full pl-8 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 bg-slate-50"
+                />
+              </div>
+            )}
+
+            <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+              {filteredOptions.length === 0 ? (
+                <div className="py-3 text-center text-xs text-slate-400">
+                  No matching {filter.name.toLowerCase()} options
+                </div>
+              ) : (
+                filteredOptions.map((opt) => {
+                  let isChecked = false;
+                  if (filter.id === 'category') {
+                    isChecked = (activeFilters.categories || []).includes(opt.value);
+                  } else if (filter.id === 'childCategory') {
+                    isChecked = (activeFilters.childCategories || []).includes(opt.value);
+                  } else if (filter.id === 'brand') {
+                    isChecked = (activeFilters.brands || []).includes(opt.value);
+                  } else if (filter.id === 'subcategory') {
+                    isChecked = (activeFilters.subcategories || []).includes(opt.value);
+                  } else {
+                    isChecked = (activeFilters.specifications?.[filter.id] || []).includes(opt.value);
+                  }
+
+                  const onToggle = () => {
+                    if (filter.id === 'category') {
+                      handleCategoryToggle(opt.value, filter.selectionMode);
+                    } else if (filter.id === 'childCategory') {
+                      handleChildCategoryToggle(opt.value, filter.selectionMode);
+                    } else if (filter.id === 'brand') {
+                      handleBrandToggle(opt.value, filter.selectionMode);
+                    } else if (filter.id === 'subcategory') {
+                      handleSubcategoryToggle(opt.value, filter.selectionMode);
+                    } else {
+                      handleSpecToggle(filter.id, opt.value, filter.selectionMode);
+                    }
+                  };
+
+                  return (
+                    <label
+                      key={opt.value}
+                      className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 text-xs text-slate-700 cursor-pointer select-none transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        <input
+                          type={filter.selectionMode === 'SINGLE' ? 'radio' : 'checkbox'}
+                          name={filter.selectionMode === 'SINGLE' ? `filter-${filter.id}` : undefined}
+                          checked={isChecked}
+                          onChange={onToggle}
+                          className={`w-3.5 h-3.5 text-brand-blue-900 focus:ring-brand-blue-500 border-slate-300 cursor-pointer ${
+                            filter.selectionMode === 'SINGLE' ? 'rounded-full' : 'rounded'
+                          }`}
+                        />
+                        <span className="truncate" title={opt.label}>
+                          {opt.label}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-semibold flex-shrink-0">
+                        ({opt.count})
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Custom Numeric Price Range Selector (From / To, no fixed slabs) */}
+        {filter.type === 'range' && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  From
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="numeric"
+                  placeholder="Enter amount"
+                  value={tempMinPrice}
+                  onChange={(e) => {
+                    setTempMinPrice(e.target.value);
+                    if (priceError) setPriceError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleApplyCustomPrice();
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  To
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="numeric"
+                  placeholder="Enter amount"
+                  value={tempMaxPrice}
+                  onChange={(e) => {
+                    setTempMaxPrice(e.target.value);
+                    if (priceError) setPriceError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleApplyCustomPrice();
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
+                />
+              </div>
+            </div>
+
+            {priceError && (
+              <p className="text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+                {priceError}
+              </p>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleApplyCustomPrice}
+                className="flex-1 py-1.5 rounded-lg bg-brand-blue-900 text-white text-xs font-bold hover:bg-brand-blue-950 transition-colors cursor-pointer shadow-2xs"
+              >
+                Apply
+              </button>
+              <button
+                type="button"
+                onClick={handleResetCustomPrice}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Popover Footer Done Button */}
+        <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setOpenDropdownId(null)}
+            className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+          >
+            Done
+          </button>
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <div ref={barRef} className={`relative z-30 ${className}`}>
       {/* Main Horizontal Filter Bar Container */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm py-2 px-3 sm:px-4 flex flex-wrap items-center justify-between gap-2.5">
         {/* Left Side: 'Filter:' Label + Horizontal Filter Dropdown Buttons */}
@@ -253,12 +538,21 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
           {availableFilters.map((filter) => {
             const activeCount = getActiveCountForDimension(filter);
             const isOpen = openDropdownId === filter.id;
+            const alignRight = alignRightId === filter.id;
 
             return (
-              <div key={filter.id} className="relative flex-shrink-0">
+              <div
+                key={filter.id}
+                className={`relative flex-shrink-0 ${isOpen ? 'z-50' : ''}`}
+              >
                 {/* Dropdown Trigger Button */}
                 <button
+                  ref={(el) => {
+                    triggerRefs.current[filter.id] = el;
+                  }}
                   type="button"
+                  aria-expanded={isOpen}
+                  aria-haspopup="dialog"
                   onClick={() => toggleDropdown(filter.id)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border select-none cursor-pointer ${
                     activeCount > 0
@@ -268,8 +562,8 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                       : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
-                  <span className="truncate max-w-[130px]">{filter.name}</span>
-                  {activeCount > 0 && (
+                  <span className="truncate max-w-[180px]">{getPillLabel(filter)}</span>
+                  {activeCount > 0 && filter.id !== 'price' && (
                     <span className="w-4 h-4 rounded-full bg-brand-blue-900 text-white text-[10px] font-black flex items-center justify-center">
                       {activeCount}
                     </span>
@@ -281,183 +575,17 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                   />
                 </button>
 
-                {/* Popover Dropdown Panel (bottom sheet on <640px so overflow-x-auto never clips; anchored dropdown on >=640px) */}
-                {isOpen && (
+                {/* Desktop Popover Panel (>= 640px) anchored directly below button */}
+                {isOpen && !isMobileViewport && (
                   <div
-                    className="fixed inset-x-3 bottom-4 max-h-[75dvh] overflow-y-auto z-50 sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-full sm:left-0 sm:mt-2 sm:z-30 sm:max-h-none bg-white rounded-2xl border border-slate-200 shadow-2xl sm:shadow-xl p-4 sm:min-w-[260px] sm:max-w-xs animate-in fade-in zoom-in-95 duration-150"
+                    role="dialog"
+                    aria-label={`${filter.name} filter`}
+                    className={`absolute top-full mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 w-[280px] max-w-[calc(100vw-2rem)] ${
+                      alignRight ? 'right-0' : 'left-0'
+                    }`}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {/* Popover Header */}
-                    <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
-                      <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <span>{activeCount} selected</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleClearDimension(filter)}
-                        disabled={activeCount === 0}
-                        className={`text-[11px] font-semibold transition-colors ${
-                          activeCount > 0
-                            ? 'text-brand-blue-900 hover:underline cursor-pointer'
-                            : 'text-slate-300 cursor-default'
-                        }`}
-                      >
-                        Reset
-                      </button>
-                    </div>
-
-                    {/* Checkbox Options List */}
-                    {filter.type === 'checkbox' && (
-                      <div className="space-y-2">
-                        {/* Searchable Option Input */}
-                        {filter.options && filter.options.length > 0 && (
-                          <div className="relative mb-2">
-                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input
-                              type="text"
-                              placeholder={`Search ${filter.name}...`}
-                              value={searchQueries[filter.id] || ''}
-                              onChange={(e) =>
-                                setSearchQueries((prev) => ({
-                                  ...prev,
-                                  [filter.id]: e.target.value
-                                }))
-                              }
-                              className="w-full pl-8 pr-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 bg-slate-50"
-                            />
-                          </div>
-                        )}
-
-                        {/* List */}
-                        <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
-                          {filter.options
-                            .filter((opt) => {
-                              const q = searchQueries[filter.id]?.toLowerCase().trim();
-                              return !q || opt.label.toLowerCase().includes(q);
-                            })
-                            .map((opt) => {
-                              let isChecked = false;
-                              if (filter.id === 'category') {
-                                isChecked = (activeFilters.categories || []).includes(opt.value);
-                              } else if (filter.id === 'childCategory') {
-                                isChecked = (activeFilters.childCategories || []).includes(opt.value);
-                              } else if (filter.id === 'brand') {
-                                isChecked = (activeFilters.brands || []).includes(opt.value);
-                              } else if (filter.id === 'subcategory') {
-                                isChecked = (activeFilters.subcategories || []).includes(opt.value);
-                              } else {
-                                isChecked = (
-                                  activeFilters.specifications?.[filter.id] || []
-                                ).includes(opt.value);
-                              }
-
-                               const onToggle = () => {
-                                 if (filter.id === 'category') {
-                                   handleCategoryToggle(opt.value, filter.selectionMode);
-                                 } else if (filter.id === 'childCategory') {
-                                   handleChildCategoryToggle(opt.value, filter.selectionMode);
-                                 } else if (filter.id === 'brand') {
-                                   handleBrandToggle(opt.value, filter.selectionMode);
-                                 } else if (filter.id === 'subcategory') {
-                                   handleSubcategoryToggle(opt.value, filter.selectionMode);
-                                 } else {
-                                   handleSpecToggle(filter.id, opt.value, filter.selectionMode);
-                                 }
-                               };
-
-                               return (
-                                 <label
-                                   key={opt.value}
-                                   className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 text-xs text-slate-700 cursor-pointer select-none transition-colors"
-                                 >
-                                   <div className="flex items-center gap-2 min-w-0 pr-2">
-                                     <input
-                                       type={filter.selectionMode === 'SINGLE' ? 'radio' : 'checkbox'}
-                                       name={filter.selectionMode === 'SINGLE' ? `filter-${filter.id}` : undefined}
-                                       checked={isChecked}
-                                       onChange={onToggle}
-                                       className={`w-3.5 h-3.5 text-brand-blue-900 focus:ring-brand-blue-500 border-slate-300 cursor-pointer ${
-                                         filter.selectionMode === 'SINGLE' ? 'rounded-full' : 'rounded'
-                                       }`}
-                                     />
-                                    <span className="truncate" title={opt.label}>
-                                      {opt.label}
-                                    </span>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 font-semibold flex-shrink-0">
-                                    ({opt.count})
-                                  </span>
-                                </label>
-                              );
-                            })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Price Range Selector */}
-                    {filter.type === 'range' && (
-                      <div className="space-y-3">
-                        <div className="text-[10px] font-bold text-slate-500 uppercase">
-                          Price Range (₹)
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">
-                              From Amount (₹)
-                            </label>
-                            <input
-                              type="number"
-                              min={0}
-                              placeholder="From"
-                              value={tempMinPrice}
-                              onChange={(e) => setTempMinPrice(e.target.value)}
-                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">
-                              To Amount (₹)
-                            </label>
-                            <input
-                              type="number"
-                              min={0}
-                              placeholder="To"
-                              value={tempMaxPrice}
-                              onChange={(e) => setTempMaxPrice(e.target.value)}
-                              className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-blue-500 font-medium"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={handleApplyCustomPrice}
-                            className="flex-1 py-1.5 rounded-lg bg-brand-blue-900 text-white text-xs font-bold hover:bg-brand-blue-950 transition-colors cursor-pointer shadow-2xs"
-                          >
-                            Apply
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleResetCustomPrice}
-                            className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
-                          >
-                            Reset
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Popover Footer Done Button */}
-                    <div className="pt-2.5 mt-2.5 border-t border-slate-100 flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setOpenDropdownId(null)}
-                        className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                      >
-                        Done
-                      </button>
-                    </div>
+                    {renderDropdownBody(filter, activeCount)}
                   </div>
                 )}
               </div>
@@ -559,6 +687,28 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
           </div>
         </div>
       </div>
+
+      {/* Mobile Bottom Sheet Portal (< 640px) so overflow-x-auto never clips open dropdowns */}
+      {openFilterObj &&
+        isMobileViewport &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/40 backdrop-blur-[1px] sm:hidden"
+            onClick={() => setOpenDropdownId(null)}
+          >
+            <div
+              ref={portalPanelRef}
+              role="dialog"
+              aria-label={`${openFilterObj.name} filter`}
+              className="w-full max-w-lg max-h-[80dvh] overflow-y-auto bg-white rounded-t-2xl border-t border-slate-200 shadow-2xl p-4 pb-6 safe-pb"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {renderDropdownBody(openFilterObj, getActiveCountForDimension(openFilterObj))}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
