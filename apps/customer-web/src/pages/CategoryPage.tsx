@@ -26,31 +26,17 @@ import {
 } from '../components/catalog';
 
 function parseCategoryPageUrlFilters(
-  searchParams: URLSearchParams,
-  subcategoryParam?: string,
-  category?: Category
+  searchParams: URLSearchParams
 ): ActiveCategoryFilters {
   const urlChildCats = (searchParams.get('child') || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const urlSubs = (searchParams.get('sub') || '')
+  const subcategories = (searchParams.get('sub') || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-
-  let subcategories: string[] = [];
-  if (urlSubs.length > 0) {
-    subcategories = urlSubs;
-  } else if (subcategoryParam) {
-    const matchedSub = category?.subcategories?.find(
-      (s) =>
-        s.slug.toLowerCase() === subcategoryParam.toLowerCase() ||
-        s.name.toLowerCase() === subcategoryParam.toLowerCase()
-    );
-    subcategories = [matchedSub ? matchedSub.slug : subcategoryParam];
-  }
 
   const brands = (searchParams.get('brand') || '')
     .split(',')
@@ -121,7 +107,7 @@ export const CategoryPage: React.FC = () => {
   }, [subcategorySlug, searchParams]);
 
   const [activeFilters, setActiveFilters] = useState<ActiveCategoryFilters>(() =>
-    parseCategoryPageUrlFilters(searchParams, subcategorySlug)
+    parseCategoryPageUrlFilters(searchParams)
   );
 
   // Load category details and live products (supports both Main Category and Child Category pages)
@@ -176,29 +162,57 @@ export const CategoryPage: React.FC = () => {
           ? filtersRes.filterConfigs
           : [];
         const nextDims = filterConfigsToDimensions(cfgs);
-        setDynamicFilterDimensions(nextDims);
-        setHasConfiguredFilters(
+        const nextHasConfig =
           typeof filtersRes?.hasFilterConfiguration === 'boolean'
             ? filtersRes.hasFilterConfiguration
-            : !isMain && cfgs.length > 0
+            : !isMain && cfgs.length > 0;
+        setDynamicFilterDimensions(nextDims);
+        setHasConfiguredFilters(nextHasConfig);
+
+        // Validate active URL filter parameters cleanly against category taxonomy & active configured dimensions
+        const validSubNeedles = new Set(
+          (cat.subcategories || []).flatMap((s: any) =>
+            [s.slug, s.name, s.id].filter(Boolean).map((v: string) => String(v).toLowerCase())
+          )
         );
-        if (silent) {
-          const activeDimIds = new Set(nextDims.map((d) => d.id.toLowerCase()));
-          setActiveFilters((prev) => {
-            const nextSpecs: Record<string, string[]> = {};
-            let changed = false;
-            for (const [k, vals] of Object.entries(prev.specifications || {})) {
-              if (activeDimIds.has(k.toLowerCase())) {
-                nextSpecs[k] = vals;
-              } else {
-                changed = true;
-              }
-            }
-            const nextBrands = activeDimIds.has('brand') || !cfgs.length ? prev.brands : [];
-            if (nextBrands.length !== prev.brands.length) changed = true;
-            return changed ? { ...prev, brands: nextBrands, specifications: nextSpecs } : prev;
+        const validChildNeedles = new Set(
+          (cat.childCategories || []).flatMap((c: any) =>
+            [c.slug, c.name, c.id].filter(Boolean).map((v: string) => String(v).toLowerCase())
+          )
+        );
+        const activeDimIds = new Set(nextDims.map((d) => d.id.toLowerCase()));
+        setActiveFilters((prev) => {
+          let changed = false;
+          const nextSubs = prev.subcategories.filter((s) => {
+            const ok = validSubNeedles.size === 0 || validSubNeedles.has(s.toLowerCase());
+            if (!ok) changed = true;
+            return ok;
           });
-        }
+          const nextChildCats = (prev.childCategories || []).filter((c) => {
+            const ok = !isMain || validChildNeedles.size === 0 || validChildNeedles.has(c.toLowerCase());
+            if (!ok) changed = true;
+            return ok;
+          });
+          const nextSpecs: Record<string, string[]> = {};
+          for (const [k, vals] of Object.entries(prev.specifications || {})) {
+            if (!nextHasConfig || activeDimIds.has(k.toLowerCase())) {
+              nextSpecs[k] = vals;
+            } else {
+              changed = true;
+            }
+          }
+          const nextBrands = !nextHasConfig || activeDimIds.has('brand') || !cfgs.length ? prev.brands : [];
+          if (nextBrands.length !== prev.brands.length) changed = true;
+          return changed
+            ? {
+                ...prev,
+                childCategories: nextChildCats,
+                subcategories: nextSubs,
+                brands: nextBrands,
+                specifications: nextSpecs,
+              }
+            : prev;
+        });
       } finally {
         if (active && !silent) setLoadingProducts(false);
       }
@@ -227,8 +241,8 @@ export const CategoryPage: React.FC = () => {
 
   // Synchronize URL changes (initial load + browser Back/Forward navigation) into filter state
   useEffect(() => {
-    setActiveFilters(parseCategoryPageUrlFilters(searchParams, subcategorySlug, category));
-  }, [searchParams, subcategorySlug, category]);
+    setActiveFilters(parseCategoryPageUrlFilters(searchParams));
+  }, [searchParams]);
 
   // Push filter changes cleanly to URL so selections persist across navigation & browser Back/Forward
   const commitFiltersToUrl = useCallback(
@@ -264,15 +278,9 @@ export const CategoryPage: React.FC = () => {
         params.set('specs', JSON.stringify(next.specifications));
       }
 
-      if (subcategorySlug) {
-        const basePath = `/categories/${slug}`;
-        const nextUrl = params.toString() ? `${basePath}?${params.toString()}` : basePath;
-        navigate(nextUrl);
-      } else {
-        setSearchParams(params);
-      }
+      setSearchParams(params);
     },
-    [slug, subcategorySlug, navigate, setSearchParams]
+    [setSearchParams]
   );
 
   const activeSubcategory =
@@ -304,7 +312,7 @@ export const CategoryPage: React.FC = () => {
     return null;
   }, [isMainCategoryPage, category]);
 
-  // All products belonging to this Main Category or Child Category
+  // All products belonging to this Main Category, Child Category, or Route Product Type
   const allCategoryProducts = useMemo(() => {
     if (!category) return [];
     if (isMainCategoryPage) {
@@ -316,12 +324,49 @@ export const CategoryPage: React.FC = () => {
           childSlugs.includes((p.childCategorySlug || p.categorySlug || '').toLowerCase())
       );
     }
-    return productList.filter(
+    const childScoped = productList.filter(
       (p) =>
-        (p.childCategorySlug || p.categorySlug) === category.slug ||
+        (p.childCategorySlug || p.categorySlug || '').toLowerCase() === String(category.slug || '').toLowerCase() ||
         (p.childCategoryId || p.categoryId) === category.id
     );
-  }, [isMainCategoryPage, mainChildCategories, productList, category]);
+    if (!subcategorySlug) return childScoped;
+
+    const normalizeSlug = (val?: string) =>
+      String(val || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    const routeNeedles = new Set(
+      [
+        subcategorySlug,
+        normalizeSlug(subcategorySlug),
+        activeSubcategory?.id,
+        activeSubcategory?.slug,
+        activeSubcategory?.name,
+        normalizeSlug(activeSubcategory?.name),
+      ]
+        .filter(Boolean)
+        .map((v) => String(v).toLowerCase())
+    );
+    return childScoped.filter((p: any) => {
+      const candidates = [
+        p.productTypeId,
+        p.productTypeSlug,
+        p.productTypeName,
+        normalizeSlug(p.productTypeName),
+        p.subcategoryId,
+        p.subcategorySlug,
+        p.subcategory,
+        normalizeSlug(p.subcategory),
+        p.productType,
+        normalizeSlug(p.productType),
+      ]
+        .filter(Boolean)
+        .map((v) => String(v).toLowerCase());
+      return candidates.some((c) => routeNeedles.has(c));
+    });
+  }, [isMainCategoryPage, mainChildCategories, productList, category, subcategorySlug, activeSubcategory]);
 
   // Compute Child Category + Admin-configured dynamic specification filters with live faceted option counts
   const availableFilters = useMemo(() => {

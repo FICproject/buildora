@@ -14,7 +14,9 @@ import {
   Building2,
   ArrowRight,
   FileEdit,
-  ShieldAlert
+  ShieldAlert,
+  FileText,
+  UploadCloud
 } from 'lucide-react';
 
 export const VendorApplicationStatusPage: React.FC = () => {
@@ -25,6 +27,7 @@ export const VendorApplicationStatusPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [replacingDocType, setReplacingDocType] = useState<string | null>(null);
   const [statusData, setStatusData] = useState<any>(null);
 
   const loadStatus = async (isManual = false) => {
@@ -44,7 +47,8 @@ export const VendorApplicationStatusPage: React.FC = () => {
         logoUrl: res.logoUrl || freshProfile?.logoUrl || freshProfile?.businessInfo?.logo,
         rejectionReason: res.rejectionReason || freshProfile?.rejectionReason,
         resubmissionReason: res.resubmissionReason || freshProfile?.resubmissionReason,
-        suspendedReason: res.suspendedReason || freshProfile?.suspendedReason
+        suspendedReason: res.suspendedReason || freshProfile?.suspendedReason,
+        kycDocuments: res.kycDocuments || freshProfile?.kycDocuments || [],
       });
     } catch {
       if (vendor) {
@@ -58,7 +62,8 @@ export const VendorApplicationStatusPage: React.FC = () => {
           logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
           rejectionReason: vendor.rejectionReason,
           resubmissionReason: vendor.resubmissionReason,
-          suspendedReason: vendor.suspendedReason
+          suspendedReason: vendor.suspendedReason,
+          kycDocuments: vendor.kycDocuments || [],
         });
       }
     } finally {
@@ -254,6 +259,83 @@ export const VendorApplicationStatusPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Submitted KYC Documents & Inline Correction Upload */}
+      {Array.isArray(statusData?.kycDocuments) && statusData.kycDocuments.length > 0 && (
+        <div className="p-4 rounded-2xl bg-white border border-[#E7E5E4] space-y-2.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#78716C] block">
+            KYC & Verification Documents
+          </span>
+          <div className="divide-y divide-[#E7E5E4]">
+            {statusData.kycDocuments.map((doc: any) => {
+              const docSt = doc.verificationStatus || doc.status || 'PENDING';
+              return (
+                <div key={doc.id} className="py-2.5 space-y-1.5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-3.5 h-3.5 text-[#943D24] shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-[#292524] truncate">{doc.title || doc.type}</p>
+                        <p className="text-[11px] text-[#78716C] truncate">{doc.fileName}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          docSt === 'VERIFIED'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : docSt === 'REJECTED'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}
+                      >
+                        {docSt}
+                      </span>
+                      {docSt === 'REJECTED' && (
+                        <button
+                          type="button"
+                          disabled={replacingDocType === doc.type}
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept =
+                              '.pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp';
+                            input.onchange = async (ev: any) => {
+                              const file: File | undefined = ev.target.files?.[0];
+                              if (!file) return;
+                              setReplacingDocType(doc.type);
+                              try {
+                                await vendorApi.replaceKycDocumentFile(
+                                  file,
+                                  doc.type,
+                                  doc.title || doc.type
+                                );
+                                await loadStatus(true);
+                              } finally {
+                                setReplacingDocType(null);
+                              }
+                            };
+                            input.click();
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#943D24] text-white text-[11px] font-semibold hover:bg-[#7D331E] cursor-pointer disabled:opacity-50"
+                        >
+                          <UploadCloud className="w-3 h-3" />
+                          {replacingDocType === doc.type ? 'Uploading...' : 'Upload Corrected File'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {docSt === 'REJECTED' && doc.rejectionReason && (
+                    <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5">
+                      Rejection Reason: {doc.rejectionReason}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-[#E7E5E4]">

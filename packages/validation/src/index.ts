@@ -84,7 +84,13 @@ export const ALLOWED_KYC_DOCUMENT_TYPES = [
 ] as const;
 
 export const ALLOWED_LOGO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'] as const;
-export const ALLOWED_KYC_DOC_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'] as const;
+export const ALLOWED_KYC_DOC_MIME_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+] as const;
 
 export const MAX_LOGO_SIZE_BYTES = VALIDATION_LIMITS.MAX_LOGO_SIZE_BYTES;
 export const MAX_KYC_DOC_SIZE_BYTES = VALIDATION_LIMITS.MAX_KYC_DOC_SIZE_BYTES;
@@ -676,9 +682,9 @@ export function detectKycDocumentSignature(bytes: Uint8Array): { mimeType: strin
     return { mimeType: 'application/pdf', ext: 'pdf' };
   }
 
-  // JPEG or PNG
+  // JPEG, PNG, or WEBP
   const img = detectImageSignature(bytes);
-  if (img && (img.mimeType === 'image/jpeg' || img.mimeType === 'image/png')) {
+  if (img && (img.mimeType === 'image/jpeg' || img.mimeType === 'image/png' || img.mimeType === 'image/webp')) {
     return img;
   }
 
@@ -712,7 +718,7 @@ export function validateLogoFileMetadata(
 }
 
 /**
- * Validates KYC document file MIME type, extension, and size (PDF, JPG, JPEG, PNG <= 5 MB).
+ * Validates KYC document file MIME type, extension, and size (PDF, JPG, JPEG, PNG, WEBP <= 5 MB).
  */
 export function validateKycDocumentMetadata(
   mimeType: string,
@@ -720,12 +726,18 @@ export function validateKycDocumentMetadata(
   fileName?: string
 ): FieldValidationResult {
   if (!mimeType || !ALLOWED_KYC_DOC_MIME_TYPES.includes(mimeType.toLowerCase() as any)) {
-    return { isValid: false, error: 'Only PDF, JPG, JPEG, and PNG formats are supported for KYC documents.' };
+    return {
+      isValid: false,
+      error: 'Only PDF, JPG, JPEG, PNG, and WEBP formats are supported for KYC documents.',
+    };
   }
   if (fileName) {
     const ext = fileName.split('.').pop()?.toLowerCase();
-    if (!ext || !['pdf', 'jpg', 'jpeg', 'png'].includes(ext)) {
-      return { isValid: false, error: 'Invalid document extension. Allowed: .pdf, .jpg, .jpeg, .png.' };
+    if (!ext || !['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+      return {
+        isValid: false,
+        error: 'Invalid document extension. Allowed: .pdf, .jpg, .jpeg, .png, .webp.',
+      };
     }
   }
   if (!sizeBytes || sizeBytes <= 0) {

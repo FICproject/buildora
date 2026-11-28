@@ -1141,6 +1141,17 @@ export const VendorProductsPage: React.FC = () => {
     setDeleteTarget(null);
   };
 
+  const resolveVendorProductStatus = (p: VendorProduct & Record<string, any>): string => {
+    if (p.isSuspended === true) return 'SUSPENDED';
+    if (p.approvalStatus === 'DRAFT') return 'DRAFT';
+    if (p.approvalStatus === 'REJECTED') return 'REJECTED';
+    if (p.approvalStatus === 'PENDING_APPROVAL') return 'PENDING_APPROVAL';
+    if (p.isActive === false) return 'INACTIVE';
+    const stockNum = p.stockCount ?? p.stock ?? 0;
+    if (stockNum <= 0 || p.inStock === false) return 'OUT_OF_STOCK';
+    return p.status && p.approvalStatus === 'APPROVED' ? p.status : 'ACTIVE';
+  };
+
   const filteredProducts = products.filter((p) => {
     const q = search.toLowerCase();
     const matchesSearch =
@@ -1148,15 +1159,17 @@ export const VendorProductsPage: React.FC = () => {
       p.name.toLowerCase().includes(q) ||
       p.sku.toLowerCase().includes(q) ||
       (p.brand || '').toLowerCase().includes(q);
-    const matchesCat = selectedCategory === 'ALL' || p.category === selectedCategory;
+    const matchesCat =
+      selectedCategory === 'ALL' ||
+      p.category === selectedCategory ||
+      (p as any).childCategoryName === selectedCategory;
     const isProdActive =
       p.isActive !== false && p.approvalStatus === 'APPROVED' && !(p as any).isSuspended;
-    const resolvedStatus =
-      p.status || ((p.stockCount ?? p.stock ?? 0) > 0 ? 'ACTIVE' : 'OUT_OF_STOCK');
+    const resolvedStatus = resolveVendorProductStatus(p as any);
     const matchesStatus =
       selectedStatus === 'ALL' ||
-      (selectedStatus === 'ACTIVE' && isProdActive) ||
-      (selectedStatus === 'INACTIVE' && !isProdActive) ||
+      (selectedStatus === 'ACTIVE' && resolvedStatus === 'ACTIVE') ||
+      (selectedStatus === 'INACTIVE' && (!isProdActive || resolvedStatus === 'INACTIVE')) ||
       resolvedStatus === selectedStatus ||
       p.approvalStatus === selectedStatus;
     return matchesSearch && matchesCat && matchesStatus;
@@ -1240,13 +1253,16 @@ export const VendorProductsPage: React.FC = () => {
                   setSelectedStatus(e.target.value);
                   setPage(1);
                 }}
-                className="portal-input sm:w-40"
+                className="portal-input sm:w-44"
               >
                 <option value="ALL">All Status</option>
-                <option value="ACTIVE">Active</option>
+                <option value="ACTIVE">Active (Live)</option>
+                <option value="PENDING_APPROVAL">Pending Approval</option>
                 <option value="OUT_OF_STOCK">Out of Stock</option>
                 <option value="DRAFT">Draft</option>
-                <option value="PENDING_APPROVAL">Pending Approval</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="INACTIVE">Inactive</option>
+                <option value="SUSPENDED">Suspended</option>
               </select>
             </div>
           </div>
@@ -1289,7 +1305,7 @@ export const VendorProductsPage: React.FC = () => {
                 paginatedProducts.map((p) => {
                   const stockNum = p.stockCount ?? p.stock ?? 0;
                   const isLow = stockNum > 0 && stockNum <= (p.lowStockThreshold || 30);
-                  const statusLabel = p.status || (stockNum > 0 ? 'ACTIVE' : 'OUT_OF_STOCK');
+                  const statusLabel = resolveVendorProductStatus(p as any);
 
                   return (
                     <tr key={p.id} className="hover:bg-[#F8F7F5] transition-colors">
@@ -1372,7 +1388,11 @@ export const VendorProductsPage: React.FC = () => {
                           variant={
                             statusLabel === 'ACTIVE'
                               ? 'success'
-                              : statusLabel === 'OUT_OF_STOCK'
+                              : statusLabel === 'PENDING_APPROVAL'
+                              ? 'warning'
+                              : statusLabel === 'OUT_OF_STOCK' ||
+                                statusLabel === 'REJECTED' ||
+                                statusLabel === 'SUSPENDED'
                               ? 'danger'
                               : 'neutral'
                           }
@@ -1380,6 +1400,16 @@ export const VendorProductsPage: React.FC = () => {
                         >
                           {statusLabel.replace(/_/g, ' ')}
                         </Badge>
+                        {statusLabel === 'PENDING_APPROVAL' && (
+                          <div className="text-[10px] text-[#A16207] mt-0.5">
+                            Awaiting Admin Approval
+                          </div>
+                        )}
+                        {statusLabel === 'REJECTED' && (p as any).rejectionReason && (
+                          <div className="text-[10px] text-[#DC4545] mt-0.5 line-clamp-1" title={(p as any).rejectionReason}>
+                            {(p as any).rejectionReason}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-right">

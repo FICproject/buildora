@@ -11,12 +11,14 @@ import {
   Body,
   Headers,
   Req,
+  Res,
   BadRequestException,
   NotFoundException,
   ForbiddenException,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { storageService } from '../../vendors/services/storage.service';
 import { dbStore } from '../../../database/store';
@@ -104,41 +106,46 @@ export class CompanyAdminController {
   }
 
   private resolveDateRange(period = '30d', from?: string, to?: string) {
-    const now = new Date();
-    const endOfToday = new Date(now);
-    endOfToday.setHours(23, 59, 59, 999);
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
+    // Business timezone: IST (UTC+05:30)
+    const IST_OFFSET_MS = 330 * 60 * 1000;
+    const istNow = new Date(Date.now() + IST_OFFSET_MS);
+    const y = istNow.getUTCFullYear();
+    const m = istNow.getUTCMonth();
+    const d = istNow.getUTCDate();
+    const startOfTodayMs = Date.UTC(y, m, d, 0, 0, 0, 0) - IST_OFFSET_MS;
+    const endOfTodayMs = Date.UTC(y, m, d, 23, 59, 59, 999) - IST_OFFSET_MS;
 
     if (period === 'today') {
-      return { startMs: startOfToday.getTime(), endMs: endOfToday.getTime(), label: 'Today' };
+      return { startMs: startOfTodayMs, endMs: endOfTodayMs, label: 'Today' };
     }
     if (period === 'yesterday') {
-      const yStart = new Date(startOfToday.getTime() - 86400000);
-      const yEnd = new Date(startOfToday.getTime() - 1);
-      return { startMs: yStart.getTime(), endMs: yEnd.getTime(), label: 'Yesterday' };
+      return {
+        startMs: startOfTodayMs - 86400000,
+        endMs: startOfTodayMs - 1,
+        label: 'Yesterday',
+      };
     }
     if (period === '7d') {
       return {
-        startMs: startOfToday.getTime() - 6 * 86400000,
-        endMs: endOfToday.getTime(),
+        startMs: startOfTodayMs - 6 * 86400000,
+        endMs: endOfTodayMs,
         label: 'Last 7 Days',
       };
     }
     if (period === 'month') {
-      const mStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-      return { startMs: mStart.getTime(), endMs: endOfToday.getTime(), label: 'This Month' };
+      const mStartMs = Date.UTC(y, m, 1, 0, 0, 0, 0) - IST_OFFSET_MS;
+      return { startMs: mStartMs, endMs: endOfTodayMs, label: 'This Month' };
     }
     if (period === 'custom' && from && to) {
-      const fMs = new Date(from).setHours(0, 0, 0, 0);
-      const tMs = new Date(to).setHours(23, 59, 59, 999);
+      const fMs = new Date(`${from}T00:00:00+05:30`).getTime();
+      const tMs = new Date(`${to}T23:59:59.999+05:30`).getTime();
       if (!Number.isNaN(fMs) && !Number.isNaN(tMs)) {
         return { startMs: fMs, endMs: tMs, label: `${from} to ${to}` };
       }
     }
     return {
-      startMs: startOfToday.getTime() - 29 * 86400000,
-      endMs: endOfToday.getTime(),
+      startMs: startOfTodayMs - 29 * 86400000,
+      endMs: endOfTodayMs,
       label: 'Last 30 Days',
     };
   }
@@ -170,106 +177,373 @@ export class CompanyAdminController {
     );
     const settlements = companyAdminDataService.getTenantSettlements(tenantId);
     const returns = companyAdminDataService.getTenantReturns(tenantId);
-    const quotations = Array.from(companyAdminDataService.quotations.values()).filter(
-      (q) => q.tenantId === tenantId
-    );
     const customers = Array.from(companyAdminDataService.customers.values()).filter(
       (c) => c.tenantId === tenantId
     );
     const alerts = companyAdminDataService.notificationAlerts.filter((a) => a.tenantId === tenantId);
-    const reviews = companyAdminDataService.getTenantReviews(tenantId);
     const tickets = companyAdminDataService.getTenantSupportTickets(tenantId);
 
-    const totalRevenue = filteredOrders
-      .filter((o) => o.status !== 'CANCELLED')
-      .reduce((acc, o) => acc + Number(o.totalAmount || 0), 0);
+    const isSuccessfulOrder = (o: any) => {
+      const st = String(o.status || '').toUpperCase();
+      const pay = String(o.paymentStatus || 'PAID').toUpperCase();
+      return st !== 'CANCELLED' && st !== 'FAILED' && pay !== 'FAILED' && pay !== 'PAYMENT_FAILED';
+    };
 
+    const revenueOrders = filteredOrders.filter(isSuccessfulOrder);
+    const totalRevenue = revenueOrders.reduce((acc, o) => acc + Number(o.totalAmount || 0), 0);
+
+    // Vendors & KYC breakdown (current records, independent of period filter)
     const activeVendors = vendors.filter(
       (v) => (v.approvalStatus === 'APPROVED' || v.approvalStatus === 'ACTIVE') && v.isActive
     );
-    const pendingVendorApprovals = vendors.filter(
+    const inactiveVendors = vendors.length - activeVendors.length;
+    const pendingKycStatuses = new Set([
+      'PENDING_VERIFICATION',
+      'UNDER_REVIEW',
+      'SUBMITTED',
+      'RESUBMISSION_REQUIRED',
+    ]);
+    const excludedKycStatuses = new Set(['DRAFT', 'REJECTED', 'SUSPENDED']);
+    const hasPendingDocs = (v: any) =>
+      Array.isArray(v.documents) &&
+      v.documents.some((d: any) => ['PENDING', 'UNDER_REVIEW'].includes(String(d.status || '').toUpperCase()));
+
+    const vendorsAwaitingKyc = vendors.filter(
       (v) =>
-        v.approvalStatus === 'PENDING_VERIFICATION' ||
-        v.approvalStatus === 'UNDER_REVIEW' ||
-        v.approvalStatus === 'SUBMITTED' ||
-        v.approvalStatus === 'RESUBMISSION_REQUIRED'
+        !excludedKycStatuses.has(v.approvalStatus) &&
+        (pendingKycStatuses.has(v.approvalStatus) || hasPendingDocs(v))
     );
+    const newVendorApplications = vendors.filter((v) =>
+      ['SUBMITTED', 'PENDING_VERIFICATION', 'UNDER_REVIEW'].includes(v.approvalStatus)
+    );
+    const vendorsPendingGst = vendors.filter(
+      (v) =>
+        pendingKycStatuses.has(v.approvalStatus) &&
+        (!v.gstin ||
+          (Array.isArray(v.documents) &&
+            v.documents.some(
+              (d: any) =>
+                String(d.type || d.documentType || '').toUpperCase().includes('GST') &&
+                String(d.status || '').toUpperCase() !== 'VERIFIED'
+            )))
+    );
+
+    // Product approvals & inventory (current records)
     const pendingProducts = products.filter((p) => p.approvalStatus === 'PENDING_APPROVAL');
-    const approvedProducts = products.filter((p) => p.approvalStatus === 'APPROVED' && p.isActive);
-    const lowStockAlerts = products.filter(
-      (p) => Number(p.stock) > 0 && Number(p.stock) <= Number(p.lowStockThreshold || 25)
-    );
-    const outOfStockProducts = products.filter((p) => Number(p.stock) <= 0);
+    const approvedProducts = products.filter((p) => p.approvalStatus === 'APPROVED');
+    const rejectedProducts = products.filter((p) => p.approvalStatus === 'REJECTED');
+    const liveProducts = approvedProducts.filter((p) => p.isActive);
+    const lowStockAlerts = products.filter((p) => {
+      const stock = Number(p.stock ?? p.stockCount ?? 0);
+      return stock > 0 && stock <= Number(p.lowStockThreshold || 25);
+    });
+    const outOfStockProducts = products.filter((p) => Number(p.stock ?? p.stockCount ?? 0) <= 0);
+
+    // Customers
+    const activeCustomers = customers.filter((c) => String(c.status || '').toUpperCase() === 'ACTIVE');
+
+    // Orders (total in date range; pending is current operational queue)
+    const pendingOrderStatuses = new Set([
+      'NEW',
+      'PLACED',
+      'ORDER_PLACED',
+      'CONFIRMED',
+      'ACCEPTED',
+      'PROCESSING',
+      'READY_FOR_DISPATCH',
+    ]);
     const pendingOrders = allOrders.filter((o) =>
-      [
-        'NEW',
-        'PLACED',
-        'ORDER_PLACED',
-        'CONFIRMED',
-        'ACCEPTED',
-        'PROCESSING',
-        'READY_FOR_DISPATCH',
-      ].includes(String(o.status).toUpperCase())
+      pendingOrderStatuses.has(String(o.status || '').toUpperCase())
     );
     const activeDispatches = allOrders.filter((o) =>
-      ['DISPATCHED', 'OUT_FOR_DELIVERY'].includes(String(o.status).toUpperCase())
+      ['DISPATCHED', 'OUT_FOR_DELIVERY'].includes(String(o.status || '').toUpperCase())
     );
     const deliveredOrders = filteredOrders.filter(
-      (o) => String(o.status).toUpperCase() === 'DELIVERED'
+      (o) => String(o.status || '').toUpperCase() === 'DELIVERED'
     );
-    const pendingSettlements = settlements.filter((s) => s.status !== 'PAID');
-    const pendingSettlementAmount = pendingSettlements.reduce(
-      (sum, s) => sum + Number(s.netAmount || 0),
+
+    // Payments, Refunds & Settlements
+    const capturedStatuses = new Set(['PAID', 'CAPTURED', 'SUCCESS', 'SETTLED']);
+    const failedPayStatuses = new Set(['FAILED', 'PAYMENT_FAILED']);
+    const pendingPayStatuses = new Set(['PENDING', 'UNPAID', 'AUTHORIZED']);
+
+    const successfulPaymentsInPeriod = filteredOrders.filter((o) => {
+      const st = String(o.status || '').toUpperCase();
+      const pay = String(o.paymentStatus || 'PAID').toUpperCase();
+      return st !== 'CANCELLED' && capturedStatuses.has(pay);
+    });
+    const totalSuccessfulPayments = successfulPaymentsInPeriod.reduce(
+      (sum, o) => sum + Number(o.totalAmount || 0),
       0
     );
-    const pendingQuotations = quotations.filter((q) =>
-      ['INCOMING', 'VENDOR_ASSIGNED', 'QUOTES_RECEIVED', 'UNDER_NEGOTIATION'].includes(q.status)
+
+    const periodReturns = returns.filter((r) =>
+      this.isInRange(r.resolvedAt || r.requestedAt, range.startMs, range.endMs)
     );
-    const pendingReturns = returns.filter((r) => r.status === 'REQUESTED');
-    const openTickets = tickets.filter((t) => ['OPEN', 'IN_PROGRESS'].includes(t.status));
+    const refundedReturnsInPeriod = periodReturns.filter(
+      (r) => String(r.status || '').toUpperCase() === 'REFUNDED'
+    );
+    const totalRefundedAmount = refundedReturnsInPeriod.reduce(
+      (sum, r) => sum + Number(r.totalRefundAmount || 0),
+      0
+    );
+    const pendingRefundActions = returns.filter((r) =>
+      ['REQUESTED', 'APPROVED'].includes(String(r.status || '').toUpperCase())
+    );
+
+    const failedPaymentOrders = allOrders.filter((o) =>
+      failedPayStatuses.has(String(o.paymentStatus || '').toUpperCase())
+    );
+    const pendingPaymentOrders = allOrders.filter((o) => {
+      const st = String(o.status || '').toUpperCase();
+      const pay = String(o.paymentStatus || '').toUpperCase();
+      return st !== 'CANCELLED' && pendingPayStatuses.has(pay);
+    });
+
+    const pendingSettlements = settlements.filter(
+      (s) => !['PAID', 'COMPLETED'].includes(String(s.status || '').toUpperCase())
+    );
+    const completedSettlements = settlements.filter((s) =>
+      ['PAID', 'COMPLETED'].includes(String(s.status || '').toUpperCase())
+    );
+    const failedSettlements = settlements.filter(
+      (s) => String(s.status || '').toUpperCase() === 'FAILED'
+    );
+    const pendingSettlementAmount = pendingSettlements.reduce(
+      (sum, s) => sum + Number(s.netAmount ?? s.netPayable ?? 0),
+      0
+    );
+    const completedSettlementAmount = completedSettlements.reduce(
+      (sum, s) => sum + Number(s.netAmount ?? s.netPayable ?? 0),
+      0
+    );
+
+    // Support tickets (open customer/vendor issues)
+    const openCustomerTickets = tickets.filter(
+      (t) =>
+        ['OPEN', 'IN_PROGRESS'].includes(String(t.status || '').toUpperCase()) &&
+        (!t.source || t.source === 'CUSTOMER')
+    );
+
+    const earliestIso = (items: any[], fields: string[] = ['createdAt', 'requestedAt', 'updatedAt']) => {
+      let minMs = Infinity;
+      let minIso: string | undefined;
+      for (const item of items) {
+        for (const f of fields) {
+          if (item?.[f]) {
+            const ms = new Date(item[f]).getTime();
+            if (!Number.isNaN(ms) && ms < minMs) {
+              minMs = ms;
+              minIso = item[f];
+            }
+            break;
+          }
+        }
+      }
+      return minIso;
+    };
+
+    const rawPendingActions = [
+      {
+        id: 'new-vendor-apps',
+        actionType: 'New Vendor Applications',
+        count: newVendorApplications.length,
+        reference:
+          newVendorApplications[0]?.businessName ||
+          (newVendorApplications.length > 0 ? `${newVendorApplications.length} application(s)` : ''),
+        pendingSince: earliestIso(newVendorApplications),
+        status: newVendorApplications[0]?.approvalStatus || 'PENDING_VERIFICATION',
+        actionLabel: 'Review',
+        route: '/vendors?status=PENDING_VERIFICATION',
+      },
+      {
+        id: 'kyc-verification',
+        actionType: 'Pending KYC Verification',
+        count: vendorsAwaitingKyc.length,
+        reference:
+          vendorsAwaitingKyc.map((v) => v.businessName).slice(0, 2).join(', ') || '',
+        pendingSince: earliestIso(vendorsAwaitingKyc),
+        status: 'KYC_PENDING',
+        actionLabel: 'Review',
+        route: '/vendors?status=PENDING_VERIFICATION',
+      },
+      {
+        id: 'gst-verification',
+        actionType: 'Pending GST Verification',
+        count: vendorsPendingGst.length,
+        reference: vendorsPendingGst[0]?.businessName || '',
+        pendingSince: earliestIso(vendorsPendingGst),
+        status: 'GST_PENDING',
+        actionLabel: 'Review',
+        route: '/vendors?status=PENDING_VERIFICATION',
+      },
+      {
+        id: 'product-approvals',
+        actionType: 'Pending Product Approvals',
+        count: pendingProducts.length,
+        reference:
+          pendingProducts[0]?.name
+            ? `${pendingProducts[0].name}${pendingProducts.length > 1 ? ` (+${pendingProducts.length - 1} more)` : ''}`
+            : '',
+        pendingSince: earliestIso(pendingProducts),
+        status: 'PENDING_APPROVAL',
+        actionLabel: 'Review',
+        route: '/products/pending',
+      },
+      {
+        id: 'payment-refund-actions',
+        actionType: 'Pending Payment or Refund Actions',
+        count: failedPaymentOrders.length + pendingPaymentOrders.length + pendingRefundActions.length,
+        reference:
+          failedPaymentOrders[0]?.orderNumber ||
+          pendingRefundActions[0]?.orderNumber ||
+          pendingPaymentOrders[0]?.orderNumber ||
+          '',
+        pendingSince: earliestIso([
+          ...failedPaymentOrders,
+          ...pendingPaymentOrders,
+          ...pendingRefundActions,
+        ]),
+        status: failedPaymentOrders.length > 0 ? 'PAYMENT_FAILED' : 'ACTION_REQUIRED',
+        actionLabel: failedPaymentOrders.length > 0 ? 'Investigate' : 'View',
+        route: pendingRefundActions.length > 0 && failedPaymentOrders.length === 0 ? '/orders?view=returns' : '/finance',
+      },
+      {
+        id: 'pending-settlements',
+        actionType: 'Vendor Settlements Awaiting Processing',
+        count: pendingSettlements.length,
+        reference:
+          pendingSettlements[0]?.settlementNumber ||
+          pendingSettlements[0]?.vendorName ||
+          '',
+        pendingSince: earliestIso(pendingSettlements),
+        status: pendingSettlements[0]?.status || 'PENDING',
+        actionLabel: 'View',
+        route: '/finance',
+      },
+      {
+        id: 'orders-attention',
+        actionType: 'Orders Requiring Admin Attention',
+        count: pendingOrders.length,
+        reference: pendingOrders[0]?.orderNumber || pendingOrders[0]?.id || '',
+        pendingSince: earliestIso(pendingOrders),
+        status: pendingOrders[0]?.status || 'PENDING',
+        actionLabel: 'View',
+        route: '/orders?status=PENDING',
+      },
+      {
+        id: 'support-issues',
+        actionType: 'Open Customer Support Issues',
+        count: openCustomerTickets.length,
+        reference:
+          openCustomerTickets[0]?.ticketNumber || openCustomerTickets[0]?.subject || '',
+        pendingSince: earliestIso(openCustomerTickets),
+        status: openCustomerTickets[0]?.status || 'OPEN',
+        actionLabel: 'View',
+        route: '/support',
+      },
+    ];
+
+    const pendingActions = rawPendingActions.filter((item) => item.count > 0);
+
+    const recentOrders = allOrders.slice(0, 5).map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber || o.id,
+      customerName: o.customerName || 'Customer',
+      totalAmount: Number(o.totalAmount || 0),
+      createdAt: o.createdAt,
+      status: o.status,
+      paymentStatus: o.paymentStatus || 'PAID',
+    }));
+
+    const recentVendors = [...vendors]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      )
+      .slice(0, 5)
+      .map((v) => ({
+        id: v.id,
+        businessName: v.businessName,
+        contactPerson: v.contactPerson || v.name || '',
+        createdAt: v.createdAt,
+        kycStatus: pendingKycStatuses.has(v.approvalStatus)
+          ? 'PENDING_VERIFICATION'
+          : v.approvalStatus === 'APPROVED' || v.approvalStatus === 'ACTIVE'
+          ? 'VERIFIED'
+          : v.approvalStatus,
+        accountStatus: v.isActive ? 'ACTIVE' : v.approvalStatus,
+        approvalStatus: v.approvalStatus,
+        needsVerification: pendingKycStatuses.has(v.approvalStatus),
+      }));
+
+    const importantAlerts = [...alerts]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      )
+      .slice(0, 5);
 
     return {
       success: true,
       data: {
         tenant: companyAdminDataService.tenants.get(tenantId),
         dateRange: { period, label: range.label },
-        charts: companyAdminDataService.buildDashboardCharts(tenantId, filteredOrders, products),
         kpis: {
-          totalRevenue,
+          // Vendors
+          totalVendors: vendors.length,
+          activeVendors: activeVendors.length,
+          inactiveVendors,
+          // Pending KYC
+          pendingKycCount: vendorsAwaitingKyc.length,
+          pendingVendorApprovals: vendorsAwaitingKyc.length,
+          newVendorApplications: newVendorApplications.length,
+          pendingGstVerification: vendorsPendingGst.length,
+          // Products
+          totalProducts: products.length,
+          pendingProductApprovals: pendingProducts.length,
+          approvedProducts: approvedProducts.length,
+          rejectedProducts: rejectedProducts.length,
+          liveProducts: liveProducts.length,
+          // Customers
+          totalCustomers: customers.length,
+          activeCustomers: activeCustomers.length,
+          // Orders
           totalOrders: filteredOrders.length,
           allTimeOrders: allOrders.length,
           pendingOrders: pendingOrders.length,
           activeDispatches: activeDispatches.length,
           deliveredOrders: deliveredOrders.length,
-          activeVendors: activeVendors.length,
-          totalVendors: vendors.length,
-          pendingVendorApprovals: pendingVendorApprovals.length,
-          totalProducts: products.length,
-          liveProducts: approvedProducts.length,
-          pendingProductApprovals: pendingProducts.length,
+          // Revenue
+          totalRevenue,
+          revenueOrderCount: revenueOrders.length,
+          // Payments & Settlements
+          pendingSettlementCount: pendingSettlements.length,
+          pendingSettlementAmount,
+          failedPaymentsCount: failedPaymentOrders.length + failedSettlements.length,
+          // Inventory
           lowStockCount: lowStockAlerts.length,
           outOfStockCount: outOfStockProducts.length,
-          pendingSettlementAmount,
+          // Support & Returns
+          pendingReturns: pendingRefundActions.length,
+          openTickets: openCustomerTickets.length,
+        },
+        pendingActions,
+        recentOrders,
+        recentVendors,
+        paymentSummary: {
+          successfulPaymentsAmount: totalSuccessfulPayments,
+          successfulPaymentsCount: successfulPaymentsInPeriod.length,
+          totalRefundedAmount,
+          refundedCount: refundedReturnsInPeriod.length,
           pendingSettlementCount: pendingSettlements.length,
-          pendingQuotations: pendingQuotations.length,
-          totalCustomers: customers.length,
-          pendingReturns: pendingReturns.length,
-          openTickets: openTickets.length,
+          pendingSettlementAmount,
+          completedSettlementCount: completedSettlements.length,
+          completedSettlementAmount,
+          failedTransactionsCount: failedPaymentOrders.length + failedSettlements.length,
+          pendingRefundCount: pendingRefundActions.length,
         },
-        sections: {
-          ordersRequiringAttention: pendingOrders.slice(0, 6),
-          pendingVendorApprovals: pendingVendorApprovals.slice(0, 5),
-          pendingProductApprovals: pendingProducts.slice(0, 5),
-          recentOrders: allOrders.slice(0, 6),
-          lowStockAlerts: [...outOfStockProducts, ...lowStockAlerts].slice(0, 6),
-          recentQuotations: quotations.slice(0, 5),
-          recentPayments: settlements.slice(0, 5),
-          dailyActivitySummary: companyAdminDataService.auditLogs
-            .filter((l) => l.tenantId === tenantId)
-            .slice(0, 8),
-          customerFeedbackAlerts: [...reviews.slice(0, 3), ...openTickets.slice(0, 3)],
-          systemNotifications: alerts.slice(0, 6),
-        },
+        recentNotifications: importantAlerts,
       },
     };
   }
@@ -293,30 +567,141 @@ export class CompanyAdminController {
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
     @Query('status') status?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
+    @Query('sort') sort = 'newest',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('includeMeta') includeMeta?: string
   ) {
-    const { tenantId } = this.requireAdmin(authHeader, 'vendors:read', headerTenantId);
-    let list = companyAdminDataService.getTenantVendors(tenantId);
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'vendors:read', headerTenantId);
+    const includeSensitiveSearch =
+      admin.role === 'COMPANY_OWNER' ||
+      admin.permissions.includes('*') ||
+      admin.permissions.includes('vendors:manage') ||
+      admin.permissions.includes('vendors:read');
+
+    const rawTenantVendors = Array.from(vendorRecords.values()).filter(
+      (v) => (v.tenantId || DEFAULT_TENANT_ID) === tenantId
+    );
+    const pairs = rawTenantVendors.map((raw) => ({
+      raw,
+      normalized: companyAdminDataService.normalizeVendor(raw),
+    }));
+
+    const tabCounts = {
+      ALL: pairs.length,
+      SUBMITTED: pairs.filter(({ normalized: v }) => v.approvalStatus === 'SUBMITTED').length,
+      PENDING_VERIFICATION: pairs.filter(({ normalized: v }) =>
+        ['SUBMITTED', 'PENDING_VERIFICATION', 'UNDER_REVIEW'].includes(v.approvalStatus)
+      ).length,
+      RESUBMISSION_REQUIRED: pairs.filter(
+        ({ normalized: v }) => v.approvalStatus === 'RESUBMISSION_REQUIRED'
+      ).length,
+      APPROVED: pairs.filter(
+        ({ normalized: v }) => v.approvalStatus === 'APPROVED' || v.approvalStatus === 'ACTIVE'
+      ).length,
+      REJECTED: pairs.filter(({ normalized: v }) => v.approvalStatus === 'REJECTED').length,
+      SUSPENDED: pairs.filter(({ normalized: v }) => v.approvalStatus === 'SUSPENDED').length,
+    };
+
+    const summary = {
+      totalVendors: tabCounts.ALL,
+      newApplications: tabCounts.SUBMITTED,
+      pendingKyc: pairs.filter(({ normalized: v }) =>
+        ['SUBMITTED', 'PENDING_VERIFICATION', 'UNDER_REVIEW', 'RESUBMISSION_REQUIRED'].includes(
+          v.approvalStatus
+        )
+      ).length,
+      documentsAwaitingVerification: pairs.reduce(
+        (sum, { normalized: v }) => sum + Number(v.kycSummary?.pendingCount || 0),
+        0
+      ),
+      approvedVendors: tabCounts.APPROVED,
+      rejectedOrSuspendedVendors: tabCounts.REJECTED + tabCounts.SUSPENDED,
+    };
+
+    let filteredPairs = pairs;
 
     if (status && status !== 'ALL') {
-      if (status === 'ACTIVE' || status === 'APPROVED') {
-        list = list.filter((v) => v.approvalStatus === 'APPROVED' || v.approvalStatus === 'ACTIVE');
+      const upper = status.toUpperCase();
+      if (upper === 'ACTIVE' || upper === 'APPROVED') {
+        filteredPairs = filteredPairs.filter(
+          ({ normalized: v }) => v.approvalStatus === 'APPROVED' || v.approvalStatus === 'ACTIVE'
+        );
+      } else if (upper === 'NEW_APPLICATIONS' || upper === 'SUBMITTED') {
+        filteredPairs = filteredPairs.filter(({ normalized: v }) => v.approvalStatus === 'SUBMITTED');
+      } else if (upper === 'PENDING_VERIFICATION' || upper === 'KYC_QUEUE' || upper === 'PENDING_APPROVALS') {
+        filteredPairs = filteredPairs.filter(({ normalized: v }) =>
+          ['SUBMITTED', 'PENDING_VERIFICATION', 'UNDER_REVIEW'].includes(v.approvalStatus)
+        );
+      } else if (upper === 'REJECTED_OR_SUSPENDED') {
+        filteredPairs = filteredPairs.filter(({ normalized: v }) =>
+          ['REJECTED', 'SUSPENDED'].includes(v.approvalStatus)
+        );
       } else {
-        list = list.filter((v) => v.approvalStatus === status);
+        filteredPairs = filteredPairs.filter(({ normalized: v }) => v.approvalStatus === upper);
       }
     }
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (v) =>
-          v.businessName?.toLowerCase().includes(q) ||
-          v.storeName?.toLowerCase().includes(q) ||
-          v.email?.toLowerCase().includes(q) ||
-          v.gstin?.toLowerCase().includes(q) ||
-          v.city?.toLowerCase().includes(q)
+
+    if (search && search.trim()) {
+      filteredPairs = filteredPairs.filter(({ raw, normalized }) =>
+        companyAdminDataService.matchesVendorSearch(raw, normalized, search, includeSensitiveSearch)
       );
     }
-    return { success: true, data: list };
+
+    const toMs = (iso?: string | null) => {
+      if (!iso) return 0;
+      const t = new Date(iso).getTime();
+      return Number.isNaN(t) ? 0 : t;
+    };
+
+    const sorted = filteredPairs
+      .map(({ normalized }) => normalized)
+      .sort((a, b) => {
+        if (sort === 'oldest') {
+          const aTime = toMs(a.applicationSubmittedAt || a.createdAt);
+          const bTime = toMs(b.applicationSubmittedAt || b.createdAt);
+          return aTime - bTime;
+        }
+        if (sort === 'updated') {
+          return toMs(b.lastKycUpdatedAt || b.updatedAt) - toMs(a.lastKycUpdatedAt || a.updatedAt);
+        }
+        // Default: Newest KYC Application First
+        const aSubmitted = toMs(a.latestKycSubmittedAt || a.submittedAt);
+        const bSubmitted = toMs(b.latestKycSubmittedAt || b.submittedAt);
+        if ((aSubmitted > 0) !== (bSubmitted > 0)) {
+          return bSubmitted > 0 ? 1 : -1;
+        }
+        const aPrimary = aSubmitted || toMs(a.lastDocumentUploadedAt || a.updatedAt || a.createdAt);
+        const bPrimary = bSubmitted || toMs(b.lastDocumentUploadedAt || b.updatedAt || b.createdAt);
+        return bPrimary - aPrimary;
+      });
+
+    if (includeMeta === '1' || includeMeta === 'true' || page !== undefined) {
+      const pageNum = Math.max(1, Number(page) || 1);
+      const limitNum = Math.min(100, Math.max(1, Number(limit) || 10));
+      const total = sorted.length;
+      const totalPages = Math.max(1, Math.ceil(total / limitNum));
+      const safePage = Math.min(pageNum, totalPages);
+      const start = (safePage - 1) * limitNum;
+      const items = sorted.slice(start, start + limitNum);
+      return {
+        success: true,
+        data: {
+          items,
+          summary,
+          tabCounts,
+          meta: {
+            total,
+            page: safePage,
+            limit: limitNum,
+            totalPages,
+          },
+        },
+      };
+    }
+
+    return { success: true, data: sorted };
   }
 
   @Get('vendors/:id')
@@ -349,7 +734,12 @@ export class CompanyAdminController {
         metrics: {
           totalProducts: products.length,
           liveProducts: products.filter((p) => p.approvalStatus === 'APPROVED' && p.isActive).length,
+          pendingProductApprovals: products.filter((p) => p.approvalStatus === 'PENDING_APPROVAL')
+            .length,
           totalOrders: orders.length,
+          completedOrders: orders.filter(
+            (o) => String(o.status || '').toUpperCase() === 'DELIVERED'
+          ).length,
           pendingSettlementAmount: settlements
             .filter((s) => s.status !== 'PAID')
             .reduce((sum, s) => sum + Number(s.netAmount || 0), 0),
@@ -374,6 +764,31 @@ export class CompanyAdminController {
     if ((vendor.tenantId || DEFAULT_TENANT_ID) !== tenantId) {
       throw new ForbiddenException('Tenant isolation error.');
     }
+    if (vendor.status === 'DRAFT') {
+      throw new BadRequestException(
+        'Cannot approve a DRAFT vendor. Registration and KYC submission must be completed first.'
+      );
+    }
+    if (!vendor.businessInfo?.businessName || (!vendor.businessInfo?.bankDetails?.accountNumber && !vendor.businessInfo?.gstin)) {
+      throw new BadRequestException(
+        'Incomplete business or bank settlement information. Request correction before approving.'
+      );
+    }
+
+    const docs: any[] = Array.isArray(vendor.kycDocuments) ? vendor.kycDocuments : [];
+    const hasRejectedDoc = docs.some(
+      (d: any) => String(d.verificationStatus || d.status || '').toUpperCase() === 'REJECTED'
+    );
+    if (hasRejectedDoc) {
+      throw new BadRequestException(
+        'Cannot approve vendor while rejected KYC documents remain unreplaced.'
+      );
+    }
+    if (vendor.registrationData?.documents && docs.length < 4) {
+      throw new BadRequestException(
+        'All 4 required KYC documents must be uploaded before final vendor approval.'
+      );
+    }
 
     vendor.status = 'APPROVED';
     vendor.approvedBy = admin.email;
@@ -382,9 +797,13 @@ export class CompanyAdminController {
       vendor.commissionRate = body.commissionRate;
     }
     if (Array.isArray(vendor.kycDocuments)) {
+      const nowIso = new Date().toISOString();
       vendor.kycDocuments = vendor.kycDocuments.map((d: any) => ({
         ...d,
-        verificationStatus: d.verificationStatus === 'REJECTED' ? 'REJECTED' : 'VERIFIED',
+        verificationStatus: 'VERIFIED',
+        status: 'VERIFIED',
+        reviewedAt: d.reviewedAt || nowIso,
+        reviewedBy: d.reviewedBy || admin.email,
       }));
     }
     vendor.updatedAt = new Date().toISOString();
@@ -522,7 +941,7 @@ export class CompanyAdminController {
     @Param('id') id: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
-    @Body() body?: { reason?: string },
+    @Body() body?: { reason?: string; docId?: string; docType?: string },
     @Req() req?: any
   ) {
     const { admin, tenantId } = this.requireAdmin(authHeader, 'vendors:manage', headerTenantId);
@@ -535,9 +954,34 @@ export class CompanyAdminController {
       throw new BadRequestException('Correction notes are required.');
     }
 
+    const cleanReason = body.reason.trim();
+    const nowIso = new Date().toISOString();
+    const docs: any[] = Array.isArray(vendor.kycDocuments) ? vendor.kycDocuments : [];
+    const targetDoc =
+      (body.docId && docs.find((d) => d.id === body.docId)) ||
+      (body.docType && docs.find((d) => d.type === body.docType)) ||
+      null;
+
+    if (targetDoc) {
+      targetDoc.verificationStatus = 'REJECTED';
+      targetDoc.status = 'REJECTED';
+      targetDoc.rejectionReason = cleanReason;
+      targetDoc.reviewedAt = nowIso;
+      targetDoc.reviewedBy = admin.email;
+      if (!Array.isArray(targetDoc.auditHistory)) targetDoc.auditHistory = [];
+      targetDoc.auditHistory.unshift({
+        action: 'CORRECTION_REQUESTED',
+        actor: admin.email,
+        timestamp: nowIso,
+        notes: cleanReason,
+      });
+    }
+
     vendor.status = 'RESUBMISSION_REQUIRED';
-    vendor.resubmissionReason = body.reason.trim();
-    vendor.updatedAt = new Date().toISOString();
+    vendor.resubmissionReason = targetDoc
+      ? `${targetDoc.title || targetDoc.type}: ${cleanReason}`
+      : cleanReason;
+    vendor.updatedAt = nowIso;
     await vendorPersistenceService.saveVendorRecord(vendor);
 
     const normalized = companyAdminDataService.normalizeVendor(vendor);
@@ -721,6 +1165,179 @@ export class CompanyAdminController {
     return { success: true, data: normalized };
   }
 
+  private findVendorDocumentById(vendor: any, docId: string): any | null {
+    const docs = vendor?.kycDocuments || vendor?.documents || [];
+    for (const d of docs) {
+      if (d.id === docId) return d;
+      if (Array.isArray(d.previousVersions)) {
+        const prev = d.previousVersions.find((pv: any) => pv.id === docId);
+        if (prev) return { ...prev, type: d.type, title: `${d.title || d.type} (Previous Version)` };
+      }
+    }
+    return null;
+  }
+
+  private streamAuthorizedVendorDocument(
+    vendor: any,
+    doc: any,
+    res: Response,
+    options: { download?: boolean; actorId: string; actorName: string; actorRole: string; tenantId: string; ip?: string }
+  ) {
+    const resolved = storageService.resolveDocumentFile(doc);
+    const safeName = resolved.originalFileName.replace(/["\\\r\n]/g, '_');
+    const disposition = options.download ? 'attachment' : 'inline';
+
+    res.setHeader('Content-Type', resolved.mimeType);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${safeName}"`);
+    res.setHeader('Content-Length', String(resolved.fileSize));
+    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    companyAdminDataService.recordAuditLog({
+      tenantId: options.tenantId,
+      actorId: options.actorId,
+      actorName: options.actorName,
+      actorRole: options.actorRole,
+      action: options.download ? 'VENDOR_DOCUMENT_DOWNLOADED' : 'VENDOR_DOCUMENT_OPENED',
+      module: 'Vendors',
+      entityType: 'VendorDocument',
+      entityId: doc.id,
+      details: `${options.download ? 'Downloaded' : 'Opened for inspection'} ${doc.type} (${safeName}) for vendor ${vendor.id}.`,
+      ipAddress: options.ip || '127.0.0.1',
+    });
+
+    return res.sendFile(resolved.filePath);
+  }
+
+  @Get('vendors/:id/documents/:docId/access-url')
+  getVendorDocumentAccessUrl(
+    @Param('id') id: string,
+    @Param('docId') docId: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'vendors:read', headerTenantId);
+    const vendor = vendorRecords.get(id) as any;
+    if (!vendor) throw new NotFoundException('Vendor not found.');
+    if ((vendor.tenantId || DEFAULT_TENANT_ID) !== tenantId) {
+      throw new ForbiddenException('Tenant isolation error: Cannot access another company’s vendor documents.');
+    }
+
+    const doc = this.findVendorDocumentById(vendor, docId);
+    if (!doc) throw new NotFoundException('KYC document not found for this vendor.');
+
+    const resolved = storageService.resolveDocumentFile(doc);
+    const inlineSigned = companyAdminSecurityService.signDocumentAccessToken(
+      {
+        scope: 'ADMIN',
+        vendorId: vendor.id,
+        docId: doc.id,
+        tenantId,
+        actorId: admin.sub,
+        disposition: 'inline',
+      },
+      300
+    );
+    const downloadSigned = companyAdminSecurityService.signDocumentAccessToken(
+      {
+        scope: 'ADMIN',
+        vendorId: vendor.id,
+        docId: doc.id,
+        tenantId,
+        actorId: admin.sub,
+        disposition: 'attachment',
+      },
+      300
+    );
+
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'VENDOR_DOCUMENT_OPENED',
+      module: 'Vendors',
+      entityType: 'VendorDocument',
+      entityId: doc.id,
+      details: `Issued short-lived KYC inspection URL for ${doc.type} (${doc.fileName}) of vendor ${vendor.id}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+
+    return {
+      success: true,
+      data: {
+        docId: doc.id,
+        vendorId: vendor.id,
+        fileName: doc.fileName,
+        mimeType: resolved.mimeType,
+        fileSize: resolved.fileSize,
+        expiresAt: inlineSigned.expiresAt,
+        inlineStreamPath: `/company-admin/documents/stream?token=${encodeURIComponent(inlineSigned.token)}`,
+        downloadStreamPath: `/company-admin/documents/stream?token=${encodeURIComponent(downloadSigned.token)}&download=true`,
+      },
+    };
+  }
+
+  @Get('vendors/:id/documents/:docId/file')
+  serveVendorDocumentFile(
+    @Param('id') id: string,
+    @Param('docId') docId: string,
+    @Res() res: Response,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Query('download') download?: string,
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'vendors:read', headerTenantId);
+    const vendor = vendorRecords.get(id) as any;
+    if (!vendor) throw new NotFoundException('Vendor not found.');
+    if ((vendor.tenantId || DEFAULT_TENANT_ID) !== tenantId) {
+      throw new ForbiddenException('Tenant isolation error: Cannot access another company’s vendor documents.');
+    }
+
+    const doc = this.findVendorDocumentById(vendor, docId);
+    if (!doc) throw new NotFoundException('KYC document not found for this vendor.');
+
+    return this.streamAuthorizedVendorDocument(vendor, doc, res, {
+      download: download === 'true' || download === '1',
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      tenantId,
+      ip: req?.ip,
+    });
+  }
+
+  @Get('documents/stream')
+  streamSignedVendorDocument(
+    @Res() res: Response,
+    @Query('token') token?: string,
+    @Query('download') download?: string,
+    @Req() req?: any
+  ) {
+    const verified = companyAdminSecurityService.verifyDocumentAccessToken(token);
+    if (verified.scope !== 'ADMIN') {
+      throw new ForbiddenException('Access denied: Invalid scope for admin document stream.');
+    }
+    const vendor = vendorRecords.get(verified.vendorId) as any;
+    if (!vendor) throw new NotFoundException('Vendor record no longer exists.');
+    if ((vendor.tenantId || DEFAULT_TENANT_ID) !== verified.tenantId) {
+      throw new ForbiddenException('Tenant isolation violation.');
+    }
+    const doc = this.findVendorDocumentById(vendor, verified.docId);
+    if (!doc) throw new NotFoundException('Document record not found.');
+
+    return this.streamAuthorizedVendorDocument(vendor, doc, res, {
+      download: download === 'true' || verified.disposition === 'attachment',
+      actorId: verified.actorId,
+      actorName: verified.actorId,
+      actorRole: 'COMPANY_ADMIN',
+      tenantId: verified.tenantId,
+      ip: req?.ip,
+    });
+  }
+
   @Patch('vendors/:id/documents/:docId/verify')
   async verifyVendorDocument(
     @Param('id') id: string,
@@ -740,10 +1357,32 @@ export class CompanyAdminController {
     const docs = vendor.kycDocuments || vendor.documents || [];
     const doc = docs.find((d: any) => d.id === docId);
     if (!doc) throw new NotFoundException('Document not found.');
-    doc.verificationStatus = body?.status || 'VERIFIED';
-    doc.status = doc.verificationStatus;
-    doc.rejectionReason = body?.status === 'REJECTED' ? body?.notes || '' : undefined;
-    vendor.updatedAt = new Date().toISOString();
+
+    const targetStatus = body?.status === 'REJECTED' ? 'REJECTED' : 'VERIFIED';
+    const cleanReason = String(body?.notes || '').trim();
+    if (targetStatus === 'REJECTED' && !cleanReason) {
+      throw new BadRequestException('A rejection reason is required when rejecting a KYC document.');
+    }
+
+    const nowIso = new Date().toISOString();
+    doc.verificationStatus = targetStatus;
+    doc.status = targetStatus;
+    doc.reviewedAt = nowIso;
+    doc.reviewedBy = admin.email;
+    doc.rejectionReason = targetStatus === 'REJECTED' ? cleanReason : undefined;
+    if (!Array.isArray(doc.auditHistory)) doc.auditHistory = [];
+    doc.auditHistory.unshift({
+      action: targetStatus === 'REJECTED' ? 'DOCUMENT_REJECTED' : 'DOCUMENT_VERIFIED',
+      actor: admin.email,
+      timestamp: nowIso,
+      notes: targetStatus === 'REJECTED' ? cleanReason : 'Verified by Company Admin',
+    });
+
+    if (targetStatus === 'REJECTED' && vendor.status !== 'REJECTED') {
+      vendor.resubmissionReason = `KYC document "${doc.title || doc.type}" rejected: ${cleanReason}`;
+    }
+
+    vendor.updatedAt = nowIso;
     await vendorPersistenceService.saveVendorRecord(vendor);
 
     const normalized = companyAdminDataService.normalizeVendor(vendor);
@@ -753,13 +1392,36 @@ export class CompanyAdminController {
       actorId: admin.sub,
       actorName: admin.name,
       actorRole: admin.role,
-      action: 'VENDOR_DOCUMENT_REVIEWED',
+      action: targetStatus === 'REJECTED' ? 'VENDOR_DOCUMENT_REJECTED' : 'VENDOR_DOCUMENT_VERIFIED',
       module: 'Vendors',
       entityType: 'VendorDocument',
       entityId: docId,
-      details: `Marked ${doc.type} as ${doc.verificationStatus} for ${normalized.businessName}.`,
+      details: `${targetStatus === 'REJECTED' ? 'Rejected' : 'Verified'} ${doc.type} (${doc.fileName}) for ${normalized.businessName} (Vendor ID: ${vendor.id})${targetStatus === 'REJECTED' ? ` — Reason: ${cleanReason}` : ''}.`,
       ipAddress: req?.ip || '127.0.0.1',
     });
+
+    if (targetStatus === 'REJECTED') {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: vendor.id,
+        type: 'VENDOR_ONBOARDING',
+        title: `KYC Document Rejected: ${doc.title || doc.type}`,
+        message: `Your uploaded file "${doc.fileName}" was rejected: ${cleanReason}. Please upload a corrected document.`,
+        severity: 'WARNING',
+        actionUrl: '/application-status',
+        metadata: { vendorId: vendor.id, docId, type: doc.type, rejectionReason: cleanReason },
+        email: normalized.email,
+        phone: normalized.phone,
+      });
+    }
+
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'vendor.document.reviewed',
+      { vendorId: vendor.id, docId, status: targetStatus, rejectionReason: doc.rejectionReason },
+      tenantId
+    );
 
     return { success: true, data: normalized };
   }

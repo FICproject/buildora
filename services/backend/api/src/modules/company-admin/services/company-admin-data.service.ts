@@ -1223,7 +1223,7 @@ export class CompanyAdminDataService implements OnModuleInit {
         severity: 'WARNING',
         isRead: false,
         createdAt: nowIso,
-        link: '/vendors?tab=pending',
+        link: '/vendors?status=PENDING_VERIFICATION',
       },
       {
         id: 'alt-2',
@@ -1234,7 +1234,7 @@ export class CompanyAdminDataService implements OnModuleInit {
         severity: 'INFO',
         isRead: false,
         createdAt: nowIso,
-        link: '/products?tab=pending',
+        link: '/products/pending',
       },
       {
         id: 'alt-3',
@@ -1336,41 +1336,253 @@ export class CompanyAdminDataService implements OnModuleInit {
     }
   }
 
+  private maskPan(pan?: string): string {
+    const clean = String(pan || '').trim().toUpperCase();
+    if (!clean) return '';
+    if (clean.length <= 4) return '••••';
+    return `${clean.slice(0, 2)}•••••${clean.slice(-3)}`;
+  }
+
+  private maskAadhaar(aadhaar?: string): string {
+    const digits = String(aadhaar || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length < 4) return '•••• •••• ••••';
+    return `•••• •••• ${digits.slice(-4)}`;
+  }
+
+  private maskAccountNumber(acc?: string): string {
+    const clean = String(acc || '').trim();
+    if (!clean) return '';
+    if (clean.length <= 4) return clean;
+    return `••••${clean.slice(-4)}`;
+  }
+
+  matchesVendorSearch(
+    rawVendor: any,
+    normalized: any,
+    searchQuery: string,
+    includeSensitiveIds = false
+  ): boolean {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const biz = rawVendor?.businessInfo || rawVendor?.business || {};
+    const reg = rawVendor?.registrationData || {};
+    const addr = biz.address || {};
+
+    const publicFields = [
+      normalized.businessName,
+      normalized.storeName,
+      normalized.contactPerson,
+      normalized.email,
+      normalized.phone,
+      normalized.gstin,
+      normalized.fullAddress,
+      normalized.city,
+      normalized.district,
+      normalized.state,
+      normalized.pincode,
+      addr.building,
+      addr.street,
+      addr.area,
+    ];
+    if (publicFields.some((val) => val && String(val).toLowerCase().includes(q))) {
+      return true;
+    }
+
+    if (includeSensitiveIds) {
+      const sensitiveFields = [
+        biz.pan,
+        rawVendor?.pan,
+        reg.pan,
+        rawVendor?.aadhaarNumber,
+        biz.aadhaarNumber,
+        reg.aadhaarNumber,
+      ];
+      const cleanDigitsQ = q.replace(/\s+/g, '');
+      if (
+        sensitiveFields.some((val) => {
+          if (!val) return false;
+          const low = String(val).toLowerCase();
+          return low.includes(q) || low.replace(/\s+/g, '').includes(cleanDigitsQ);
+        })
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   normalizeVendor(v: any) {
     const biz = v.businessInfo || v.business || {};
+    const reg = v.registrationData || {};
     const addr = biz.address || {};
     const status = String(v.status || v.approvalStatus || 'PENDING_VERIFICATION').toUpperCase();
-    const docs = Array.isArray(v.kycDocuments)
+    const rawDocs = Array.isArray(v.kycDocuments)
       ? v.kycDocuments
       : Array.isArray(v.documents)
         ? v.documents
         : [];
+
+    const requiredSlots = [
+      { type: 'GST_CERTIFICATE', title: 'GST Registration Certificate (REG-06)' },
+      { type: 'PAN_CARD', title: 'PAN Card Document' },
+      { type: 'BUSINESS_REGISTRATION', title: 'Trade License / Incorporation Certificate' },
+      { type: 'AUTHORIZED_ID', title: 'Authorized Signatory Government ID (Aadhaar / Passport)' },
+    ];
+
+    const normalizedDocs = rawDocs.map((d: any) => {
+      const rawVer = String(d.verificationStatus || d.status || 'PENDING').toUpperCase();
+      const hasPrev = Array.isArray(d.previousVersions) && d.previousVersions.length > 0;
+      const effectiveStatus =
+        rawVer === 'PENDING' && hasPrev
+          ? 'RESUBMITTED'
+          : rawVer === 'PENDING' && status === 'DRAFT'
+            ? 'UPLOADED'
+            : rawVer;
+      return {
+        id: d.id,
+        type: d.type,
+        title: d.title,
+        fileName: d.fileName,
+        fileSize: d.fileSize,
+        mimeType: d.mimeType,
+        uploadedAt: d.uploadedAt,
+        verificationStatus: rawVer,
+        status: rawVer,
+        displayStatus: effectiveStatus,
+        rejectionReason: d.rejectionReason,
+        reviewedAt: d.reviewedAt,
+        reviewedBy: d.reviewedBy,
+        previousVersions: Array.isArray(d.previousVersions) ? d.previousVersions : [],
+        auditHistory: Array.isArray(d.auditHistory) ? d.auditHistory : [],
+        hasStoredFile: Boolean(
+          d.storageKey || (typeof d.fileUrl === 'string' && d.fileUrl.includes('/uploads/docs/'))
+        ),
+      };
+    });
+
+    const slots = requiredSlots.map((slot) => {
+      const found = normalizedDocs.find((d: any) => d.type === slot.type);
+      return {
+        type: slot.type,
+        title: slot.title,
+        status: found ? found.displayStatus : 'NOT_UPLOADED',
+        verificationStatus: found ? found.verificationStatus : 'NOT_UPLOADED',
+        fileName: found?.fileName || null,
+        uploadedAt: found?.uploadedAt || null,
+        docId: found?.id || null,
+      };
+    });
+
+    const verifiedRequiredCount = slots.filter((s) => s.verificationStatus === 'VERIFIED').length;
+    const uploadedRequiredCount = slots.filter((s) => s.status !== 'NOT_UPLOADED').length;
+    const pendingDocCount = normalizedDocs.filter(
+      (d: any) => d.verificationStatus === 'PENDING'
+    ).length;
+    const rejectedDocCount = normalizedDocs.filter(
+      (d: any) => d.verificationStatus === 'REJECTED'
+    ).length;
+
+    const maxDocUploadedMs = normalizedDocs.reduce(
+      (max: number, d: any) => Math.max(max, new Date(d.uploadedAt || 0).getTime() || 0),
+      0
+    );
+    const maxDocReviewedMs = normalizedDocs.reduce(
+      (max: number, d: any) => Math.max(max, new Date(d.reviewedAt || 0).getTime() || 0),
+      0
+    );
+
+    const lastDocumentUploadedAt =
+      v.lastDocumentUploadedAt || (maxDocUploadedMs > 0 ? new Date(maxDocUploadedMs).toISOString() : null);
+    const applicationSubmittedAt =
+      v.latestKycSubmittedAt || v.submittedAt || v.resubmittedAt || null;
+    const lastKycUpdatedMs = Math.max(
+      maxDocUploadedMs,
+      maxDocReviewedMs,
+      applicationSubmittedAt ? new Date(applicationSubmittedAt).getTime() || 0 : 0,
+      v.updatedAt ? new Date(v.updatedAt).getTime() || 0 : 0,
+      v.createdAt ? new Date(v.createdAt).getTime() || 0 : 0
+    );
+    const lastKycUpdatedAt =
+      lastKycUpdatedMs > 0 ? new Date(lastKycUpdatedMs).toISOString() : v.updatedAt || v.createdAt;
+
+    const rawPan = biz.pan || v.pan || reg.pan || '';
+    const rawAadhaar = v.aadhaarNumber || biz.aadhaarNumber || reg.aadhaarNumber || '';
+    const district = addr.district || reg.district || '';
+    const city = addr.city || v.city || 'Bengaluru';
+    const state = addr.state || v.state || 'Karnataka';
+    const pincode = addr.pincode || v.pincode || '';
+    const fullAddress = [addr.building, addr.street, addr.area, district, city, state, pincode]
+      .filter(Boolean)
+      .join(', ');
+
+    const rawBank = biz.bankDetails || v.bankAccount || null;
+    const bankAccount = rawBank
+      ? {
+          accountHolderName: rawBank.accountHolderName || '',
+          bankName: rawBank.bankName || '',
+          ifsc: rawBank.ifsc || rawBank.ifscCode || '',
+          ifscCode: rawBank.ifscCode || rawBank.ifsc || '',
+          accountType: rawBank.accountType || 'CURRENT',
+          branch: rawBank.branch || '',
+          isVerified: Boolean(rawBank.isVerified),
+          accountNumberMasked:
+            rawBank.accountNumberMasked || this.maskAccountNumber(rawBank.accountNumber),
+        }
+      : null;
+
     return {
-      ...v,
       id: v.id,
       tenantId: v.tenantId || DEFAULT_TENANT_ID,
+      applicationId: v.applicationId || '',
       businessName: biz.businessName || v.storeName || v.name || 'Vendor',
       storeName: v.storeName || biz.storeName || biz.businessName || v.name || 'Vendor',
       contactPerson: biz.contactPerson || v.name || '',
+      name: v.name || biz.contactPerson || '',
       email: v.email || biz.email || '',
       phone: v.phone || biz.phone || '',
       gstin: biz.gstin || v.gstin || '',
-      pan: biz.pan || v.pan || '',
+      panMasked: this.maskPan(rawPan),
+      aadhaarMasked: this.maskAadhaar(rawAadhaar),
       vendorType: biz.businessType || 'DISTRIBUTOR',
-      city: addr.city || v.city || 'Bengaluru',
-      state: addr.state || v.state || 'Karnataka',
-      pincode: addr.pincode || v.pincode || '',
+      businessRegistrationType: biz.businessRegistrationType || '',
+      fullAddress,
+      city,
+      district,
+      state,
+      pincode,
       approvalStatus: status,
+      status,
       isActive: status === 'APPROVED' || status === 'ACTIVE',
-      documents: docs.map((d: any) => ({
-        ...d,
-        status: d.verificationStatus || d.status || 'PENDING',
-      })),
-      bankAccount: biz.bankDetails || v.bankAccount || null,
+      isNewApplication: status === 'SUBMITTED',
+      rejectionReason: v.rejectionReason,
+      resubmissionReason: v.resubmissionReason,
+      suspendedReason: v.suspendedReason,
+      createdAt: v.createdAt,
+      updatedAt: v.updatedAt,
+      submittedAt: v.submittedAt || null,
+      latestKycSubmittedAt: applicationSubmittedAt,
+      applicationSubmittedAt,
+      lastDocumentUploadedAt,
+      lastKycUpdatedAt,
+      kycSummary: {
+        verifiedCount: verifiedRequiredCount,
+        totalRequired: requiredSlots.length,
+        uploadedCount: uploadedRequiredCount,
+        pendingCount: pendingDocCount,
+        rejectedCount: rejectedDocCount,
+        slots,
+      },
+      documents: normalizedDocs,
+      bankAccount,
       fulfillmentRate: v.fulfillmentRate ?? 96,
       onTimeDispatchRate: v.onTimeDispatchRate ?? 95,
       commissionRate: v.commissionRate ?? 6,
       rating: v.rating ?? 4.5,
+      approvedAt: v.approvedAt || null,
+      approvedBy: v.approvedBy || null,
+      auditLogs: Array.isArray(v.auditLogs) ? v.auditLogs : [],
     };
   }
 
@@ -1404,8 +1616,15 @@ export class CompanyAdminDataService implements OnModuleInit {
       const vpTenant = anyVp.tenantId || DEFAULT_TENANT_ID;
       if (vpTenant === tenantId || tenantVendorIds.has(vp.vendorId)) {
         const custProd = dbStore.products.find((cp) => cp.id === vp.id || cp.sku === vp.sku) as any;
+        const normalizedStock = Number(anyVp.stock ?? vp.stockCount ?? 0);
+        const normalizedPrice = Number(anyVp.sellingPrice ?? vp.price ?? 0);
         merged.push({
           ...vp,
+          stock: normalizedStock,
+          stockCount: normalizedStock,
+          sellingPrice: normalizedPrice,
+          price: normalizedPrice,
+          lowStockThreshold: Number(vp.lowStockThreshold ?? 25),
           tenantId: vpTenant,
           vendorName: vendorNameMap.get(vp.vendorId) || 'Apex Building Supplies',
           isVisibleOnStorefront: custProd ? custProd.inStock !== false && vp.isActive : false,
@@ -1482,10 +1701,20 @@ export class CompanyAdminDataService implements OnModuleInit {
 
       for (const vo of vendorOrders) {
         if (seen.has(vo.id) || results.some((r) => r.orderNumber === vo.orderNumber)) continue;
+        const anyVo = vo as any;
+        const addr = anyVo.deliveryAddress as any;
         const assignment = this.dispatchAssignments.get(vo.id);
+        const computedTotal =
+          anyVo.totalAmount ??
+          anyVo.grandTotal ??
+          (Number(anyVo.subtotal || 0) + Number(anyVo.gstTotal || 0));
         results.push({
           ...vo,
           tenantId: DEFAULT_TENANT_ID,
+          totalAmount: Number(computedTotal || 0),
+          customerName: anyVo.customerName || addr?.recipientName || 'Customer',
+          customerPhone: anyVo.customerPhone || addr?.mobile || '',
+          paymentStatus: anyVo.paymentStatus || 'PAID',
           dispatchInfo: assignment || null,
         });
         seen.add(vo.id);
@@ -1512,11 +1741,16 @@ export class CompanyAdminDataService implements OnModuleInit {
     const vendorMap = new Map(vendors.map((v) => [v.id, v.businessName]));
     return vendorSettlements
       .filter((s) => tenantVendorIds.has(s.vendorId))
-      .map((s) => ({
-        ...s,
-        tenantId,
-        vendorName: vendorMap.get(s.vendorId) || 'Vendor',
-      }));
+      .map((s) => {
+        const anyS = s as any;
+        return {
+          ...s,
+          tenantId,
+          vendorName: vendorMap.get(s.vendorId) || 'Vendor',
+          netAmount: Number(anyS.netAmount ?? anyS.netPayable ?? 0),
+          grossRevenue: Number(anyS.grossRevenue ?? anyS.grossSales ?? 0),
+        };
+      });
   }
 
   getTenantReturns(tenantId: string) {
@@ -1822,6 +2056,7 @@ export class CompanyAdminDataService implements OnModuleInit {
 
     const mapped: any = {
       id: idx >= 0 ? dbStore.products[idx].id : cleanId || vp.id,
+      tenantId: vp.tenantId || 'tenant-buildora-blr',
       name: vp.name,
       slug: vp.slug || vp.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       sku: vp.sku,
@@ -1843,6 +2078,8 @@ export class CompanyAdminDataService implements OnModuleInit {
       subcategoryId: tax.productTypeId || vp.subcategoryId,
       subcategory: tax.productTypeName || vp.subcategory || vp.categoryName || 'General',
       subcategorySlug: tax.productTypeSlug || vp.subcategorySlug || vp.categoryId || 'general',
+      productType: vp.productType || tax.productTypeName || vp.productTypeName || vp.subcategory || '',
+      size: vp.size || vp.packSize || vp.unit || '',
       description: vp.description || '',
       shortDescription: vp.shortDescription || '',
       unit: vp.unit || 'Unit',

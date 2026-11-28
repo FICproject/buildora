@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Body,
+  Header,
   Headers,
   Param,
   Query,
@@ -13,6 +14,7 @@ import { dbStore } from '../../../database/store';
 import {
   CATEGORY_ATTRIBUTE_TEMPLATES,
   LEGACY_CATEGORY_SLUG_ALIASES,
+  LEGACY_PRODUCT_TYPE_SLUG_ALIASES,
   getAttributeTemplatesForCategory,
 } from '@buildora/constants';
 import { vendorRecords, vendorProducts } from '../../vendors/controllers/vendor.controller';
@@ -76,22 +78,22 @@ function enrichStorefrontProduct(p: any, tenantId = 'tenant-buildora-blr') {
 
   return {
     ...publicProduct,
-    mainCategoryId: p.mainCategoryId || hierarchy.mainCategoryId,
-    mainCategorySlug: p.mainCategorySlug || hierarchy.mainCategorySlug,
-    mainCategoryName: p.mainCategoryName || hierarchy.mainCategoryName,
-    childCategoryId: p.childCategoryId || hierarchy.childCategoryId,
-    childCategorySlug: p.childCategorySlug || hierarchy.childCategorySlug,
-    childCategoryName: p.childCategoryName || hierarchy.childCategoryName,
-    productTypeId: p.productTypeId || hierarchy.productTypeId,
-    productTypeSlug: p.productTypeSlug || hierarchy.productTypeSlug,
-    productTypeName: p.productTypeName || hierarchy.productTypeName,
+    mainCategoryId: hierarchy.mainCategoryId || p.mainCategoryId,
+    mainCategorySlug: hierarchy.mainCategorySlug || p.mainCategorySlug,
+    mainCategoryName: hierarchy.mainCategoryName || p.mainCategoryName,
+    childCategoryId: hierarchy.childCategoryId || p.childCategoryId,
+    childCategorySlug: hierarchy.childCategorySlug || p.childCategorySlug,
+    childCategoryName: hierarchy.childCategoryName || p.childCategoryName,
+    productTypeId: hierarchy.productTypeId || p.productTypeId,
+    productTypeSlug: hierarchy.productTypeSlug || p.productTypeSlug,
+    productTypeName: hierarchy.productTypeName || p.productTypeName,
     brandId: p.brandId || hierarchy.brandId,
-    categoryId: p.categoryId || hierarchy.childCategoryId,
-    categorySlug: p.categorySlug || hierarchy.childCategorySlug,
-    category: p.category || hierarchy.childCategoryName,
-    subcategoryId: p.subcategoryId || hierarchy.productTypeId,
-    subcategorySlug: p.subcategorySlug || hierarchy.productTypeSlug,
-    subcategory: p.subcategory || hierarchy.productTypeName,
+    categoryId: hierarchy.childCategoryId || p.categoryId,
+    categorySlug: hierarchy.childCategorySlug || p.categorySlug,
+    category: hierarchy.childCategoryName || p.category,
+    subcategoryId: hierarchy.productTypeId || p.subcategoryId,
+    subcategorySlug: hierarchy.productTypeSlug || p.subcategorySlug,
+    subcategory: hierarchy.productTypeName || p.subcategory,
     categoryAttributes: p.categoryAttributes || vp?.categoryAttributes || {},
     specifications: p.specifications || vp?.specifications || {},
     moq: p.moq ?? vp?.moq ?? 1,
@@ -155,6 +157,7 @@ export class ProductsController {
     };
   }
   @Get('products')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
   getProducts(
     @Headers('x-tenant-id') tenantId?: string,
     @Query('mainCategory') mainCategory?: string,
@@ -212,6 +215,9 @@ export class ProductsController {
       );
       result = result.filter(
         (p) =>
+          cats.includes((p.childCategorySlug || p.categorySlug || '').toLowerCase()) ||
+          cats.includes((p.childCategoryName || p.category || '').toLowerCase()) ||
+          cats.includes(String(p.childCategoryId || (p as any).categoryId || '').toLowerCase()) ||
           cats.includes((p.categorySlug || '').toLowerCase()) ||
           cats.includes((p.category || '').toLowerCase()) ||
           cats.includes(String((p as any).categoryId || '').toLowerCase()) ||
@@ -222,7 +228,15 @@ export class ProductsController {
     }
     const effectiveSubOrType = productType || subcategory;
     if (effectiveSubOrType) {
-      const subs = effectiveSubOrType.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+      const rawSubs = effectiveSubOrType.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+      const subs = Array.from(
+        new Set(
+          rawSubs.flatMap((s) => {
+            const alias = LEGACY_PRODUCT_TYPE_SLUG_ALIASES[s];
+            return alias ? [s, alias.slug, alias.productTypeId.toLowerCase()] : [s];
+          })
+        )
+      );
       result = result.filter(
         (p) =>
           subs.includes((p.productTypeSlug || p.subcategorySlug || '').toLowerCase()) ||
@@ -252,10 +266,25 @@ export class ProductsController {
       result = result.filter((p) => p.isNewLaunch);
     }
     if (type) {
-      const types = type.split(',').map((t) => t.trim().toLowerCase());
+      const types = type.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+      const normalizeSlug = (val: string) => val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       result = result.filter((p) => {
-        const prodType = (p as any).productType || p.specifications?.['Product Type'] || p.specifications?.['Type'] || p.subcategory;
-        return types.some((t) => prodType && String(prodType).toLowerCase().includes(t));
+        const candidates = [
+          (p as any).productType,
+          p.productTypeName,
+          p.productTypeSlug,
+          p.subcategory,
+          p.subcategorySlug,
+          p.specifications?.['Product Type'],
+          p.specifications?.['Type'],
+        ].filter(Boolean);
+        return types.some((t) => {
+          const tNorm = normalizeSlug(t);
+          return candidates.some((c) => {
+            const cStr = String(c).toLowerCase();
+            return cStr.includes(t) || normalizeSlug(cStr) === tNorm;
+          });
+        });
       });
     }
     if (size) {

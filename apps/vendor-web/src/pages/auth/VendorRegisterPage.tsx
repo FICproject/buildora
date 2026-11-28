@@ -1061,7 +1061,7 @@ export const VendorRegisterPage: React.FC = () => {
   const handleFileUpload = (type: VendorKycDocument['type'], title: string) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+    input.accept = '.pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp';
     input.onchange = async (e: any) => {
       const file: File | undefined = e.target.files?.[0];
       if (!file) return;
@@ -1080,7 +1080,7 @@ export const VendorRegisterPage: React.FC = () => {
         const detected = detectKycDocumentSignature(new Uint8Array(headerBuffer));
         if (!detected) {
           const msg =
-            'Corrupted or unsupported file content. Upload a genuine PDF, JPG, JPEG, or PNG document.';
+            'Corrupted or unsupported file content. Upload a genuine PDF, JPG, JPEG, PNG, or WEBP document.';
           setFieldErrors((prev) => ({ ...prev, documents: msg }));
           setError(msg);
           return;
@@ -1095,7 +1095,36 @@ export const VendorRegisterPage: React.FC = () => {
       setIsUploadingDocType(type);
       try {
         const uploadedDoc = await vendorApi.uploadDocumentFile(file, type, title);
-        setDocuments((prev) => [...prev.filter((d) => d.type !== type), uploadedDoc]);
+        setDocuments((prev) => {
+          const existing = prev.find((d) => d.type === type);
+          const previousVersions = existing
+            ? [
+                ...(Array.isArray(existing.previousVersions) ? existing.previousVersions : []),
+                {
+                  id: existing.id,
+                  fileName: existing.fileName,
+                  fileSize: existing.fileSize,
+                  mimeType: existing.mimeType,
+                  fileUrl: existing.fileUrl,
+                  storageKey: existing.storageKey,
+                  storageProvider: existing.storageProvider,
+                  uploadedAt: existing.uploadedAt,
+                  verificationStatus: existing.verificationStatus || 'PENDING',
+                  rejectionReason: existing.rejectionReason,
+                  reviewedAt: existing.reviewedAt,
+                  reviewedBy: existing.reviewedBy,
+                  replacedAt: new Date().toISOString(),
+                },
+              ]
+            : [];
+          return [
+            ...prev.filter((d) => d.type !== type),
+            {
+              ...uploadedDoc,
+              ...(previousVersions.length > 0 ? { previousVersions } : {}),
+            },
+          ];
+        });
         clearFieldError('documents');
       } catch (err: any) {
         const msg = err.message || 'Document upload failed on verification server.';
@@ -2346,11 +2375,23 @@ export const VendorRegisterPage: React.FC = () => {
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-0.5">
                         <span className="text-xs font-bold text-[#292524]">{docType.title}</span>
-                        <p className="text-[11px] text-[#78716C]">PDF, JPG, JPEG, or PNG (Max 5 MB)</p>
+                        <p className="text-[11px] text-[#78716C]">PDF, JPG, JPEG, PNG, or WEBP (Max 5 MB)</p>
                       </div>
                       {uploaded ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                          Pending Review
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            uploaded.verificationStatus === 'VERIFIED'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : uploaded.verificationStatus === 'REJECTED'
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          {uploaded.verificationStatus === 'VERIFIED'
+                            ? 'Verified'
+                            : uploaded.verificationStatus === 'REJECTED'
+                              ? 'Rejected'
+                              : 'Pending Review'}
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F8F7F5] text-[#78716C]">
@@ -2359,19 +2400,34 @@ export const VendorRegisterPage: React.FC = () => {
                       )}
                     </div>
 
+                    {uploaded?.verificationStatus === 'REJECTED' && uploaded.rejectionReason && (
+                      <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5">
+                        Rejected: {uploaded.rejectionReason}
+                      </p>
+                    )}
+
                     {uploaded ? (
-                      <div className="p-2 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex items-center justify-between text-xs">
+                      <div className="p-2 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex items-center justify-between gap-2 text-xs">
                         <div className="flex items-center gap-1.5 truncate">
                           <FileText className="w-3.5 h-3.5 text-[#943D24]" />
                           <span className="truncate font-medium">{uploaded.fileName}</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setDocuments(documents.filter((d) => d.id !== uploaded.id))}
-                          className="text-[#78716C] hover:text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleFileUpload(docType.type, docType.title)}
+                            className="text-[11px] font-semibold text-[#943D24] hover:underline cursor-pointer"
+                          >
+                            Replace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDocuments(documents.filter((d) => d.id !== uploaded.id))}
+                            className="text-[#78716C] hover:text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <button

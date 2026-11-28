@@ -933,6 +933,22 @@ export interface VendorWarehouse {
   isPrimary?: boolean;
 }
 
+export interface VendorKycDocumentVersion {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  fileUrl: string;
+  storageKey?: string;
+  storageProvider?: 'LOCAL_OBJECT_STORAGE' | 'S3';
+  uploadedAt: string;
+  verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  rejectionReason?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  replacedAt?: string;
+}
+
 export interface VendorKycDocument {
   id: string;
   type: 'BUSINESS_REGISTRATION' | 'GST_CERTIFICATE' | 'PAN_CARD' | 'AUTHORIZED_ID' | 'CANCELLED_CHEQUE' | 'CATALOGUE' | 'OTHER';
@@ -941,9 +957,15 @@ export interface VendorKycDocument {
   fileSize: number;
   mimeType: string;
   fileUrl: string;
+  storageKey?: string;
+  storageProvider?: 'LOCAL_OBJECT_STORAGE' | 'S3';
   uploadedAt: string;
   verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  status?: 'PENDING' | 'VERIFIED' | 'REJECTED';
   rejectionReason?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  previousVersions?: VendorKycDocumentVersion[];
 }
 
 export interface VendorAuditLog {

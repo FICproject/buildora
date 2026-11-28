@@ -321,6 +321,77 @@ export class CompanyAdminSecurityService {
     }
     return admin.tenantId;
   }
+
+  signDocumentAccessToken(
+    payload: {
+      scope: 'ADMIN' | 'VENDOR';
+      vendorId: string;
+      docId: string;
+      tenantId: string;
+      actorId: string;
+      disposition?: 'inline' | 'attachment';
+    },
+    ttlSeconds = 300
+  ): { token: string; expiresAt: string } {
+    const now = Math.floor(Date.now() / 1000);
+    const exp = now + ttlSeconds;
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const body = Buffer.from(
+      JSON.stringify({
+        ...payload,
+        tokenType: 'DOC_ACCESS',
+        iat: now,
+        exp,
+      })
+    ).toString('base64url');
+    const sig = crypto
+      .createHmac('sha256', this.getJwtSecret())
+      .update(`${header}.${body}`)
+      .digest('base64url');
+    return {
+      token: `${header}.${body}.${sig}`,
+      expiresAt: new Date(exp * 1000).toISOString(),
+    };
+  }
+
+  verifyDocumentAccessToken(token?: string): {
+    scope: 'ADMIN' | 'VENDOR';
+    vendorId: string;
+    docId: string;
+    tenantId: string;
+    actorId: string;
+    disposition?: 'inline' | 'attachment';
+    exp: number;
+  } {
+    if (!token || typeof token !== 'string') {
+      throw new UnauthorizedException('Signed document access token is required.');
+    }
+    const parts = token.trim().split('.');
+    if (parts.length !== 3) {
+      throw new UnauthorizedException('Malformed document access token.');
+    }
+    const [header, body, sig] = parts;
+    const expectedSig = crypto
+      .createHmac('sha256', this.getJwtSecret())
+      .update(`${header}.${body}`)
+      .digest('base64url');
+
+    if (
+      sig.length !== expectedSig.length ||
+      !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))
+    ) {
+      throw new UnauthorizedException('Invalid document access token signature.');
+    }
+
+    const decoded = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (decoded.tokenType !== 'DOC_ACCESS') {
+      throw new ForbiddenException('Invalid token purpose for document access.');
+    }
+    if (!decoded.exp || decoded.exp < Math.floor(Date.now() / 1000)) {
+      throw new UnauthorizedException('Document preview link has expired. Please retry to refresh access.');
+    }
+    return decoded;
+  }
 }
 
 export const companyAdminSecurityService = new CompanyAdminSecurityService();

@@ -28,8 +28,10 @@ const ORDER_TABS = [
 export const OrdersPage: React.FC = () => {
   const pushToast = useToastStore((s) => s.push);
   const [searchParams] = useSearchParams();
-  const [view, setView] = useState<'ORDERS' | 'RETURNS'>('ORDERS');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [view, setView] = useState<'ORDERS' | 'RETURNS'>(
+    searchParams.get('view') === 'returns' ? 'RETURNS' : 'ORDERS'
+  );
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'ALL');
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [orders, setOrders] = useState<any[]>([]);
   const [returns, setReturns] = useState<any[]>([]);
@@ -38,7 +40,15 @@ export const OrdersPage: React.FC = () => {
   const loadData = async () => {
     if (view === 'ORDERS') {
       const list = await adminApi.getOrders(statusFilter, search);
-      setOrders(list || []);
+      const nextOrders = list || [];
+      setOrders(nextOrders);
+      const targetOrderId = searchParams.get('orderId');
+      if (targetOrderId) {
+        const matched = nextOrders.find(
+          (o: any) => o.id === targetOrderId || o.orderNumber === targetOrderId
+        );
+        if (matched) setSelectedOrder(matched);
+      }
     } else {
       const ret = await adminApi.getReturns();
       setReturns(ret || []);

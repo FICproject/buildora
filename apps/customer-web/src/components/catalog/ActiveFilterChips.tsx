@@ -145,15 +145,16 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
         const subOpt = availableFilters
           .find((f) => f.id === 'subcategory')
           ?.options.find((o) => o.value === sub);
+        const dimLabel = dimNameMap.get('subcategory') || dimNameMap.get('category') || 'Product Type';
         const displayLabel = subOpt?.label || sub;
         return (
           <button
             key={`sub-${sub}`}
             onClick={() => onRemoveSubcategory(sub)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue-50 text-brand-blue-900 border border-brand-blue-200 hover:bg-brand-blue-100 transition-colors cursor-pointer"
-            title={`Remove product type ${displayLabel}`}
+            title={`Remove ${dimLabel} ${displayLabel}`}
           >
-            <span>Type: {displayLabel}</span>
+            <span>{dimLabel}: {displayLabel}</span>
             <X className="w-3.5 h-3.5 text-brand-blue-700" />
           </button>
         );

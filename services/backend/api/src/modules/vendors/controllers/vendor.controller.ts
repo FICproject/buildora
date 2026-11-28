@@ -1437,6 +1437,18 @@ export let vendorNotifications: VendorNotification[] = [
   }
 ];
 
+export function resolveVendorProductDisplayStatus(p: any): string {
+  if (!p) return 'DRAFT';
+  if (p.isSuspended === true) return 'SUSPENDED';
+  if (p.approvalStatus === 'DRAFT') return 'DRAFT';
+  if (p.approvalStatus === 'REJECTED') return 'REJECTED';
+  if (p.approvalStatus === 'PENDING_APPROVAL') return 'PENDING_APPROVAL';
+  if (p.isActive === false) return 'INACTIVE';
+  const stockNum = Number(p.stockCount ?? p.stock ?? 0);
+  if (stockNum <= 0 || p.inStock === false) return 'OUT_OF_STOCK';
+  return 'ACTIVE';
+}
+
 export function syncVendorProductToCustomerCatalog(vp: VendorProduct) {
   const targetSku = vp.sku;
   const targetSlug = vp.slug;
@@ -2410,8 +2422,59 @@ export class VendorController implements OnModuleInit {
         }
       }
       if (wizardData.documents) {
-        vendor.kycDocuments = wizardData.documents;
+        const prevDocs: any[] = Array.isArray(vendor.kycDocuments) ? vendor.kycDocuments : [];
+        const mergedDocs = (wizardData.documents || []).map((incoming: any) => {
+          const existingSameType = prevDocs.find(
+            (d) => d.type === incoming.type && d.id !== incoming.id
+          );
+          const mergedPrevVersions = [
+            ...(Array.isArray(incoming.previousVersions) ? incoming.previousVersions : []),
+            ...(existingSameType
+              ? [
+                  ...(Array.isArray(existingSameType.previousVersions)
+                    ? existingSameType.previousVersions
+                    : []),
+                  {
+                    id: existingSameType.id,
+                    fileName: existingSameType.fileName,
+                    fileSize: existingSameType.fileSize,
+                    mimeType: existingSameType.mimeType,
+                    fileUrl: existingSameType.fileUrl,
+                    storageKey: existingSameType.storageKey,
+                    storageProvider: existingSameType.storageProvider,
+                    uploadedAt: existingSameType.uploadedAt,
+                    verificationStatus: existingSameType.verificationStatus || 'PENDING',
+                    rejectionReason: existingSameType.rejectionReason,
+                    reviewedAt: existingSameType.reviewedAt,
+                    reviewedBy: existingSameType.reviewedBy,
+                    replacedAt: new Date().toISOString(),
+                  },
+                ]
+              : []),
+          ].filter((v, idx, arr) => arr.findIndex((x) => x.id === v.id) === idx);
+
+          return {
+            ...incoming,
+            verificationStatus: incoming.verificationStatus || 'PENDING',
+            ...(mergedPrevVersions.length > 0 ? { previousVersions: mergedPrevVersions } : {}),
+          };
+        });
+        vendor.kycDocuments = mergedDocs;
+        const maxDocMs = mergedDocs.reduce(
+          (max: number, d: any) => Math.max(max, new Date(d.uploadedAt || 0).getTime() || 0),
+          0
+        );
+        if (maxDocMs > 0) {
+          (vendor as any).lastDocumentUploadedAt = new Date(maxDocMs).toISOString();
+        }
       }
+      if ((wizardData as any).district && vendor.businessInfo?.address) {
+        (vendor.businessInfo.address as any).district = (wizardData as any).district;
+      }
+      if ((wizardData as any).aadhaarNumber) {
+        (vendor as any).aadhaarNumber = String((wizardData as any).aadhaarNumber).replace(/\s+/g, '');
+      }
+      vendor.updatedAt = new Date().toISOString();
     }
 
     await vendorPersistenceService.saveVendorRecord(vendor);
@@ -2480,12 +2543,17 @@ export class VendorController implements OnModuleInit {
     if (!vendor.applicationId) {
       vendor.applicationId = `APP-BLR-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     }
-    vendor.submittedAt = new Date().toISOString();
+    const submittedIso = new Date().toISOString();
+    vendor.submittedAt = submittedIso;
+    (vendor as any).latestKycSubmittedAt = submittedIso;
     vendor.status = 'SUBMITTED';
     vendor.rejectionReason = undefined;
     vendor.resubmissionReason = undefined;
-    vendor.updatedAt = new Date().toISOString();
+    vendor.updatedAt = submittedIso;
     vendor.registrationStep = 5;
+    if ((data as any).aadhaarNumber) {
+      (vendor as any).aadhaarNumber = String((data as any).aadhaarNumber).replace(/\s+/g, '');
+    }
     vendor.registrationData = {
       ...data,
       ownerName: mergedValidationData.ownerName.trim(),
@@ -2515,7 +2583,38 @@ export class VendorController implements OnModuleInit {
     if (data.logoUrl !== undefined) vendor.logoUrl = data.logoUrl || undefined;
     if (data.logoMetadata !== undefined) vendor.logoMetadata = data.logoMetadata || undefined;
     if (data.documents && data.documents.length > 0) {
-      vendor.kycDocuments = data.documents;
+      const existingDocs: any[] = Array.isArray(vendor.kycDocuments) ? vendor.kycDocuments : [];
+      vendor.kycDocuments = data.documents.map((incoming: any) => {
+        const oldDoc = existingDocs.find((d) => d.type === incoming.type && d.id !== incoming.id);
+        const history = [
+          ...(Array.isArray(incoming.previousVersions) ? incoming.previousVersions : []),
+          ...(oldDoc
+            ? [
+                ...(Array.isArray(oldDoc.previousVersions) ? oldDoc.previousVersions : []),
+                {
+                  id: oldDoc.id,
+                  fileName: oldDoc.fileName,
+                  fileSize: oldDoc.fileSize,
+                  mimeType: oldDoc.mimeType,
+                  fileUrl: oldDoc.fileUrl,
+                  storageKey: oldDoc.storageKey,
+                  storageProvider: oldDoc.storageProvider,
+                  uploadedAt: oldDoc.uploadedAt,
+                  verificationStatus: oldDoc.verificationStatus || 'PENDING',
+                  rejectionReason: oldDoc.rejectionReason,
+                  reviewedAt: oldDoc.reviewedAt,
+                  reviewedBy: oldDoc.reviewedBy,
+                  replacedAt: new Date().toISOString(),
+                },
+              ]
+            : []),
+        ].filter((v, idx, arr) => arr.findIndex((x) => x.id === v.id) === idx);
+        return {
+          ...incoming,
+          verificationStatus: incoming.verificationStatus || 'PENDING',
+          ...(history.length > 0 ? { previousVersions: history } : {}),
+        };
+      });
     }
 
     vendor.businessInfo = {
@@ -2839,11 +2938,259 @@ export class VendorController implements OnModuleInit {
   }
 
   @Get('uploads/docs/:filename')
-  serveUploadedDocument(@Param('filename') filename: string, @Res() res: Response) {
-    const { filePath, mimeType } = storageService.getDocumentFilePath(filename);
+  serveUploadedDocument(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+    @Headers('authorization') authHeader?: string,
+    @Query('token') token?: string,
+    @Query('download') download?: string
+  ) {
+    // Enforce strict authentication & ownership/tenant isolation for private KYC files
+    const cleanFilename = filename.split('?')[0];
+    let authorized = false;
+
+    if (token) {
+      const decoded = companyAdminSecurityService.verifyDocumentAccessToken(token);
+      const ownerVendor = vendorRecords.get(decoded.vendorId);
+      if (!ownerVendor || (ownerVendor.tenantId || DEFAULT_TENANT_ID) !== decoded.tenantId) {
+        throw new ForbiddenException('Access denied: Document tenant mismatch.');
+      }
+      const docs = ownerVendor.kycDocuments || [];
+      const matchesDoc = docs.some(
+        (d: any) =>
+          (d.id === decoded.docId &&
+            (d.storageKey === cleanFilename || String(d.fileUrl || '').includes(cleanFilename))) ||
+          (Array.isArray(d.previousVersions) &&
+            d.previousVersions.some(
+              (pv: any) =>
+                pv.id === decoded.docId &&
+                (pv.storageKey === cleanFilename || String(pv.fileUrl || '').includes(cleanFilename))
+            ))
+      );
+      if (!matchesDoc) {
+        throw new ForbiddenException('Access denied: Signed token does not match requested file.');
+      }
+      authorized = true;
+    } else if (authHeader) {
+      try {
+        const admin = companyAdminSecurityService.verifyAccessToken(authHeader);
+        companyAdminSecurityService.assertPermission(admin, 'vendors:read');
+        const matchingVendor = Array.from(vendorRecords.values()).find((v) =>
+          (v.kycDocuments || []).some(
+            (d: any) =>
+              d.storageKey === cleanFilename ||
+              String(d.fileUrl || '').includes(cleanFilename) ||
+              (Array.isArray(d.previousVersions) &&
+                d.previousVersions.some(
+                  (pv: any) =>
+                    pv.storageKey === cleanFilename || String(pv.fileUrl || '').includes(cleanFilename)
+                ))
+          )
+        );
+        if (matchingVendor && (matchingVendor.tenantId || DEFAULT_TENANT_ID) !== admin.tenantId) {
+          throw new ForbiddenException('Tenant isolation violation: Document belongs to another company.');
+        }
+        authorized = true;
+      } catch (err) {
+        if (err instanceof ForbiddenException) throw err;
+        // Fallback: check authenticated vendor ownership
+        const vendor = getVendorFromAuthHeader(authHeader);
+        const ownsDoc = (vendor.kycDocuments || []).some(
+          (d: any) =>
+            d.storageKey === cleanFilename ||
+            String(d.fileUrl || '').includes(cleanFilename) ||
+            (Array.isArray(d.previousVersions) &&
+              d.previousVersions.some(
+                (pv: any) =>
+                  pv.storageKey === cleanFilename || String(pv.fileUrl || '').includes(cleanFilename)
+              ))
+        );
+        if (!ownsDoc) {
+          throw new ForbiddenException('Ownership violation: You cannot access another vendor’s KYC documents.');
+        }
+        authorized = true;
+      }
+    }
+
+    if (!authorized) {
+      throw new UnauthorizedException('Authentication or a valid signed access token is required to view KYC documents.');
+    }
+
+    const { filePath, mimeType, fileSize } = storageService.getDocumentFilePath(cleanFilename);
     res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('Content-Disposition', `${download === 'true' ? 'attachment' : 'inline'}; filename="${cleanFilename}"`);
+    res.setHeader('Content-Length', String(fileSize));
+    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     return res.sendFile(filePath);
+  }
+
+  @Get('kyc-documents/:docId/file')
+  serveOwnKycDocument(
+    @Param('docId') docId: string,
+    @Res() res: Response,
+    @Headers('authorization') authHeader?: string,
+    @Query('download') download?: string
+  ) {
+    const vendor = getVendorFromAuthHeader(authHeader);
+    const docs: any[] = vendor.kycDocuments || [];
+    let targetDoc: any = null;
+    for (const d of docs) {
+      if (d.id === docId) {
+        targetDoc = d;
+        break;
+      }
+      if (Array.isArray(d.previousVersions)) {
+        const pv = d.previousVersions.find((x: any) => x.id === docId);
+        if (pv) {
+          targetDoc = pv;
+          break;
+        }
+      }
+    }
+    if (!targetDoc) {
+      throw new NotFoundException('KYC document not found in your vendor profile.');
+    }
+
+    const resolved = storageService.resolveDocumentFile(targetDoc);
+    const safeName = resolved.originalFileName.replace(/["\\\r\n]/g, '_');
+    res.setHeader('Content-Type', resolved.mimeType);
+    res.setHeader('Content-Disposition', `${download === 'true' ? 'attachment' : 'inline'}; filename="${safeName}"`);
+    res.setHeader('Content-Length', String(resolved.fileSize));
+    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.sendFile(resolved.filePath);
+  }
+
+  @Post('profile/kyc-documents/replace')
+  @UseInterceptors(
+    FileInterceptor('document', {
+      limits: { fileSize: MAX_KYC_DOC_SIZE_BYTES }
+    })
+  )
+  async replaceVendorKycDocument(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { type?: VendorKycDocument['type']; title?: string },
+    @Headers('authorization') authHeader?: string,
+    @Req() req?: Request
+  ) {
+    const vendor = getVendorFromAuthHeader(authHeader);
+    if (!file) {
+      throw new BadRequestException('Please attach a valid replacement KYC document (PDF, JPG, JPEG, PNG, or WEBP up to 5 MB).');
+    }
+    const docType = (body?.type || 'OTHER') as VendorKycDocument['type'];
+    if (!ALLOWED_KYC_DOCUMENT_TYPES.includes(docType as any)) {
+      throw new BadRequestException('Invalid KYC document type.');
+    }
+
+    const host = req?.get?.('host') || `localhost:${process.env.PORT || 3000}`;
+    const protocol = req?.protocol || 'http';
+    const baseUrl = `${protocol}://${host}`;
+    const nextDoc = await storageService.uploadKycDocument(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      docType,
+      body?.title || file.originalname,
+      baseUrl
+    );
+
+    const existingDocs: any[] = Array.isArray(vendor.kycDocuments) ? vendor.kycDocuments : [];
+    const oldDoc = existingDocs.find((d) => d.type === docType);
+    const previousVersions = oldDoc
+      ? [
+          ...(Array.isArray(oldDoc.previousVersions) ? oldDoc.previousVersions : []),
+          {
+            id: oldDoc.id,
+            fileName: oldDoc.fileName,
+            fileSize: oldDoc.fileSize,
+            mimeType: oldDoc.mimeType,
+            fileUrl: oldDoc.fileUrl,
+            storageKey: oldDoc.storageKey,
+            storageProvider: oldDoc.storageProvider,
+            uploadedAt: oldDoc.uploadedAt,
+            verificationStatus: oldDoc.verificationStatus || 'PENDING',
+            rejectionReason: oldDoc.rejectionReason,
+            reviewedAt: oldDoc.reviewedAt,
+            reviewedBy: oldDoc.reviewedBy,
+            replacedAt: new Date().toISOString(),
+          },
+        ]
+      : [];
+
+    const docWithHistory: VendorKycDocument = {
+      ...nextDoc,
+      title: body?.title || oldDoc?.title || nextDoc.title,
+      verificationStatus: 'PENDING',
+      ...(previousVersions.length > 0 ? { previousVersions } : {}),
+    };
+
+    vendor.kycDocuments = [...existingDocs.filter((d) => d.type !== docType), docWithHistory];
+    if (vendor.registrationData) {
+      vendor.registrationData.documents = vendor.kycDocuments;
+    }
+    if (vendor.status === 'RESUBMISSION_REQUIRED') {
+      vendor.status = 'SUBMITTED';
+      vendor.resubmissionReason = undefined;
+    }
+    const repIso = new Date().toISOString();
+    (vendor as any).lastDocumentUploadedAt = repIso;
+    (vendor as any).latestKycSubmittedAt = repIso;
+    (vendor as any).resubmittedAt = repIso;
+    vendor.updatedAt = repIso;
+
+    if (!vendor.auditLogs) vendor.auditLogs = [];
+    vendor.auditLogs.unshift({
+      id: `audit-${Date.now()}`,
+      action: oldDoc ? 'DOCUMENT_REPLACED' : 'DOCUMENT_UPLOADED',
+      performedBy: vendor.name || vendor.email,
+      performedAt: vendor.updatedAt,
+      details: `${oldDoc ? 'Replaced' : 'Uploaded'} ${docType} (${file.originalname})${oldDoc ? ` replacing ${oldDoc.fileName}` : ''}.`,
+    });
+
+    await vendorPersistenceService.saveVendorRecord(vendor);
+
+    const tenantId = vendor.tenantId || DEFAULT_TENANT_ID;
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: vendor.id,
+      actorName: vendor.businessInfo?.businessName || vendor.name || vendor.email,
+      actorRole: 'VENDOR',
+      action: oldDoc ? 'VENDOR_DOCUMENT_REPLACED' : 'VENDOR_DOCUMENT_UPLOADED',
+      module: 'Vendors',
+      entityType: 'VendorDocument',
+      entityId: docWithHistory.id,
+      details: `${vendor.storeName || vendor.name} ${oldDoc ? 'replaced' : 'uploaded'} ${docType} (${file.originalname}).`,
+      ipAddress: (req as any)?.ip || '127.0.0.1',
+    });
+
+    await platformNotificationService.dispatch({
+      tenantId,
+      recipientRole: 'ADMIN',
+      recipientId: 'TENANT_ADMIN',
+      type: 'VENDOR_ONBOARDING',
+      title: `KYC Document ${oldDoc ? 'Replaced' : 'Uploaded'}: ${vendor.storeName || vendor.name}`,
+      message: `${docWithHistory.title} (${file.originalname}) is ready for Company Admin verification.`,
+      severity: 'INFO',
+      actionUrl: `/vendors?status=PENDING_VERIFICATION&vendorId=${encodeURIComponent(vendor.id)}`,
+      metadata: { vendorId: vendor.id, docId: docWithHistory.id, type: docType },
+    });
+
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'vendor.document.uploaded',
+      { vendorId: vendor.id, document: docWithHistory },
+      tenantId
+    );
+
+    return {
+      success: true,
+      message: oldDoc
+        ? 'Corrected KYC document uploaded and queued for Admin verification.'
+        : 'KYC document uploaded successfully.',
+      document: docWithHistory,
+      vendor: serializeVendorProfile(vendor),
+    };
   }
 
   @Post('registration/upload-logo')
@@ -3004,10 +3351,13 @@ export class VendorController implements OnModuleInit {
     }
 
     const oldStatus = vendor.status;
+    const nowIso = new Date().toISOString();
     vendor.status = 'SUBMITTED';
+    (vendor as any).resubmittedAt = nowIso;
+    (vendor as any).latestKycSubmittedAt = nowIso;
     vendor.rejectionReason = undefined;
     vendor.resubmissionReason = undefined;
-    vendor.updatedAt = new Date().toISOString();
+    vendor.updatedAt = nowIso;
 
     if (!vendor.auditLogs) vendor.auditLogs = [];
     vendor.auditLogs.unshift({
@@ -3717,10 +4067,17 @@ export class VendorController implements OnModuleInit {
     let prods = vendorProducts.filter((p) => p.vendorId === vendor.id);
 
     if (category) {
-      prods = prods.filter((p) => p.categorySlug === category || p.category === category);
+      const catLow = category.trim().toLowerCase();
+      prods = prods.filter((p: any) =>
+        [p.childCategoryId, p.childCategorySlug, p.childCategoryName, p.categoryId, p.categorySlug, p.category]
+          .filter(Boolean)
+          .some((val) => String(val).toLowerCase() === catLow)
+      );
     }
     if (status === 'ACTIVE') {
-      prods = prods.filter((p) => p.isActive && p.approvalStatus === 'APPROVED');
+      prods = prods.filter((p) => p.isActive && p.approvalStatus === 'APPROVED' && !(p as any).isSuspended);
+    } else if (status === 'INACTIVE') {
+      prods = prods.filter((p) => p.approvalStatus === 'APPROVED' && !p.isActive && !(p as any).isSuspended);
     } else if (status === 'DRAFT') {
       prods = prods.filter((p) => p.approvalStatus === 'DRAFT');
     } else if (status === 'PENDING_APPROVAL') {
@@ -3750,6 +4107,7 @@ export class VendorController implements OnModuleInit {
       total: prods.length,
       data: prods.map((p) => ({
         ...p,
+        status: resolveVendorProductDisplayStatus(p),
         categoryHierarchyActive: taxonomyService.isProductCategoryHierarchyActive(
           p,
           vendor.tenantId || DEFAULT_TENANT_ID
@@ -3772,6 +4130,7 @@ export class VendorController implements OnModuleInit {
       success: true,
       data: {
         ...prod,
+        status: resolveVendorProductDisplayStatus(prod),
         categoryHierarchyActive: taxonomyService.isProductCategoryHierarchyActive(
           prod,
           vendor.tenantId || DEFAULT_TENANT_ID
@@ -3850,8 +4209,9 @@ export class VendorController implements OnModuleInit {
         `Product Type "${rawSubInput}" does not belong to "${hierarchy.childCategoryName}".`
       );
     }
-    const resolvedFull = resolveCanonicalCategoryHierarchy(hierarchy.childCategorySlug, hierarchy.productTypeSlug);
-    const defaultChild = resolvedFull.matchedChild || resolvedFull.matchedMain?.subcategories[0];
+    const defaultPoolType = activePool.productTypes.find(
+      (pt) => pt.childCategoryId === hierarchy.childCategoryId && pt.isActive !== false
+    );
 
     const requestedCollectionNeedle = String(
       body.newLaunchCollectionId || body.newLaunchCollectionSlug || ''
@@ -3906,16 +4266,16 @@ export class VendorController implements OnModuleInit {
       childCategoryId: hierarchy.childCategoryId,
       childCategorySlug: hierarchy.childCategorySlug,
       childCategoryName: hierarchy.childCategoryName,
-      productTypeId: hierarchy.productTypeId || defaultChild?.id || '',
-      productTypeSlug: hierarchy.productTypeSlug || defaultChild?.slug || '',
-      productTypeName: hierarchy.productTypeName || defaultChild?.name || '',
+      productTypeId: hierarchy.productTypeId || defaultPoolType?.id || '',
+      productTypeSlug: hierarchy.productTypeSlug || defaultPoolType?.slug || '',
+      productTypeName: hierarchy.productTypeName || defaultPoolType?.name || '',
       category: hierarchy.childCategoryName,
       categorySlug: hierarchy.childCategorySlug,
       categoryId: hierarchy.childCategoryId,
       categoryName: hierarchy.childCategoryName,
-      subcategory: hierarchy.productTypeName || defaultChild?.name || hierarchy.childCategoryName,
-      subcategorySlug: hierarchy.productTypeSlug || defaultChild?.slug || hierarchy.childCategorySlug,
-      subcategoryId: hierarchy.productTypeId || defaultChild?.id || '',
+      subcategory: hierarchy.productTypeName || defaultPoolType?.name || '',
+      subcategorySlug: hierarchy.productTypeSlug || defaultPoolType?.slug || '',
+      subcategoryId: hierarchy.productTypeId || defaultPoolType?.id || '',
       description: body.description || '',
       shortDescription: body.shortDescription || '',
       images:
@@ -4032,7 +4392,10 @@ export class VendorController implements OnModuleInit {
       message: isDraft
         ? 'Product saved as draft (hidden from customers).'
         : 'Product submitted for Company Admin approval.',
-      data: newProd
+      data: {
+        ...newProd,
+        status: resolveVendorProductDisplayStatus(newProd),
+      },
     };
   }
 
@@ -4284,8 +4647,22 @@ export class VendorController implements OnModuleInit {
     }
 
     // Apply direct update (e.g., DRAFT/REJECTED resubmission or stock-only update)
-    const { vendorId: _ignoreVendor, approvalStatus: requestedStatus, isDraft, ...safeBody } = body;
+    const {
+      vendorId: _ignoreVendor,
+      approvalStatus: _ignoreApproval,
+      isDraft,
+      status: _ignoreStatus,
+      isActive: _ignoreActive,
+      isSuspended: _ignoreSuspended,
+      pendingRevision: _ignoreRevision,
+      approvedBy: _ignoreApprovedBy,
+      approvedAt: _ignoreApprovedAt,
+      rejectedBy: _ignoreRejectedBy,
+      rejectedAt: _ignoreRejectedAt,
+      ...safeBody
+    } = body;
     Object.assign(existing, safeBody);
+    existing.isActive = existing.approvalStatus === 'APPROVED' ? existing.isActive !== false : false;
     const updatedHierarchy = taxonomyService.resolveAndValidateProductTaxonomy(
       {
         mainCategoryId: body.mainCategoryId || body.mainCategorySlug || existing.mainCategoryId,

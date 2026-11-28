@@ -21,7 +21,7 @@ const pendingPayments = new Map<string, PendingPaymentRecord>();
 @Controller('api/v1/payments')
 export class PaymentsController {
   @Post('razorpay/order')
-  createRazorpayOrder(
+  async createRazorpayOrder(
     @Body() body: { amount: number; currency?: string; receipt?: string; buildoraOrderId?: string }
   ) {
     const amount = Number(body.amount || 0);
@@ -29,6 +29,70 @@ export class PaymentsController {
       throw new BadRequestException('Payment amount must be greater than zero.');
     }
     const amountInPaise = Math.round(amount * 100);
+    const currency = body.currency || 'INR';
+    const receipt = body.receipt || 'rcpt_' + Date.now();
+
+    const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+    const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+
+    if (keyId && keySecret) {
+      const authHeader = 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+      const rzpRes = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          amount: amountInPaise,
+          currency,
+          receipt,
+          ...(body.buildoraOrderId ? { notes: { buildoraOrderId: body.buildoraOrderId } } : {}),
+        }),
+      });
+
+      if (!rzpRes.ok) {
+        let errMessage = 'Failed to create Razorpay order.';
+        try {
+          const errJson = (await rzpRes.json()) as { error?: { description?: string } };
+          if (errJson?.error?.description) {
+            errMessage = `Razorpay error: ${errJson.error.description}`;
+          }
+        } catch {
+          // Keep generic error message if response body is not JSON
+        }
+        throw new BadRequestException(errMessage);
+      }
+
+      const rzpOrder = (await rzpRes.json()) as {
+        id: string;
+        amount: number;
+        currency: string;
+        receipt?: string;
+        status: string;
+      };
+
+      pendingPayments.set(rzpOrder.id, {
+        razorpayOrderId: rzpOrder.id,
+        amountInPaise: rzpOrder.amount,
+        buildoraOrderId: body.buildoraOrderId,
+        status: 'CREATED',
+        createdAt: new Date().toISOString(),
+      });
+
+      return {
+        success: true,
+        data: {
+          id: rzpOrder.id,
+          amount: rzpOrder.amount,
+          currency: rzpOrder.currency,
+          receipt: rzpOrder.receipt || receipt,
+          status: rzpOrder.status,
+          keyId,
+        },
+      };
+    }
+
     const rzpOrderId = 'order_' + Math.random().toString(36).substring(2, 12);
 
     pendingPayments.set(rzpOrderId, {
@@ -44,10 +108,10 @@ export class PaymentsController {
       data: {
         id: rzpOrderId,
         amount: amountInPaise,
-        currency: body.currency || 'INR',
-        receipt: body.receipt || 'rcpt_' + Date.now(),
+        currency,
+        receipt,
         status: 'created',
-        keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_buildora_mock_key',
+        keyId: keyId || 'rzp_test_buildora_mock_key',
       },
     };
   }
@@ -62,15 +126,19 @@ export class PaymentsController {
       buildoraOrderId?: string;
     }
   ) {
-    const hasSecret = Boolean(process.env.RAZORPAY_KEY_SECRET);
-    let isValid = Boolean(body.razorpayPaymentId && body.razorpayOrderId);
+    const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+    let isValid = false;
 
-    if (hasSecret && body.razorpaySignature) {
-      const expected = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
-        .update(`${body.razorpayOrderId}|${body.razorpayPaymentId}`)
-        .digest('hex');
-      isValid = expected === body.razorpaySignature;
+    if (keySecret) {
+      if (body.razorpayOrderId && body.razorpayPaymentId && body.razorpaySignature) {
+        const expected = crypto
+          .createHmac('sha256', keySecret)
+          .update(`${body.razorpayOrderId}|${body.razorpayPaymentId}`)
+          .digest('hex');
+        isValid = expected === body.razorpaySignature;
+      }
+    } else {
+      isValid = Boolean(body.razorpayPaymentId && body.razorpayOrderId);
     }
 
     if (!isValid) {

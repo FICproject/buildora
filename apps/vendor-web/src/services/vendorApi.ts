@@ -661,6 +661,40 @@ export const vendorApi = {
     return data.document;
   },
 
+  async replaceKycDocumentFile(file: File, type: string, title: string) {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('type', type);
+    formData.append('title', title);
+
+    return apiRequest<{ success: boolean; document: any; vendor: any }>('/vendor/profile/kyc-documents/replace', {
+      method: 'POST',
+      body: formData,
+      fallbackErrorMessage: 'Failed to replace KYC document.'
+    });
+  },
+
+  async fetchOwnKycDocumentBlob(docId: string, download = false): Promise<Blob> {
+    const rawToken =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('buildora_vendor_token') || sessionStorage.getItem('buildora_vendor_token')
+        : null;
+    const base =
+      import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+    const res = await fetch(
+      `${base}/vendor/kyc-documents/${encodeURIComponent(docId)}/file${download ? '?download=true' : ''}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+        headers: rawToken ? { Authorization: `Bearer ${rawToken}` } : {},
+      }
+    );
+    if (!res.ok) {
+      throw new Error(`Unable to open KYC document (HTTP ${res.status}).`);
+    }
+    return res.blob();
+  },
+
   async uploadRegistrationLogo(file: File) {
     const formData = new FormData();
     formData.append('logo', file);

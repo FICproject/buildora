@@ -191,10 +191,13 @@ export const ProductListingPage: React.FC = () => {
   // Dynamically compute available filters for the catalog (using live Admin configs when a category is selected)
   const availableFilters = useMemo(() => {
     if (activeCategorySlug && hasConfiguredFilters) {
+      const slugLow = activeCategorySlug.toLowerCase();
       const catProducts = products.filter(
         (p) =>
-          (p.childCategorySlug || p.categorySlug || '').toLowerCase() === activeCategorySlug.toLowerCase() ||
-          (p.mainCategorySlug || '').toLowerCase() === activeCategorySlug.toLowerCase()
+          (p.childCategorySlug || p.categorySlug || '').toLowerCase() === slugLow ||
+          (p.mainCategorySlug || '').toLowerCase() === slugLow ||
+          String(p.childCategoryId || p.categoryId || '').toLowerCase() === slugLow ||
+          String(p.mainCategoryId || '').toLowerCase() === slugLow
       );
       return getAvailableFiltersForCategory(
         activeCategorySlug,

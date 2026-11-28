@@ -1435,12 +1435,18 @@ export function applyCategoryFilters(
 
     // 2. Product Type / Subcategory filter (OR within selected product types, case-insensitive across name/slug/id)
     if (activeFilters.subcategories && activeFilters.subcategories.length > 0) {
-      const subTargets = activeFilters.subcategories.map((s) => s.toLowerCase());
+      const normalizeSlug = (val: string) =>
+        val.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const subTargets = new Set(
+        activeFilters.subcategories.flatMap((s) => [s.toLowerCase(), normalizeSlug(s)])
+      );
       const pSubId = String(p.productTypeId || (p as any).subcategoryId || '').toLowerCase();
+      const pSubName = String(p.productTypeName || p.subcategory || '').toLowerCase();
+      const pSubSlug = String(p.productTypeSlug || p.subcategorySlug || '').toLowerCase();
       const matchSub =
-        subTargets.includes((p.productTypeName || p.subcategory || '').toLowerCase()) ||
-        subTargets.includes((p.productTypeSlug || p.subcategorySlug || '').toLowerCase()) ||
-        (pSubId && subTargets.includes(pSubId));
+        (pSubName && (subTargets.has(pSubName) || subTargets.has(normalizeSlug(pSubName)))) ||
+        (pSubSlug && subTargets.has(pSubSlug)) ||
+        (pSubId && subTargets.has(pSubId));
       if (!matchSub) {
         return false;
       }

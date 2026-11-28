@@ -133,6 +133,33 @@ export const adminApi = {
     rawRequest<any[]>(
       `/company-admin/vendors?status=${encodeURIComponent(status)}&search=${encodeURIComponent(search)}`
     ),
+  getVendorsDirectory: (params: {
+    status?: string;
+    search?: string;
+    sort?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const q = new URLSearchParams({ includeMeta: '1' });
+    if (params.status) q.set('status', params.status);
+    if (params.search) q.set('search', params.search);
+    if (params.sort) q.set('sort', params.sort);
+    if (params.page) q.set('page', String(params.page));
+    if (params.limit) q.set('limit', String(params.limit));
+    return rawRequest<{
+      items: any[];
+      summary: {
+        totalVendors: number;
+        newApplications: number;
+        pendingKyc: number;
+        documentsAwaitingVerification: number;
+        approvedVendors: number;
+        rejectedOrSuspendedVendors: number;
+      };
+      tabCounts: Record<string, number>;
+      meta: { total: number; page: number; limit: number; totalPages: number };
+    }>(`/company-admin/vendors?${q.toString()}`);
+  },
   getVendorDetail: (id: string) => rawRequest<any>(`/company-admin/vendors/${id}`),
   approveVendor: (id: string, body?: { notes?: string; commissionRate?: number }) =>
     rawRequest<any>(`/company-admin/vendors/${id}/approve`, {
@@ -144,10 +171,13 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify({ reason }),
     }),
-  requestVendorCorrection: (id: string, reason: string) =>
+  requestVendorCorrection: (
+    id: string,
+    payload: string | { reason: string; docId?: string; docType?: string }
+  ) =>
     rawRequest<any>(`/company-admin/vendors/${id}/request-correction`, {
       method: 'PATCH',
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(typeof payload === 'string' ? { reason: payload } : payload),
     }),
   suspendVendor: (id: string, reason?: string) =>
     rawRequest<any>(`/company-admin/vendors/${id}/suspend`, {
@@ -166,6 +196,49 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify({ status, notes }),
     }),
+  getVendorDocumentAccessUrl: (vendorId: string, docId: string) =>
+    rawRequest<{
+      docId: string;
+      vendorId: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      expiresAt: string;
+      inlineStreamPath: string;
+      downloadStreamPath: string;
+    }>(`/company-admin/vendors/${encodeURIComponent(vendorId)}/documents/${encodeURIComponent(docId)}/access-url`),
+  fetchVendorDocumentBlob: async (
+    vendorId: string,
+    docId: string,
+    download = false
+  ): Promise<{ blob: Blob; contentType: string; fileName: string }> => {
+    const store = useAdminAuthStore.getState();
+    const url = `${API_BASE}/company-admin/vendors/${encodeURIComponent(vendorId)}/documents/${encodeURIComponent(docId)}/file${
+      download ? '?download=true' : ''
+    }`;
+    const res = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        ...(store.accessToken ? { Authorization: `Bearer ${store.accessToken}` } : {}),
+        ...(store.tenant?.id ? { 'x-tenant-id': store.tenant.id } : {}),
+      },
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json?.message || `Unable to load document (HTTP ${res.status}).`);
+    }
+    const blob = await res.blob();
+    if (!blob || blob.size === 0) {
+      throw new Error('Document file appears to be empty or corrupted.');
+    }
+    const contentType = res.headers.get('content-type') || blob.type || 'application/octet-stream';
+    const disposition = res.headers.get('content-disposition') || '';
+    const match = /filename="?([^"]+)"?/i.exec(disposition);
+    const fileName = match ? match[1] : `kyc-document-${docId}`;
+    return { blob, contentType, fileName };
+  },
+  resolveApiStreamUrl: (relativePath: string) => `${API_BASE}${relativePath}`,
 
   // Products & Catalog
   getProducts: (status = 'ALL', search = '') =>

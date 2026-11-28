@@ -109,6 +109,7 @@ export const VendorBusinessProfilePage: React.FC = () => {
   const [logoFileName, setLogoFileName] = useState('');
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
+  const [replacingDocType, setReplacingDocType] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -674,41 +675,84 @@ export const VendorBusinessProfilePage: React.FC = () => {
               <div className="divide-y divide-[#E7E5E4] border border-[#E7E5E4] rounded-xl">
                 {docs.map((doc: any, idx: number) => {
                   const status = doc.verificationStatus || doc.status || 'PENDING';
-                  const docUrl = doc.fileUrl || doc.url;
                   return (
                     <div
                       key={doc.id || idx}
-                      className="px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs"
+                      className="px-4 py-3 space-y-2 text-xs"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <FileText className="w-4 h-4 text-[#943D24] shrink-0" />
-                        <div className="min-w-0">
-                          <p className="font-medium text-[#292524] truncate">
-                            {doc.title || doc.name || doc.type}
-                          </p>
-                          <p className="text-[11px] text-[#78716C] truncate">
-                            {doc.fileName || doc.type}
-                            {doc.fileSize
-                              ? ` • ${Math.max(1, Math.round(doc.fileSize / 1024))} KB`
-                              : ''}
-                          </p>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FileText className="w-4 h-4 text-[#943D24] shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium text-[#292524] truncate">
+                              {doc.title || doc.name || doc.type}
+                            </p>
+                            <p className="text-[11px] text-[#78716C] truncate">
+                              {doc.fileName || doc.type}
+                              {doc.fileSize
+                                ? ` • ${Math.max(1, Math.round(doc.fileSize / 1024))} KB`
+                                : ''}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {docUrl && !String(docUrl).startsWith('/secure/') && (
-                          <a
-                            href={docUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#943D24] hover:underline"
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const blob = await vendorApi.fetchOwnKycDocumentBlob(doc.id, false);
+                                const blobUrl = URL.createObjectURL(blob);
+                                window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                                setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+                              } catch (err: any) {
+                                toast.error(err?.message || 'Unable to open document.');
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#943D24] hover:underline cursor-pointer"
                           >
                             View <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                        <Badge variant={getDocumentBadgeVariant(status)} size="sm">
-                          {status}
-                        </Badge>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={replacingDocType === doc.type}
+                            onClick={() => {
+                              const input = document.createElement('input');
+                              input.type = 'file';
+                              input.accept = '.pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp';
+                              input.onchange = async (ev: any) => {
+                                const file: File | undefined = ev.target.files?.[0];
+                                if (!file) return;
+                                setReplacingDocType(doc.type);
+                                try {
+                                  await vendorApi.replaceKycDocumentFile(
+                                    file,
+                                    doc.type,
+                                    doc.title || doc.type
+                                  );
+                                  toast.success('Replacement document uploaded for review.');
+                                  await fetchProfile();
+                                } catch (err: any) {
+                                  toast.error(err?.message || 'Failed to upload replacement document.');
+                                } finally {
+                                  setReplacingDocType(null);
+                                }
+                              };
+                              input.click();
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#5E5946] hover:text-[#943D24] cursor-pointer disabled:opacity-50"
+                          >
+                            {replacingDocType === doc.type ? 'Uploading...' : status === 'REJECTED' ? 'Re-upload' : 'Replace'}
+                          </button>
+                          <Badge variant={getDocumentBadgeVariant(status)} size="sm">
+                            {status}
+                          </Badge>
+                        </div>
                       </div>
+                      {status === 'REJECTED' && doc.rejectionReason && (
+                        <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5">
+                          Rejection Reason: {doc.rejectionReason}
+                        </p>
+                      )}
                     </div>
                   );
                 })}

@@ -135,7 +135,7 @@ export class StorageService {
     const detected = detectKycDocumentSignature(buffer);
     if (!detected) {
       throw new BadRequestException(
-        'Corrupted or unsupported document file. File signature must be genuine PDF, JPG, or PNG.'
+        'Corrupted or unsupported document file. File signature must be genuine PDF, JPG, JPEG, PNG, or WEBP.'
       );
     }
 
@@ -156,6 +156,8 @@ export class StorageService {
       fileSize: buffer.length,
       mimeType: detected.mimeType,
       fileUrl: `${origin}/api/v1/vendor/uploads/docs/${safeFileName}`,
+      storageKey: safeFileName,
+      storageProvider: 'LOCAL_OBJECT_STORAGE',
       uploadedAt,
       verificationStatus: 'PENDING'
     };
@@ -185,9 +187,9 @@ export class StorageService {
   /**
    * Safely retrieves a stored vendor KYC document while preventing path traversal.
    */
-  getDocumentFilePath(filename: string): { filePath: string; mimeType: string } {
-    const cleanName = path.basename(filename || '');
-    if (!cleanName || !/^vendor-doc-[a-f0-9-]+\.(pdf|jpg|jpeg|png)$/i.test(cleanName)) {
+  getDocumentFilePath(filename: string): { filePath: string; mimeType: string; fileSize: number } {
+    const cleanName = path.basename(String(filename || '').split('?')[0]);
+    if (!cleanName || !/^vendor-doc-[a-f0-9-]+\.(pdf|jpg|jpeg|png|webp)$/i.test(cleanName)) {
       throw new NotFoundException('Requested document file not found.');
     }
 
@@ -196,11 +198,54 @@ export class StorageService {
       throw new NotFoundException('Document file does not exist in storage.');
     }
 
+    const stat = fs.statSync(filePath);
+    if (stat.size <= 0) {
+      throw new BadRequestException('Stored document file is empty or incomplete.');
+    }
+
     const ext = path.extname(cleanName).toLowerCase();
     const mimeType =
-      ext === '.pdf' ? 'application/pdf' : ext === '.png' ? 'image/png' : 'image/jpeg';
+      ext === '.pdf'
+        ? 'application/pdf'
+        : ext === '.png'
+          ? 'image/png'
+          : ext === '.webp'
+            ? 'image/webp'
+            : 'image/jpeg';
 
-    return { filePath, mimeType };
+    return { filePath, mimeType, fileSize: stat.size };
+  }
+
+  /**
+   * Extracts storage key from a VendorKycDocument record and verifies file existence & integrity.
+   */
+  resolveDocumentFile(doc: any): {
+    storageKey: string;
+    filePath: string;
+    mimeType: string;
+    fileSize: number;
+    originalFileName: string;
+  } {
+    const rawKey =
+      doc?.storageKey ||
+      (typeof doc?.fileUrl === 'string' && doc.fileUrl.includes('/uploads/docs/')
+        ? doc.fileUrl.split('/uploads/docs/')[1]?.split('?')[0]
+        : typeof doc?.url === 'string' && doc.url.includes('/uploads/docs/')
+          ? doc.url.split('/uploads/docs/')[1]?.split('?')[0]
+          : '');
+    if (!rawKey) {
+      throw new NotFoundException(
+        'Uploaded binary file is unavailable in storage for this document record.'
+      );
+    }
+    const { filePath, mimeType, fileSize } = this.getDocumentFilePath(rawKey);
+    return {
+      storageKey: path.basename(rawKey),
+      filePath,
+      mimeType,
+      fileSize,
+      originalFileName: String(doc?.fileName || path.basename(rawKey)),
+    };
   }
 }
 

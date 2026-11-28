@@ -332,15 +332,20 @@ export const CheckoutPage: React.FC = () => {
         // Online Payment Flow (Razorpay Gateway Integration)
         // 1. Create order session on backend
         const rzpData = await api.createRazorpayOrder(finalPayable);
-        const rzpOrderId = rzpData?.data?.id || 'order_mock_' + Date.now();
-        const rzpKeyId = rzpData?.data?.keyId || 'rzp_test_buildora_mock';
+        if (!rzpData?.success || !rzpData?.data?.id) {
+          setIsProcessingPayment(false);
+          setPaymentError(rzpData?.message || 'Could not initiate Razorpay payment order. Please try again.');
+          return;
+        }
+        const rzpOrderId = rzpData.data.id;
+        const rzpKeyId = rzpData.data.keyId;
 
         // Check if Razorpay script is available in browser
         if (typeof (window as any).Razorpay !== 'undefined') {
           const options = {
             key: rzpKeyId,
-            amount: Math.round(finalPayable * 100),
-            currency: 'INR',
+            amount: rzpData.data.amount || Math.round(finalPayable * 100),
+            currency: rzpData.data.currency || 'INR',
             name: 'BUILDORA 60',
             description: `Payment for Site Order (${items.length} materials)`,
             order_id: rzpOrderId,
@@ -418,6 +423,12 @@ export const CheckoutPage: React.FC = () => {
           };
 
           const rzp = new (window as any).Razorpay(options);
+          rzp.on('payment.failed', function (response: any) {
+            const reason = response?.error?.description || 'Payment failed in Razorpay checkout.';
+            void api.failRazorpayPayment({ razorpayOrderId: rzpOrderId, reason });
+            setIsProcessingPayment(false);
+            setPaymentError(`${reason} Your cart and selected address have been preserved.`);
+          });
           rzp.open();
         } else {
           // Direct fallback verification for dev/demo mode

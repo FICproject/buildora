@@ -20,7 +20,11 @@ const VendorMongoSchema = new Schema(
     isEmailVerified: { type: Boolean, default: false },
     isPhoneVerified: { type: Boolean, default: false },
     registrationStep: { type: Number, default: 1 },
-    submittedAt: { type: String },
+    submittedAt: { type: String, index: true },
+    latestKycSubmittedAt: { type: String, index: true },
+    lastDocumentUploadedAt: { type: String, index: true },
+    resubmittedAt: { type: String },
+    aadhaarNumber: { type: String, index: true },
     approvedBy: { type: String },
     approvedAt: { type: String },
     rejectedBy: { type: String },
@@ -38,8 +42,8 @@ const VendorMongoSchema = new Schema(
     kycDocuments: [{ type: Schema.Types.Mixed }],
     auditLogs: [{ type: Schema.Types.Mixed }],
     registrationData: { type: Schema.Types.Mixed },
-    createdAt: { type: String },
-    updatedAt: { type: String }
+    createdAt: { type: String, index: true },
+    updatedAt: { type: String, index: true }
   },
   {
     collection: 'vendors',
@@ -47,6 +51,12 @@ const VendorMongoSchema = new Schema(
     timestamps: false
   }
 );
+
+VendorMongoSchema.index({ tenantId: 1, status: 1, latestKycSubmittedAt: -1 });
+VendorMongoSchema.index({ tenantId: 1, updatedAt: -1 });
+VendorMongoSchema.index({ 'businessInfo.gstin': 1 });
+VendorMongoSchema.index({ 'businessInfo.pan': 1 });
+VendorMongoSchema.index({ 'businessInfo.address.city': 1, 'businessInfo.address.state': 1, 'businessInfo.address.pincode': 1 });
 
 export const VendorMongoModel: Model<any> =
   mongoose.models.Vendor || mongoose.model('Vendor', VendorMongoSchema);

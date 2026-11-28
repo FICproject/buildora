@@ -4,6 +4,8 @@ export type RealtimeEventName =
   | 'vendor.application.submitted'
   | 'vendor.application.approved'
   | 'vendor.application.rejected'
+  | 'vendor.document.uploaded'
+  | 'vendor.document.reviewed'
   | 'product.submitted'
   | 'product.approved'
   | 'product.rejected'
