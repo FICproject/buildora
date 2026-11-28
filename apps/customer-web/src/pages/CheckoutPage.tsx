@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   MapPin,
   Truck,
@@ -32,11 +32,26 @@ import { checkBengaluruServiceability } from '@buildora/constants';
 import { Address, PaymentMethod, DeliverySpeed, Order } from '@buildora/types';
 import { Button } from '../components/ui/Button';
 import { api } from '../services/api';
+import { loadRazorpayCheckoutScript } from '../utils/razorpay';
 
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
+function formatVerifiedPaymentMethod(method?: string, details?: string): string {
+  const m = String(method || '').toUpperCase();
+  if (m === 'COD') return 'Pay On Delivery (COD)';
+  if (details) return details;
+  if (m === 'UPI' || m === 'RAZORPAY_UPI') return 'UPI (Razorpay)';
+  if (m === 'CARD' || m === 'RAZORPAY_CARD') return 'Card (Razorpay)';
+  if (m === 'NETBANKING' || m === 'RAZORPAY_NETBANKING') return 'Netbanking (Razorpay)';
+  if (m === 'WALLET') return 'Wallet (Razorpay)';
+  if (m === 'PAY_LATER') return 'Pay Later (Razorpay)';
+  return 'Pay Online (Razorpay)';
+}
+
 export const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const {
     items,
@@ -49,7 +64,7 @@ export const CheckoutPage: React.FC = () => {
   } = useCartStore();
 
   const { isAuthenticated, user, addresses, addAddress, updateProfile, verifyOtp } = useAuthStore();
-  const { placeOrder } = useOrderStore();
+  const { placeOrder, addConfirmedOrder, getOrder } = useOrderStore();
   const { pincode: defaultPincode, cityName: defaultCity, selectedAddressId: locationSelectedAddrId, selectSavedAddress } = useLocationStore();
 
   const summary = getSummary();
@@ -110,11 +125,31 @@ export const CheckoutPage: React.FC = () => {
   // Payment Method Selection (Phase 10)
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('RAZORPAY_UPI');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentStatusText, setPaymentStatusText] = useState<string>('');
+  const [pendingOnlineOrderId, setPendingOnlineOrderId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string>(`chkpage_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
-  // Order Confirmed Snapshot (Phase 14)
-  const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  // Order Confirmed Snapshot (Phase 14) - restore from router state or ?order= query param
+  const routeConfirmed = (location.state as any)?.confirmedOrder as Order | undefined;
+  const queryOrderNumber = searchParams.get('order');
+  const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(
+    () => routeConfirmed || (queryOrderNumber ? getOrder(queryOrderNumber) || null : null)
+  );
+
+  useEffect(() => {
+    if (!confirmedOrder && queryOrderNumber) {
+      const fromStore = getOrder(queryOrderNumber);
+      if (fromStore) {
+        setConfirmedOrder(fromStore);
+      } else {
+        void api.getOrderById(queryOrderNumber).then((fetched) => {
+          if (fetched) setConfirmedOrder(fetched);
+        });
+      }
+    }
+  }, [confirmedOrder, queryOrderNumber, getOrder]);
 
   // Sync default address
   useEffect(() => {
@@ -232,6 +267,7 @@ export const CheckoutPage: React.FC = () => {
     }
 
     setIsProcessingPayment(true);
+    setPaymentStatusText(selectedPayment === 'COD' ? 'Placing COD order...' : 'Preparing secure payment...');
 
     try {
       // 3. Phase 9: Server-Side Pre-Order Validation via Backend API
@@ -263,11 +299,16 @@ export const CheckoutPage: React.FC = () => {
       if (!valRes.success && valRes.errors && valRes.errors.length > 0) {
         setValidationErrors(valRes.errors);
         setIsProcessingPayment(false);
+        setPaymentStatusText('');
         return;
       }
 
-      // 4. Phase 10: Payment Routing
-      const finalPayable = summary.payableAmount !== undefined ? summary.payableAmount : summary.grandTotal;
+      // 4. Phase 10: Payment Routing using authoritative server-calculated payableAmount
+      const finalPayable =
+        valRes.data?.payableAmount ??
+        valRes.data?.summary?.payableAmount ??
+        valRes.data?.summary?.grandTotal ??
+        (summary.payableAmount !== undefined ? summary.payableAmount : summary.grandTotal);
 
       const paymentCfg = useStoreConfigStore.getState().config?.paymentConfig;
       const codEnabled = paymentCfg?.codEnabled !== false;
@@ -277,220 +318,181 @@ export const CheckoutPage: React.FC = () => {
         if (!codEnabled) {
           setValidationErrors(['Cash on Delivery is currently disabled by store configuration.']);
           setIsProcessingPayment(false);
+          setPaymentStatusText('');
           return;
         }
         // Pay on Delivery Flow
         if (finalPayable > codMax) {
           setValidationErrors([`Cash on Delivery is limited to orders up to ₹${codMax.toLocaleString('en-IN')} for site delivery security.`]);
           setIsProcessingPayment(false);
+          setPaymentStatusText('');
           return;
         }
 
-        const order = await placeOrder({
-          status: 'ORDER_PLACED',
-          items: items.map((i) => ({
-            productId: i.productId,
-            variantId: i.variantId,
-            sku: i.sku,
-            name: i.name,
-            slug: i.slug,
-            brand: i.brand,
-            image: i.image,
-            unit: i.unit,
-            unitPrice: i.effectiveUnitPrice,
-            quantity: i.quantity,
-            gstAmount: Math.round(i.totalPrice * 0.18),
-            totalAmount: i.totalPrice
-          })),
-          deliveryAddress: deliveryAddr,
-          deliveryOption: deliverySpeed,
-          estimatedDeliveryTime: deliverySpeed === 'ASAP_60' ? 'Within 60 minutes' : 'Tomorrow 8:00 AM - 11:00 AM',
-          paymentMethod: 'COD',
-          paymentStatus: 'PENDING',
-          subtotal: summary.subtotal,
-          itemDiscount: summary.itemDiscount,
-          couponDiscount: summary.couponDiscount,
-          couponCode: coupon?.code,
-          gstTotal: summary.gstTotal,
-          deliveryFee: summary.deliveryFee,
-          handlingFee: summary.handlingFee,
-          handlingBreakdown: summary.handlingBreakdown,
-          unloadingFee: summary.unloadingFee,
-          unloadingOptions,
-          walletUsed: summary.walletUsed,
-          grandTotal: summary.grandTotal,
-          payableAmount: finalPayable,
-          isBusinessOrder,
-          gstin: isBusinessOrder ? gstin.trim().toUpperCase() : undefined,
-          companyName: isBusinessOrder ? companyName.trim() : undefined
-        });
+        const order = await placeOrder(
+          {
+            status: 'ORDER_PLACED',
+            items: items.map((i) => ({
+              productId: i.productId,
+              variantId: i.variantId,
+              sku: i.sku,
+              name: i.name,
+              slug: i.slug,
+              brand: i.brand,
+              image: i.image,
+              unit: i.unit,
+              unitPrice: i.effectiveUnitPrice,
+              quantity: i.quantity,
+              gstAmount: Math.round(i.totalPrice * 0.18),
+              totalAmount: i.totalPrice
+            })),
+            deliveryAddress: deliveryAddr,
+            deliveryOption: deliverySpeed,
+            estimatedDeliveryTime: deliverySpeed === 'ASAP_60' ? 'Within 60 minutes' : 'Tomorrow 8:00 AM - 11:00 AM',
+            paymentMethod: 'COD',
+            paymentStatus: 'PENDING',
+            subtotal: summary.subtotal,
+            itemDiscount: summary.itemDiscount,
+            couponDiscount: summary.couponDiscount,
+            couponCode: coupon?.code,
+            gstTotal: summary.gstTotal,
+            deliveryFee: summary.deliveryFee,
+            handlingFee: summary.handlingFee,
+            handlingBreakdown: summary.handlingBreakdown,
+            unloadingFee: summary.unloadingFee,
+            unloadingOptions,
+            walletUsed: summary.walletUsed,
+            grandTotal: summary.grandTotal,
+            payableAmount: finalPayable,
+            isBusinessOrder,
+            gstin: isBusinessOrder ? gstin.trim().toUpperCase() : undefined,
+            companyName: isBusinessOrder ? companyName.trim() : undefined
+          },
+          `${idempotencyKeyRef.current}_cod`
+        );
 
         setIsProcessingPayment(false);
+        setPaymentStatusText('');
         setConfirmedOrder(order);
         clearCart();
       } else {
-        // Online Payment Flow (Razorpay Gateway Integration)
-        // 1. Create order session on backend
-        const rzpData = await api.createRazorpayOrder(finalPayable);
-        if (!rzpData?.success || !rzpData?.data?.id) {
+        // Online Payment Flow (Official Razorpay Test Mode Gateway Integration)
+        const scriptLoaded = await loadRazorpayCheckoutScript();
+        if (!scriptLoaded || typeof (window as any).Razorpay !== 'function') {
           setIsProcessingPayment(false);
-          setPaymentError(rzpData?.message || 'Could not initiate Razorpay payment order. Please try again.');
+          setPaymentStatusText('');
+          setPaymentError('Razorpay Checkout script failed to load. Please check your connection and retry.');
           return;
         }
-        const rzpOrderId = rzpData.data.id;
-        const rzpKeyId = rzpData.data.keyId;
 
-        // Check if Razorpay script is available in browser
-        if (typeof (window as any).Razorpay !== 'undefined') {
-          const options = {
-            key: rzpKeyId,
-            amount: rzpData.data.amount || Math.round(finalPayable * 100),
-            currency: rzpData.data.currency || 'INR',
-            name: 'BUILDORA 60',
-            description: `Payment for Site Order (${items.length} materials)`,
-            order_id: rzpOrderId,
-            prefill: {
-              name: deliveryAddr.recipientName,
-              contact: deliveryAddr.mobile
-            },
-            theme: { color: '#0f172a' },
-            handler: async function (response: any) {
-              // Server-side payment verification
-              const verifyJson = await api.verifyRazorpayPayment({
-                razorpayOrderId: response.razorpay_order_id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature
-              });
-
-              if (verifyJson.success) {
-                // Confirm order
-                const order = await placeOrder({
-                  status: 'ORDER_PLACED',
-                  items: items.map((i) => ({
-                    productId: i.productId,
-                    variantId: i.variantId,
-                    sku: i.sku,
-                    name: i.name,
-                    slug: i.slug,
-                    brand: i.brand,
-                    image: i.image,
-                    unit: i.unit,
-                    unitPrice: i.effectiveUnitPrice,
-                    quantity: i.quantity,
-                    gstAmount: Math.round(i.totalPrice * 0.18),
-                    totalAmount: i.totalPrice
-                  })),
-                  deliveryAddress: deliveryAddr,
-                  deliveryOption: deliverySpeed,
-                  estimatedDeliveryTime: deliverySpeed === 'ASAP_60' ? 'Within 60 minutes' : 'Tomorrow 8:00 AM - 11:00 AM',
-                  paymentMethod: selectedPayment,
-                  paymentStatus: 'CAPTURED',
-                  razorpayOrderId: response.razorpay_order_id,
-                  razorpayPaymentId: response.razorpay_payment_id,
-                  subtotal: summary.subtotal,
-                  itemDiscount: summary.itemDiscount,
-                  couponDiscount: summary.couponDiscount,
-                  couponCode: coupon?.code,
-                  gstTotal: summary.gstTotal,
-                  deliveryFee: summary.deliveryFee,
-                  handlingFee: summary.handlingFee,
-                  handlingBreakdown: summary.handlingBreakdown,
-                  unloadingFee: summary.unloadingFee,
-                  unloadingOptions,
-                  walletUsed: summary.walletUsed,
-                  grandTotal: summary.grandTotal,
-                  payableAmount: finalPayable,
-                  isBusinessOrder,
-                  gstin: isBusinessOrder ? gstin.trim().toUpperCase() : undefined,
-                  companyName: isBusinessOrder ? companyName.trim() : undefined
-                });
-
-                setIsProcessingPayment(false);
-                setConfirmedOrder(order);
-                clearCart();
-              } else {
-                setIsProcessingPayment(false);
-                setPaymentError('Payment verification failed on the server. Your cart items are preserved.');
-              }
-            },
-            modal: {
-              ondismiss: function () {
-                void api.failRazorpayPayment({ razorpayOrderId: rzpOrderId, reason: 'User cancelled payment' });
-                setIsProcessingPayment(false);
-                setPaymentError('Online payment was cancelled. Your cart and selected address have been preserved. You can retry or switch to COD.');
-              }
-            }
-          };
-
-          const rzp = new (window as any).Razorpay(options);
-          rzp.on('payment.failed', function (response: any) {
-            const reason = response?.error?.description || 'Payment failed in Razorpay checkout.';
-            void api.failRazorpayPayment({ razorpayOrderId: rzpOrderId, reason });
-            setIsProcessingPayment(false);
-            setPaymentError(`${reason} Your cart and selected address have been preserved.`);
-          });
-          rzp.open();
-        } else {
-          // Direct fallback verification for dev/demo mode
-          const simulatedPaymentId = 'pay_sim_' + Math.random().toString(36).substring(2, 10);
-          const verifyJson = await api.verifyRazorpayPayment({
-            razorpayOrderId: rzpOrderId,
-            razorpayPaymentId: simulatedPaymentId
-          });
-
-          if (verifyJson.success) {
-            const order = await placeOrder({
-              status: 'ORDER_PLACED',
+        const rzpData = await api.createRazorpayOrder(
+          pendingOnlineOrderId
+            ? { buildoraOrderId: pendingOnlineOrderId }
+            : {
               items: items.map((i) => ({
                 productId: i.productId,
                 variantId: i.variantId,
-                sku: i.sku,
-                name: i.name,
-                slug: i.slug,
-                brand: i.brand,
-                image: i.image,
-                unit: i.unit,
-                unitPrice: i.effectiveUnitPrice,
-                quantity: i.quantity,
-                gstAmount: Math.round(i.totalPrice * 0.18),
-                totalAmount: i.totalPrice
+                quantity: i.quantity
               })),
+              couponCode: coupon?.code || null,
+              deliverySpeed,
               deliveryAddress: deliveryAddr,
-              deliveryOption: deliverySpeed,
-              estimatedDeliveryTime: deliverySpeed === 'ASAP_60' ? 'Within 60 minutes' : 'Tomorrow 8:00 AM - 11:00 AM',
-              paymentMethod: selectedPayment,
-              paymentStatus: 'CAPTURED',
-              razorpayOrderId: rzpOrderId,
-              razorpayPaymentId: simulatedPaymentId,
-              subtotal: summary.subtotal,
-              itemDiscount: summary.itemDiscount,
-              couponDiscount: summary.couponDiscount,
-              couponCode: coupon?.code,
-              gstTotal: summary.gstTotal,
-              deliveryFee: summary.deliveryFee,
-              handlingFee: summary.handlingFee,
-              handlingBreakdown: summary.handlingBreakdown,
-              unloadingFee: summary.unloadingFee,
-              unloadingOptions,
-              walletUsed: summary.walletUsed,
-              grandTotal: summary.grandTotal,
-              payableAmount: finalPayable,
               isBusinessOrder,
               gstin: isBusinessOrder ? gstin.trim().toUpperCase() : undefined,
-              companyName: isBusinessOrder ? companyName.trim() : undefined
-            });
+              companyName: isBusinessOrder ? companyName.trim() : undefined,
+              unloadingOptions,
+              walletBalanceToUse,
+              customerEmail: user?.email,
+              paymentMethod: 'RAZORPAY',
+              idempotencyKey: idempotencyKeyRef.current
+            }
+        );
 
-            setIsProcessingPayment(false);
-            setConfirmedOrder(order);
-            clearCart();
-          } else {
-            setIsProcessingPayment(false);
-            setPaymentError('Payment failed. Cart contents are preserved.');
-          }
+        if (!rzpData?.success || !rzpData?.data?.id || !rzpData?.data?.keyId) {
+          setIsProcessingPayment(false);
+          setPaymentStatusText('');
+          setPaymentError(rzpData?.message || 'Could not initiate Razorpay payment order. Please check configuration and try again.');
+          return;
         }
+
+        const rzpOrderId = rzpData.data.id;
+        const rzpKeyId = rzpData.data.keyId;
+        const buildoraOrderId = rzpData.data.buildoraOrderId || pendingOnlineOrderId || '';
+        if (buildoraOrderId) setPendingOnlineOrderId(buildoraOrderId);
+
+        const options = {
+          key: rzpKeyId,
+          amount: rzpData.data.amount || Math.round(finalPayable * 100),
+          currency: rzpData.data.currency || 'INR',
+          name: 'BUILDORA 60',
+          description: `Payment for Site Order (${items.length} materials)`,
+          order_id: rzpOrderId,
+          prefill: {
+            name: deliveryAddr.recipientName || user?.name || '',
+            email: user?.email || '',
+            contact: deliveryAddr.mobile || user?.phone || ''
+          },
+          theme: { color: '#15803d' },
+          handler: async function (response: any) {
+            setPaymentStatusText('Verifying your payment...');
+            try {
+              const verifyJson = await api.verifyRazorpayPayment({
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+                buildoraOrderId: buildoraOrderId || undefined
+              });
+
+              if (verifyJson.success && verifyJson.data?.verified && verifyJson.data?.order) {
+                addConfirmedOrder(verifyJson.data.order);
+                setIsProcessingPayment(false);
+                setPaymentStatusText('');
+                setConfirmedOrder(verifyJson.data.order);
+                clearCart();
+              } else {
+                setIsProcessingPayment(false);
+                setPaymentStatusText('');
+                setPaymentError(verifyJson.message || 'Payment verification failed on the server. Your cart items are preserved.');
+              }
+            } catch (err: any) {
+              setIsProcessingPayment(false);
+              setPaymentStatusText('');
+              setPaymentError(err?.message || 'Verification failed due to network error. Please retry.');
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              void api.failRazorpayPayment({
+                razorpayOrderId: rzpOrderId,
+                buildoraOrderId: buildoraOrderId || undefined,
+                cancelled: true,
+                reason: 'Customer cancelled payment'
+              });
+              setIsProcessingPayment(false);
+              setPaymentStatusText('');
+              setPaymentError('Payment was cancelled. Your order has not been marked as paid. Click Pay & Confirm to retry or switch to COD.');
+            }
+          }
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.on('payment.failed', function (response: any) {
+          const reason = response?.error?.description || 'Payment failed in Razorpay checkout.';
+          void api.failRazorpayPayment({
+            razorpayOrderId: rzpOrderId,
+            buildoraOrderId: buildoraOrderId || undefined,
+            cancelled: false,
+            reason
+          });
+          setIsProcessingPayment(false);
+          setPaymentStatusText('');
+          setPaymentError(`Payment could not be completed. ${reason} You can safely retry.`);
+        });
+        rzp.open();
       }
     } catch (err: any) {
       setIsProcessingPayment(false);
+      setPaymentStatusText('');
       setPaymentError(err.message || 'Payment processing error. Your cart items are intact.');
     }
   };
@@ -524,15 +526,20 @@ export const CheckoutPage: React.FC = () => {
               </strong>
             </div>
             <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-bold">Date &amp; Time</span>
-              <span className="font-semibold text-slate-800">
-                {new Date(confirmedOrder.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
+              <span className="text-slate-400 block text-[10px] uppercase font-bold">Total Amount</span>
+              <strong className="text-slate-900 text-xs sm:text-sm">
+                {formatCurrency(confirmedOrder.payableAmount || confirmedOrder.grandTotal)}
+              </strong>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-bold">Payment</span>
-              <span className="font-semibold text-slate-800">
-                {confirmedOrder.paymentMethod === 'COD' ? 'Pay on Delivery' : 'Online Paid (Razorpay)'}
+              <span className="font-semibold text-slate-800 block">
+                {formatVerifiedPaymentMethod(confirmedOrder.paymentMethod, (confirmedOrder as any).paymentChannelDetails)}
+              </span>
+              <span className="text-[10px] font-bold uppercase text-emerald-700">
+                {String(confirmedOrder.paymentStatus) === 'PAID' || confirmedOrder.paymentStatus === 'CAPTURED'
+                  ? `Paid • Ref ${confirmedOrder.razorpayPaymentId || 'Verified'}`
+                  : 'Payable on Delivery'}
               </span>
             </div>
             <div>
@@ -544,12 +551,39 @@ export const CheckoutPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Delivery Address Summary */}
+          {confirmedOrder.deliveryAddress && (
+            <div className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80 text-xs text-left flex items-start gap-2.5">
+              <MapPin className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold text-slate-900">
+                  Delivering to: {confirmedOrder.deliveryAddress.recipientName} (+91 {confirmedOrder.deliveryAddress.mobile})
+                </div>
+                <div className="text-slate-600 mt-0.5">
+                  {[
+                    confirmedOrder.deliveryAddress.building,
+                    confirmedOrder.deliveryAddress.street,
+                    confirmedOrder.deliveryAddress.area,
+                    confirmedOrder.deliveryAddress.city,
+                    confirmedOrder.deliveryAddress.pincode,
+                  ]
+                    .filter((v, idx, arr): v is string => Boolean(v) && arr.indexOf(v) === idx)
+                    .join(', ')}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Action CTAs */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
             <Button
               variant="primary"
               size="lg"
-              onClick={() => navigate(`/orders/${confirmedOrder.orderNumber}/track`)}
+              onClick={() =>
+                navigate(`/account/orders/${encodeURIComponent(confirmedOrder.orderNumber)}?focus=delivery`, {
+                  state: { focusDelivery: true, fromCheckout: true, orderId: confirmedOrder.id },
+                })
+              }
               rightIcon={<ArrowRight className="w-4 h-4" />}
             >
               Track Real-Time Delivery
@@ -768,11 +802,10 @@ export const CheckoutPage: React.FC = () => {
                               city: a.city || 'Bengaluru'
                             });
                           }}
-                          className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all space-y-1 ${
-                            selectedAddressId === a.id
-                              ? 'border-brand-blue-500 bg-brand-blue-50/50 ring-1 ring-brand-blue-500 font-medium'
-                              : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                          }`}
+                          className={`p-3.5 rounded-xl border text-xs cursor-pointer transition-all space-y-1 ${selectedAddressId === a.id
+                            ? 'border-brand-blue-500 bg-brand-blue-50/50 ring-1 ring-brand-blue-500 font-medium'
+                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <strong className="text-slate-900">{a.recipientName}</strong>
@@ -985,11 +1018,10 @@ export const CheckoutPage: React.FC = () => {
             <div className="space-y-3 text-xs">
               {/* Online Payment (Razorpay UPI, Cards, NetBanking) */}
               <label
-                className={`p-4 rounded-xl border flex items-start justify-between cursor-pointer transition-all ${
-                  selectedPayment === 'RAZORPAY_UPI'
-                    ? 'border-brand-blue-500 bg-brand-blue-50/40 ring-1 ring-brand-blue-500'
-                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                }`}
+                className={`p-4 rounded-xl border flex items-start justify-between cursor-pointer transition-all ${selectedPayment === 'RAZORPAY_UPI'
+                  ? 'border-brand-blue-500 bg-brand-blue-50/40 ring-1 ring-brand-blue-500'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
               >
                 <div className="flex items-start gap-3">
                   <input
@@ -1021,11 +1053,10 @@ export const CheckoutPage: React.FC = () => {
 
               {/* Pay on Delivery (COD) */}
               <label
-                className={`p-4 rounded-xl border flex items-start justify-between cursor-pointer transition-all ${
-                  selectedPayment === 'COD'
-                    ? 'border-brand-blue-500 bg-brand-blue-50/40 ring-1 ring-brand-blue-500'
-                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                }`}
+                className={`p-4 rounded-xl border flex items-start justify-between cursor-pointer transition-all ${selectedPayment === 'COD'
+                  ? 'border-brand-blue-500 bg-brand-blue-50/40 ring-1 ring-brand-blue-500'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
               >
                 <div className="flex items-start gap-3">
                   <input
@@ -1148,10 +1179,10 @@ export const CheckoutPage: React.FC = () => {
               rightIcon={<ArrowRight className="w-4 h-4" />}
             >
               {isProcessingPayment
-                ? 'Securing Order...'
+                ? paymentStatusText || 'Securing Order...'
                 : selectedPayment === 'COD'
-                ? `Confirm Site Order (${formatCurrency(summary.payableAmount || summary.grandTotal)})`
-                : `Pay & Confirm Order (${formatCurrency(summary.payableAmount || summary.grandTotal)})`}
+                  ? `Confirm Site Order (${formatCurrency(summary.payableAmount || summary.grandTotal)})`
+                  : `Pay & Confirm Order (${formatCurrency(summary.payableAmount || summary.grandTotal)})`}
             </Button>
           </div>
         </div>

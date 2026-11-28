@@ -24,6 +24,7 @@ import {
   validateBankName,
   validateBankAccount,
   validateIFSC,
+  maskBankAccount,
 } from '@buildora/validation';
 import { useVendorAuthStore } from '../../store/useVendorAuthStore';
 import { vendorApi } from '../../services/vendorApi';
@@ -90,8 +91,14 @@ export const VendorBusinessProfilePage: React.FC = () => {
   const [website, setWebsite] = useState('');
   const [description, setDescription] = useState('');
 
+  const [gstStatus, setGstStatus] = useState('NOT_REGISTERED');
   const [gstin, setGstin] = useState('');
-  const [pan, setPan] = useState('');
+  const [gstApplicationNumber, setGstApplicationNumber] = useState('');
+  const [panMasked, setPanMasked] = useState('');
+  const [aadhaarMasked, setAadhaarMasked] = useState('');
+  const [msmeStatus, setMsmeStatus] = useState('NOT_REGISTERED');
+  const [udyamNumber, setUdyamNumber] = useState('');
+  const [msmeApplicationNumber, setMsmeApplicationNumber] = useState('');
 
   const [addressStreet, setAddressStreet] = useState('');
   const [addressCountry, setAddressCountry] = useState('India');
@@ -136,8 +143,14 @@ export const VendorBusinessProfilePage: React.FC = () => {
     setWebsite(reg.website || biz.website || '');
     setDescription(biz.description || reg.description || '');
 
+    setGstStatus(v.gstStatus || biz.gstStatus || reg.gstStatus || (biz.gstin || reg.gstin ? 'REGISTERED' : 'NOT_REGISTERED'));
     setGstin(biz.gstin || reg.gstin || bizLegacy.gstin || '');
-    setPan(biz.pan || reg.pan || bizLegacy.pan || '');
+    setGstApplicationNumber(v.gstApplicationNumber || biz.gstApplicationNumber || reg.gstApplicationNumber || '');
+    setPanMasked(v.panMasked || biz.panMasked || biz.pan || reg.pan || bizLegacy.pan || '');
+    setAadhaarMasked(v.aadhaarMasked || biz.aadhaarMasked || '');
+    setMsmeStatus(v.msmeStatus || biz.msmeStatus || reg.msmeStatus || (v.udyamNumber || biz.udyamNumber || reg.udyamNumber ? 'REGISTERED' : 'NOT_REGISTERED'));
+    setUdyamNumber(v.udyamNumber || biz.udyamNumber || reg.udyamNumber || '');
+    setMsmeApplicationNumber(v.msmeApplicationNumber || biz.msmeApplicationNumber || reg.msmeApplicationNumber || '');
 
     setAddressStreet(
       reg.completeAddress ||
@@ -151,7 +164,12 @@ export const VendorBusinessProfilePage: React.FC = () => {
 
     setAccountHolderName(bank.accountHolderName || bank.beneficiaryName || '');
     setBankName(bank.bankName || '');
-    setAccountNumber(bank.accountNumber || '');
+    setAccountNumber(
+      bank.accountNumberMasked ||
+        (bank.accountNumber && !/X|•/i.test(bank.accountNumber)
+          ? maskBankAccount(bank.accountNumber)
+          : bank.accountNumber || '')
+    );
     setIfsc((bank.ifsc || bank.ifscCode || '').toUpperCase());
     setAccountType(bank.accountType === 'SAVINGS' ? 'SAVINGS' : 'CURRENT');
 
@@ -266,6 +284,7 @@ export const VendorBusinessProfilePage: React.FC = () => {
       }
     }
 
+    const isMaskedAcc = /X|•|\*/i.test(accountNumber);
     if (accountHolderName.trim() || bankName.trim() || accountNumber.trim() || ifsc.trim()) {
       const holderCheck = validateAccountBeneficiaryName(accountHolderName);
       if (!holderCheck.isValid) {
@@ -277,10 +296,12 @@ export const VendorBusinessProfilePage: React.FC = () => {
         setFormError(bankCheck.error || 'Please enter a valid bank name.');
         return;
       }
-      const accCheck = validateBankAccount(accountNumber);
-      if (!accCheck.isValid) {
-        setFormError(accCheck.error || 'Bank account number must be 9 to 18 digits.');
-        return;
+      if (!isMaskedAcc) {
+        const accCheck = validateBankAccount(accountNumber);
+        if (!accCheck.isValid) {
+          setFormError(accCheck.error || 'Bank account number must be 9 to 18 digits.');
+          return;
+        }
       }
       const ifscCheck = validateIFSC(ifsc);
       if (!ifscCheck.isValid) {
@@ -320,7 +341,9 @@ export const VendorBusinessProfilePage: React.FC = () => {
       await vendorApi.updateBankDetails({
         accountHolderName: accountHolderName.trim(),
         bankName: bankName.trim(),
-        accountNumber: accountNumber.replace(/\D/g, ''),
+        accountNumber: /X|•|\*/i.test(accountNumber)
+          ? accountNumber.trim()
+          : accountNumber.replace(/\D/g, ''),
         ifsc: ifsc.trim().toUpperCase(),
         accountType,
       });
@@ -635,28 +658,92 @@ export const VendorBusinessProfilePage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* GST & KYC Documents */}
+        {/* GST, MSME & KYC Documents */}
         <Card>
           <CardHeader
-            title="GST & Verification Documents"
-            subtitle="Registered tax identifiers and uploaded KYC compliance documents"
+            title="Identification & Verification Documents"
+            subtitle="Registered tax/business identifiers (masked for security) and uploaded KYC compliance documents"
           />
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="portal-label">GSTIN</label>
+                <label className="portal-label">Aadhaar (Masked)</label>
                 <input
                   type="text"
-                  value={gstin || 'Not Provided'}
+                  value={aadhaarMasked || 'Not Provided'}
                   disabled
                   className="portal-input font-mono"
                 />
               </div>
               <div>
-                <label className="portal-label">PAN</label>
+                <label className="portal-label">PAN (Masked)</label>
                 <input
                   type="text"
-                  value={pan || 'Not Provided'}
+                  value={panMasked || 'Not Provided'}
+                  disabled
+                  className="portal-input font-mono"
+                />
+              </div>
+              <div>
+                <label className="portal-label">GST Status</label>
+                <input
+                  type="text"
+                  value={
+                    gstStatus === 'REGISTERED'
+                      ? 'Registered'
+                      : gstStatus === 'APPLIED'
+                        ? 'Applied for Registration'
+                        : 'Not Registered'
+                  }
+                  disabled
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">
+                  {gstStatus === 'APPLIED' ? 'GST Application Ref' : 'GSTIN'}
+                </label>
+                <input
+                  type="text"
+                  value={
+                    gstStatus === 'REGISTERED'
+                      ? gstin || 'Not Provided'
+                      : gstStatus === 'APPLIED'
+                        ? gstApplicationNumber || 'Not Provided'
+                        : 'Not Applicable'
+                  }
+                  disabled
+                  className="portal-input font-mono"
+                />
+              </div>
+              <div>
+                <label className="portal-label">MSME Status</label>
+                <input
+                  type="text"
+                  value={
+                    msmeStatus === 'REGISTERED'
+                      ? 'Yes – MSME Registered'
+                      : msmeStatus === 'APPLIED'
+                        ? 'Applied for MSME Registration'
+                        : 'No – Not MSME Registered'
+                  }
+                  disabled
+                  className="portal-input"
+                />
+              </div>
+              <div>
+                <label className="portal-label">
+                  {msmeStatus === 'APPLIED' ? 'MSME Application Ref' : 'Udyam Number'}
+                </label>
+                <input
+                  type="text"
+                  value={
+                    msmeStatus === 'REGISTERED'
+                      ? udyamNumber || 'Not Provided'
+                      : msmeStatus === 'APPLIED'
+                        ? msmeApplicationNumber || 'Not Provided'
+                        : 'Not Applicable'
+                  }
                   disabled
                   className="portal-input font-mono"
                 />
@@ -691,6 +778,9 @@ export const VendorBusinessProfilePage: React.FC = () => {
                               {doc.fileName || doc.type}
                               {doc.fileSize
                                 ? ` • ${Math.max(1, Math.round(doc.fileSize / 1024))} KB`
+                                : ''}
+                              {doc.identificationNumberMasked
+                                ? ` • ID: ${doc.identificationNumberMasked}`
                                 : ''}
                             </p>
                           </div>
@@ -768,16 +858,31 @@ export const VendorBusinessProfilePage: React.FC = () => {
             subtitle="Settlement account details verified during registration"
             action={
               <div className="flex items-center gap-2">
-                {activeVendor?.businessInfo?.bankDetails?.isVerified && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#15966B]">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Verified
-                  </span>
+                {activeVendor?.businessInfo?.bankDetails?.isVerified ? (
+                  <Badge variant="success" size="sm">
+                    Bank Verified
+                  </Badge>
+                ) : activeVendor?.businessInfo?.bankDetails?.verificationStatus === 'REJECTED' ? (
+                  <Badge variant="danger" size="sm">
+                    Bank Rejected
+                  </Badge>
+                ) : (
+                  <Badge variant="warning" size="sm">
+                    Pending Verification
+                  </Badge>
                 )}
                 <CreditCard className="w-4 h-4 text-[#78716C]" />
               </div>
             }
           />
-          <CardContent>
+          <CardContent className="space-y-4">
+            {activeVendor?.businessInfo?.bankDetails?.verificationStatus === 'REJECTED' &&
+              activeVendor?.businessInfo?.bankDetails?.rejectionReason && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800">
+                  <strong>Bank Verification Rejected:</strong>{' '}
+                  {activeVendor.businessInfo.bankDetails.rejectionReason}
+                </div>
+              )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="portal-label">Beneficiary Name *</label>
@@ -802,7 +907,15 @@ export const VendorBusinessProfilePage: React.FC = () => {
                 <input
                   type="text"
                   value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (/X|•|\*/i.test(accountNumber) && raw !== accountNumber) {
+                      setAccountNumber(raw.replace(/\D/g, ''));
+                    } else {
+                      setAccountNumber(raw.replace(/\D/g, ''));
+                    }
+                  }}
+                  placeholder="Enter new 9-18 digit account number to update"
                   className="portal-input font-mono"
                 />
               </div>

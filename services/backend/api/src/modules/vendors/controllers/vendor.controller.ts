@@ -72,6 +72,7 @@ import {
   PlatformWalletTxnModel,
   PlatformPromotionModel,
   PlatformReviewModel,
+  PlatformShipmentModel,
   VendorInvoiceModel,
   DispatchAssignmentModel,
   platformPersistenceService
@@ -85,6 +86,11 @@ import {
   CompanyQuotationModel,
 } from '../../company-admin/services/company-admin-persistence.service';
 import { orderSyncService } from '../../orders/services/order-sync.service';
+import { gstInvoiceService } from '../../orders/services/gst-invoice.service';
+import {
+  fulfilmentLifecycleService,
+  VEHICLE_CAPACITY_SPECS,
+} from '../../orders/services/fulfilment-lifecycle.service';
 import {
   AnalyticsGranularity,
   vendorAnalyticsService,
@@ -115,8 +121,17 @@ import {
   validateYearOfEstablishment,
   validateWebsite,
   validateKycDocumentMetadata,
+  validateAadhaar,
+  validateUdyamNumber,
+  validateApplicationReference,
+  isTradeLicenseRequired,
+  maskAadhaar,
+  maskPan,
+  maskBankAccount,
   validateVendorStep1,
   validateVendorRegistrationPayload,
+  ALLOWED_GST_STATUSES,
+  ALLOWED_MSME_STATUSES,
   ALLOWED_KYC_DOCUMENT_TYPES,
   MAX_LOGO_SIZE_BYTES,
   MAX_KYC_DOC_SIZE_BYTES
@@ -611,6 +626,80 @@ export async function resolveStrictAuthenticatedVendor(authHeader?: string): Pro
   throw new UnauthorizedException('Session expired or invalid token. Please sign in again.');
 }
 
+function linkIdentificationNumbersToDocuments(
+  docs: any[],
+  ids: {
+    aadhaarPlain?: string;
+    panPlain?: string;
+    gstStatus?: string;
+    gstin?: string;
+    gstApplicationNumber?: string;
+    msmeStatus?: string;
+    udyamNumber?: string;
+    msmeApplicationNumber?: string;
+    bankAccountPlain?: string;
+  }
+): VendorKycDocument[] {
+  return (Array.isArray(docs) ? docs : []).map((doc: any) => {
+    const type = String(doc?.type || '').toUpperCase();
+    let identificationNumber = doc?.identificationNumber;
+    let identificationNumberMasked = doc?.identificationNumberMasked;
+
+    if ((type === 'AADHAAR_CARD' || type === 'AUTHORIZED_ID') && ids.aadhaarPlain) {
+      identificationNumber = vendorSecurityService.encryptSensitive(ids.aadhaarPlain);
+      identificationNumberMasked = maskAadhaar(ids.aadhaarPlain);
+    } else if (type === 'PAN_CARD' && ids.panPlain) {
+      identificationNumber = vendorSecurityService.encryptSensitive(ids.panPlain);
+      identificationNumberMasked = maskPan(ids.panPlain);
+    } else if (type === 'GST_CERTIFICATE' && ids.gstin) {
+      identificationNumber = ids.gstin;
+      identificationNumberMasked = ids.gstin;
+    } else if (type === 'GST_ACKNOWLEDGEMENT' && ids.gstApplicationNumber) {
+      identificationNumber = ids.gstApplicationNumber;
+      identificationNumberMasked = ids.gstApplicationNumber;
+    } else if ((type === 'UDYAM_CERTIFICATE' || type === 'MSME_CERTIFICATE') && ids.udyamNumber) {
+      identificationNumber = ids.udyamNumber;
+      identificationNumberMasked = ids.udyamNumber;
+    } else if (type === 'MSME_ACKNOWLEDGEMENT' && ids.msmeApplicationNumber) {
+      identificationNumber = ids.msmeApplicationNumber;
+      identificationNumberMasked = ids.msmeApplicationNumber;
+    } else if (type === 'CANCELLED_CHEQUE' && ids.bankAccountPlain) {
+      identificationNumber = vendorSecurityService.encryptSensitive(ids.bankAccountPlain);
+      identificationNumberMasked = maskBankAccount(ids.bankAccountPlain);
+    }
+
+    const prevCount = Array.isArray(doc?.previousVersions) ? doc.previousVersions.length : 0;
+    const sanitized = { ...doc };
+    // Avoid storing public URLs for sensitive documents when storageKey is present
+    if (sanitized.storageKey) {
+      delete sanitized.fileUrl;
+    }
+
+    return {
+      ...sanitized,
+      version: doc?.version || prevCount + 1,
+      ...(identificationNumber ? { identificationNumber } : {}),
+      ...(identificationNumberMasked ? { identificationNumberMasked } : {}),
+      verificationStatus: doc?.verificationStatus || 'PENDING',
+    };
+  });
+}
+
+function sanitizeDocumentForClient(doc: any): VendorKycDocument {
+  const clean = { ...doc };
+  delete clean.identificationNumber;
+  delete clean.fileUrl;
+  if (Array.isArray(clean.previousVersions)) {
+    clean.previousVersions = clean.previousVersions.map((pv: any) => {
+      const cleanPv = { ...pv };
+      delete cleanPv.identificationNumber;
+      delete cleanPv.fileUrl;
+      return cleanPv;
+    });
+  }
+  return clean;
+}
+
 // Normalizes and merges registrationData + businessInfo + top-level fields without leaking secrets
 export function serializeVendorProfile(vendor: BackendVendorRecord): VendorProfile {
   const reg = (vendor.registrationData || {}) as Partial<VendorRegistrationWizardData>;
@@ -618,6 +707,37 @@ export function serializeVendorProfile(vendor: BackendVendorRecord): VendorProfi
   const bizAddr = biz.address || {};
   const regBank = reg.bankDetails || ({} as any);
   const bizBank = biz.bankDetails || {};
+  const isDraftOrEditable = vendor.status === 'DRAFT' || vendor.status === 'RESUBMISSION_REQUIRED';
+
+  const rawAadhaar = vendorSecurityService.decryptSensitive(
+    (vendor as any).aadhaarNumber || biz.aadhaarNumber || reg.aadhaarNumber || ''
+  );
+  const rawPan = vendorSecurityService.decryptSensitive(biz.pan || reg.pan || '');
+  const rawBankAcc = vendorSecurityService.decryptSensitive(
+    bizBank.accountNumber || regBank.accountNumber || ''
+  );
+
+  const aadhaarMasked = (vendor as any).aadhaarMasked || biz.aadhaarMasked || maskAadhaar(rawAadhaar);
+  const panMasked = (vendor as any).panMasked || biz.panMasked || maskPan(rawPan);
+  const accountNumberMasked = bizBank.accountNumberMasked || maskBankAccount(rawBankAcc);
+
+  const rawGstin = String(biz.gstin || reg.gstin || '').trim().toUpperCase();
+  const gstStatus =
+    ((vendor as any).gstStatus || biz.gstStatus || reg.gstStatus || (rawGstin ? 'REGISTERED' : 'NOT_REGISTERED')) as any;
+  const gstApplicationNumber =
+    (vendor as any).gstApplicationNumber || biz.gstApplicationNumber || reg.gstApplicationNumber || '';
+  const resolvedGstin = gstStatus === 'REGISTERED' ? rawGstin : '';
+
+  const rawUdyam = String(
+    (vendor as any).udyamNumber || biz.udyamNumber || reg.udyamNumber || ''
+  )
+    .trim()
+    .toUpperCase();
+  const msmeStatus =
+    ((vendor as any).msmeStatus || biz.msmeStatus || reg.msmeStatus || (rawUdyam ? 'REGISTERED' : 'NOT_REGISTERED')) as any;
+  const msmeApplicationNumber =
+    (vendor as any).msmeApplicationNumber || biz.msmeApplicationNumber || reg.msmeApplicationNumber || '';
+  const resolvedUdyam = msmeStatus === 'REGISTERED' ? rawUdyam : '';
 
   const resolvedAddress = {
     building: bizAddr.building || reg.completeAddress || '',
@@ -631,24 +751,37 @@ export function serializeVendorProfile(vendor: BackendVendorRecord): VendorProfi
     lng: bizAddr.lng
   };
 
-  const resolvedBank = {
-    accountHolderName: bizBank.accountHolderName || regBank.accountHolderName || '',
-    bankName: bizBank.bankName || regBank.bankName || '',
-    accountNumber: bizBank.accountNumber || regBank.accountNumber || '',
-    ifsc: bizBank.ifsc || regBank.ifsc || '',
-    accountType: bizBank.accountType || regBank.accountType || 'CURRENT',
-    branch: bizBank.branch || (bizBank.bankName ? `${bizBank.bankName} Branch` : ''),
-    isVerified: Boolean(bizBank.isVerified ?? regBank.isVerified ?? false)
-  };
-
-  const resolvedLogo = vendor.logoUrl || biz.logo || reg.logoUrl || undefined;
-  const resolvedLogoMeta = vendor.logoMetadata || biz.logoMetadata || reg.logoMetadata || undefined;
-  const resolvedDocs =
+  const resolvedDocs = (
     (vendor.kycDocuments && vendor.kycDocuments.length > 0
       ? vendor.kycDocuments
       : reg.documents && reg.documents.length > 0
         ? reg.documents
-        : biz.documents) || [];
+        : biz.documents) || []
+  ).map((d: any) => sanitizeDocumentForClient(d));
+
+  const bankProofDoc = resolvedDocs.find((d: any) => d.type === 'CANCELLED_CHEQUE');
+  const resolvedBank = {
+    accountHolderName: bizBank.accountHolderName || regBank.accountHolderName || '',
+    bankName: bizBank.bankName || regBank.bankName || '',
+    accountNumber: isDraftOrEditable ? rawBankAcc : accountNumberMasked,
+    accountNumberMasked,
+    ifsc: bizBank.ifsc || regBank.ifsc || '',
+    accountType: bizBank.accountType || regBank.accountType || 'CURRENT',
+    branch: bizBank.branch || (bizBank.bankName ? `${bizBank.bankName} Branch` : ''),
+    isVerified: Boolean(bizBank.isVerified ?? regBank.isVerified ?? false),
+    verificationStatus:
+      bizBank.verificationStatus ||
+      regBank.verificationStatus ||
+      (bizBank.isVerified ? 'VERIFIED' : 'PENDING'),
+    rejectionReason: bizBank.rejectionReason || regBank.rejectionReason,
+    reviewedAt: bizBank.reviewedAt || regBank.reviewedAt,
+    reviewedBy: bizBank.reviewedBy || regBank.reviewedBy,
+    proofDocumentId: bankProofDoc?.id || bizBank.proofDocumentId || regBank.proofDocumentId,
+    proofFileName: bankProofDoc?.fileName || bizBank.proofFileName || regBank.proofFileName
+  };
+
+  const resolvedLogo = vendor.logoUrl || biz.logo || reg.logoUrl || undefined;
+  const resolvedLogoMeta = vendor.logoMetadata || biz.logoMetadata || reg.logoMetadata || undefined;
   const resolvedWarehouses =
     (vendor.warehouses && vendor.warehouses.length > 0
       ? vendor.warehouses
@@ -664,8 +797,17 @@ export function serializeVendorProfile(vendor: BackendVendorRecord): VendorProfi
     status: vendor.status,
     applicationId: vendor.applicationId,
     submittedAt: vendor.submittedAt,
+    latestKycSubmittedAt: (vendor as any).latestKycSubmittedAt,
+    lastDocumentUploadedAt: (vendor as any).lastDocumentUploadedAt,
     logoUrl: resolvedLogo,
     logoMetadata: resolvedLogoMeta,
+    aadhaarMasked: aadhaarMasked || undefined,
+    panMasked: panMasked || undefined,
+    gstStatus,
+    gstApplicationNumber: gstStatus === 'APPLIED' ? gstApplicationNumber || undefined : undefined,
+    msmeStatus,
+    udyamNumber: resolvedUdyam || undefined,
+    msmeApplicationNumber: msmeStatus === 'APPLIED' ? msmeApplicationNumber || undefined : undefined,
     rating: vendor.rating || 0,
     productCount: vendor.productCount || 0,
     orderCount: vendor.orderCount || 0,
@@ -697,8 +839,16 @@ export function serializeVendorProfile(vendor: BackendVendorRecord): VendorProfi
       description: biz.description || reg.description || '',
       logo: resolvedLogo,
       logoMetadata: resolvedLogoMeta,
-      gstin: biz.gstin || reg.gstin || '',
-      pan: biz.pan || reg.pan || '',
+      gstStatus,
+      gstin: resolvedGstin,
+      gstApplicationNumber: gstStatus === 'APPLIED' ? gstApplicationNumber : undefined,
+      pan: panMasked,
+      panMasked,
+      aadhaarNumber: aadhaarMasked,
+      aadhaarMasked,
+      msmeStatus,
+      udyamNumber: resolvedUdyam,
+      msmeApplicationNumber: msmeStatus === 'APPLIED' ? msmeApplicationNumber : undefined,
       categories: biz.categories || vendor.categories || reg.productCategories || [],
       address: resolvedAddress,
       bankDetails: resolvedBank
@@ -722,8 +872,14 @@ export function serializeVendorProfile(vendor: BackendVendorRecord): VendorProfi
       city: resolvedAddress.city,
       pincode: resolvedAddress.pincode,
       completeAddress: reg.completeAddress || resolvedAddress.building || resolvedAddress.street || '',
-      gstin: reg.gstin || biz.gstin || '',
-      pan: reg.pan || biz.pan || '',
+      gstStatus,
+      gstin: resolvedGstin,
+      gstApplicationNumber: gstStatus === 'APPLIED' ? gstApplicationNumber : undefined,
+      pan: isDraftOrEditable ? rawPan : panMasked,
+      aadhaarNumber: isDraftOrEditable ? rawAadhaar : aadhaarMasked,
+      msmeStatus,
+      udyamNumber: resolvedUdyam,
+      msmeApplicationNumber: msmeStatus === 'APPLIED' ? msmeApplicationNumber : undefined,
       documents: resolvedDocs as any,
       warehouses: resolvedWarehouses,
       bankDetails: {
@@ -1669,7 +1825,7 @@ export class VendorController implements OnModuleInit {
       }
     };
 
-    const [pProducts, pMovements, pWarehouses, pOrders, pReturns, pSettlements, pTickets, pPromotions, pReviews, pInvoices] =
+    const [pProducts, pMovements, pWarehouses, pOrders, pReturns, pSettlements, pTickets, pPromotions, pReviews, pInvoices, pShipments] =
       await Promise.all([
         platformPersistenceService.loadAll<VendorProduct>(PlatformProductModel),
         platformPersistenceService.loadAll<VendorStockMovement>(PlatformStockMovementModel),
@@ -1681,6 +1837,7 @@ export class VendorController implements OnModuleInit {
         platformPersistenceService.loadAll<VendorPromotion>(PlatformPromotionModel),
         platformPersistenceService.loadAll<VendorProductReview>(PlatformReviewModel),
         platformPersistenceService.loadAll<VendorInvoice>(VendorInvoiceModel),
+        platformPersistenceService.loadAll<any>(PlatformShipmentModel),
       ]);
 
     mergeById(vendorProducts, pProducts);
@@ -1693,6 +1850,32 @@ export class VendorController implements OnModuleInit {
     mergeById(vendorPromotions, pPromotions);
     mergeById(vendorReviews, pReviews);
     mergeById(vendorInvoices, pInvoices);
+    mergeById(dbStore.shipments, pShipments);
+
+    gstInvoiceService.registerStores(
+      (vendorId: string) => vendorRecords.get(vendorId),
+      () => vendorInvoices
+    );
+
+    fulfilmentLifecycleService.registerStores({
+      getVendorOrders: () => vendorOrders,
+      getVendorProducts: () => vendorProducts,
+      getVendorRecords: () => vendorRecords,
+      getVendorWarehouses: () => vendorWarehouses,
+      getVendorInvoices: () => vendorInvoices,
+      releaseStockForVendorOrder: async (vo, _reason) => {
+        const custOrder = dbStore.orders.find((o) => o.orderNumber === vo.orderNumber);
+        if (custOrder && (custOrder as any).stockReserved) {
+          await orderSyncService.releaseOrderStock(
+            (vo.items || []).map((i: any) => ({ productId: i.productId, sku: i.sku, quantity: i.quantity, name: i.name })),
+            vo.orderNumber
+          );
+        }
+      },
+      ensureFinancials: async (vo, masterOrder) => {
+        await orderSyncService.ensureDeliveredFinancials(vo, masterOrder);
+      },
+    });
 
     taxonomyService.migrateLegacyCatalogRecords(vendorProducts);
 
@@ -2308,13 +2491,47 @@ export class VendorController implements OnModuleInit {
         const res = validateAddress(wizardData.completeAddress);
         if (!res.isValid && res.error) draftErrors.completeAddress = res.error;
       }
-      if (wizardData.gstin) {
+      if (wizardData.aadhaarNumber) {
+        const res = validateAadhaar(wizardData.aadhaarNumber);
+        if (!res.isValid && res.error) draftErrors.aadhaarNumber = res.error;
+      }
+      if (wizardData.gstStatus) {
+        const gs = String(wizardData.gstStatus).trim().toUpperCase();
+        if (!ALLOWED_GST_STATUSES.includes(gs as any)) {
+          draftErrors.gstStatus = 'Please select a valid GST Registration Status.';
+        }
+      }
+      if (wizardData.gstin && (!wizardData.gstStatus || wizardData.gstStatus === 'REGISTERED')) {
         const res = validateGSTIN(wizardData.gstin);
         if (!res.isValid && res.error) draftErrors.gstin = res.error;
+      }
+      if (wizardData.gstStatus === 'APPLIED' && wizardData.gstApplicationNumber) {
+        const res = validateApplicationReference(
+          wizardData.gstApplicationNumber,
+          'GST Application / ARN Reference Number'
+        );
+        if (!res.isValid && res.error) draftErrors.gstApplicationNumber = res.error;
       }
       if (wizardData.pan) {
         const res = validatePAN(wizardData.pan);
         if (!res.isValid && res.error) draftErrors.pan = res.error;
+      }
+      if (wizardData.msmeStatus) {
+        const ms = String(wizardData.msmeStatus).trim().toUpperCase();
+        if (!ALLOWED_MSME_STATUSES.includes(ms as any)) {
+          draftErrors.msmeStatus = 'Please select a valid MSME Status.';
+        }
+      }
+      if (wizardData.udyamNumber && wizardData.msmeStatus === 'REGISTERED') {
+        const res = validateUdyamNumber(wizardData.udyamNumber);
+        if (!res.isValid && res.error) draftErrors.udyamNumber = res.error;
+      }
+      if (wizardData.msmeStatus === 'APPLIED' && wizardData.msmeApplicationNumber) {
+        const res = validateApplicationReference(
+          wizardData.msmeApplicationNumber,
+          'MSME Application Reference Number'
+        );
+        if (!res.isValid && res.error) draftErrors.msmeApplicationNumber = res.error;
       }
       if (wizardData.bankDetails) {
         if (wizardData.bankDetails.accountHolderName) {
@@ -2385,8 +2602,93 @@ export class VendorController implements OnModuleInit {
         vendor.logoMetadata = wizardData.logoMetadata || undefined;
         vendor.businessInfo.logoMetadata = wizardData.logoMetadata || undefined;
       }
-      if (wizardData.gstin) vendor.businessInfo.gstin = wizardData.gstin;
-      if (wizardData.pan) vendor.businessInfo.pan = wizardData.pan;
+      const gstStatus = (
+        wizardData.gstStatus ||
+        (vendor as any).gstStatus ||
+        (wizardData.gstin ? 'REGISTERED' : 'NOT_REGISTERED')
+      ) as VendorRegistrationWizardData['gstStatus'];
+      const cleanGstin =
+        gstStatus === 'REGISTERED' && wizardData.gstin
+          ? wizardData.gstin.trim().toUpperCase()
+          : gstStatus === 'REGISTERED'
+            ? vendor.businessInfo?.gstin || ''
+            : '';
+      const cleanGstAppNo =
+        gstStatus === 'APPLIED' && wizardData.gstApplicationNumber
+          ? wizardData.gstApplicationNumber.trim().toUpperCase()
+          : gstStatus === 'APPLIED'
+            ? (vendor as any).gstApplicationNumber || ''
+            : '';
+
+      const msmeStatus = (
+        wizardData.msmeStatus ||
+        (vendor as any).msmeStatus ||
+        (wizardData.udyamNumber ? 'REGISTERED' : 'NOT_REGISTERED')
+      ) as VendorRegistrationWizardData['msmeStatus'];
+      const cleanUdyam =
+        msmeStatus === 'REGISTERED' && wizardData.udyamNumber
+          ? wizardData.udyamNumber.trim().toUpperCase()
+          : msmeStatus === 'REGISTERED'
+            ? (vendor as any).udyamNumber || ''
+            : '';
+      const cleanMsmeAppNo =
+        msmeStatus === 'APPLIED' && wizardData.msmeApplicationNumber
+          ? wizardData.msmeApplicationNumber.trim().toUpperCase()
+          : msmeStatus === 'APPLIED'
+            ? (vendor as any).msmeApplicationNumber || ''
+            : '';
+
+      const cleanAadhaar = wizardData.aadhaarNumber
+        ? String(wizardData.aadhaarNumber).replace(/[\s-]+/g, '').trim()
+        : vendorSecurityService.decryptSensitive((vendor as any).aadhaarNumber || '');
+      const cleanPan = wizardData.pan
+        ? wizardData.pan.trim().toUpperCase()
+        : vendorSecurityService.decryptSensitive(vendor.businessInfo?.pan || '');
+
+      (vendor as any).gstStatus = gstStatus;
+      vendor.businessInfo.gstStatus = gstStatus;
+      vendor.businessInfo.gstin = cleanGstin || undefined;
+      (vendor as any).gstApplicationNumber = cleanGstAppNo || undefined;
+      vendor.businessInfo.gstApplicationNumber = cleanGstAppNo || undefined;
+
+      (vendor as any).msmeStatus = msmeStatus;
+      vendor.businessInfo.msmeStatus = msmeStatus;
+      (vendor as any).udyamNumber = cleanUdyam || undefined;
+      vendor.businessInfo.udyamNumber = cleanUdyam || undefined;
+      (vendor as any).msmeApplicationNumber = cleanMsmeAppNo || undefined;
+      vendor.businessInfo.msmeApplicationNumber = cleanMsmeAppNo || undefined;
+
+      if (cleanAadhaar) {
+        const encAadhaar = vendorSecurityService.encryptSensitive(cleanAadhaar);
+        const maskedAadhaarVal = maskAadhaar(cleanAadhaar);
+        (vendor as any).aadhaarNumber = encAadhaar;
+        (vendor as any).aadhaarMasked = maskedAadhaarVal;
+        vendor.businessInfo.aadhaarNumber = encAadhaar;
+        vendor.businessInfo.aadhaarMasked = maskedAadhaarVal;
+      }
+      if (cleanPan) {
+        const encPan = vendorSecurityService.encryptSensitive(cleanPan);
+        const maskedPanVal = maskPan(cleanPan);
+        vendor.businessInfo.pan = encPan;
+        vendor.businessInfo.panMasked = maskedPanVal;
+        (vendor as any).panMasked = maskedPanVal;
+      }
+
+      if (vendor.registrationData) {
+        vendor.registrationData.gstStatus = gstStatus;
+        vendor.registrationData.gstin = cleanGstin || undefined;
+        vendor.registrationData.gstApplicationNumber = cleanGstAppNo || undefined;
+        vendor.registrationData.msmeStatus = msmeStatus;
+        vendor.registrationData.udyamNumber = cleanUdyam || undefined;
+        vendor.registrationData.msmeApplicationNumber = cleanMsmeAppNo || undefined;
+        if (cleanAadhaar) {
+          vendor.registrationData.aadhaarNumber = vendorSecurityService.encryptSensitive(cleanAadhaar);
+        }
+        if (cleanPan) {
+          vendor.registrationData.pan = vendorSecurityService.encryptSensitive(cleanPan);
+        }
+      }
+
       if (wizardData.pincode || wizardData.city || wizardData.state || wizardData.country || wizardData.completeAddress) {
         vendor.businessInfo.address = {
           ...vendor.businessInfo.address,
@@ -2398,16 +2700,31 @@ export class VendorController implements OnModuleInit {
           country: wizardData.country || vendor.businessInfo.address?.country || 'India'
         };
       }
+      const cleanBankAcc = wizardData.bankDetails?.accountNumber
+        ? String(wizardData.bankDetails.accountNumber).replace(/\D/g, '')
+        : vendorSecurityService.decryptSensitive(vendor.businessInfo?.bankDetails?.accountNumber || '');
       if (wizardData.bankDetails) {
+        const encAcc = cleanBankAcc ? vendorSecurityService.encryptSensitive(cleanBankAcc) : '';
+        const maskedAcc = cleanBankAcc ? maskBankAccount(cleanBankAcc) : '';
         vendor.businessInfo.bankDetails = {
           accountHolderName: wizardData.bankDetails.accountHolderName || '',
           bankName: wizardData.bankDetails.bankName || '',
-          accountNumber: wizardData.bankDetails.accountNumber || '',
-          ifsc: wizardData.bankDetails.ifsc || '',
+          accountNumber: encAcc,
+          accountNumberMasked: maskedAcc,
+          ifsc: (wizardData.bankDetails.ifsc || '').trim().toUpperCase(),
           accountType: wizardData.bankDetails.accountType || 'CURRENT',
           branch: wizardData.bankDetails.bankName || 'Main Branch',
-          isVerified: false
+          isVerified: false,
+          verificationStatus: 'PENDING'
         };
+        if (vendor.registrationData?.bankDetails) {
+          vendor.registrationData.bankDetails = {
+            ...vendor.registrationData.bankDetails,
+            accountNumber: encAcc,
+            isVerified: false,
+            verificationStatus: 'PENDING'
+          };
+        }
       }
       if (wizardData.productCategories) {
         vendor.businessInfo.categories = wizardData.productCategories;
@@ -2436,12 +2753,14 @@ export class VendorController implements OnModuleInit {
                     : []),
                   {
                     id: existingSameType.id,
+                    version: existingSameType.version,
                     fileName: existingSameType.fileName,
                     fileSize: existingSameType.fileSize,
                     mimeType: existingSameType.mimeType,
-                    fileUrl: existingSameType.fileUrl,
                     storageKey: existingSameType.storageKey,
                     storageProvider: existingSameType.storageProvider,
+                    identificationNumber: existingSameType.identificationNumber,
+                    identificationNumberMasked: existingSameType.identificationNumberMasked,
                     uploadedAt: existingSameType.uploadedAt,
                     verificationStatus: existingSameType.verificationStatus || 'PENDING',
                     rejectionReason: existingSameType.rejectionReason,
@@ -2459,8 +2778,27 @@ export class VendorController implements OnModuleInit {
             ...(mergedPrevVersions.length > 0 ? { previousVersions: mergedPrevVersions } : {}),
           };
         });
-        vendor.kycDocuments = mergedDocs;
-        const maxDocMs = mergedDocs.reduce(
+        const linkedDocs = linkIdentificationNumbersToDocuments(mergedDocs, {
+          aadhaarPlain: cleanAadhaar,
+          panPlain: cleanPan,
+          gstStatus,
+          gstin: cleanGstin,
+          gstApplicationNumber: cleanGstAppNo,
+          msmeStatus,
+          udyamNumber: cleanUdyam,
+          msmeApplicationNumber: cleanMsmeAppNo,
+          bankAccountPlain: cleanBankAcc,
+        });
+        vendor.kycDocuments = linkedDocs;
+        if (vendor.registrationData) {
+          vendor.registrationData.documents = linkedDocs;
+        }
+        const bankProof = linkedDocs.find((d) => d.type === 'CANCELLED_CHEQUE');
+        if (bankProof && vendor.businessInfo?.bankDetails) {
+          vendor.businessInfo.bankDetails.proofDocumentId = bankProof.id;
+          vendor.businessInfo.bankDetails.proofFileName = bankProof.fileName;
+        }
+        const maxDocMs = linkedDocs.reduce(
           (max: number, d: any) => Math.max(max, new Date(d.uploadedAt || 0).getTime() || 0),
           0
         );
@@ -2470,9 +2808,6 @@ export class VendorController implements OnModuleInit {
       }
       if ((wizardData as any).district && vendor.businessInfo?.address) {
         (vendor.businessInfo.address as any).district = (wizardData as any).district;
-      }
-      if ((wizardData as any).aadhaarNumber) {
-        (vendor as any).aadhaarNumber = String((wizardData as any).aadhaarNumber).replace(/\s+/g, '');
       }
       vendor.updatedAt = new Date().toISOString();
     }
@@ -2488,7 +2823,7 @@ export class VendorController implements OnModuleInit {
   }
 
   @Post('registration/submit')
-  submitRegistration(
+  async submitRegistration(
     @Body() body: { vendorId?: string; wizardData?: VendorRegistrationWizardData },
     @Headers('authorization') authHeader?: string
   ) {
@@ -2519,13 +2854,64 @@ export class VendorController implements OnModuleInit {
       throw new BadRequestException('Registration wizard data is required for submission.');
     }
 
+    // Decrypt any previously encrypted draft fields if client didn't overwrite them
+    const rawDraftAadhaar = data.aadhaarNumber
+      ? vendorSecurityService.decryptSensitive(data.aadhaarNumber)
+      : vendorSecurityService.decryptSensitive((vendor as any).aadhaarNumber || '');
+    const rawDraftPan = data.pan
+      ? vendorSecurityService.decryptSensitive(data.pan)
+      : vendorSecurityService.decryptSensitive(vendor.businessInfo?.pan || '');
+    const rawDraftAcc = data.bankDetails?.accountNumber
+      ? vendorSecurityService.decryptSensitive(data.bankDetails.accountNumber)
+      : vendorSecurityService.decryptSensitive(vendor.businessInfo?.bankDetails?.accountNumber || '');
+
+    const gstStatus = (
+      data.gstStatus ||
+      (vendor as any).gstStatus ||
+      (data.gstin ? 'REGISTERED' : 'NOT_REGISTERED')
+    ) as VendorRegistrationWizardData['gstStatus'];
+    const cleanGstin =
+      gstStatus === 'REGISTERED' && data.gstin ? data.gstin.trim().toUpperCase() : '';
+    const cleanGstAppNo =
+      gstStatus === 'APPLIED' && data.gstApplicationNumber
+        ? data.gstApplicationNumber.trim().toUpperCase()
+        : '';
+
+    const msmeStatus = (
+      data.msmeStatus ||
+      (vendor as any).msmeStatus ||
+      (data.udyamNumber ? 'REGISTERED' : 'NOT_REGISTERED')
+    ) as VendorRegistrationWizardData['msmeStatus'];
+    const cleanUdyam =
+      msmeStatus === 'REGISTERED' && data.udyamNumber ? data.udyamNumber.trim().toUpperCase() : '';
+    const cleanMsmeAppNo =
+      msmeStatus === 'APPLIED' && data.msmeApplicationNumber
+        ? data.msmeApplicationNumber.trim().toUpperCase()
+        : '';
+
     // Never trust client-only flags; validate every step's fields on the backend
     const mergedValidationData = {
       ...data,
       ownerName: data.ownerName ?? vendor.name,
       email: data.email ?? vendor.email,
       phone: data.phone ?? vendor.phone,
-      country: data.country || 'India'
+      country: data.country || 'India',
+      aadhaarNumber: rawDraftAadhaar,
+      pan: rawDraftPan,
+      gstStatus,
+      gstin: cleanGstin || undefined,
+      gstApplicationNumber: cleanGstAppNo || undefined,
+      msmeStatus,
+      udyamNumber: cleanUdyam || undefined,
+      msmeApplicationNumber: cleanMsmeAppNo || undefined,
+      bankDetails: {
+        ...data.bankDetails,
+        accountNumber: rawDraftAcc,
+        confirmAccountNumber:
+          data.bankDetails?.confirmAccountNumber !== undefined
+            ? vendorSecurityService.decryptSensitive(data.bankDetails.confirmAccountNumber)
+            : rawDraftAcc,
+      },
     };
 
     const fullCheck = validateVendorRegistrationPayload(mergedValidationData);
@@ -2551,9 +2937,90 @@ export class VendorController implements OnModuleInit {
     vendor.resubmissionReason = undefined;
     vendor.updatedAt = submittedIso;
     vendor.registrationStep = 5;
-    if ((data as any).aadhaarNumber) {
-      (vendor as any).aadhaarNumber = String((data as any).aadhaarNumber).replace(/\s+/g, '');
+
+    const cleanAadhaar = rawDraftAadhaar.replace(/[\s-]+/g, '').trim();
+    const cleanPan = rawDraftPan.trim().toUpperCase();
+    const cleanBankAcc = rawDraftAcc.replace(/\D/g, '');
+    const encAadhaar = vendorSecurityService.encryptSensitive(cleanAadhaar);
+    const encPan = vendorSecurityService.encryptSensitive(cleanPan);
+    const encBankAcc = vendorSecurityService.encryptSensitive(cleanBankAcc);
+    const maskedAadhaarVal = maskAadhaar(cleanAadhaar);
+    const maskedPanVal = maskPan(cleanPan);
+    const maskedBankVal = maskBankAccount(cleanBankAcc);
+
+    (vendor as any).aadhaarNumber = encAadhaar;
+    (vendor as any).aadhaarMasked = maskedAadhaarVal;
+    (vendor as any).panMasked = maskedPanVal;
+    (vendor as any).gstStatus = gstStatus;
+    (vendor as any).gstApplicationNumber = cleanGstAppNo || undefined;
+    (vendor as any).msmeStatus = msmeStatus;
+    (vendor as any).udyamNumber = cleanUdyam || undefined;
+    (vendor as any).msmeApplicationNumber = cleanMsmeAppNo || undefined;
+
+    if (mergedValidationData.ownerName) vendor.name = mergedValidationData.ownerName.trim();
+    if (data.storeName) vendor.storeName = data.storeName.trim();
+    if (mergedValidationData.phone) vendor.phone = mergedValidationData.phone.trim();
+    if (mergedValidationData.email) vendor.email = mergedValidationData.email.trim().toLowerCase();
+    if (data.logoUrl !== undefined) vendor.logoUrl = data.logoUrl || undefined;
+    if (data.logoMetadata !== undefined) vendor.logoMetadata = data.logoMetadata || undefined;
+
+    const existingDocs: any[] = Array.isArray(vendor.kycDocuments) ? vendor.kycDocuments : [];
+    const incomingDocs = Array.isArray(data.documents) && data.documents.length > 0 ? data.documents : existingDocs;
+    const mergedDocs = incomingDocs.map((incoming: any) => {
+      const oldDoc = existingDocs.find((d) => d.type === incoming.type && d.id !== incoming.id);
+      const history = [
+        ...(Array.isArray(incoming.previousVersions) ? incoming.previousVersions : []),
+        ...(oldDoc
+          ? [
+              ...(Array.isArray(oldDoc.previousVersions) ? oldDoc.previousVersions : []),
+              {
+                id: oldDoc.id,
+                version: oldDoc.version,
+                fileName: oldDoc.fileName,
+                fileSize: oldDoc.fileSize,
+                mimeType: oldDoc.mimeType,
+                storageKey: oldDoc.storageKey,
+                storageProvider: oldDoc.storageProvider,
+                identificationNumber: oldDoc.identificationNumber,
+                identificationNumberMasked: oldDoc.identificationNumberMasked,
+                uploadedAt: oldDoc.uploadedAt,
+                verificationStatus: oldDoc.verificationStatus || 'PENDING',
+                rejectionReason: oldDoc.rejectionReason,
+                reviewedAt: oldDoc.reviewedAt,
+                reviewedBy: oldDoc.reviewedBy,
+                replacedAt: new Date().toISOString(),
+              },
+            ]
+          : []),
+      ].filter((v, idx, arr) => arr.findIndex((x) => x.id === v.id) === idx);
+      return {
+        ...incoming,
+        verificationStatus: incoming.verificationStatus || 'PENDING',
+        ...(history.length > 0 ? { previousVersions: history } : {}),
+      };
+    });
+
+    vendor.kycDocuments = linkIdentificationNumbersToDocuments(mergedDocs, {
+      aadhaarPlain: cleanAadhaar,
+      panPlain: cleanPan,
+      gstStatus,
+      gstin: cleanGstin,
+      gstApplicationNumber: cleanGstAppNo,
+      msmeStatus,
+      udyamNumber: cleanUdyam,
+      msmeApplicationNumber: cleanMsmeAppNo,
+      bankAccountPlain: cleanBankAcc,
+    });
+    const maxDocMs = vendor.kycDocuments.reduce(
+      (max: number, d: any) => Math.max(max, new Date(d.uploadedAt || 0).getTime() || 0),
+      0
+    );
+    if (maxDocMs > 0) {
+      (vendor as any).lastDocumentUploadedAt = new Date(maxDocMs).toISOString();
     }
+
+    const bankProofDoc = vendor.kycDocuments.find((d) => d.type === 'CANCELLED_CHEQUE');
+
     vendor.registrationData = {
       ...data,
       ownerName: mergedValidationData.ownerName.trim(),
@@ -2565,57 +3032,27 @@ export class VendorController implements OnModuleInit {
       state: data.state.trim(),
       city: data.city.trim(),
       completeAddress: data.completeAddress.trim(),
-      gstin: data.gstin ? data.gstin.trim().toUpperCase() : undefined,
-      pan: data.pan ? data.pan.trim().toUpperCase() : undefined,
+      gstStatus,
+      gstin: cleanGstin || undefined,
+      gstApplicationNumber: cleanGstAppNo || undefined,
+      pan: encPan,
+      aadhaarNumber: encAadhaar,
+      msmeStatus,
+      udyamNumber: cleanUdyam || undefined,
+      msmeApplicationNumber: cleanMsmeAppNo || undefined,
+      documents: vendor.kycDocuments,
       bankDetails: {
         ...data.bankDetails,
         accountHolderName: data.bankDetails.accountHolderName.trim(),
         bankName: data.bankDetails.bankName.trim(),
-        accountNumber: data.bankDetails.accountNumber.trim(),
-        ifsc: data.bankDetails.ifsc.trim().toUpperCase()
+        accountNumber: encBankAcc,
+        ifsc: data.bankDetails.ifsc.trim().toUpperCase(),
+        isVerified: false,
+        verificationStatus: 'PENDING',
+        proofDocumentId: bankProofDoc?.id,
+        proofFileName: bankProofDoc?.fileName,
       }
     };
-
-    if (mergedValidationData.ownerName) vendor.name = mergedValidationData.ownerName.trim();
-    if (data.storeName) vendor.storeName = data.storeName.trim();
-    if (mergedValidationData.phone) vendor.phone = mergedValidationData.phone.trim();
-    if (mergedValidationData.email) vendor.email = mergedValidationData.email.trim().toLowerCase();
-    if (data.logoUrl !== undefined) vendor.logoUrl = data.logoUrl || undefined;
-    if (data.logoMetadata !== undefined) vendor.logoMetadata = data.logoMetadata || undefined;
-    if (data.documents && data.documents.length > 0) {
-      const existingDocs: any[] = Array.isArray(vendor.kycDocuments) ? vendor.kycDocuments : [];
-      vendor.kycDocuments = data.documents.map((incoming: any) => {
-        const oldDoc = existingDocs.find((d) => d.type === incoming.type && d.id !== incoming.id);
-        const history = [
-          ...(Array.isArray(incoming.previousVersions) ? incoming.previousVersions : []),
-          ...(oldDoc
-            ? [
-                ...(Array.isArray(oldDoc.previousVersions) ? oldDoc.previousVersions : []),
-                {
-                  id: oldDoc.id,
-                  fileName: oldDoc.fileName,
-                  fileSize: oldDoc.fileSize,
-                  mimeType: oldDoc.mimeType,
-                  fileUrl: oldDoc.fileUrl,
-                  storageKey: oldDoc.storageKey,
-                  storageProvider: oldDoc.storageProvider,
-                  uploadedAt: oldDoc.uploadedAt,
-                  verificationStatus: oldDoc.verificationStatus || 'PENDING',
-                  rejectionReason: oldDoc.rejectionReason,
-                  reviewedAt: oldDoc.reviewedAt,
-                  reviewedBy: oldDoc.reviewedBy,
-                  replacedAt: new Date().toISOString(),
-                },
-              ]
-            : []),
-        ].filter((v, idx, arr) => arr.findIndex((x) => x.id === v.id) === idx);
-        return {
-          ...incoming,
-          verificationStatus: incoming.verificationStatus || 'PENDING',
-          ...(history.length > 0 ? { previousVersions: history } : {}),
-        };
-      });
-    }
 
     vendor.businessInfo = {
       ...vendor.businessInfo,
@@ -2631,13 +3068,22 @@ export class VendorController implements OnModuleInit {
       description: data.description || vendor.businessInfo?.description,
       logo: data.logoUrl || vendor.logoUrl || vendor.businessInfo?.logo,
       logoMetadata: data.logoMetadata || vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
-      gstin: data.gstin ? data.gstin.trim().toUpperCase() : vendor.businessInfo?.gstin,
-      pan: data.pan ? data.pan.trim().toUpperCase() : vendor.businessInfo?.pan,
+      gstStatus,
+      gstin: cleanGstin || undefined,
+      gstApplicationNumber: cleanGstAppNo || undefined,
+      pan: encPan,
+      panMasked: maskedPanVal,
+      aadhaarNumber: encAadhaar,
+      aadhaarMasked: maskedAadhaarVal,
+      msmeStatus,
+      udyamNumber: cleanUdyam || undefined,
+      msmeApplicationNumber: cleanMsmeAppNo || undefined,
       categories: data.productCategories || vendor.categories || [],
       address: {
         building: data.completeAddress.trim(),
         street: data.area || vendor.businessInfo?.address?.street || '',
         area: data.area || vendor.businessInfo?.address?.area || '',
+        district: (data as any).district || (vendor.businessInfo?.address as any)?.district || '',
         city: data.city.trim(),
         state: data.state.trim(),
         pincode: data.pincode.trim(),
@@ -2646,11 +3092,15 @@ export class VendorController implements OnModuleInit {
       bankDetails: {
         accountHolderName: data.bankDetails.accountHolderName.trim(),
         bankName: data.bankDetails.bankName.trim(),
-        accountNumber: data.bankDetails.accountNumber.replace(/\D/g, ''),
+        accountNumber: encBankAcc,
+        accountNumberMasked: maskedBankVal,
         ifsc: data.bankDetails.ifsc.trim().toUpperCase(),
         accountType: data.bankDetails.accountType || 'CURRENT',
         branch: data.bankDetails.bankName ? `${data.bankDetails.bankName.trim()} Branch` : 'Main Branch',
-        isVerified: false
+        isVerified: false,
+        verificationStatus: 'PENDING',
+        proofDocumentId: bankProofDoc?.id,
+        proofFileName: bankProofDoc?.fileName,
       }
     };
 
@@ -2679,7 +3129,7 @@ export class VendorController implements OnModuleInit {
     });
 
     // Persist to MongoDB
-    void vendorPersistenceService.saveVendorRecord(vendor);
+    await vendorPersistenceService.saveVendorRecord(vendor);
 
     // Send notifications
     vendorNotificationService.notify(
@@ -2781,13 +3231,11 @@ export class VendorController implements OnModuleInit {
       throw new ForbiddenException('You are not authorized to view this vendor application.');
     }
 
-    // 3. Mask sensitive information (PAN, Bank account)
-    const rawPan = targetVendor.registrationData?.pan || targetVendor.businessInfo?.pan || '';
-    const maskedPan = rawPan.length >= 6 ? `${rawPan.slice(0, 5)}••••${rawPan.slice(-1)}` : (rawPan ? '••••••••••' : 'Not Provided');
-
-    const rawBankAcc = targetVendor.registrationData?.bankDetails?.accountNumber || targetVendor.businessInfo?.bankDetails?.accountNumber || '';
-    const maskedBankAcc = rawBankAcc.length >= 4 ? `••••••••${rawBankAcc.slice(-4)}` : (rawBankAcc ? '••••••••' : 'Not Provided');
-
+    // 3. Mask sensitive information (Aadhaar, PAN, Bank account)
+    const serialized = serializeVendorProfile(targetVendor);
+    const maskedPan = serialized.panMasked || 'Not Provided';
+    const maskedAadhaar = serialized.aadhaarMasked || 'Not Provided';
+    const maskedBankAcc = serialized.businessInfo?.bankDetails?.accountNumberMasked || 'Not Provided';
     const regData = targetVendor.registrationData;
 
     return {
@@ -2834,24 +3282,33 @@ export class VendorController implements OnModuleInit {
           dispatchAddress: regData?.dispatchAddress || ''
         },
         kycDetails: {
-          gstin: regData?.gstin || targetVendor.businessInfo?.gstin || 'Not Provided',
-          pan: maskedPan
+          gstStatus: serialized.gstStatus || 'NOT_REGISTERED',
+          gstin: serialized.businessInfo?.gstin || 'Not Applicable',
+          gstApplicationNumber: serialized.gstApplicationNumber,
+          msmeStatus: serialized.msmeStatus || 'NOT_REGISTERED',
+          udyamNumber: serialized.udyamNumber || 'Not Applicable',
+          msmeApplicationNumber: serialized.msmeApplicationNumber,
+          pan: maskedPan,
+          aadhaar: maskedAadhaar
         },
         bankDetails: {
           accountHolderName: regData?.bankDetails?.accountHolderName || targetVendor.businessInfo?.bankDetails?.accountHolderName || '',
           bankName: regData?.bankDetails?.bankName || targetVendor.businessInfo?.bankDetails?.bankName || '',
           accountNumber: maskedBankAcc,
           ifsc: regData?.bankDetails?.ifsc || targetVendor.businessInfo?.bankDetails?.ifsc || '',
-          accountType: regData?.bankDetails?.accountType || 'CURRENT'
+          accountType: regData?.bankDetails?.accountType || 'CURRENT',
+          isVerified: Boolean(serialized.businessInfo?.bankDetails?.isVerified),
+          verificationStatus: serialized.businessInfo?.bankDetails?.verificationStatus || 'PENDING'
         },
-        documents: (targetVendor.kycDocuments || regData?.documents || []).map((doc) => ({
+        documents: (serialized.kycDocuments || []).map((doc) => ({
           id: doc.id,
           type: doc.type,
           title: doc.title,
           fileName: doc.fileName,
           fileSize: doc.fileSize,
           mimeType: doc.mimeType,
-          fileUrl: doc.fileUrl,
+          version: doc.version || 1,
+          identificationNumberMasked: doc.identificationNumberMasked,
           uploadedAt: doc.uploadedAt,
           verificationStatus: doc.verificationStatus || 'PENDING'
         }))
@@ -2910,11 +3367,42 @@ export class VendorController implements OnModuleInit {
   )
   async uploadRegistrationDocFile(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { type?: VendorKycDocument['type']; title?: string },
+    @Body() body: { type?: VendorKycDocument['type']; title?: string; identificationNumber?: string },
     @Req() req?: Request
   ) {
     if (!file) {
       throw new BadRequestException('Please attach a valid KYC document (PDF, JPG, JPEG, or PNG up to 5 MB).');
+    }
+
+    const docType = (body?.type || 'OTHER') as VendorKycDocument['type'];
+    const rawId = String(body?.identificationNumber || '').trim();
+    let identification: { identificationNumber?: string; identificationNumberMasked?: string } | undefined;
+    if (rawId) {
+      if (docType === 'AADHAAR_CARD' || docType === 'AUTHORIZED_ID') {
+        const cleanAadhaar = rawId.replace(/[\s-]+/g, '');
+        identification = {
+          identificationNumber: vendorSecurityService.encryptSensitive(cleanAadhaar),
+          identificationNumberMasked: maskAadhaar(cleanAadhaar),
+        };
+      } else if (docType === 'PAN_CARD') {
+        const cleanPan = rawId.toUpperCase();
+        identification = {
+          identificationNumber: vendorSecurityService.encryptSensitive(cleanPan),
+          identificationNumberMasked: maskPan(cleanPan),
+        };
+      } else if (docType === 'CANCELLED_CHEQUE') {
+        const cleanAcc = rawId.replace(/\D/g, '');
+        identification = {
+          identificationNumber: vendorSecurityService.encryptSensitive(cleanAcc),
+          identificationNumberMasked: maskBankAccount(cleanAcc),
+        };
+      } else {
+        const cleanVal = rawId.toUpperCase();
+        identification = {
+          identificationNumber: cleanVal,
+          identificationNumberMasked: cleanVal,
+        };
+      }
     }
 
     const host = req?.get?.('host') || `localhost:${process.env.PORT || 3000}`;
@@ -2925,15 +3413,16 @@ export class VendorController implements OnModuleInit {
       file.buffer,
       file.originalname,
       file.mimetype,
-      (body?.type || 'OTHER') as VendorKycDocument['type'],
+      docType,
       body?.title || file.originalname,
-      baseUrl
+      baseUrl,
+      identification
     );
 
     return {
       success: true,
       message: 'Document uploaded and verified securely.',
-      document
+      document: sanitizeDocumentForClient(document)
     };
   }
 
@@ -3102,12 +3591,14 @@ export class VendorController implements OnModuleInit {
           ...(Array.isArray(oldDoc.previousVersions) ? oldDoc.previousVersions : []),
           {
             id: oldDoc.id,
+            version: oldDoc.version || (Array.isArray(oldDoc.previousVersions) ? oldDoc.previousVersions.length + 1 : 1),
             fileName: oldDoc.fileName,
             fileSize: oldDoc.fileSize,
             mimeType: oldDoc.mimeType,
-            fileUrl: oldDoc.fileUrl,
             storageKey: oldDoc.storageKey,
             storageProvider: oldDoc.storageProvider,
+            identificationNumber: oldDoc.identificationNumber,
+            identificationNumberMasked: oldDoc.identificationNumberMasked,
             uploadedAt: oldDoc.uploadedAt,
             verificationStatus: oldDoc.verificationStatus || 'PENDING',
             rejectionReason: oldDoc.rejectionReason,
@@ -3121,11 +3612,43 @@ export class VendorController implements OnModuleInit {
     const docWithHistory: VendorKycDocument = {
       ...nextDoc,
       title: body?.title || oldDoc?.title || nextDoc.title,
+      version: previousVersions.length + 1,
       verificationStatus: 'PENDING',
       ...(previousVersions.length > 0 ? { previousVersions } : {}),
     };
 
-    vendor.kycDocuments = [...existingDocs.filter((d) => d.type !== docType), docWithHistory];
+    const updatedDocs = linkIdentificationNumbersToDocuments(
+      [...existingDocs.filter((d) => d.type !== docType), docWithHistory],
+      {
+        aadhaarPlain: vendorSecurityService.decryptSensitive(
+          (vendor as any).aadhaarNumber || vendor.businessInfo?.aadhaarNumber || ''
+        ),
+        panPlain: vendorSecurityService.decryptSensitive(
+          vendor.businessInfo?.pan || vendor.registrationData?.pan || ''
+        ),
+        gstStatus: (vendor as any).gstStatus || vendor.businessInfo?.gstStatus,
+        gstin: vendor.businessInfo?.gstin || vendor.registrationData?.gstin,
+        gstApplicationNumber:
+          (vendor as any).gstApplicationNumber || vendor.businessInfo?.gstApplicationNumber,
+        msmeStatus: (vendor as any).msmeStatus || vendor.businessInfo?.msmeStatus,
+        udyamNumber: (vendor as any).udyamNumber || vendor.businessInfo?.udyamNumber,
+        msmeApplicationNumber:
+          (vendor as any).msmeApplicationNumber || vendor.businessInfo?.msmeApplicationNumber,
+        bankAccountPlain: vendorSecurityService.decryptSensitive(
+          vendor.businessInfo?.bankDetails?.accountNumber || ''
+        ),
+      }
+    );
+    vendor.kycDocuments = updatedDocs;
+    const savedReplacement = updatedDocs.find((d) => d.id === docWithHistory.id) || docWithHistory;
+
+    if (docType === 'CANCELLED_CHEQUE' && vendor.businessInfo?.bankDetails) {
+      vendor.businessInfo.bankDetails.proofDocumentId = savedReplacement.id;
+      vendor.businessInfo.bankDetails.proofFileName = savedReplacement.fileName;
+      vendor.businessInfo.bankDetails.isVerified = false;
+      vendor.businessInfo.bankDetails.verificationStatus = 'PENDING';
+      vendor.businessInfo.bankDetails.rejectionReason = undefined;
+    }
     if (vendor.registrationData) {
       vendor.registrationData.documents = vendor.kycDocuments;
     }
@@ -3306,11 +3829,7 @@ export class VendorController implements OnModuleInit {
   @Get('registration/status')
   getRegistrationStatus(@Headers('authorization') authHeader?: string) {
     const vendor = getVendorFromAuthHeader(authHeader);
-    const rawPan = vendor.registrationData?.pan || vendor.businessInfo?.pan || '';
-    const maskedPan = rawPan.length >= 6 ? `${rawPan.slice(0, 5)}••••${rawPan.slice(-1)}` : (rawPan ? '••••••••••' : undefined);
-
-    const rawBankAcc = vendor.registrationData?.bankDetails?.accountNumber || vendor.businessInfo?.bankDetails?.accountNumber || '';
-    const maskedBankAcc = rawBankAcc.length >= 4 ? `••••••••${rawBankAcc.slice(-4)}` : undefined;
+    const serialized = serializeVendorProfile(vendor);
 
     return {
       success: true,
@@ -3328,9 +3847,17 @@ export class VendorController implements OnModuleInit {
       phone: vendor.phone,
       logoUrl: vendor.logoUrl || vendor.businessInfo?.logo,
       logoMetadata: vendor.logoMetadata || vendor.businessInfo?.logoMetadata,
-      maskedPan,
-      maskedBankAcc,
-      kycDocuments: (vendor.kycDocuments || []).map((doc) => ({
+      maskedPan: serialized.panMasked,
+      maskedAadhaar: serialized.aadhaarMasked,
+      maskedBankAcc: serialized.businessInfo?.bankDetails?.accountNumberMasked,
+      gstStatus: serialized.gstStatus,
+      gstin: serialized.businessInfo?.gstin,
+      gstApplicationNumber: serialized.gstApplicationNumber,
+      msmeStatus: serialized.msmeStatus,
+      udyamNumber: serialized.udyamNumber,
+      msmeApplicationNumber: serialized.msmeApplicationNumber,
+      bankVerificationStatus: serialized.businessInfo?.bankDetails?.verificationStatus || 'PENDING',
+      kycDocuments: (serialized.kycDocuments || []).map((doc) => ({
         ...doc,
         verificationStatus: doc.verificationStatus || 'PENDING'
       })),
@@ -5321,17 +5848,49 @@ export class VendorController implements OnModuleInit {
   @Get('orders')
   async getOrders(
     @Headers('authorization') authHeader?: string,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('search') search?: string
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
     let orders = vendorOrders.filter((o) => o.vendorId === vendor.id);
-    if (status) {
-      orders = orders.filter((o) => o.status === status);
+    if (status && status !== 'ALL') {
+      const targetSt = status.toUpperCase();
+      orders = orders.filter((o) => String(o.status).toUpperCase() === targetSt);
     }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      orders = orders.filter(
+        (o) =>
+          String(o.orderNumber || o.id).toLowerCase().includes(q) ||
+          String(o.customerName || '').toLowerCase().includes(q) ||
+          (o.items || []).some(
+            (i: any) =>
+              String(i.name || '').toLowerCase().includes(q) ||
+              String(i.sku || '').toLowerCase().includes(q)
+          )
+      );
+    }
+    const enriched = orders.map((o: any) => {
+      const master = dbStore.orders.find((m: any) => m.orderNumber === o.orderNumber) as any;
+      const shipment = fulfilmentLifecycleService.getOrderShipments(o.orderNumber, o.id)[0] || null;
+      const invoice = gstInvoiceService.getExistingVendorInvoice(o.id) || null;
+      return {
+        ...o,
+        paymentMethod: master?.paymentMethod || o.paymentMethod || 'COD',
+        paymentStatus: master?.paymentStatus || o.paymentStatus || 'PENDING',
+        deliverySpeed: master?.deliverySpeed || 'ASAP_60',
+        deliveryAddress: master?.deliveryAddress || o.deliveryAddress,
+        customerPhone: master?.customerPhone || o.customerPhone,
+        buyerGstin: master?.gstin,
+        companyName: master?.companyName,
+        shipment,
+        invoice,
+      };
+    });
     return {
       success: true,
-      total: orders.length,
-      data: orders
+      total: enriched.length,
+      data: enriched
     };
   }
 
@@ -5341,13 +5900,36 @@ export class VendorController implements OnModuleInit {
     @Headers('authorization') authHeader?: string
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const anyOrder = vendorOrders.find((o) => o.id === id || o.orderNumber === id) as any;
+    if (anyOrder && anyOrder.vendorId !== vendor.id) {
+      const mineForNum = vendorOrders.find((o) => o.orderNumber === id && o.vendorId === vendor.id);
+      if (!mineForNum) {
+        throw new ForbiddenException('Access denied: this order belongs to another vendor.');
+      }
+    }
     const order = vendorOrders.find(
       (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
-    );
+    ) as any;
     if (!order) throw new NotFoundException('Order not found for your vendor account');
+
+    const master = dbStore.orders.find((m: any) => m.orderNumber === order.orderNumber) as any;
+    const shipment = fulfilmentLifecycleService.getOrderShipments(order.orderNumber, order.id)[0] || null;
+    const invoice = gstInvoiceService.getExistingVendorInvoice(order.id) || null;
+
     return {
       success: true,
-      data: order
+      data: {
+        ...order,
+        paymentMethod: master?.paymentMethod || order.paymentMethod || 'COD',
+        paymentStatus: master?.paymentStatus || order.paymentStatus || 'PENDING',
+        deliverySpeed: master?.deliverySpeed || 'ASAP_60',
+        deliveryAddress: master?.deliveryAddress || order.deliveryAddress,
+        customerPhone: master?.customerPhone || order.customerPhone,
+        buyerGstin: master?.gstin,
+        companyName: master?.companyName,
+        shipment,
+        invoice,
+      }
     };
   }
 
@@ -5358,10 +5940,21 @@ export class VendorController implements OnModuleInit {
     @Headers('authorization') authHeader?: string
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const anyOrder = vendorOrders.find((o) => o.id === id || o.orderNumber === id) as any;
+    if (anyOrder && anyOrder.vendorId !== vendor.id && !vendorOrders.some((o) => o.orderNumber === id && o.vendorId === vendor.id)) {
+      throw new ForbiddenException('Access denied: you cannot update another vendor order.');
+    }
     const order = vendorOrders.find(
       (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
     ) as any;
     if (!order) throw new NotFoundException('Order not found for your vendor account');
+
+    const requestedStatus = String(body.status || '').toUpperCase();
+    if (requestedStatus === 'DELIVERED' || requestedStatus === 'COMPLETED') {
+      throw new ForbiddenException(
+        'Vendors cannot mark site delivery COMPLETED/DELIVERED without customer Delivery OTP confirmation.'
+      );
+    }
 
     await orderSyncService.syncVendorOrderStatusToCustomer(order, body.status, body.note);
 
@@ -5375,18 +5968,15 @@ export class VendorController implements OnModuleInit {
   @Post('orders/:id/accept')
   async acceptOrder(
     @Param('id') id: string,
+    @Body() body?: { note?: string },
     @Headers('authorization') authHeader?: string
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
-    const order = vendorOrders.find(
-      (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
-    ) as any;
-    if (!order) throw new NotFoundException('Order not found for your vendor account');
-
-    await orderSyncService.syncVendorOrderStatusToCustomer(
-      order,
-      'ACCEPTED',
-      'Order accepted by Vendor Depot and queued for picking.'
+    const order = await fulfilmentLifecycleService.vendorAcceptOrder(
+      vendor.id,
+      id,
+      vendor.name || vendor.storeName,
+      body?.note
     );
 
     return {
@@ -5403,15 +5993,11 @@ export class VendorController implements OnModuleInit {
     @Headers('authorization') authHeader?: string
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
-    const order = vendorOrders.find(
-      (o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id
-    ) as any;
-    if (!order) throw new NotFoundException('Order not found for your vendor account');
-
-    await orderSyncService.syncVendorOrderStatusToCustomer(
-      order,
-      'REJECTED',
-      body.reason || 'Depot capacity full or batch unavailable'
+    const order = await fulfilmentLifecycleService.vendorRejectOrder(
+      vendor.id,
+      id,
+      body?.reason,
+      vendor.name || vendor.storeName
     );
 
     return {
@@ -5884,11 +6470,111 @@ export class VendorController implements OnModuleInit {
     @Headers('authorization') authHeader?: string
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
-    const inv = vendorInvoices.find(
-      (i) => (i.id === id || i.invoiceNumber === id) && i.vendorId === vendor.id
+    const anyInv = vendorInvoices.find((i) => i.id === id || i.invoiceNumber === id);
+    if (anyInv && anyInv.vendorId !== vendor.id) {
+      throw new ForbiddenException('Access denied: cannot view another vendor tax invoice.');
+    }
+    if (!anyInv) throw new NotFoundException('Invoice not found');
+    return { success: true, data: anyInv };
+  }
+
+  @Get('invoices/:id/pdf')
+  async downloadVendorInvoicePdf(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const anyInv = vendorInvoices.find((i) => i.id === id || i.invoiceNumber === id);
+    if (anyInv && anyInv.vendorId !== vendor.id) {
+      throw new ForbiddenException('Access denied: cannot download another vendor tax invoice.');
+    }
+    if (!anyInv) throw new NotFoundException('Invoice not found');
+    const pdfBuf = await gstInvoiceService.renderGstInvoicePdfBuffer(anyInv);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${anyInv.invoiceNumber}.pdf"`,
+      'Content-Length': pdfBuf.length,
+    });
+    res.end(pdfBuf);
+  }
+
+  @Post('orders/:id/picking')
+  async confirmOrderPicking(
+    @Param('id') id: string,
+    @Body() body: { pickedItems?: Array<{ productId: string; sku?: string; pickedQuantity: number; shortageReason?: string }>; notes?: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const order = await fulfilmentLifecycleService.vendorConfirmPicking(
+      vendor.id,
+      id,
+      body || {},
+      vendor.name || vendor.storeName
     );
-    if (!inv) throw new NotFoundException('Invoice not found');
-    return { success: true, data: inv };
+    return {
+      success: true,
+      message: 'Material picking recorded.',
+      data: order,
+    };
+  }
+
+  @Post('orders/:id/packing')
+  async confirmOrderPacking(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const order = await fulfilmentLifecycleService.vendorConfirmPacking(
+      vendor.id,
+      id,
+      body || {},
+      vendor.name || vendor.storeName
+    );
+    return {
+      success: true,
+      message: 'Construction packing specifications recorded.',
+      data: order,
+    };
+  }
+
+  @Post('orders/:id/ready-for-dispatch')
+  async markOrderReadyForDispatch(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const resData = await fulfilmentLifecycleService.vendorMarkReadyForDispatch(
+      vendor.id,
+      id,
+      vendor.name || vendor.storeName
+    );
+    return {
+      success: true,
+      message: `Staged for dispatch (${resData.shipment.id}).`,
+      data: resData,
+    };
+  }
+
+  @Post('orders/:id/handover')
+  async handoverToDriver(
+    @Param('id') id: string,
+    @Body() body: { vehicleNumber?: string; driverName?: string; driverPhone?: string; handoverRef?: string; notes?: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const vendor = await resolveStrictAuthenticatedVendor(authHeader);
+    const resData = await fulfilmentLifecycleService.vendorHandoverToDriver(
+      vendor.id,
+      id,
+      body || {},
+      vendor.name || vendor.storeName
+    );
+    return {
+      success: true,
+      message: `Dispatched and GST Tax Invoice ${resData.invoice.invoiceNumber} generated.`,
+      data: resData,
+    };
   }
 
   // ==========================================
@@ -6225,7 +6911,12 @@ export class VendorController implements OnModuleInit {
 
     const holder = String(body?.accountHolderName || '').trim();
     const bankName = String(body?.bankName || '').trim();
-    const accNo = String(body?.accountNumber || '').replace(/\D/g, '');
+    const rawAccInput = String(body?.accountNumber || '').trim();
+    const isMaskedInput = /X|•|\*/i.test(rawAccInput);
+    const existingPlainAcc = vendorSecurityService.decryptSensitive(
+      target.businessInfo?.bankDetails?.accountNumber || ''
+    );
+    const accNo = isMaskedInput ? existingPlainAcc : rawAccInput.replace(/\D/g, '');
     const ifsc = String(body?.ifsc || '').trim().toUpperCase();
     const accType: 'CURRENT' | 'SAVINGS' = body?.accountType === 'SAVINGS' ? 'SAVINGS' : 'CURRENT';
 
@@ -6237,7 +6928,7 @@ export class VendorController implements OnModuleInit {
       const bankCheck = validateBankName(bankName);
       if (!bankCheck.isValid) throw new BadRequestException(bankCheck.error);
     }
-    if (accNo) {
+    if (accNo && !isMaskedInput) {
       const accCheck = validateBankAccount(accNo);
       if (!accCheck.isValid) throw new BadRequestException(accCheck.error);
     }
@@ -6246,15 +6937,27 @@ export class VendorController implements OnModuleInit {
       if (!ifscCheck.isValid) throw new BadRequestException(ifscCheck.error);
     }
 
+    const accountChanged =
+      (Boolean(accNo) && !isMaskedInput && accNo !== existingPlainAcc) ||
+      (Boolean(ifsc) && ifsc !== String(target.businessInfo?.bankDetails?.ifsc || '').toUpperCase());
+
+    const encAcc = accNo ? vendorSecurityService.encryptSensitive(accNo) : target.businessInfo?.bankDetails?.accountNumber || '';
+    const maskedAcc = accNo ? maskBankAccount(accNo) : target.businessInfo?.bankDetails?.accountNumberMasked || '';
+
     const updatedBank = {
       ...target.businessInfo?.bankDetails,
       ...(holder ? { accountHolderName: holder } : {}),
       ...(bankName ? { bankName } : {}),
-      ...(accNo ? { accountNumber: accNo } : {}),
+      ...(encAcc ? { accountNumber: encAcc, accountNumberMasked: maskedAcc } : {}),
       ...(ifsc ? { ifsc } : {}),
       accountType: accType,
       branch: bankName ? `${bankName} Branch` : target.businessInfo?.bankDetails?.branch || 'Main Branch',
-      isVerified: Boolean(target.businessInfo?.bankDetails?.isVerified)
+      isVerified: accountChanged ? false : Boolean(target.businessInfo?.bankDetails?.isVerified),
+      verificationStatus: accountChanged
+        ? ('PENDING' as const)
+        : target.businessInfo?.bankDetails?.verificationStatus ||
+          (target.businessInfo?.bankDetails?.isVerified ? ('VERIFIED' as const) : ('PENDING' as const)),
+      ...(accountChanged ? { rejectionReason: undefined } : {}),
     };
 
     target.businessInfo = {
@@ -6271,7 +6974,9 @@ export class VendorController implements OnModuleInit {
           bankName: updatedBank.bankName,
           accountNumber: updatedBank.accountNumber,
           ifsc: updatedBank.ifsc,
-          accountType: accType as any
+          accountType: accType as any,
+          isVerified: updatedBank.isVerified,
+          verificationStatus: updatedBank.verificationStatus,
         }
       };
     }
@@ -6279,11 +6984,12 @@ export class VendorController implements OnModuleInit {
     target.updatedAt = new Date().toISOString();
     await vendorPersistenceService.saveVendorRecord(target);
 
+    const serialized = serializeVendorProfile(target);
     return {
       success: true,
       message: 'Bank account details updated.',
-      data: updatedBank,
-      vendor: serializeVendorProfile(target)
+      data: serialized.businessInfo.bankDetails,
+      vendor: serialized
     };
   }
 
@@ -6632,7 +7338,7 @@ export class VendorController implements OnModuleInit {
   @Post('orders/:id/assign-delivery')
   async assignDeliveryPartner(
     @Param('id') id: string,
-    @Body() body: { partnerId?: string; driverName?: string; driverPhone?: string; vehicleNumber?: string; eta?: string },
+    @Body() body: { partnerId?: string; driverName?: string; driverPhone?: string; vehicleNumber?: string; vehicleType?: string; eta?: string; reassignReason?: string },
     @Headers('authorization') authHeader?: string
   ) {
     const vendor = await resolveStrictAuthenticatedVendor(authHeader);
@@ -6640,54 +7346,27 @@ export class VendorController implements OnModuleInit {
     const order = vendorOrders.find((o) => (o.id === id || o.orderNumber === id) && o.vendorId === vendor.id) as any;
     if (!order) throw new NotFoundException('Order not found for your vendor account');
 
-    const partner = body.partnerId ? companyAdminDataService.deliveryPartners.get(body.partnerId) : undefined;
-    const driverName = (partner?.contactPerson || partner?.name || body.driverName || '').trim();
-    const driverPhone = (partner?.phone || body.driverPhone || '').trim();
-    const vehicleNumber = (body.vehicleNumber || partner?.vehicleTypes?.[0] || 'KA-01-BLD').trim();
-    if (!driverName) {
-      throw new BadRequestException('Delivery partner or driver name is required');
+    const fallbackPartnerId = body.partnerId || Array.from(companyAdminDataService.deliveryPartners.values())[0]?.id || '';
+    if (!fallbackPartnerId) {
+      throw new BadRequestException('Delivery partner ID is required.');
     }
 
-    const nowIso = new Date().toISOString();
-    const assignment = {
-      orderId: order.id,
-      tenantId,
-      partnerId: partner?.id || body.partnerId || '',
-      partnerName: partner?.name || driverName,
-      driverName,
-      driverPhone,
-      vehicleNumber,
-      status: 'ASSIGNED' as const,
-      eta: body.eta || 'Within 60 mins',
-      assignedAt: nowIso,
-      updatedAt: nowIso,
-    };
-    companyAdminDataService.dispatchAssignments.set(order.id, assignment);
-    await platformPersistenceService.upsert(DispatchAssignmentModel, assignment, 'orderId');
+    const resData = await fulfilmentLifecycleService.assignDispatchVehicle(tenantId, {
+      orderIdOrNumber: order.orderNumber,
+      vendorOrderId: order.id,
+      partnerId: fallbackPartnerId,
+      driverName: body.driverName,
+      driverPhone: body.driverPhone,
+      vehicleNumber: body.vehicleNumber || 'KA-01-BLD-6060',
+      vehicleType: body.vehicleType,
+      reassignReason: body.reassignReason,
+      actorName: vendor.storeName || vendor.name,
+    });
 
-    order.deliveryPartnerId = assignment.partnerId;
-    order.deliveryPartnerName = assignment.driverName;
-    order.deliveryPartnerPhone = assignment.driverPhone;
-    order.vehicleNumber = assignment.vehicleNumber;
-    if (order.status === 'READY_FOR_DISPATCH' || order.status === 'PACKING' || order.status === 'ACCEPTED') {
-      order.status = 'DISPATCHED';
-    }
-    await platformPersistenceService.upsert(PlatformOrderModel, order);
-
-    const custOrd = dbStore.orders.find((co: any) => co.id === order.id || co.orderNumber === order.orderNumber);
-    if (custOrd) {
-      (custOrd as any).driverName = driverName;
-      (custOrd as any).driverPhone = driverPhone;
-      (custOrd as any).vehicleNumber = vehicleNumber;
-      if (custOrd.status !== 'DELIVERED') custOrd.status = 'OUT_FOR_DELIVERY';
-      await platformPersistenceService.upsert(PlatformOrderModel, custOrd);
-    }
-
-    realtimeBus.emitVendorAndAdmin(vendor.id, 'order.status.updated', { order, assignment }, tenantId);
     return {
       success: true,
-      message: `Assigned ${driverName} for order #${order.orderNumber}`,
-      data: assignment,
+      message: `Assigned ${resData.assignment.driverName} (${resData.assignment.vehicleType}) for order #${order.orderNumber}`,
+      data: resData.assignment,
     };
   }
 

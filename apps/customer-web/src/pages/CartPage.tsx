@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Clock,
   Trash2,
@@ -23,14 +23,18 @@ import { useLocationStore } from '../store/useLocationStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { formatCurrency, DEFAULT_FREE_DELIVERY_THRESHOLD, DEFAULT_STANDARD_DELIVERY_FEE } from '@buildora/utils';
 import { GstinModal, DeliveryChargeModal, HandlingChargeModal } from '../components/cart';
+import { CheckoutAddressSummary, CheckoutPaymentModal } from '../components/checkout/CheckoutPaymentModal';
 import { api } from '../services/api';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Stores
   const {
     items,
+    mergeAdjustments,
+    clearMergeAdjustments,
     updateQuantity,
     removeItem,
     clearCart,
@@ -52,6 +56,8 @@ export const CartPage: React.FC = () => {
   const {
     pincode,
     locality,
+    cityName,
+    state: locState,
     selectedAddressId,
     selectedAddressLabel,
     selectedAddressFull,
@@ -61,7 +67,15 @@ export const CartPage: React.FC = () => {
     openLocationModal
   } = useLocationStore();
 
-  const { user, addresses, updateProfile } = useAuthStore();
+  const {
+    isAuthenticated,
+    user,
+    addresses,
+    updateProfile,
+    requireAuth,
+    postLoginEvent,
+    consumePostLoginEvent,
+  } = useAuthStore();
   const summary = getSummary();
 
   // Local State
@@ -143,9 +157,52 @@ export const CartPage: React.FC = () => {
     }
   };
 
-  // Checkout validation state & comprehensive checkout action
+  // Checkout validation state & Delivering To Payment Modal
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [isValidatingCheckout, setIsValidatingCheckout] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [validatedAddress, setValidatedAddress] = useState<CheckoutAddressSummary | null>(null);
+  const [serverPayableAmount, setServerPayableAmount] = useState<number | null>(null);
+
+  const buildActiveCheckoutAddress = (): CheckoutAddressSummary => {
+    const targetSaved = addresses?.find((a) => a && a.id === selectedAddressId) || addresses?.[0];
+    if (targetSaved) {
+      return {
+        type: targetSaved.type || 'HOME',
+        label:
+          targetSaved.type === 'WORK'
+            ? 'Office'
+            : targetSaved.type === 'CONSTRUCTION_SITE'
+              ? 'Job Site'
+              : 'Home',
+        recipientName: targetSaved.recipientName || user?.name || 'Buildora Customer',
+        mobile: targetSaved.mobile || user?.phone || '9876543210',
+        email: user?.email,
+        building: targetSaved.building || 'Site Project',
+        street: targetSaved.street || locality || 'Main Road',
+        area: targetSaved.area || locality || 'Bengaluru',
+        city: targetSaved.city || cityName || 'Bengaluru',
+        state: targetSaved.state || locState || 'Karnataka',
+        pincode: targetSaved.pincode || pincode || '560072',
+        landmark: targetSaved.landmark,
+        deliveryInstructions: targetSaved.deliveryInstructions,
+      };
+    }
+
+    return {
+      type: 'HOME',
+      label: selectedAddressLabel || 'Home',
+      recipientName: user?.name || 'Buildora Customer',
+      mobile: user?.phone || '9876543210',
+      email: user?.email,
+      building: selectedAddressFull ? selectedAddressFull.split(',')[0].trim() : '',
+      street: '',
+      area: locality || 'Bengaluru',
+      city: (cityName ? cityName.split(',')[0].trim() : '') || 'Bengaluru',
+      state: locState || 'Karnataka',
+      pincode: pincode || '560072',
+    };
+  };
 
   const handleContinueToCheckout = async () => {
     setCheckoutError(null);
@@ -156,7 +213,17 @@ export const CartPage: React.FC = () => {
       return;
     }
 
-    // 2. Validate quantities & stock
+    // 2. Require authenticated customer before checkout / payment
+    if (
+      !requireAuth(
+        { type: 'CHECKOUT', source: 'CART_PAGE' },
+        { reason: 'Sign in with your mobile number to continue to checkout.' }
+      )
+    ) {
+      return;
+    }
+
+    // 3. Validate quantities & stock
     for (const item of items) {
       if (item.quantity <= 0) {
         setCheckoutError(`Invalid quantity for '${item.name}'. Quantity must be at least 1.`);
@@ -168,7 +235,7 @@ export const CartPage: React.FC = () => {
       }
     }
 
-    // 3. Validate address & serviceability
+    // 4. Validate address & serviceability
     if (!pincode && !selectedAddressFull) {
       setCheckoutError('Please enter a delivery PIN code or select a saved address.');
       openLocationModal();
@@ -181,32 +248,10 @@ export const CartPage: React.FC = () => {
       return;
     }
 
-    // 4. Server-Side Pre-Order Validation via API (centralized authoritative check)
+    // 4. Authoritative Server-Side Cart, Pricing & Serviceability Validation
     setIsValidatingCheckout(true);
     try {
-      const targetSaved = addresses?.find((a) => a && a.id === selectedAddressId);
-      const activeAddr = targetSaved
-        ? {
-            recipientName: targetSaved.recipientName || user?.name || 'Customer',
-            mobile: targetSaved.mobile || user?.phone || '9876543210',
-            building: targetSaved.building || 'Site Project',
-            street: targetSaved.street || locality || 'Main Road',
-            area: targetSaved.area || locality || 'Bengaluru',
-            city: targetSaved.city || 'Bengaluru',
-            state: targetSaved.state || 'Karnataka',
-            pincode: targetSaved.pincode || pincode || '560072'
-          }
-        : {
-            recipientName: user?.name || 'Customer',
-            mobile: user?.phone || '9876543210',
-            building: selectedAddressFull ? selectedAddressFull.split(',')[0].trim() : 'Site Location',
-            street: locality || 'Main Road',
-            area: locality || 'Bengaluru',
-            city: 'Bengaluru',
-            state: 'Karnataka',
-            pincode: pincode || '560072'
-          };
-
+      const activeAddr = buildActiveCheckoutAddress();
       const valRes = await api.validateCheckout({
         items: items.map((i) => ({
           productId: i.productId,
@@ -229,15 +274,40 @@ export const CartPage: React.FC = () => {
         return;
       }
 
+      const calculatedPayable =
+        valRes.data?.payableAmount ?? valRes.data?.summary?.payableAmount ?? valRes.data?.summary?.grandTotal ?? (summary.payableAmount || summary.grandTotal);
+
+      setValidatedAddress(activeAddr);
+      setServerPayableAmount(calculatedPayable);
       setCheckoutError(null);
-      navigate('/checkout');
+      setIsPaymentModalOpen(true);
     } catch {
-      // Offline / fallback transition
-      navigate('/checkout');
+      const activeAddr = buildActiveCheckoutAddress();
+      setValidatedAddress(activeAddr);
+      setServerPayableAmount(summary.payableAmount || summary.grandTotal);
+      setIsPaymentModalOpen(true);
     } finally {
       setIsValidatingCheckout(false);
     }
   };
+
+  useEffect(() => {
+    if (!isAuthenticated || items.length === 0) return;
+    const hasPostLoginCheckout = postLoginEvent?.type === 'CHECKOUT';
+    const hasAutoParam = searchParams.get('autoCheckout') === '1';
+    if (!hasPostLoginCheckout && !hasAutoParam) return;
+
+    if (hasPostLoginCheckout) {
+      consumePostLoginEvent('CHECKOUT');
+    }
+    if (hasAutoParam) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('autoCheckout');
+      setSearchParams(nextParams, { replace: true });
+    }
+    void handleContinueToCheckout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, postLoginEvent, searchParams, items.length]);
 
   // If cart is empty
   if (items.length === 0) {
@@ -480,6 +550,28 @@ export const CartPage: React.FC = () => {
 
         {/* RIGHT COLUMN: Unified Scrollable Panel & Sticky Checkout Section (col-span-12 lg:col-span-5 xl:col-span-4) */}
         <div className="lg:col-span-5 xl:col-span-4 space-y-3 lg:sticky lg:top-20">
+          {/* Guest-to-Account Cart Merge Notice */}
+          {mergeAdjustments && mergeAdjustments.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-start justify-between gap-2 shadow-xs">
+              <div className="space-y-1">
+                <div className="font-bold">Cart synced with your account</div>
+                <ul className="list-disc list-inside text-[11px] space-y-0.5 text-blue-800">
+                  {mergeAdjustments.map((msg, idx) => (
+                    <li key={idx}>{msg}</li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                type="button"
+                onClick={clearMergeAdjustments}
+                className="text-blue-400 hover:text-blue-700 p-0.5 rounded cursor-pointer"
+                aria-label="Dismiss sync notice"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Validation Error Banner (if checkout pre-validation fails) */}
           {checkoutError && (
             <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-900 flex items-start justify-between gap-2 shadow-xs animate-in fade-in">
@@ -539,11 +631,10 @@ export const CartPage: React.FC = () => {
                     type="button"
                     onClick={handleApplyCoupon}
                     disabled={isApplyingCoupon || !couponInput.trim()}
-                    className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer ${
-                      isApplyingCoupon || !couponInput.trim()
-                        ? 'bg-emerald-600/60 cursor-not-allowed'
-                        : 'bg-emerald-700 hover:bg-emerald-800 shadow-sm'
-                    }`}
+                    className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all cursor-pointer ${isApplyingCoupon || !couponInput.trim()
+                      ? 'bg-emerald-600/60 cursor-not-allowed'
+                      : 'bg-emerald-700 hover:bg-emerald-800 shadow-sm'
+                      }`}
                   >
                     {isApplyingCoupon ? '...' : 'Apply'}
                   </button>
@@ -552,9 +643,8 @@ export const CartPage: React.FC = () => {
 
               {couponFeedback && (
                 <p
-                  className={`text-[11px] font-semibold flex items-center gap-1 ${
-                    couponFeedback.type === 'success' ? 'text-emerald-700' : 'text-red-600'
-                  }`}
+                  className={`text-[11px] font-semibold flex items-center gap-1 ${couponFeedback.type === 'success' ? 'text-emerald-700' : 'text-red-600'
+                    }`}
                 >
                   {couponFeedback.type === 'success' ? (
                     <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -802,13 +892,12 @@ export const CartPage: React.FC = () => {
                 </div>
                 {/* Delivery ETA badge positioned clearly above Change Address */}
                 <span
-                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide shadow-2xs flex items-center gap-1 ${
-                    isLocationLoading
-                      ? 'bg-slate-200 text-slate-700'
-                      : !isServiceable && pincode
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide shadow-2xs flex items-center gap-1 ${isLocationLoading
+                    ? 'bg-slate-200 text-slate-700'
+                    : !isServiceable && pincode
                       ? 'bg-amber-600 text-white'
                       : 'bg-[#14532d] text-white'
-                  }`}
+                    }`}
                 >
                   {isLocationLoading && <Loader2 className="w-3 h-3 animate-spin" />}
                   {getEtaBadgeText()}
@@ -901,6 +990,22 @@ export const CartPage: React.FC = () => {
       <HandlingChargeModal
         isOpen={isHandlingModalOpen}
         onClose={() => setIsHandlingModalOpen(false)}
+      />
+
+      {/* Centered Delivering To & Payment Selection Popup */}
+      <CheckoutPaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        address={validatedAddress || buildActiveCheckoutAddress()}
+        payableAmount={serverPayableAmount ?? payableAmount}
+        onEditAddress={() => {
+          setIsPaymentModalOpen(false);
+          openLocationModal();
+        }}
+        onOrderConfirmed={(order) => {
+          setIsPaymentModalOpen(false);
+          navigate(`/checkout?order=${encodeURIComponent(order.orderNumber)}`, { state: { confirmedOrder: order } });
+        }}
       />
     </div>
   );

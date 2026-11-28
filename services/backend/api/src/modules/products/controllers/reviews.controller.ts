@@ -8,7 +8,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { verifyCustomerToken } from '../../../common/customer-auth.util';
+import { requireCustomer } from '../../../common/customer-auth.util';
 import {
   PlatformProductModel,
   PlatformReviewModel,
@@ -57,7 +57,7 @@ export class ReviewsController {
     @Body() body: { rating: number; comment: string; title?: string; customerName?: string },
     @Headers('authorization') authHeader?: string
   ) {
-    const cust = verifyCustomerToken(authHeader);
+    const cust = requireCustomer(authHeader);
     const prod =
       vendorProducts.find((vp) => vp.id === idOrSlug || vp.slug === idOrSlug || vp.id === `vp-${idOrSlug}`) ||
       (dbStore.products.find((p) => p.id === idOrSlug || p.slug === idOrSlug) as any);

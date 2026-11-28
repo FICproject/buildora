@@ -41,7 +41,6 @@ import { api } from '../../services/api';
 import { formatCurrency } from '@buildora/utils';
 import { formatLocationDisplay } from '../../utils';
 import { LocationModal } from './LocationModal';
-import { AuthModal } from './AuthModal';
 import { CartDrawer } from './CartDrawer';
 import { SmartSearchBar } from './SmartSearchBar';
 import { NotificationPopover } from './NotificationPopover';
@@ -332,6 +331,14 @@ export const Header: React.FC = () => {
     }
   };
 
+  const handleWishlistClick = () => {
+    if (isAuthenticated) {
+      navigate('/wishlist');
+    } else {
+      openAuthModal('/wishlist', 'Sign in to view and sync your saved Wishlist.');
+    }
+  };
+
   const getDepartmentCategories = (deptSlug: string) => getMainChildCategories(deptSlug);
 
   const getLocationDisplaySubtitle = () => {
@@ -435,8 +442,8 @@ export const Header: React.FC = () => {
               ) : (
                 <button
                   type="button"
-                  onClick={() => openAuthModal('/account', 'Sign in to access your Buildora account and saved details')}
-                  className="h-10 flex items-center gap-1.5 px-3 xl:px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-800 transition-colors shadow-2xs flex-shrink-0"
+                  onClick={() => openAuthModal(undefined, 'Sign in to access your Buildora account and saved details.')}
+                  className="h-10 flex items-center gap-1.5 px-3 xl:px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-800 transition-colors shadow-2xs flex-shrink-0 cursor-pointer"
                   title="Sign In to Account"
                 >
                   <User className="w-4 h-4 text-slate-600 flex-shrink-0" />
@@ -445,10 +452,11 @@ export const Header: React.FC = () => {
               )}
 
               {/* 2. Wishlist */}
-              <Link
-                to="/wishlist"
-                className="h-10 w-10 relative rounded-xl text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 transition-colors flex items-center justify-center flex-shrink-0"
-                title="View Saved Materials (Wishlist)"
+              <button
+                type="button"
+                onClick={handleWishlistClick}
+                className="h-10 w-10 relative rounded-xl text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
+                title={isAuthenticated ? 'View Saved Materials (Wishlist)' : 'Sign In to View Wishlist'}
               >
                 <Heart className="w-5 h-5" />
                 {wishlistItems.length > 0 && (
@@ -456,7 +464,7 @@ export const Header: React.FC = () => {
                     {wishlistItems.length}
                   </span>
                 )}
-              </Link>
+              </button>
 
               {/* 3. Notifications */}
               <div className="flex-shrink-0">
@@ -534,8 +542,8 @@ export const Header: React.FC = () => {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => openAuthModal('/account')}
-                    className="p-2 rounded-xl text-slate-700 hover:bg-slate-100 text-xs font-bold"
+                    onClick={() => openAuthModal(undefined, 'Sign in to access your Buildora account and saved details.')}
+                    className="p-2 rounded-xl text-slate-700 hover:bg-slate-100 text-xs font-bold cursor-pointer"
                     title="Sign In"
                   >
                     <User className="w-4 h-4" />
@@ -543,14 +551,19 @@ export const Header: React.FC = () => {
                 )}
 
                 {/* Wishlist */}
-                <Link to="/wishlist" className="relative p-2 rounded-xl text-slate-700 hover:bg-slate-100" title="Wishlist">
+                <button
+                  type="button"
+                  onClick={handleWishlistClick}
+                  className="relative p-2 rounded-xl text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  title={isAuthenticated ? 'Wishlist' : 'Sign In for Wishlist'}
+                >
                   <Heart className="w-4 h-4" />
                   {wishlistItems.length > 0 && (
                     <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
                       {wishlistItems.length}
                     </span>
                   )}
-                </Link>
+                </button>
 
                 {/* Notifications */}
                 <NotificationPopover />
@@ -645,10 +658,11 @@ export const Header: React.FC = () => {
                 </button>
 
                 {/* Wishlist */}
-                <Link
-                  to="/wishlist"
-                  className="relative p-1.5 rounded-xl text-slate-700 hover:bg-slate-100 min-h-[36px] flex items-center justify-center"
-                  title="Saved Materials"
+                <button
+                  type="button"
+                  onClick={handleWishlistClick}
+                  className="relative p-1.5 rounded-xl text-slate-700 hover:bg-slate-100 min-h-[36px] flex items-center justify-center cursor-pointer"
+                  title={isAuthenticated ? 'Saved Materials' : 'Sign In for Wishlist'}
                 >
                   <Heart className="w-4 h-4" />
                   {wishlistItems.length > 0 && (
@@ -656,7 +670,7 @@ export const Header: React.FC = () => {
                       {wishlistItems.length}
                     </span>
                   )}
-                </Link>
+                </button>
 
                 {/* Notifications */}
                 <NotificationPopover />
@@ -1510,7 +1524,6 @@ export const Header: React.FC = () => {
 
       {/* Persistent Modals */}
       <LocationModal />
-      <AuthModal />
       <CartDrawer isOpen={isCartDrawerOpen} onClose={() => setIsCartDrawerOpen(false)} />
     </>
   );

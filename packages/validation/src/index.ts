@@ -12,6 +12,10 @@ export const VALIDATION_PATTERNS = {
   PINCODE: /^[1-9][0-9]{5}$/,
   // Indian PAN: 5 uppercase letters + 4 digits + 1 uppercase letter
   PAN: /^[A-Z]{5}[0-9]{4}[A-Z]$/,
+  // Indian Aadhaar: 12 numeric digits starting with 2-9
+  AADHAAR: /^[2-9][0-9]{11}$/,
+  // Indian Udyam MSME Registration Number: UDYAM-XX-00-0000000
+  UDYAM: /^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$/,
   // Indian GSTIN structural pattern: 2-digit state + 10-char PAN + entity + 'Z' + check char
   GSTIN: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/,
   // Indian IFSC: 4 uppercase letters + '0' + 6 alphanumeric characters
@@ -72,11 +76,18 @@ export const ALLOWED_BUSINESS_REGISTRATION_TYPES = [
 ] as const;
 
 export const ALLOWED_BANK_ACCOUNT_TYPES = ['CURRENT', 'SAVINGS'] as const;
+export const ALLOWED_GST_STATUSES = ['REGISTERED', 'NOT_REGISTERED', 'APPLIED'] as const;
+export const ALLOWED_MSME_STATUSES = ['REGISTERED', 'NOT_REGISTERED', 'APPLIED'] as const;
 
 export const ALLOWED_KYC_DOCUMENT_TYPES = [
-  'BUSINESS_REGISTRATION',
-  'GST_CERTIFICATE',
+  'AADHAAR_CARD',
   'PAN_CARD',
+  'GST_CERTIFICATE',
+  'GST_ACKNOWLEDGEMENT',
+  'MSME_CERTIFICATE',
+  'UDYAM_CERTIFICATE',
+  'MSME_ACKNOWLEDGEMENT',
+  'BUSINESS_REGISTRATION',
   'AUTHORIZED_ID',
   'CANCELLED_CHEQUE',
   'CATALOGUE',
@@ -343,6 +354,100 @@ export function validatePAN(pan: string): FieldValidationResult {
 
 export function isValidPAN(pan: string): boolean {
   return validatePAN(pan).isValid;
+}
+
+/**
+ * Validates 12-digit Indian Aadhaar Number (must start with 2-9, rejects repeated digits).
+ */
+export function validateAadhaar(aadhaar: string): FieldValidationResult {
+  if (typeof aadhaar !== 'string' || !aadhaar.trim()) {
+    return { isValid: false, error: 'Aadhaar Number is required.' };
+  }
+  const clean = aadhaar.replace(/[\s-]+/g, '').trim();
+  if (!/^\d+$/.test(clean)) {
+    return { isValid: false, error: 'Aadhaar Number must contain 12 numeric digits only.' };
+  }
+  if (clean.length !== 12) {
+    return { isValid: false, error: 'Aadhaar Number must be exactly 12 digits.' };
+  }
+  if (!VALIDATION_PATTERNS.AADHAAR.test(clean)) {
+    return { isValid: false, error: 'Enter a valid 12-digit Aadhaar Number (cannot start with 0 or 1).' };
+  }
+  if (/^(\d)\1+$/.test(clean)) {
+    return { isValid: false, error: 'Enter a valid 12-digit Aadhaar Number.' };
+  }
+  return { isValid: true, normalized: clean };
+}
+
+export function isValidAadhaar(aadhaar: string): boolean {
+  return validateAadhaar(aadhaar).isValid;
+}
+
+/**
+ * Validates Indian Udyam MSME Registration Number: UDYAM-XX-00-0000000.
+ */
+export function validateUdyamNumber(udyam: string): FieldValidationResult {
+  if (typeof udyam !== 'string' || !udyam.trim()) {
+    return { isValid: false, error: 'Udyam Registration Number is required.' };
+  }
+  const clean = udyam.trim().toUpperCase();
+  if (!VALIDATION_PATTERNS.UDYAM.test(clean)) {
+    return {
+      isValid: false,
+      error: 'Enter a valid Udyam Number in format UDYAM-XX-00-0000000 (e.g. UDYAM-KA-03-0012345).'
+    };
+  }
+  return { isValid: true, normalized: clean };
+}
+
+/**
+ * Validates optional GST / MSME Application Reference / ARN Number when provided.
+ */
+export function validateApplicationReference(
+  ref: string,
+  fieldLabel = 'Application Reference Number'
+): FieldValidationResult {
+  const clean = typeof ref === 'string' ? ref.trim().toUpperCase() : '';
+  if (!clean) {
+    return { isValid: true, normalized: '' };
+  }
+  if (clean.length < 6 || clean.length > 35 || !/^[A-Z0-9\-\/]+$/.test(clean)) {
+    return {
+      isValid: false,
+      error: `${fieldLabel} must be 6–35 alphanumeric characters (letters, digits, '-' or '/').`
+    };
+  }
+  return { isValid: true, normalized: clean };
+}
+
+/**
+ * Preserves existing business-type verification rules for Trade License / Incorporation Certificate.
+ */
+export function isTradeLicenseRequired(businessRegistrationType?: string): boolean {
+  const clean = String(businessRegistrationType || '').trim().toUpperCase();
+  if (!clean) return true;
+  return ALLOWED_BUSINESS_REGISTRATION_TYPES.includes(clean as any);
+}
+
+export function maskAadhaar(aadhaar?: string): string {
+  const digits = String(aadhaar || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length < 4) return 'XXXX XXXX XXXX';
+  return `XXXX XXXX ${digits.slice(-4)}`;
+}
+
+export function maskPan(pan?: string): string {
+  const clean = String(pan || '').trim().toUpperCase();
+  if (!clean) return '';
+  if (clean.length <= 4) return 'XXXXXX';
+  return `${clean.slice(0, 3)}XXXXXX${clean.slice(-1)}`;
+}
+
+export function maskBankAccount(acc?: string): string {
+  const clean = String(acc || '').replace(/\s+/g, '');
+  if (!clean) return '';
+  if (clean.length <= 4) return clean;
+  return `XXXX${clean.slice(-4)}`;
 }
 
 /**
@@ -861,46 +966,107 @@ export function validateVendorStep3(data: {
  * Validates Step 4 KYC & Tax Information payload consistently across frontend & backend.
  */
 export function validateVendorStep4(data: {
+  aadhaarNumber?: string;
+  gstStatus?: string;
   gstin?: string;
+  gstApplicationNumber?: string;
   pan?: string;
+  msmeStatus?: string;
+  udyamNumber?: string;
+  msmeApplicationNumber?: string;
+  businessRegistrationType?: string;
   documents?: Array<{ type?: string; fileName?: string; fileSize?: number; mimeType?: string }>;
 }): StepValidationResult {
   const errors: Record<string, string> = {};
 
-  const cleanGst = (data.gstin || '').trim().toUpperCase();
-  const cleanPan = (data.pan || '').trim().toUpperCase();
+  // A. Aadhaar validation
+  const aadhaarCheck = validateAadhaar(data.aadhaarNumber || '');
+  if (!aadhaarCheck.isValid && aadhaarCheck.error) {
+    errors.aadhaarNumber = aadhaarCheck.error;
+  }
 
-  if (!cleanGst && !cleanPan) {
-    errors.gstin = 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
-    errors.pan = 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
-  } else {
-    if (cleanGst) {
-      const gstCheck = validateGSTIN(cleanGst);
-      if (!gstCheck.isValid && gstCheck.error) errors.gstin = gstCheck.error;
-    }
-    if (cleanPan) {
-      const panCheck = validatePAN(cleanPan);
-      if (!panCheck.isValid && panCheck.error) errors.pan = panCheck.error;
+  // B. PAN validation
+  const panCheck = validatePAN(data.pan || '');
+  if (!panCheck.isValid && panCheck.error) {
+    errors.pan = panCheck.error;
+  }
+
+  // C. GST Status & conditional validation
+  const gstStatus = String(data.gstStatus || '').trim().toUpperCase();
+  if (!ALLOWED_GST_STATUSES.includes(gstStatus as any)) {
+    errors.gstStatus = 'Please select your GST Registration Status.';
+  } else if (gstStatus === 'REGISTERED') {
+    const gstCheck = validateGSTIN(data.gstin || '');
+    if (!gstCheck.isValid && gstCheck.error) errors.gstin = gstCheck.error;
+  } else if (gstStatus === 'APPLIED' && data.gstApplicationNumber?.trim()) {
+    const arnCheck = validateApplicationReference(
+      data.gstApplicationNumber,
+      'GST Application / ARN Reference Number'
+    );
+    if (!arnCheck.isValid && arnCheck.error) errors.gstApplicationNumber = arnCheck.error;
+  }
+
+  // D. MSME Status & conditional validation (MSME itself is optional; Udyam is required if Yes)
+  const msmeStatus = String(data.msmeStatus || 'NOT_REGISTERED').trim().toUpperCase();
+  if (msmeStatus && !ALLOWED_MSME_STATUSES.includes(msmeStatus as any)) {
+    errors.msmeStatus = 'Please select a valid MSME Status.';
+  } else if (msmeStatus === 'REGISTERED') {
+    const udyamCheck = validateUdyamNumber(data.udyamNumber || '');
+    if (!udyamCheck.isValid && udyamCheck.error) errors.udyamNumber = udyamCheck.error;
+  } else if (msmeStatus === 'APPLIED' && data.msmeApplicationNumber?.trim()) {
+    const msmeRefCheck = validateApplicationReference(
+      data.msmeApplicationNumber,
+      'MSME Application Reference Number'
+    );
+    if (!msmeRefCheck.isValid && msmeRefCheck.error) {
+      errors.msmeApplicationNumber = msmeRefCheck.error;
     }
   }
 
+  // E. Document format & applicability checks
   const docs = Array.isArray(data.documents) ? data.documents : [];
-  if (docs.length === 0) {
-    errors.documents = 'Please upload at least one required KYC document (GST Certificate or PAN Card).';
-  } else {
-    for (const doc of docs) {
-      if (!doc.type || !ALLOWED_KYC_DOCUMENT_TYPES.includes(doc.type as any)) {
-        errors.documents = 'Invalid KYC document category.';
+  for (const doc of docs) {
+    if (!doc.type || !ALLOWED_KYC_DOCUMENT_TYPES.includes(doc.type as any)) {
+      errors.documents = 'Invalid KYC document category.';
+      break;
+    }
+    if (doc.mimeType && doc.fileSize !== undefined) {
+      const meta = validateKycDocumentMetadata(doc.mimeType, doc.fileSize, doc.fileName);
+      if (!meta.isValid) {
+        errors.documents = meta.error || 'Invalid KYC document file.';
         break;
       }
-      if (doc.mimeType && doc.fileSize !== undefined) {
-        const meta = validateKycDocumentMetadata(doc.mimeType, doc.fileSize, doc.fileName);
-        if (!meta.isValid) {
-          errors.documents = meta.error || 'Invalid KYC document file.';
-          break;
-        }
-      }
     }
+  }
+
+  const hasDoc = (types: string[]) => docs.some((d) => d.type && types.includes(d.type));
+
+  if (!hasDoc(['AADHAAR_CARD', 'AUTHORIZED_ID'])) {
+    errors.aadhaarDoc = 'Please upload your Aadhaar Card document.';
+  }
+  if (!hasDoc(['PAN_CARD'])) {
+    errors.panDoc = 'Please upload your PAN Card document.';
+  }
+  if (gstStatus === 'REGISTERED' && !hasDoc(['GST_CERTIFICATE'])) {
+    errors.gstDoc = 'Please upload your GST Registration Certificate (REG-06).';
+  }
+  if (msmeStatus === 'REGISTERED' && !hasDoc(['MSME_CERTIFICATE', 'UDYAM_CERTIFICATE'])) {
+    errors.msmeDoc = 'Please upload your Udyam Registration Certificate.';
+  }
+  if (isTradeLicenseRequired(data.businessRegistrationType) && !hasDoc(['BUSINESS_REGISTRATION'])) {
+    errors.businessRegDoc = 'Please upload your Trade License / Incorporation Certificate.';
+  }
+
+  if (
+    !errors.documents &&
+    (errors.aadhaarDoc || errors.panDoc || errors.gstDoc || errors.msmeDoc || errors.businessRegDoc)
+  ) {
+    errors.documents =
+      errors.aadhaarDoc ||
+      errors.panDoc ||
+      errors.gstDoc ||
+      errors.msmeDoc ||
+      errors.businessRegDoc;
   }
 
   return { isValid: Object.keys(errors).length === 0, errors };
@@ -918,11 +1084,13 @@ export function validateVendorStep5(
       confirmAccountNumber?: string;
       ifsc?: string;
       accountType?: string;
+      chequeDocUrl?: string;
     };
+    documents?: Array<{ type?: string }>;
     termsAccepted?: boolean;
     privacyAccepted?: boolean;
   },
-  options?: { requireConfirmAccountNumber?: boolean }
+  options?: { requireConfirmAccountNumber?: boolean; requireBankProof?: boolean }
 ): StepValidationResult {
   const errors: Record<string, string> = {};
   const bank = data.bankDetails || {};
@@ -952,6 +1120,14 @@ export function validateVendorStep5(
   if (bank.accountType !== undefined) {
     const typeCheck = validateBankAccountType(bank.accountType);
     if (!typeCheck.isValid && typeCheck.error) errors.accountType = typeCheck.error;
+  }
+
+  if (options?.requireBankProof !== false) {
+    const docs = Array.isArray(data.documents) ? data.documents : [];
+    const hasBankProof = docs.some((d) => d.type === 'CANCELLED_CHEQUE') || Boolean(bank.chequeDocUrl);
+    if (!hasBankProof) {
+      errors.bankProofDoc = 'Please upload your Bank Passbook or Cancelled Cheque.';
+    }
   }
 
   if (!data.termsAccepted) {
@@ -990,15 +1166,26 @@ export function validateVendorRegistrationPayload(data: any): StepValidationResu
     completeAddress: data?.completeAddress
   });
   const s4 = validateVendorStep4({
+    aadhaarNumber: data?.aadhaarNumber,
+    gstStatus: data?.gstStatus,
     gstin: data?.gstin,
+    gstApplicationNumber: data?.gstApplicationNumber,
     pan: data?.pan,
+    msmeStatus: data?.msmeStatus,
+    udyamNumber: data?.udyamNumber,
+    msmeApplicationNumber: data?.msmeApplicationNumber,
+    businessRegistrationType: data?.businessRegistrationType,
     documents: data?.documents
   });
-  const s5 = validateVendorStep5({
-    bankDetails: data?.bankDetails,
-    termsAccepted: data?.termsAccepted,
-    privacyAccepted: data?.privacyAccepted
-  });
+  const s5 = validateVendorStep5(
+    {
+      bankDetails: data?.bankDetails,
+      documents: data?.documents,
+      termsAccepted: data?.termsAccepted,
+      privacyAccepted: data?.privacyAccepted
+    },
+    { requireBankProof: true }
+  );
 
   const errors = {
     ...s1.errors,

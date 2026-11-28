@@ -1,7 +1,14 @@
-import { Controller, Get, Put, Patch, Post, Delete, Body, Param, Headers } from '@nestjs/common';
+import { Controller, Get, Put, Patch, Post, Delete, Body, Param, Headers, ForbiddenException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { Address, CustomerProfile } from '@buildora/types';
-import { verifyCustomerToken } from '../../../common/customer-auth.util';
+import { requireCustomer } from '../../../common/customer-auth.util';
+import { dbStore } from '../../../database/store';
+import {
+  PlatformCustomerAddressModel,
+  PlatformCustomerWishlistModel,
+  platformPersistenceService,
+} from '../../../database/platform-persistence.service';
+import { vendorProducts } from '../../vendors/controllers/vendor.controller';
 import { companyAdminDataService } from '../../company-admin/services/company-admin-data.service';
 import {
   companyAdminPersistenceService,
@@ -137,29 +144,84 @@ let mockAddresses: Address[] = [
 
 @Controller('api/v1/customer')
 export class CustomerController {
+  private getCustomerAddressesList(customerId: string): Address[] {
+    if (!dbStore.customerAddresses.has(customerId)) {
+      const isSeedDemo = customerId === 'cust-9876543210' || customerId === 'cust-demo-1';
+      dbStore.customerAddresses.set(
+        customerId,
+        isSeedDemo ? mockAddresses.map((a) => ({ ...a })) : []
+      );
+    }
+    return dbStore.customerAddresses.get(customerId)!;
+  }
+
+  private resolveWishlistCatalogProducts(rawList: any[]): any[] {
+    const seen = new Set<string>();
+    const result: any[] = [];
+    for (const entry of Array.isArray(rawList) ? rawList : []) {
+      const pid = typeof entry === 'string' ? entry : entry?.id || entry?.productId;
+      if (!pid || seen.has(pid)) continue;
+      const catalogMatch =
+        dbStore.products.find((p) => p.id === pid || p.slug === pid) ||
+        vendorProducts.find((vp) => vp.id === pid || vp.slug === pid);
+      const item = catalogMatch || (typeof entry === 'object' && entry?.id ? entry : null);
+      if (item && (item as any).isActive !== false) {
+        seen.add(item.id || pid);
+        result.push(item);
+      }
+    }
+    return result;
+  }
+
   @Get('profile')
   getProfile(@Headers('authorization') authHeader?: string) {
-    const cust = verifyCustomerToken(authHeader);
-    const live = cust?.sub ? (companyAdminDataService.customers.get(cust.sub) as any) : undefined;
+    const cust = requireCustomer(authHeader);
+    const live = companyAdminDataService.customers.get(cust.sub) as any;
+    const isSeedDemo = cust.sub === 'cust-9876543210' || cust.sub === 'cust-demo-1';
+
     if (live) {
       return {
         success: true,
         data: {
-          ...mockProfile,
           id: live.id,
           name: live.name,
           phone: live.phone,
-          email: live.email,
+          email: live.email || '',
+          isPhoneVerified: true,
+          isEmailVerified: Boolean(live.email),
           gstin: live.gstin || '',
           businessName: live.businessName || '',
-          walletBalance: live.walletBalance ?? mockProfile.walletBalance,
-          status: live.status,
+          walletBalance: Number(live.walletBalance ?? (isSeedDemo ? mockProfile.walletBalance : 0)),
+          rewardPoints: isSeedDemo ? mockProfile.rewardPoints : 0,
+          status: live.status || 'ACTIVE',
+          createdAt: live.createdAt || new Date().toISOString(),
         },
       };
     }
+
+    if (isSeedDemo) {
+      return {
+        success: true,
+        data: mockProfile,
+      };
+    }
+
     return {
       success: true,
-      data: mockProfile,
+      data: {
+        id: cust.sub,
+        name: cust.name || 'Buildora Customer',
+        phone: cust.phone,
+        email: cust.email || '',
+        isPhoneVerified: true,
+        isEmailVerified: Boolean(cust.email),
+        gstin: '',
+        businessName: '',
+        walletBalance: 0,
+        rewardPoints: 0,
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString(),
+      },
     };
   }
 
@@ -168,11 +230,13 @@ export class CustomerController {
     @Body() body: Partial<CustomerProfile>,
     @Headers('authorization') authHeader?: string
   ) {
-    const cust = verifyCustomerToken(authHeader);
-    const live = cust?.sub ? (companyAdminDataService.customers.get(cust.sub) as any) : undefined;
+    const cust = requireCustomer(authHeader);
+    const live = companyAdminDataService.customers.get(cust.sub) as any;
+    const isSeedDemo = cust.sub === 'cust-9876543210' || cust.sub === 'cust-demo-1';
+
     if (live) {
-      if (body.name) live.name = body.name;
-      if (body.email) live.email = body.email;
+      if (body.name !== undefined) live.name = body.name;
+      if (body.email !== undefined) live.email = body.email;
       if (body.gstin !== undefined) live.gstin = body.gstin;
       if (body.businessName !== undefined) live.businessName = body.businessName;
       await companyAdminPersistenceService.upsert(CompanyCustomerModel, live);
@@ -180,22 +244,48 @@ export class CustomerController {
         success: true,
         message: 'Profile updated successfully',
         data: {
-          ...mockProfile,
           id: live.id,
           name: live.name,
           phone: live.phone,
-          email: live.email,
+          email: live.email || '',
+          isPhoneVerified: true,
+          isEmailVerified: Boolean(live.email),
           gstin: live.gstin || '',
           businessName: live.businessName || '',
-          walletBalance: live.walletBalance ?? mockProfile.walletBalance,
+          walletBalance: Number(live.walletBalance ?? 0),
+          rewardPoints: isSeedDemo ? mockProfile.rewardPoints : 0,
         },
       };
     }
-    mockProfile = { ...mockProfile, ...body };
+
+    if (isSeedDemo) {
+      mockProfile = { ...mockProfile, ...body };
+      return {
+        success: true,
+        message: 'Profile updated successfully',
+        data: mockProfile,
+      };
+    }
+
+    const created: any = {
+      id: cust.sub,
+      tenantId: cust.tenantId || 'tenant-buildora-blr',
+      name: body.name || cust.name || 'Buildora Customer',
+      phone: cust.phone,
+      email: body.email || cust.email || '',
+      customerType: 'CONTRACTOR',
+      gstin: body.gstin || '',
+      businessName: body.businessName || '',
+      walletBalance: 0,
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString(),
+    };
+    companyAdminDataService.customers.set(cust.sub, created);
+    await companyAdminPersistenceService.upsert(CompanyCustomerModel, created);
     return {
       success: true,
       message: 'Profile updated successfully',
-      data: mockProfile,
+      data: created,
     };
   }
 
@@ -208,64 +298,165 @@ export class CustomerController {
   }
 
   @Get('addresses')
-  getAddresses() {
+  getAddresses(@Headers('authorization') authHeader?: string) {
+    const cust = requireCustomer(authHeader);
     return {
       success: true,
-      data: mockAddresses
+      data: this.getCustomerAddressesList(cust.sub),
     };
   }
 
   @Post('addresses')
-  addAddress(@Body() body: Omit<Address, 'id'>) {
-    const id = 'addr-' + Date.now();
+  async addAddress(
+    @Body() body: Omit<Address, 'id'>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const list = this.getCustomerAddressesList(cust.sub);
+    const id = 'addr-' + Date.now() + '-' + Math.floor(Math.random() * 100);
     const newAddress: Address = {
       ...body,
       id,
-      isDefault: body.isDefault || mockAddresses.length === 0
+      isDefault: Boolean(body.isDefault) || list.length === 0,
     };
-    if (newAddress.isDefault) {
-      mockAddresses = mockAddresses.map((a) => ({ ...a, isDefault: false }));
-    }
-    mockAddresses.push(newAddress);
+    const nextList = newAddress.isDefault
+      ? list.map((a) => ({ ...a, isDefault: false })).concat(newAddress)
+      : list.concat(newAddress);
+    dbStore.customerAddresses.set(cust.sub, nextList);
+    await platformPersistenceService.upsert(PlatformCustomerAddressModel, {
+      id: `addrs-${cust.sub}`,
+      customerId: cust.sub,
+      addresses: nextList,
+    });
     return {
       success: true,
       message: 'Address added successfully',
-      data: newAddress
+      data: newAddress,
     };
   }
 
   @Delete('addresses/:id')
-  deleteAddress(@Param('id') id: string) {
-    mockAddresses = mockAddresses.filter((a) => a.id !== id);
+  async deleteAddress(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const list = this.getCustomerAddressesList(cust.sub);
+    const nextList = list.filter((a) => a.id !== id);
+    dbStore.customerAddresses.set(cust.sub, nextList);
+    await platformPersistenceService.upsert(PlatformCustomerAddressModel, {
+      id: `addrs-${cust.sub}`,
+      customerId: cust.sub,
+      addresses: nextList,
+    });
     return {
       success: true,
-      message: 'Address removed successfully'
+      message: 'Address removed successfully',
     };
   }
 
   @Put('addresses/:id')
-  updateAddress(@Param('id') id: string, @Body() body: Partial<Address>) {
-    const index = mockAddresses.findIndex((a) => a.id === id);
+  async updateAddress(
+    @Param('id') id: string,
+    @Body() body: Partial<Address>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const list = this.getCustomerAddressesList(cust.sub);
+    const index = list.findIndex((a) => a.id === id);
     if (index === -1) {
       return { success: false, message: 'Address not found' };
     }
-    mockAddresses[index] = { ...mockAddresses[index], ...body, id };
-    if (body.isDefault) {
-      mockAddresses = mockAddresses.map((a) => ({
-        ...a,
-        isDefault: a.id === id
-      }));
-    }
+    list[index] = { ...list[index], ...body, id };
+    const nextList = body.isDefault
+      ? list.map((a) => ({ ...a, isDefault: a.id === id }))
+      : list;
+    dbStore.customerAddresses.set(cust.sub, nextList);
+    await platformPersistenceService.upsert(PlatformCustomerAddressModel, {
+      id: `addrs-${cust.sub}`,
+      customerId: cust.sub,
+      addresses: nextList,
+    });
     return {
       success: true,
       message: 'Address updated successfully',
-      data: mockAddresses[index]
+      data: nextList[index],
     };
   }
 
   @Patch('addresses/:id')
-  patchAddress(@Param('id') id: string, @Body() body: Partial<Address>) {
-    return this.updateAddress(id, body);
+  patchAddress(
+    @Param('id') id: string,
+    @Body() body: Partial<Address>,
+    @Headers('authorization') authHeader?: string
+  ) {
+    return this.updateAddress(id, body, authHeader);
+  }
+
+  // ========================================================
+  // CUSTOMER WISHLIST PERSISTENCE & GUEST MERGE
+  // ========================================================
+
+  @Get('wishlist')
+  getWishlist(@Headers('authorization') authHeader?: string) {
+    const cust = requireCustomer(authHeader);
+    const raw = dbStore.customerWishlists.get(cust.sub) || [];
+    const items = this.resolveWishlistCatalogProducts(raw);
+    dbStore.customerWishlists.set(cust.sub, items);
+    return {
+      success: true,
+      data: items,
+    };
+  }
+
+  @Post('wishlist/merge')
+  async mergeWishlist(
+    @Body() body: { items?: any[] },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const serverItems = dbStore.customerWishlists.get(cust.sub) || [];
+    const guestItems = Array.isArray(body?.items) ? body.items : [];
+    const items = this.resolveWishlistCatalogProducts([...serverItems, ...guestItems]);
+    dbStore.customerWishlists.set(cust.sub, items);
+    await platformPersistenceService.upsert(PlatformCustomerWishlistModel, {
+      id: `wl-${cust.sub}`,
+      customerId: cust.sub,
+      items,
+      updatedAt: new Date().toISOString(),
+    });
+    return {
+      success: true,
+      data: items,
+    };
+  }
+
+  @Post('wishlist/toggle')
+  async toggleWishlistItem(
+    @Body() body: { productId: string; product?: any },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const current = this.resolveWishlistCatalogProducts(dbStore.customerWishlists.get(cust.sub) || []);
+    const exists = current.some((p) => p.id === body.productId);
+    let nextItems: any[];
+    if (exists) {
+      nextItems = current.filter((p) => p.id !== body.productId);
+    } else {
+      nextItems = this.resolveWishlistCatalogProducts([body.product || body.productId, ...current]);
+    }
+    dbStore.customerWishlists.set(cust.sub, nextItems);
+    await platformPersistenceService.upsert(PlatformCustomerWishlistModel, {
+      id: `wl-${cust.sub}`,
+      customerId: cust.sub,
+      items: nextItems,
+      updatedAt: new Date().toISOString(),
+    });
+    return {
+      success: true,
+      wishlisted: !exists,
+      data: nextItems,
+    };
   }
 
   // ========================================================
@@ -273,9 +464,14 @@ export class CustomerController {
   // ========================================================
 
   @Post('phone-change/initiate')
-  initiatePhoneChange(@Body() body: { newPhone: string; currentPhone?: string }) {
+  initiatePhoneChange(
+    @Body() body: { newPhone: string; currentPhone?: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const live = companyAdminDataService.customers.get(cust.sub) as any;
     const rawNewPhone = (body.newPhone || '').replace(/\D/g, '').slice(-10);
-    const currentRegisteredPhone = (body.currentPhone || mockProfile.phone || '').replace(/\D/g, '').slice(-10);
+    const currentRegisteredPhone = (body.currentPhone || live?.phone || cust.phone || '').replace(/\D/g, '').slice(-10);
 
     // 1. Validation: Indian mobile numbers (10 digits starting with 6, 7, 8, or 9)
     if (!/^[6-9]\d{9}$/.test(rawNewPhone)) {
@@ -302,8 +498,8 @@ export class CustomerController {
     }
 
     // 4. Invalidate any existing pending sessions for this user
-    for (const [sId, sess] of phoneChangeSessions.entries()) {
-      if (sess.userId === mockProfile.id && sess.status !== 'COMPLETED' && sess.status !== 'CANCELLED') {
+    for (const [, sess] of phoneChangeSessions.entries()) {
+      if (sess.userId === cust.sub && sess.status !== 'COMPLETED' && sess.status !== 'CANCELLED') {
         sess.status = 'CANCELLED';
       }
     }
@@ -315,7 +511,7 @@ export class CustomerController {
 
     const session: PhoneChangeSession = {
       sessionId,
-      userId: mockProfile.id,
+      userId: cust.sub,
       oldPhone: currentRegisteredPhone,
       newPhone: rawNewPhone,
       status: 'OLD_VERIFICATION_PENDING',
@@ -344,9 +540,16 @@ export class CustomerController {
   }
 
   @Post('phone-change/verify-old')
-  verifyOldPhone(@Body() body: { sessionId: string; otp: string }) {
+  verifyOldPhone(
+    @Body() body: { sessionId: string; otp: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
     const { sessionId, otp } = body;
     const session = phoneChangeSessions.get(sessionId);
+    if (session && session.userId !== cust.sub) {
+      throw new ForbiddenException('Unauthorized phone-change session access.');
+    }
 
     if (!session || session.status === 'CANCELLED' || session.status === 'COMPLETED') {
       return {
@@ -410,9 +613,16 @@ export class CustomerController {
   }
 
   @Post('phone-change/verify-new')
-  verifyNewPhone(@Body() body: { sessionId: string; otp: string }) {
+  verifyNewPhone(
+    @Body() body: { sessionId: string; otp: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
     const { sessionId, otp } = body;
     const session = phoneChangeSessions.get(sessionId);
+    if (session && session.userId !== cust.sub) {
+      throw new ForbiddenException('Unauthorized phone-change session access.');
+    }
 
     if (!session || session.status === 'CANCELLED' || session.status === 'COMPLETED') {
       return {
@@ -469,9 +679,16 @@ export class CustomerController {
   }
 
   @Post('phone-change/resend')
-  resendPhoneChangeOtp(@Body() body: { sessionId: string; target: 'OLD' | 'NEW' }) {
+  resendPhoneChangeOtp(
+    @Body() body: { sessionId: string; target: 'OLD' | 'NEW' },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
     const { sessionId, target } = body;
     const session = phoneChangeSessions.get(sessionId);
+    if (session && session.userId !== cust.sub) {
+      throw new ForbiddenException('Unauthorized phone-change session access.');
+    }
 
     if (!session || session.status === 'CANCELLED' || session.status === 'COMPLETED') {
       return {
@@ -531,9 +748,16 @@ export class CustomerController {
   }
 
   @Post('phone-change/confirm')
-  confirmPhoneChange(@Body() body: { sessionId: string }) {
+  async confirmPhoneChange(
+    @Body() body: { sessionId: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
     const { sessionId } = body;
     const session = phoneChangeSessions.get(sessionId);
+    if (session && session.userId !== cust.sub) {
+      throw new ForbiddenException('Unauthorized phone-change session access.');
+    }
 
     if (!session || session.status !== 'AWAITING_CONFIRMATION') {
       return {
@@ -568,9 +792,16 @@ export class CustomerController {
     }
 
     // Perform database update safely
-    const oldNumber = mockProfile.phone;
-    mockProfile.phone = session.newPhone;
-    mockProfile.isPhoneVerified = true;
+    const live = companyAdminDataService.customers.get(cust.sub) as any;
+    const oldNumber = live?.phone || cust.phone || mockProfile.phone;
+    if (live) {
+      live.phone = session.newPhone;
+      await companyAdminPersistenceService.upsert(CompanyCustomerModel, live);
+    }
+    if (cust.sub === 'cust-9876543210' || cust.sub === 'cust-demo-1') {
+      mockProfile.phone = session.newPhone;
+      mockProfile.isPhoneVerified = true;
+    }
 
     // Log permanent security audit record
     phoneChangeAuditLogs.push({
@@ -591,15 +822,19 @@ export class CustomerController {
       message: 'Phone number updated successfully!',
       newPhone: session.newPhone,
       maskedNewPhone: maskPhoneNumber(session.newPhone),
-      user: mockProfile
+      user: live || mockProfile
     };
   }
 
   @Post('phone-change/cancel')
-  cancelPhoneChange(@Body() body: { sessionId: string }) {
+  cancelPhoneChange(
+    @Body() body: { sessionId: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
     const { sessionId } = body;
     const session = phoneChangeSessions.get(sessionId);
-    if (session) {
+    if (session && session.userId === cust.sub) {
       session.status = 'CANCELLED';
     }
     return {
@@ -609,10 +844,11 @@ export class CustomerController {
   }
 
   @Get('phone-change/audit-logs')
-  getPhoneChangeAuditLogs() {
+  getPhoneChangeAuditLogs(@Headers('authorization') authHeader?: string) {
+    const cust = requireCustomer(authHeader);
     return {
       success: true,
-      data: phoneChangeAuditLogs
+      data: phoneChangeAuditLogs.filter((l) => l.userId === cust.sub),
     };
   }
 }

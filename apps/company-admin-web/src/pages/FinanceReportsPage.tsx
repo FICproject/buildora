@@ -19,6 +19,8 @@ export const FinancePage: React.FC = () => {
     transactions: [],
   });
   const [vendors, setVendors] = useState<any[]>([]);
+  const [rzpConfig, setRzpConfig] = useState<any>(null);
+  const [showDevGuide, setShowDevGuide] = useState(false);
   const [payoutModal, setPayoutModal] = useState<any>(null);
   const [payoutForm, setPayoutForm] = useState({
     paymentReference: '',
@@ -27,12 +29,14 @@ export const FinancePage: React.FC = () => {
   });
 
   const loadFinance = async () => {
-    const [fin, vnds] = await Promise.all([
+    const [fin, vnds, rzp] = await Promise.all([
       adminApi.getFinanceOverview(),
       adminApi.getVendors('APPROVED'),
+      adminApi.getRazorpayConfig().catch(() => null),
     ]);
     setData(fin || { summary: {}, settlements: [], invoices: [], transactions: [] });
     setVendors(vnds || []);
+    setRzpConfig(rzp);
   };
 
   useEffect(() => {
@@ -167,14 +171,29 @@ export const FinancePage: React.FC = () => {
       {/* Customer Payment Transactions & GST Invoices */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card title="Recent Payment Transactions">
+          {data.paymentMethodBreakdown && Object.keys(data.paymentMethodBreakdown).length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pb-3 mb-2 border-b border-[#E5DCD3] text-[11px]">
+              {Object.entries(data.paymentMethodBreakdown).map(([method, info]: [string, any]) => (
+                <span
+                  key={method}
+                  className="px-2 py-0.5 rounded-md bg-[#F9F2EC] border border-[#E5DCD3] text-[#5E5946] font-medium"
+                >
+                  {method}: {info.count} ({formatINR(info.amount)})
+                </span>
+              ))}
+            </div>
+          )}
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(data.transactions || []).slice(0, 8).map((t: any) => (
-              <div key={t.id} className="py-2.5 flex justify-between items-center">
+              <div key={t.id} className="py-2.5 flex justify-between items-center gap-2">
                 <div>
                   <p className="font-semibold text-[#5E5946]">{t.orderNumber}</p>
                   <p className="text-[#6E6859]">
-                    {t.customerName} • {t.method}
+                    {t.customerName} • {t.paymentChannelDetails || t.method}
                   </p>
+                  {t.razorpayPaymentId && (
+                    <p className="text-[10px] font-mono text-[#8A8373]">{t.razorpayPaymentId}</p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-[#5E5946]">{formatINR(t.amount)}</p>
@@ -204,6 +223,79 @@ export const FinancePage: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      {/* Razorpay Test Mode – Developer Testing Guide (Visible only in Dev or Test Mode for Authorized Admins) */}
+      {((import.meta as any).env?.DEV || rzpConfig?.mode === 'TEST') && (
+        <Card
+          title="Razorpay Test Mode – Developer Testing Guide"
+          subtitle="Authorized Dev / Test Mode reference for verifying UPI, Card, Netbanking & webhook flows"
+          action={
+            <Button size="sm" variant="outline" onClick={() => setShowDevGuide((v) => !v)}>
+              {showDevGuide ? 'Hide Guide' : 'Show Testing Details'}
+            </Button>
+          }
+        >
+          <div className="text-xs text-[#5E5946] space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={rzpConfig?.mode === 'TEST' ? 'warning' : 'error'}>
+                Mode: {rzpConfig?.mode || 'UNKNOWN'}
+              </Badge>
+              <span className="font-mono bg-[#FAF7F4] border border-[#E5DCD3] px-2 py-0.5 rounded">
+                Key ID: {rzpConfig?.maskedKeyId || 'Not Configured'}
+              </span>
+              {rzpConfig?.enabledMethods && (
+                <>
+                  <Badge variant={rzpConfig.enabledMethods.upi ? 'success' : 'error'}>
+                    UPI: {rzpConfig.enabledMethods.upi ? 'Enabled' : 'Disabled on Razorpay Account'}
+                  </Badge>
+                  <Badge variant={rzpConfig.enabledMethods.card ? 'success' : 'default'}>Cards</Badge>
+                  <Badge variant={rzpConfig.enabledMethods.netbanking ? 'success' : 'default'}>Netbanking</Badge>
+                  <Badge variant={rzpConfig.enabledMethods.wallet ? 'success' : 'default'}>Wallet</Badge>
+                  <Badge variant={rzpConfig.enabledMethods.paylater ? 'success' : 'default'}>Pay Later</Badge>
+                </>
+              )}
+            </div>
+
+            {rzpConfig?.upiUnavailableReason && (
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
+                <strong>Why UPI is hidden in Razorpay Checkout:</strong> {rzpConfig.upiUnavailableReason}
+              </div>
+            )}
+
+            {showDevGuide && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-[#E5DCD3]">
+                <div className="space-y-1.5">
+                  <p className="font-semibold">Official Test Mode Payment Details</p>
+                  <ul className="list-disc list-inside space-y-1 text-[#6E6859]">
+                    <li>Test UPI ID (Success): <code className="font-mono text-[#5E5946]">success@razorpay</code></li>
+                    <li>Test UPI ID (Failure): <code className="font-mono text-[#5E5946]">failure@razorpay</code></li>
+                    <li>Test Netbanking / Wallet / Pay Later: Select option inside Razorpay Test modal and choose <strong>Success</strong> or <strong>Failure</strong> on bank simulator.</li>
+                  </ul>
+                  <p className="pt-1">
+                    Official Docs:{' '}
+                    <a
+                      href="https://razorpay.com/docs/payments/payments/test-card-upi-details/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[#AE887B] underline font-semibold"
+                    >
+                      Razorpay Test Cards &amp; UPI Details
+                    </a>
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="font-semibold">Failure, Retry &amp; Verification Scenarios</p>
+                  <ul className="list-disc list-inside space-y-1 text-[#6E6859]">
+                    <li><strong>Success:</strong> Complete payment &rarr; <code>POST /payments/razorpay/verify</code> checks HMAC-SHA256 + Razorpay payment API &rarr; status becomes <code>PAID</code>/<code>SUCCESS</code>.</li>
+                    <li><strong>Failed / Cancelled:</strong> Close modal or select bank Failure &rarr; releases reserved stock cleanly; <strong>Retry Payment</strong> reuses the same Order ID.</li>
+                    <li><strong>Duplicate / Replay / Bad Signature:</strong> Tampered signature returns <code>400</code>; repeat callbacks and duplicate webhook IDs return idempotently without double stock deduction.</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Verified UTR Payout Modal */}
       <Modal
@@ -261,6 +353,7 @@ export const FinancePage: React.FC = () => {
 const REPORT_TYPES = [
   { id: 'sales', label: 'Sales Reports' },
   { id: 'orders', label: 'Order Reports' },
+  { id: 'payments', label: 'Payment Reports' },
   { id: 'vendors', label: 'Vendor Performance' },
   { id: 'products', label: 'Product Reports' },
   { id: 'inventory', label: 'Inventory Reports' },

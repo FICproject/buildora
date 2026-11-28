@@ -196,6 +196,15 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify({ status, notes }),
     }),
+  verifyVendorBank: (
+    vendorId: string,
+    status: 'VERIFIED' | 'REJECTED',
+    notes?: string
+  ) =>
+    rawRequest<any>(`/company-admin/vendors/${encodeURIComponent(vendorId)}/bank/verify`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes }),
+    }),
   getVendorDocumentAccessUrl: (vendorId: string, docId: string) =>
     rawRequest<{
       docId: string;
@@ -575,11 +584,38 @@ export const adminApi = {
     rawRequest<any[]>(
       `/company-admin/orders?status=${encodeURIComponent(status)}&search=${encodeURIComponent(search)}`
     ),
+  getOrdersKpis: () => rawRequest<any>('/company-admin/orders/kpis'),
+  getOrderDetail: (id: string) =>
+    rawRequest<any>(`/company-admin/orders/${encodeURIComponent(id)}`),
   updateOrderStatus: (id: string, status: string, note?: string) =>
-    rawRequest<any>(`/company-admin/orders/${id}/status`, {
+    rawRequest<any>(`/company-admin/orders/${encodeURIComponent(id)}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status, note }),
     }),
+  completeOrder: (id: string) =>
+    rawRequest<any>(`/company-admin/orders/${encodeURIComponent(id)}/complete`, {
+      method: 'POST',
+    }),
+  downloadOrderInvoicePdf: async (orderId: string, invoiceId = 'primary', filename?: string) => {
+    const store = useAdminAuthStore.getState();
+    const headers: Record<string, string> = {};
+    if (store.accessToken) headers['Authorization'] = `Bearer ${store.accessToken}`;
+    if (store.tenant?.id) headers['x-tenant-id'] = store.tenant.id;
+    const res = await fetch(
+      `${API_BASE}/company-admin/orders/${encodeURIComponent(orderId)}/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+      { headers }
+    );
+    if (!res.ok) throw new Error('Failed to download GST Tax Invoice PDF.');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `Tax-Invoice-${orderId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
   getReturns: () => rawRequest<any[]>('/company-admin/returns'),
   reviewReturn: (id: string, status: 'APPROVED' | 'REJECTED' | 'REFUNDED', resolutionNote?: string) =>
     rawRequest<any>(`/company-admin/returns/${id}`, {
@@ -742,14 +778,44 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
-  updateDeliveryStatus: (orderId: string, status: string) =>
-    rawRequest<any>(`/company-admin/delivery/assignments/${orderId}/status`, {
+  updateDeliveryStatus: (
+    orderId: string,
+    payload:
+      | string
+      | {
+          status: string;
+          vendorOrderId?: string;
+          location?: string;
+          note?: string;
+          delayReason?: string;
+          failureReason?: string;
+          otp?: string;
+          recipientName?: string;
+        }
+  ) =>
+    rawRequest<any>(`/company-admin/delivery/assignments/${encodeURIComponent(orderId)}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(typeof payload === 'string' ? { status: payload } : payload),
+    }),
+  confirmSiteDelivery: (
+    orderId: string,
+    payload: {
+      vendorOrderId?: string;
+      otp: string;
+      recipientName: string;
+      proofOfDeliveryUrl?: string;
+      notes?: string;
+      markCompleted?: boolean;
+    }
+  ) =>
+    rawRequest<any>(`/company-admin/delivery/assignments/${encodeURIComponent(orderId)}/confirm-delivery`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     }),
 
   // Finance
   getFinanceOverview: () => rawRequest<any>('/company-admin/finance/overview'),
+  getRazorpayConfig: () => rawRequest<any>('/payments/razorpay/config'),
   generateSettlement: (vendorId: string) =>
     rawRequest<any>('/company-admin/finance/settlements/generate', {
       method: 'POST',

@@ -5,16 +5,25 @@ export type DeliverySpeed = 'ASAP_60' | 'EXPRESS_90' | 'SCHEDULED' | 'NEXT_DAY' 
 export type OrderStatus =
   | 'ORDER_PLACED'
   | 'PAYMENT_PENDING'
-  | 'PAYMENT_CONFIRMED'
+  | 'PAYMENT_VERIFIED'
+  | 'PARTIALLY_ACCEPTED'
+  | 'VENDOR_ACCEPTED'
+  | 'ACCEPTED'
+  | 'PICKING_IN_PROGRESS'
+  | 'PACKING_IN_PROGRESS'
   | 'PROCESSING'
   | 'CONFIRMED'
   | 'WAREHOUSE_ASSIGNED'
   | 'PICKING'
   | 'PACKED'
   | 'READY_FOR_DISPATCH'
+  | 'PARTIALLY_DISPATCHED'
   | 'DISPATCHED'
+  | 'IN_TRANSIT'
   | 'OUT_FOR_DELIVERY'
+  | 'PARTIALLY_DELIVERED'
   | 'DELIVERED'
+  | 'COMPLETED'
   | 'CANCELLED'
   | 'RETURN_REQUESTED'
   | 'RETURNED'
@@ -22,9 +31,19 @@ export type OrderStatus =
   | 'REFUNDED'
   | 'FAILED';
 
-export type PaymentMethod = 'RAZORPAY_UPI' | 'RAZORPAY_CARD' | 'RAZORPAY_NETBANKING' | 'COD' | 'WALLET';
+export type PaymentMethod =
+  | 'UPI'
+  | 'CARD'
+  | 'NETBANKING'
+  | 'WALLET'
+  | 'PAY_LATER'
+  | 'COD'
+  | 'RAZORPAY'
+  | 'RAZORPAY_UPI'
+  | 'RAZORPAY_CARD'
+  | 'RAZORPAY_NETBANKING';
 
-export type PaymentStatus = 'PENDING' | 'AUTHORIZED' | 'CAPTURED' | 'FAILED' | 'REFUNDED';
+export type PaymentStatus = 'PENDING' | 'AUTHORIZED' | 'CAPTURED' | 'PAID' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
 
 export type AddressType = 'HOME' | 'WORK' | 'CONSTRUCTION_SITE' | 'OTHER';
 
@@ -826,12 +845,63 @@ export interface VendorProductReview {
   };
 }
 
+export interface VendorInvoiceItem {
+  sNo: number;
+  productId: string;
+  description: string;
+  sku: string;
+  hsnCode: string;
+  quantity: number;
+  unit: string;
+  rate: number;
+  discount: number;
+  taxableValue: number;
+  gstRate: number;
+  cgstRate: number;
+  cgstAmount: number;
+  sgstRate: number;
+  sgstAmount: number;
+  igstRate: number;
+  igstAmount: number;
+  gstAmount: number;
+  total: number;
+}
+
 export interface VendorInvoice {
   id: string;
   invoiceNumber: string;
+  financialYear?: string;
+  sequenceNumber?: number;
   orderId: string;
+  vendorOrderId?: string;
   orderNumber: string;
   vendorId: string;
+  tenantId?: string;
+  shipmentId?: string;
+  supplierDetails?: {
+    legalBusinessName: string;
+    tradeName?: string;
+    address: string;
+    gstin: string;
+    stateName: string;
+    stateCode: string;
+    phone?: string;
+    email?: string;
+  };
+  buyerDetails?: {
+    name: string;
+    businessName?: string;
+    gstin?: string;
+    billingAddress: string;
+    shippingAddress: string;
+    stateName: string;
+    stateCode: string;
+    placeOfSupply: string;
+    phone?: string;
+  };
+  items?: VendorInvoiceItem[];
+  isInterState?: boolean;
+  reverseCharge?: boolean;
   customerName: string;
   customerGstin?: string;
   invoiceDate: string;
@@ -841,9 +911,34 @@ export interface VendorInvoice {
   cgstAmount: number;
   sgstAmount: number;
   igstAmount: number;
+  cessAmount?: number;
+  deliveryCharges?: number;
+  loadingCharges?: number;
+  unloadingCharges?: number;
+  roundOff?: number;
   totalAmount: number;
+  amountInWords?: string;
+  amountPaid?: number;
+  amountDue?: number;
+  paymentMethod?: string;
+  paymentReference?: string;
+  deliveryReference?: string;
+  irn?: string;
+  signedQrCode?: string;
+  ewayBillNumber?: string;
+  transporterId?: string;
+  vehicleNumber?: string;
+  distanceKm?: number;
   pdfUrl: string;
-  status: 'GENERATED' | 'PAID' | 'CANCELLED';
+  status: 'GENERATED' | 'FINALIZED' | 'PAID' | 'CANCELLED';
+  version?: number;
+  creditNotes?: {
+    creditNoteNumber: string;
+    reason: string;
+    amount: number;
+    issuedAt: string;
+  }[];
+  createdAt?: string;
 }
 
 export interface VendorSupportTicket {
@@ -870,16 +965,24 @@ export interface VendorBankDetails {
   accountHolderName: string;
   bankName: string;
   accountNumber: string;
+  accountNumberMasked?: string;
   ifsc: string;
   accountType?: 'CURRENT' | 'SAVINGS';
   branch: string;
   isVerified: boolean;
+  verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  rejectionReason?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  proofDocumentId?: string;
+  proofFileName?: string;
 }
 
 export interface VendorBusinessAddress {
   building: string;
   street: string;
   area: string;
+  district?: string;
   city: string;
   state: string;
   pincode: string;
@@ -900,8 +1003,16 @@ export interface VendorBusinessInfo {
   description?: string;
   logo?: string;
   logoMetadata?: VendorLogoMetadata;
+  gstStatus?: VendorGstStatus;
   gstin?: string;
+  gstApplicationNumber?: string;
   pan?: string;
+  panMasked?: string;
+  aadhaarNumber?: string;
+  aadhaarMasked?: string;
+  msmeStatus?: VendorMsmeStatus;
+  udyamNumber?: string;
+  msmeApplicationNumber?: string;
   businessRegNumber?: string;
   address: VendorBusinessAddress;
   bankDetails: VendorBankDetails;
@@ -933,14 +1044,34 @@ export interface VendorWarehouse {
   isPrimary?: boolean;
 }
 
+export type VendorGstStatus = 'REGISTERED' | 'NOT_REGISTERED' | 'APPLIED';
+export type VendorMsmeStatus = 'REGISTERED' | 'NOT_REGISTERED' | 'APPLIED';
+
+export type VendorKycDocumentType =
+  | 'AADHAAR_CARD'
+  | 'PAN_CARD'
+  | 'GST_CERTIFICATE'
+  | 'GST_ACKNOWLEDGEMENT'
+  | 'MSME_CERTIFICATE'
+  | 'UDYAM_CERTIFICATE'
+  | 'MSME_ACKNOWLEDGEMENT'
+  | 'BUSINESS_REGISTRATION'
+  | 'AUTHORIZED_ID'
+  | 'CANCELLED_CHEQUE'
+  | 'CATALOGUE'
+  | 'OTHER';
+
 export interface VendorKycDocumentVersion {
   id: string;
+  version?: number;
   fileName: string;
   fileSize: number;
   mimeType: string;
-  fileUrl: string;
+  fileUrl?: string;
   storageKey?: string;
   storageProvider?: 'LOCAL_OBJECT_STORAGE' | 'S3';
+  identificationNumber?: string;
+  identificationNumberMasked?: string;
   uploadedAt: string;
   verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
   rejectionReason?: string;
@@ -951,14 +1082,17 @@ export interface VendorKycDocumentVersion {
 
 export interface VendorKycDocument {
   id: string;
-  type: 'BUSINESS_REGISTRATION' | 'GST_CERTIFICATE' | 'PAN_CARD' | 'AUTHORIZED_ID' | 'CANCELLED_CHEQUE' | 'CATALOGUE' | 'OTHER';
+  type: VendorKycDocumentType;
   title: string;
   fileName: string;
   fileSize: number;
   mimeType: string;
-  fileUrl: string;
+  fileUrl?: string;
   storageKey?: string;
   storageProvider?: 'LOCAL_OBJECT_STORAGE' | 'S3';
+  identificationNumber?: string;
+  identificationNumberMasked?: string;
+  version?: number;
   uploadedAt: string;
   verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
   status?: 'PENDING' | 'VERIFIED' | 'REJECTED';
@@ -966,6 +1100,12 @@ export interface VendorKycDocument {
   reviewedAt?: string;
   reviewedBy?: string;
   previousVersions?: VendorKycDocumentVersion[];
+  auditHistory?: Array<{
+    action: string;
+    actor: string;
+    timestamp: string;
+    notes?: string;
+  }>;
 }
 
 export interface VendorAuditLog {
@@ -1004,17 +1144,30 @@ export interface VendorRegistrationWizardData {
   completeAddress: string;
   dispatchAddress?: string;
   warehouses?: VendorWarehouse[];
+  gstStatus?: VendorGstStatus;
   gstin?: string;
+  gstApplicationNumber?: string;
   pan?: string;
+  aadhaarNumber?: string;
+  msmeStatus?: VendorMsmeStatus;
+  udyamNumber?: string;
+  msmeApplicationNumber?: string;
   documents: VendorKycDocument[];
   bankDetails: {
     accountHolderName: string;
     bankName: string;
     accountNumber: string;
+    confirmAccountNumber?: string;
     ifsc: string;
     accountType: 'CURRENT' | 'SAVINGS';
     chequeDocUrl?: string;
     isVerified?: boolean;
+    verificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+    rejectionReason?: string;
+    reviewedAt?: string;
+    reviewedBy?: string;
+    proofDocumentId?: string;
+    proofFileName?: string;
   };
   productCategories?: string[];
   childCategories?: string[];
@@ -1051,6 +1204,15 @@ export interface VendorProfile {
   phone?: string;
   logoUrl?: string;
   logoMetadata?: VendorLogoMetadata;
+  aadhaarMasked?: string;
+  panMasked?: string;
+  gstStatus?: VendorGstStatus;
+  gstApplicationNumber?: string;
+  msmeStatus?: VendorMsmeStatus;
+  udyamNumber?: string;
+  msmeApplicationNumber?: string;
+  latestKycSubmittedAt?: string;
+  lastDocumentUploadedAt?: string;
   categories?: string[];
   business?: any;
   bankDetails?: any;
@@ -1133,16 +1295,104 @@ export interface VendorProduct {
 
 export type VendorOrderStatus =
   | 'NEW'
+  | 'VENDOR_ACCEPTED'
   | 'ACCEPTED'
   | 'REJECTED'
+  | 'PICKING_IN_PROGRESS'
+  | 'PACKING_IN_PROGRESS'
   | 'PROCESSING'
   | 'PACKED'
   | 'READY_FOR_DISPATCH'
   | 'DISPATCHED'
+  | 'IN_TRANSIT'
+  | 'OUT_FOR_DELIVERY'
   | 'DELIVERED'
+  | 'COMPLETED'
   | 'CANCELLED'
   | 'RETURN_REQUESTED'
   | 'RETURNED';
+
+export type ShipmentStatus =
+  | 'CREATED'
+  | 'ASSIGNED'
+  | 'PICKUP_PENDING'
+  | 'PICKED_UP'
+  | 'IN_TRANSIT'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'FAILED_DELIVERY'
+  | 'RETURNED';
+
+export interface OrderPackingDetails {
+  packageCount?: number;
+  bagCount?: number;
+  boxCount?: number;
+  bundleCount?: number;
+  pieceCount?: number;
+  palletCount?: number;
+  totalWeightKg?: number;
+  dimensions?: string;
+  fragileHandling?: boolean;
+  loadingRequirements?: string;
+  notes?: string;
+  packedAt?: string;
+}
+
+export interface OrderStatusHistoryEntry {
+  previousStatus: string;
+  newStatus: string;
+  updatedBy: string;
+  role: 'CUSTOMER' | 'VENDOR' | 'ADMIN' | 'DELIVERY_PARTNER' | 'SYSTEM';
+  timestamp: string;
+  remarks?: string;
+  source?: string;
+}
+
+export interface ShipmentRecord {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  vendorOrderId: string;
+  vendorId: string;
+  tenantId: string;
+  status: ShipmentStatus;
+  partnerId?: string;
+  partnerName?: string;
+  driverName?: string;
+  driverPhone?: string;
+  vehicleType?: string;
+  vehicleNumber?: string;
+  dispatchHub?: string;
+  pickupAddress?: string;
+  siteAddress?: string;
+  packageCount?: number;
+  totalWeightKg?: number;
+  estimatedDispatchTime?: string;
+  estimatedArrivalTime?: string;
+  dispatchedAt?: string;
+  dispatchReference?: string;
+  dispatchProofUrl?: string;
+  lastKnownLocation?: string;
+  lastLocationUpdatedAt?: string;
+  delayReason?: string;
+  deliveryOtp?: string;
+  deliveredAt?: string;
+  recipientName?: string;
+  recipientPhone?: string;
+  proofOfDeliveryUrl?: string;
+  recipientSignature?: string;
+  deliveryRemarks?: string;
+  trackingEvents: {
+    status: ShipmentStatus;
+    title: string;
+    description?: string;
+    location?: string;
+    timestamp: string;
+    actor?: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface VendorOrderItem {
   productId: string;

@@ -115,7 +115,11 @@ export class StorageService {
     reportedMimeType: string,
     docType: VendorKycDocument['type'],
     title: string,
-    baseUrl?: string
+    _baseUrl?: string,
+    identification?: {
+      identificationNumber?: string;
+      identificationNumberMasked?: string;
+    }
   ): Promise<VendorKycDocument> {
     if (!docType || !ALLOWED_KYC_DOCUMENT_TYPES.includes(docType as any)) {
       throw new BadRequestException('Invalid KYC document type.');
@@ -147,7 +151,6 @@ export class StorageService {
     const targetPath = path.join(this.localDocDir, safeFileName);
     await fs.promises.writeFile(targetPath, buffer);
 
-    const origin = baseUrl || `http://localhost:${process.env.PORT || 3000}`;
     return {
       id: docId,
       type: docType,
@@ -155,9 +158,15 @@ export class StorageService {
       fileName: originalName,
       fileSize: buffer.length,
       mimeType: detected.mimeType,
-      fileUrl: `${origin}/api/v1/vendor/uploads/docs/${safeFileName}`,
       storageKey: safeFileName,
       storageProvider: 'LOCAL_OBJECT_STORAGE',
+      ...(identification?.identificationNumber
+        ? { identificationNumber: identification.identificationNumber }
+        : {}),
+      ...(identification?.identificationNumberMasked
+        ? { identificationNumberMasked: identification.identificationNumberMasked }
+        : {}),
+      version: 1,
       uploadedAt,
       verificationStatus: 'PENDING'
     };

@@ -1,58 +1,80 @@
 import { create } from 'zustand';
-import { VendorOrder, VendorOrderStatus } from '@buildora/types';
+import { VendorOrder } from '@buildora/types';
 import { vendorApi } from '../services/vendorApi';
 
-interface VendorOrderState {
-  orders: VendorOrder[];
-  selectedOrder: VendorOrder | null;
+interface VendorOrderStore {
+  orders: (VendorOrder & Record<string, any>)[];
   isLoading: boolean;
   error: string | null;
-  statusFilter: string;
-  searchQuery: string;
-
-  // Actions
-  fetchOrders: () => Promise<void>;
-  setSelectedOrder: (order: VendorOrder | null) => void;
-  setStatusFilter: (status: string) => void;
-  setSearchQuery: (query: string) => void;
-  updateOrderStatus: (id: string, status: VendorOrderStatus, note?: string) => Promise<boolean>;
+  fetchOrders: (status?: string, search?: string) => Promise<void>;
+  acceptOrder: (id: string) => Promise<boolean>;
+  rejectOrder: (id: string, reason: string) => Promise<boolean>;
+  confirmPicking: (
+    id: string,
+    payload: {
+      pickedItems?: Array<{ productId: string; sku?: string; pickedQuantity: number; shortageReason?: string }>;
+      notes?: string;
+    }
+  ) => Promise<void>;
+  confirmPacking: (id: string, payload: any) => Promise<void>;
+  markReadyForDispatch: (id: string) => Promise<void>;
+  handoverToDriver: (
+    id: string,
+    payload: { vehicleNumber?: string; driverName?: string; driverPhone?: string; handoverRef?: string; notes?: string }
+  ) => Promise<void>;
+  updateOrderStatus: (id: string, status: VendorOrder['status'], note?: string) => Promise<boolean>;
 }
 
-export const useVendorOrderStore = create<VendorOrderState>((set, get) => ({
+export const useVendorOrderStore = create<VendorOrderStore>((set, get) => ({
   orders: [],
-  selectedOrder: null,
   isLoading: false,
   error: null,
-  statusFilter: 'ALL',
-  searchQuery: '',
 
-  fetchOrders: async () => {
+  fetchOrders: async (status, _search) => {
     set({ isLoading: true, error: null });
     try {
-      const orders = await vendorApi.getOrders();
-      set({ orders, isLoading: false });
+      const data = await vendorApi.getOrders(status);
+      set({ orders: Array.isArray(data) ? data : [], isLoading: false });
     } catch (err: any) {
-      set({ error: err.message || 'Failed to fetch orders', isLoading: false });
+      set({ isLoading: false, error: err?.message || 'Failed to load orders.' });
     }
   },
 
-  setSelectedOrder: (order) => set({ selectedOrder: order }),
-  setStatusFilter: (statusFilter) => set({ statusFilter }),
-  setSearchQuery: (searchQuery) => set({ searchQuery }),
+  acceptOrder: async (id) => {
+    await vendorApi.acceptOrder(id);
+    await get().fetchOrders();
+    return true;
+  },
+
+  rejectOrder: async (id, reason) => {
+    await vendorApi.rejectOrder(id, reason);
+    await get().fetchOrders();
+    return true;
+  },
+
+  confirmPicking: async (id, payload) => {
+    await vendorApi.confirmPicking(id, payload);
+    await get().fetchOrders();
+  },
+
+  confirmPacking: async (id, payload) => {
+    await vendorApi.confirmPacking(id, payload);
+    await get().fetchOrders();
+  },
+
+  markReadyForDispatch: async (id) => {
+    await vendorApi.markReadyForDispatch(id);
+    await get().fetchOrders();
+  },
+
+  handoverToDriver: async (id, payload) => {
+    await vendorApi.handoverToDriver(id, payload);
+    await get().fetchOrders();
+  },
 
   updateOrderStatus: async (id, status, note) => {
-    set({ isLoading: true, error: null });
-    try {
-      const updated = await vendorApi.updateOrderStatus(id, status, note);
-      set((state) => ({
-        orders: state.orders.map((o) => (o.id === id ? updated : o)),
-        selectedOrder: state.selectedOrder?.id === id ? updated : state.selectedOrder,
-        isLoading: false,
-      }));
-      return true;
-    } catch (err: any) {
-      set({ error: err.message || 'Failed to update order status', isLoading: false });
-      return false;
-    }
+    await vendorApi.updateOrderStatus(id, status, note);
+    await get().fetchOrders();
+    return true;
   },
 }));

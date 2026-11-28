@@ -6,6 +6,7 @@ import { formatCurrency } from '@buildora/utils';
 import { useCartStore } from '../../store/useCartStore';
 import { useWishlistStore } from '../../store/useWishlistStore';
 import { useStoreConfigStore } from '../../store/useStoreConfigStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { QuantityControl } from '../ui/QuantityControl';
 import { VariantSelectionModal } from './VariantSelectionModal';
 import { BulkPriceTrigger } from './BulkPriceTrigger';
@@ -18,6 +19,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const navigate = useNavigate();
   const { items, addItem, updateQuantity, removeItem } = useCartStore();
   const { isInWishlist, toggleItem } = useWishlistStore();
+  const { requireAuth } = useAuthStore();
   const freeThreshold = useStoreConfigStore((s) => s.config?.deliveryConfig?.freeShippingThreshold ?? 1000);
 
   const isWishlisted = isInWishlist(product.id);
@@ -140,6 +142,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              if (
+                !requireAuth(
+                  { type: 'WISHLIST_ADD', product },
+                  { reason: `Sign in to save "${product.name}" to your Wishlist.` }
+                )
+              ) {
+                return;
+              }
               toggleItem(product);
             }}
             className={`p-1.5 rounded-full pointer-events-auto transition-colors shadow-2xs ${

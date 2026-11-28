@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useVendorAuthStore } from '../../store/useVendorAuthStore';
 import { vendorApi } from '../../services/vendorApi';
+import { maskAadhaar, maskPan, maskBankAccount } from '@buildora/validation';
 import {
   User,
   Building2,
@@ -59,18 +60,19 @@ export const VendorReviewPage: React.FC = () => {
     );
   }
 
-  const maskPan = (pan?: string) => {
-    if (!pan) return 'Not Provided';
-    if (pan.length >= 6) return `${pan.slice(0, 5)}••••${pan.slice(-1)}`;
-    return '••••••••••';
+  const formatGstStatus = (status?: string) => {
+    if (status === 'REGISTERED') return 'Registered';
+    if (status === 'APPLIED') return 'Applied for Registration';
+    return 'Not Registered';
   };
 
-  const maskBankAccount = (acc?: string) => {
-    if (!acc) return 'Not Provided';
-    if (acc.length >= 4) return `••••••••${acc.slice(-4)}`;
-    return '••••••••';
+  const formatMsmeStatus = (status?: string) => {
+    if (status === 'REGISTERED') return 'Yes – MSME Registered';
+    if (status === 'APPLIED') return 'Applied for MSME Registration';
+    return 'No – Not MSME Registered';
   };
 
+  const bankProofDoc = (data.documents || []).find((d) => d.type === 'CANCELLED_CHEQUE');
   const logoSrc = data.logoUrl || vendor.logoUrl || vendor.businessInfo?.logo;
 
   const handleSubmitApplication = async () => {
@@ -263,12 +265,48 @@ export const VendorReviewPage: React.FC = () => {
         <div className="p-4 space-y-3 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <span className="text-[#78716C] block text-[11px]">GSTIN</span>
-              <span className="font-mono font-bold text-[#292524]">{data.gstin || 'Not Provided'}</span>
+              <span className="text-[#78716C] block text-[11px]">Aadhaar Number (Masked)</span>
+              <span className="font-mono font-bold text-[#292524]">
+                {maskAadhaar(data.aadhaarNumber) || vendor.aadhaarMasked || 'Not Provided'}
+              </span>
             </div>
             <div>
-              <span className="text-[#78716C] block text-[11px]">Company / Proprietor PAN</span>
-              <span className="font-mono font-bold text-[#292524]">{maskPan(data.pan)}</span>
+              <span className="text-[#78716C] block text-[11px]">Company / Proprietor PAN (Masked)</span>
+              <span className="font-mono font-bold text-[#292524]">
+                {maskPan(data.pan) || vendor.panMasked || 'Not Provided'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[#78716C] block text-[11px]">GST Status</span>
+              <span className="font-bold text-[#292524]">{formatGstStatus(data.gstStatus)}</span>
+            </div>
+            <div>
+              <span className="text-[#78716C] block text-[11px]">
+                {data.gstStatus === 'APPLIED' ? 'GST Application Ref' : 'GSTIN'}
+              </span>
+              <span className="font-mono font-bold text-[#292524]">
+                {data.gstStatus === 'REGISTERED'
+                  ? data.gstin || 'Not Provided'
+                  : data.gstStatus === 'APPLIED'
+                    ? data.gstApplicationNumber || 'Not Provided'
+                    : 'Not Applicable'}
+              </span>
+            </div>
+            <div>
+              <span className="text-[#78716C] block text-[11px]">MSME Status</span>
+              <span className="font-bold text-[#292524]">{formatMsmeStatus(data.msmeStatus)}</span>
+            </div>
+            <div>
+              <span className="text-[#78716C] block text-[11px]">
+                {data.msmeStatus === 'APPLIED' ? 'MSME Application Ref' : 'Udyam Registration Number'}
+              </span>
+              <span className="font-mono font-bold text-[#292524]">
+                {data.msmeStatus === 'REGISTERED'
+                  ? data.udyamNumber || 'Not Provided'
+                  : data.msmeStatus === 'APPLIED'
+                    ? data.msmeApplicationNumber || 'Not Provided'
+                    : 'Not Applicable'}
+              </span>
             </div>
           </div>
           {(data.documents || []).length > 0 && (
@@ -321,12 +359,22 @@ export const VendorReviewPage: React.FC = () => {
           <div>
             <span className="text-[#78716C] block text-[11px]">Account Number (Masked)</span>
             <span className="font-mono font-bold text-[#292524]">
-              {maskBankAccount(data.bankDetails?.accountNumber)}
+              {maskBankAccount(data.bankDetails?.accountNumber) || 'Not Provided'}
             </span>
           </div>
           <div>
             <span className="text-[#78716C] block text-[11px]">IFSC Code</span>
             <span className="font-mono font-bold text-[#292524]">{data.bankDetails?.ifsc || '—'}</span>
+          </div>
+          <div>
+            <span className="text-[#78716C] block text-[11px]">Bank Proof Document</span>
+            <span className="font-semibold text-[#292524]">
+              {bankProofDoc?.fileName || data.bankDetails?.proofFileName || 'Not Uploaded'}
+            </span>
+          </div>
+          <div>
+            <span className="text-[#78716C] block text-[11px]">Bank Verification Status</span>
+            <span className="inline-block font-bold text-amber-700">Pending Admin Verification</span>
           </div>
         </div>
       </section>

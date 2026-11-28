@@ -40,13 +40,20 @@ function resolveProductWarehouseMeta(product: any, vendorId: string) {
 }
 
 export const ALLOWED_VENDOR_ORDER_TRANSITIONS: Record<string, string[]> = {
-  NEW: ['ACCEPTED', 'REJECTED', 'CANCELLED', 'PROCESSING'],
-  ACCEPTED: ['PROCESSING', 'PACKED', 'READY_FOR_DISPATCH', 'CANCELLED'],
-  PROCESSING: ['PACKED', 'READY_FOR_DISPATCH', 'DISPATCHED', 'CANCELLED'],
+  NEW: ['VENDOR_ACCEPTED', 'ACCEPTED', 'REJECTED', 'CANCELLED', 'PICKING_IN_PROGRESS', 'PROCESSING'],
+  VENDOR_ACCEPTED: ['PICKING_IN_PROGRESS', 'PROCESSING', 'PACKING_IN_PROGRESS', 'PACKED', 'READY_FOR_DISPATCH', 'CANCELLED'],
+  ACCEPTED: ['PICKING_IN_PROGRESS', 'PROCESSING', 'PACKING_IN_PROGRESS', 'PACKED', 'READY_FOR_DISPATCH', 'CANCELLED'],
+  PICKING_IN_PROGRESS: ['PACKING_IN_PROGRESS', 'PACKED', 'READY_FOR_DISPATCH', 'CANCELLED'],
+  PROCESSING: ['PACKING_IN_PROGRESS', 'PACKED', 'READY_FOR_DISPATCH', 'DISPATCHED', 'CANCELLED'],
+  PACKING_IN_PROGRESS: ['PACKED', 'READY_FOR_DISPATCH', 'CANCELLED'],
   PACKED: ['READY_FOR_DISPATCH', 'DISPATCHED', 'CANCELLED'],
   READY_FOR_DISPATCH: ['DISPATCHED', 'CANCELLED'],
-  DISPATCHED: ['DELIVERED', 'RETURN_REQUESTED'],
-  DELIVERED: ['RETURN_REQUESTED', 'RETURNED'],
+  DISPATCHED: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'FAILED_ATTEMPT', 'DELIVERED', 'RETURN_REQUESTED'],
+  IN_TRANSIT: ['OUT_FOR_DELIVERY', 'FAILED_ATTEMPT', 'DELIVERED'],
+  OUT_FOR_DELIVERY: ['DELIVERED', 'FAILED_ATTEMPT'],
+  FAILED_ATTEMPT: ['OUT_FOR_DELIVERY', 'IN_TRANSIT', 'CANCELLED'],
+  DELIVERED: ['COMPLETED', 'RETURN_REQUESTED', 'RETURNED'],
+  COMPLETED: ['RETURN_REQUESTED', 'RETURNED'],
   RETURN_REQUESTED: ['RETURNED'],
   REJECTED: [],
   CANCELLED: [],
@@ -591,12 +598,19 @@ class OrderSyncService {
 
     const custStatusMap: Record<string, Order['status']> = {
       NEW: 'ORDER_PLACED',
-      ACCEPTED: 'CONFIRMED',
-      PROCESSING: 'CONFIRMED',
-      PACKED: 'PACKED',
-      READY_FOR_DISPATCH: 'PACKED',
-      DISPATCHED: 'OUT_FOR_DELIVERY',
+      VENDOR_ACCEPTED: 'VENDOR_ACCEPTED',
+      ACCEPTED: 'VENDOR_ACCEPTED',
+      PICKING_IN_PROGRESS: 'PICKING_IN_PROGRESS',
+      PROCESSING: 'PICKING_IN_PROGRESS',
+      PACKING_IN_PROGRESS: 'PACKING_IN_PROGRESS',
+      PACKED: 'PACKING_IN_PROGRESS',
+      READY_FOR_DISPATCH: 'READY_FOR_DISPATCH',
+      DISPATCHED: 'DISPATCHED',
+      IN_TRANSIT: 'IN_TRANSIT',
+      OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
+      FAILED_ATTEMPT: 'FAILED',
       DELIVERED: 'DELIVERED',
+      COMPLETED: 'COMPLETED',
       REJECTED: 'CANCELLED',
       CANCELLED: 'CANCELLED',
     };
@@ -608,31 +622,27 @@ class OrderSyncService {
         o.id === vendorOrder.id
     ) as any;
 
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { fulfilmentLifecycleService } = require('./fulfilment-lifecycle.service');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { gstInvoiceService } = require('./gst-invoice.service');
+
     if (custOrder) {
       const siblingOrders = vendorOrders.filter(
         (vo) => vo.orderNumber === vendorOrder.orderNumber
       );
 
-      // Compute aggregate status if multi-vendor
-      let aggregateStatus: string = custStatusMap[nextVendorStatus] || nextVendorStatus;
-      if (siblingOrders.length > 1) {
-        const allCancelled = siblingOrders.every(
-          (vo) => vo.status === 'CANCELLED' || vo.status === 'REJECTED'
-        );
-        const allDelivered = siblingOrders.every((vo) => vo.status === 'DELIVERED');
-        if (allCancelled) aggregateStatus = 'CANCELLED';
-        else if (allDelivered) aggregateStatus = 'DELIVERED';
-        else if (siblingOrders.some((vo) => vo.status === 'DISPATCHED')) aggregateStatus = 'OUT_FOR_DELIVERY';
-        else if (siblingOrders.some((vo) => vo.status === 'PACKED' || vo.status === 'READY_FOR_DISPATCH')) aggregateStatus = 'PACKED';
-        else if (siblingOrders.some((vo) => vo.status === 'ACCEPTED' || vo.status === 'PROCESSING')) aggregateStatus = 'CONFIRMED';
-      }
+      const aggregateStatus: string =
+        fulfilmentLifecycleService.computeMasterOrderStatus(siblingOrders, custOrder) ||
+        custStatusMap[nextVendorStatus] ||
+        nextVendorStatus;
 
       custOrder.status = aggregateStatus;
       custOrder.updatedAt = nowIso;
       if (!Array.isArray(custOrder.timeline)) custOrder.timeline = [];
       custOrder.timeline.push({
         status: aggregateStatus,
-        title: `Order ${nextVendorStatus.replace(/_/g, ' ')}`,
+        title: fulfilmentLifecycleService.formatHumanStatus(nextVendorStatus),
         description: note || `Supplier update: ${nextVendorStatus}`,
         timestamp: nowIso,
         completed: true,
@@ -641,6 +651,10 @@ class OrderSyncService {
       if (nextVendorStatus === 'DELIVERED' && custOrder.paymentMethod === 'COD') {
         custOrder.paymentStatus = 'PAID';
         vendorOrder.paymentStatus = 'PAID';
+      }
+
+      if (nextVendorStatus === 'DISPATCHED' || nextVendorStatus === 'DELIVERED') {
+        await gstInvoiceService.buildVendorGstInvoice(vendorOrder, custOrder);
       }
 
       // Generate invoice & settlement accrual on DELIVERED if not created yet
@@ -711,7 +725,7 @@ class OrderSyncService {
     );
   }
 
-  private async ensureDeliveredFinancials(vendorOrder: any, custOrder: any) {
+  public async ensureDeliveredFinancials(vendorOrder: any, custOrder: any) {
     const existingInv = vendorInvoices.find((i) => i.orderNumber === vendorOrder.orderNumber && i.vendorId === vendorOrder.vendorId);
     if (!existingInv) {
       const gstHalf = Math.round((vendorOrder.gstAmount || 0) / 2);

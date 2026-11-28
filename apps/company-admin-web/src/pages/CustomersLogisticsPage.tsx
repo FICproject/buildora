@@ -203,10 +203,15 @@ export const DeliveryLogisticsPage: React.FC = () => {
   const [assignModal, setAssignModal] = useState<any>(null);
   const [assignForm, setAssignForm] = useState({
     partnerId: '',
+    vehicleType: 'Tata Ace',
     vehicleNumber: 'KA-05-BLD-6060',
     driverName: 'Ramesh Kumar',
     driverPhone: '+91 98450 88776',
+    dispatchHub: 'Bengaluru Primary Logistics Hub',
+    reassignReason: '',
   });
+  const [otpDeliverDispatch, setOtpDeliverDispatch] = useState<any>(null);
+  const [otpDeliverForm, setOtpDeliverForm] = useState({ otp: '', recipientName: '', notes: '' });
   const [partnerModal, setPartnerModal] = useState(false);
   const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null);
   const [partnerForm, setPartnerForm] = useState({
@@ -307,20 +312,35 @@ export const DeliveryLogisticsPage: React.FC = () => {
                       Driver: {d.driverName} • Assigned {formatDateTime(d.assignedAt)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <Badge variant={statusBadgeVariant(d.status)}>{d.status}</Badge>
                     {d.status !== 'DELIVERED' && (
-                      <Button
-                        size="sm"
-                        variant="success"
-                        onClick={async () => {
-                          await adminApi.updateDeliveryStatus(d.orderId, 'DELIVERED');
-                          pushToast({ title: 'Delivered', message: 'Order marked DELIVERED.' });
-                          loadData();
-                        }}
-                      >
-                        Mark Delivered
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await adminApi.updateDeliveryStatus(d.orderId, {
+                              status: 'OUT_FOR_DELIVERY',
+                              location: 'Site Corridor En Route',
+                            });
+                            pushToast({ title: 'Out For Delivery', message: 'Customer notified with site handover OTP.' });
+                            loadData();
+                          }}
+                        >
+                          Out for Delivery
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="success"
+                          onClick={() => {
+                            setOtpDeliverDispatch(d);
+                            setOtpDeliverForm({ otp: '', recipientName: 'Site Receiver', notes: '' });
+                          }}
+                        >
+                          Confirm OTP Delivery
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -435,8 +455,14 @@ export const DeliveryLogisticsPage: React.FC = () => {
         </Card>
       </div>
 
-      <Modal open={Boolean(assignModal)} onClose={() => setAssignModal(null)} title="Assign Fleet & Dispatch">
+      <Modal open={Boolean(assignModal)} onClose={() => setAssignModal(null)} title="Assign Fleet & Vehicle Capacity">
         <form onSubmit={submitAssign} className="space-y-3 text-xs">
+          <div className="p-2.5 rounded-lg bg-[#F9F2EC] border border-[#E5DCD3] text-[#5E5946]">
+            Order: <strong>{assignModal?.orderNumber || assignModal?.id}</strong>
+            {assignModal?.packingDetails?.totalWeightKg
+              ? ` • Verified Load Weight: ${assignModal.packingDetails.totalWeightKg} kg`
+              : ''}
+          </div>
           <select
             required
             value={assignForm.partnerId}
@@ -449,13 +475,27 @@ export const DeliveryLogisticsPage: React.FC = () => {
               </option>
             ))}
           </select>
-          <input
-            required
-            placeholder="Vehicle Number"
-            value={assignForm.vehicleNumber}
-            onChange={(e) => setAssignForm({ ...assignForm, vehicleNumber: e.target.value })}
-            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
-          />
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={assignForm.vehicleType}
+              onChange={(e) => setAssignForm({ ...assignForm, vehicleType: e.target.value })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+            >
+              <option value="2-Wheeler Express">2-Wheeler Express (max 25 kg)</option>
+              <option value="Mini Truck">Mini Truck (max 800 kg)</option>
+              <option value="Tata Ace">Tata Ace (max 1,000 kg)</option>
+              <option value="Pickup Vehicle">Pickup Vehicle (max 1,500 kg)</option>
+              <option value="Light Commercial Vehicle">LCV (max 3,500 kg)</option>
+              <option value="Heavy Goods Vehicle">Heavy Truck (max 12,000 kg)</option>
+            </select>
+            <input
+              required
+              placeholder="Vehicle Number"
+              value={assignForm.vehicleNumber}
+              onChange={(e) => setAssignForm({ ...assignForm, vehicleNumber: e.target.value })}
+              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <input
               required
@@ -472,12 +512,24 @@ export const DeliveryLogisticsPage: React.FC = () => {
               className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
+          <input
+            placeholder="Dispatch Hub"
+            value={assignForm.dispatchHub}
+            onChange={(e) => setAssignForm({ ...assignForm, dispatchHub: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
+          <input
+            placeholder="Reassignment Reason (mandatory if changing existing driver)"
+            value={assignForm.reassignReason}
+            onChange={(e) => setAssignForm({ ...assignForm, reassignReason: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setAssignModal(null)}>
               Cancel
             </Button>
             <Button type="submit" variant="primary">
-              Confirm Dispatch
+              Confirm Dispatch Assignment
             </Button>
           </div>
         </form>
@@ -617,6 +669,60 @@ export const DeliveryLogisticsPage: React.FC = () => {
               Cancel
             </Button>
             <Button type="submit">Save Pincode Zone</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(otpDeliverDispatch)}
+        onClose={() => setOtpDeliverDispatch(null)}
+        title={`Confirm Site Delivery OTP • ${otpDeliverDispatch?.orderId || ''}`}
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!otpDeliverDispatch) return;
+            try {
+              await adminApi.confirmSiteDelivery(otpDeliverDispatch.orderId, {
+                ...otpDeliverForm,
+                markCompleted: true,
+              });
+              pushToast({ title: 'Delivered & Verified', message: 'OTP confirmed and GST Tax Invoice finalized.' });
+              setOtpDeliverDispatch(null);
+              loadData();
+            } catch (err: any) {
+              pushToast({ title: 'OTP Verification Failed', message: err.message, variant: 'error' });
+            }
+          }}
+          className="space-y-3 text-xs"
+        >
+          <input
+            required
+            placeholder="4-Digit Site Delivery OTP *"
+            value={otpDeliverForm.otp}
+            onChange={(e) => setOtpDeliverForm({ ...otpDeliverForm, otp: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono tracking-widest"
+          />
+          <input
+            required
+            placeholder="Recipient / Site Engineer Name *"
+            value={otpDeliverForm.recipientName}
+            onChange={(e) => setOtpDeliverForm({ ...otpDeliverForm, recipientName: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
+          <input
+            placeholder="Delivery Proof Notes (optional)"
+            value={otpDeliverForm.notes}
+            onChange={(e) => setOtpDeliverForm({ ...otpDeliverForm, notes: e.target.value })}
+            className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setOtpDeliverDispatch(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="success">
+              Verify OTP & Complete Delivery
+            </Button>
           </div>
         </form>
       </Modal>

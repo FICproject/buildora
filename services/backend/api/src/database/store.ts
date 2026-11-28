@@ -67,10 +67,12 @@ class DataStore {
     }
   ];
 
-  public orders: Order[] = [
+  public orders: (Order & { customerId?: string; tenantId?: string })[] = [
     {
       id: 'ord-101',
       orderNumber: 'BLD-2026-8941',
+      customerId: 'cust-9876543210',
+      tenantId: 'tenant-buildora-blr',
       createdAt: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
       status: 'OUT_FOR_DELIVERY',
       items: [
@@ -189,8 +191,13 @@ class DataStore {
   ];
 
   public contactInquiries: any[] = [];
+  public payments: any[] = [];
+  public shipments: any[] = [];
   public constructionProjects: SavedConstructionProject[] = [];
   public constructionQuotes: ConstructionQuotationRequest[] = [];
+  public customerCarts = new Map<string, any[]>();
+  public customerWishlists = new Map<string, any[]>();
+  public customerAddresses = new Map<string, Address[]>();
 }
 
 export const dbStore = new DataStore();

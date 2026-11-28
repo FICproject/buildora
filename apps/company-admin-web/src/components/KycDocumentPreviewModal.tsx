@@ -193,6 +193,9 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
               <p className="text-xs text-[#6E6859] truncate">
                 {vendorName ? `${vendorName} • ` : ''}
                 File: <span className="font-medium text-[#5E5946]">{doc.fileName}</span>
+                {doc.identificationNumberMasked
+                  ? ` • Linked ID: ${doc.identificationNumberMasked}`
+                  : ''}
                 {doc.uploadedAt ? ` • Uploaded ${formatDateTime(doc.uploadedAt)}` : ''}
                 {signedInfo?.fileSize || doc.fileSize
                   ? ` • ${Math.max(1, Math.round((signedInfo?.fileSize || doc.fileSize) / 1024))} KB`

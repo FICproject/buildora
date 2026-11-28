@@ -49,6 +49,14 @@ export const VendorApplicationStatusPage: React.FC = () => {
         resubmissionReason: res.resubmissionReason || freshProfile?.resubmissionReason,
         suspendedReason: res.suspendedReason || freshProfile?.suspendedReason,
         kycDocuments: res.kycDocuments || freshProfile?.kycDocuments || [],
+        gstStatus: res.gstStatus || freshProfile?.gstStatus,
+        gstin: res.gstin || freshProfile?.businessInfo?.gstin,
+        msmeStatus: res.msmeStatus || freshProfile?.msmeStatus,
+        udyamNumber: res.udyamNumber || freshProfile?.udyamNumber,
+        maskedPan: res.maskedPan || freshProfile?.panMasked,
+        maskedAadhaar: res.maskedAadhaar || freshProfile?.aadhaarMasked,
+        bankVerificationStatus:
+          res.bankVerificationStatus || freshProfile?.businessInfo?.bankDetails?.verificationStatus,
       });
     } catch {
       if (vendor) {
@@ -276,7 +284,10 @@ export const VendorApplicationStatusPage: React.FC = () => {
                       <FileText className="w-3.5 h-3.5 text-[#943D24] shrink-0" />
                       <div className="min-w-0">
                         <p className="font-semibold text-[#292524] truncate">{doc.title || doc.type}</p>
-                        <p className="text-[11px] text-[#78716C] truncate">{doc.fileName}</p>
+                        <p className="text-[11px] text-[#78716C] truncate">
+                          {doc.fileName}
+                          {doc.identificationNumberMasked ? ` • ID: ${doc.identificationNumberMasked}` : ''}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

@@ -1,222 +1,235 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Eye, Search, Printer } from 'lucide-react';
-import { vendorApi } from '../../services/vendorApi';
-import { useVendorAuthStore } from '../../store/useVendorAuthStore';
+import React, { useEffect, useState } from 'react';
+import { Download, Eye, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
 import { VendorInvoice } from '@buildora/types';
-import {
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Badge,
-  Modal,
-  EmptyState,
-} from '../../components/common';
+import { vendorApi } from '../../services/vendorApi';
+import { toast } from '../../store/useToastStore';
+import { PageHeader } from '../../components/common/PageHeader';
+import { Card } from '../../components/common/Card';
+import { Button } from '../../components/common/Button';
+import { Badge } from '../../components/common/Badge';
+import { Modal } from '../../components/common/Modal';
 
 export const VendorInvoicesPage: React.FC = () => {
-  const vendor = useVendorAuthStore((s) => s.vendor);
   const [invoices, setInvoices] = useState<VendorInvoice[]>([]);
-  const [search, setSearch] = useState('');
-  const [viewingInvoice, setViewingInvoice] = useState<VendorInvoice | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [previewInv, setPreviewInv] = useState<VendorInvoice | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const loadInvoices = async () => {
+    setLoading(true);
+    try {
+      const list = await vendorApi.getInvoices();
+      setInvoices(Array.isArray(list) ? list : []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadInvoices = async () => {
-      try {
-        const data = await vendorApi.getInvoices();
-        setInvoices(data || []);
-      } catch {}
-    };
-    loadInvoices();
+    void loadInvoices();
   }, []);
 
-  const filteredInvoices = invoices.filter((inv) => {
-    const q = search.toLowerCase();
-    return (
-      !q ||
-      inv.invoiceNumber.toLowerCase().includes(q) ||
-      inv.orderNumber.toLowerCase().includes(q) ||
-      inv.customerName.toLowerCase().includes(q) ||
-      (inv.customerGstin && inv.customerGstin.toLowerCase().includes(q))
-    );
-  });
+  const handleDownloadPdf = async (inv: VendorInvoice) => {
+    setDownloadingId(inv.id);
+    try {
+      await vendorApi.downloadInvoicePdf(inv.id, `${inv.invoiceNumber}.pdf`);
+      toast.success(`Downloaded ${inv.invoiceNumber}.pdf`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Unable to download PDF.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6">
       <PageHeader
         title="GST Tax Invoices"
-        description="View, download, and print B2B GST tax invoices for customer orders."
+        description="Immutable supplier GST Tax Invoices generated strictly under your registered GSTIN upon dispatch."
+        actions={
+          <Button variant="outline" size="sm" onClick={loadInvoices} isLoading={loading}>
+            <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh Ledger
+          </Button>
+        }
       />
 
       <Card>
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="w-4 h-4 text-[#78716C] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by invoice #, order #, customer, or GSTIN..."
-              className="portal-input pl-9"
-            />
+        {invoices.length === 0 ? (
+          <div className="py-12 text-center text-sm text-[#78716C]">
+            <FileText className="w-10 h-10 text-[#D6D3D1] mx-auto mb-2" />
+            No GST Tax Invoices issued yet. Invoices generate automatically when an order is Dispatched or Delivered.
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
-              <tr>
-                <th className="py-3 px-4">Invoice #</th>
-                <th className="py-3 px-4">Order Ref</th>
-                <th className="py-3 px-4">Customer</th>
-                <th className="py-3 px-4">GSTIN</th>
-                <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4 text-right">Total (₹)</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E7E5E4]">
-              {filteredInvoices.length === 0 ? (
-                <tr>
-                  <td colSpan={8}>
-                    <EmptyState
-                      icon={<FileText className="w-5 h-5" />}
-                      title="No invoices found"
-                      description="Generated tax invoices will appear here."
-                    />
-                  </td>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-[#E7E5E4] text-[#78716C] bg-[#FAF9F7]">
+                  <th className="py-3 px-3 font-semibold">Invoice # / FY</th>
+                  <th className="py-3 px-3 font-semibold">Order #</th>
+                  <th className="py-3 px-3 font-semibold">Recipient / Buyer GSTIN</th>
+                  <th className="py-3 px-3 font-semibold">Supply Type</th>
+                  <th className="py-3 px-3 font-semibold text-right">Taxable</th>
+                  <th className="py-3 px-3 font-semibold text-right">GST</th>
+                  <th className="py-3 px-3 font-semibold text-right">Total</th>
+                  <th className="py-3 px-3 font-semibold">Status</th>
+                  <th className="py-3 px-3 font-semibold text-right">Actions</th>
                 </tr>
-              ) : (
-                filteredInvoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-[#F8F7F5]">
-                    <td className="py-3.5 px-4 font-mono font-semibold text-[#943D24]">
-                      {inv.invoiceNumber}
-                    </td>
-                    <td className="py-3.5 px-4 font-medium text-[#292524]">#{inv.orderNumber}</td>
-                    <td className="py-3.5 px-4 text-[#292524]">{inv.customerName}</td>
-                    <td className="py-3.5 px-4 font-mono text-[#78716C]">
-                      {inv.customerGstin || 'Unregistered'}
-                    </td>
-                    <td className="py-3.5 px-4 text-[#78716C]">
-                      {new Date(inv.invoiceDate).toLocaleDateString('en-IN')}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-semibold text-[#292524]">
-                      ₹{inv.totalAmount.toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <Badge variant={inv.status === 'PAID' ? 'success' : 'brand'} size="sm">
-                        {inv.status}
-                      </Badge>
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setViewingInvoice(inv)}
-                          className="p-1.5 rounded-lg text-[#78716C] hover:text-[#943D24] hover:bg-[#FBF3F0] cursor-pointer"
-                          title="View Invoice"
+              </thead>
+              <tbody className="divide-y divide-[#F5F5F4]">
+                {invoices.map((inv) => {
+                  const totalTax = Number(inv.cgstAmount || 0) + Number(inv.sgstAmount || 0) + Number(inv.igstAmount || 0);
+                  return (
+                    <tr key={inv.id} className="hover:bg-[#FAF9F7]/60">
+                      <td className="py-3 px-3">
+                        <p className="font-bold text-[#292524]">{inv.invoiceNumber}</p>
+                        <p className="text-[11px] text-[#78716C]">
+                          FY {inv.financialYear || '2627'} • {new Date(inv.invoiceDate || inv.createdAt || '').toLocaleDateString('en-IN')}
+                        </p>
+                      </td>
+                      <td className="py-3 px-3 font-mono font-semibold text-[#57534E]">{inv.orderNumber}</td>
+                      <td className="py-3 px-3">
+                        <p className="font-semibold text-[#292524]">{inv.customerName}</p>
+                        <p className="text-[11px] font-mono text-[#78716C]">
+                          {inv.customerGstin || inv.buyerDetails?.gstin || 'B2C Unregistered'}
+                        </p>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className="text-[#57534E]">
+                          {inv.isInterState ? 'Inter-State (IGST)' : 'Intra-State (CGST+SGST)'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-right">₹{Number(inv.taxableAmount || 0).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right">₹{totalTax.toFixed(2)}</td>
+                      <td className="py-3 px-3 text-right font-bold text-[#292524]">
+                        ₹{Number(inv.totalAmount || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3 px-3">
+                        <Badge
+                          variant={
+                            inv.status === 'PAID'
+                              ? 'success'
+                              : inv.status === 'CANCELLED'
+                              ? 'danger'
+                              : 'info'
+                          }
                         >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setViewingInvoice(inv)}
-                          className="p-1.5 rounded-lg text-[#78716C] hover:text-[#943D24] hover:bg-[#FBF3F0] cursor-pointer"
-                          title="Print Invoice"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                          {inv.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button size="sm" variant="outline" onClick={() => setPreviewInv(inv)}>
+                            <Eye className="w-3.5 h-3.5 mr-1" /> Preview
+                          </Button>
+                          <Button
+                            size="sm"
+                            isLoading={downloadingId === inv.id}
+                            onClick={() => handleDownloadPdf(inv)}
+                          >
+                            <Download className="w-3.5 h-3.5 mr-1" /> A4 PDF
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
+      {/* Legal Invoice Preview Modal (Read-only & Immutable) */}
       <Modal
-        isOpen={Boolean(viewingInvoice)}
-        onClose={() => setViewingInvoice(null)}
-        title={`Tax Invoice — ${viewingInvoice?.invoiceNumber || ''}`}
-        subtitle={viewingInvoice ? `Order #${viewingInvoice.orderNumber}` : ''}
+        isOpen={Boolean(previewInv)}
+        onClose={() => setPreviewInv(null)}
+        title={previewInv ? `Tax Invoice ${previewInv.invoiceNumber}` : 'Tax Invoice'}
+        subtitle="Legal GST Tax Invoice issued under supplying vendor GSTIN (immutable once finalized)."
         maxWidth="2xl"
       >
-        {viewingInvoice && (
-          <div className="space-y-5 text-xs">
-            <div className="p-5 rounded-xl border border-[#E7E5E4] bg-white space-y-4">
-              <div className="flex justify-between items-start border-b border-[#E7E5E4] pb-4">
-                <div>
-                  <h3 className="text-base font-bold text-[#943D24]">BUILDORA 60</h3>
-                  <p className="font-medium text-[#292524]">
-                    {vendor?.businessInfo?.businessName || vendor?.storeName || 'Buildora Partner Store'}
-                  </p>
-                  <p className="text-[#78716C]">GSTIN: {vendor?.businessInfo?.gstin || '—'}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-[#292524]">{viewingInvoice.invoiceNumber}</p>
-                  <p className="text-[#78716C]">
-                    Date: {new Date(viewingInvoice.invoiceDate).toLocaleDateString('en-IN')}
-                  </p>
-                </div>
+        {previewInv && (
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#FAF9F7] border border-[#E7E5E4]">
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#78716C]">Supplier (Your Legal Entity)</p>
+                <p className="font-bold text-[#292524] mt-0.5">{previewInv.supplierDetails?.legalBusinessName}</p>
+                <p className="text-[#57534E]">{previewInv.supplierDetails?.address}</p>
+                <p className="font-mono font-bold text-[#943D24] mt-1">
+                  GSTIN: {previewInv.supplierDetails?.gstin} (State Code: {previewInv.supplierDetails?.stateCode})
+                </p>
               </div>
-
-              <div className="grid grid-cols-2 gap-4 border-b border-[#E7E5E4] pb-3">
-                <div>
-                  <span className="text-[#78716C] block">Billed To</span>
-                  <p className="font-semibold text-[#292524]">{viewingInvoice.customerName}</p>
-                  <p className="font-mono text-[#78716C]">
-                    {viewingInvoice.customerGstin || 'Unregistered'}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-[#78716C] block">Order Reference</span>
-                  <p className="font-semibold text-[#292524]">#{viewingInvoice.orderNumber}</p>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[#78716C]">
-                  <span>Taxable Value:</span>
-                  <span className="font-medium text-[#292524]">
-                    ₹{viewingInvoice.taxableAmount.toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[#78716C]">
-                  <span>CGST:</span>
-                  <span className="font-medium text-[#292524]">
-                    ₹{viewingInvoice.cgstAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[#78716C]">
-                  <span>SGST:</span>
-                  <span className="font-medium text-[#292524]">
-                    ₹{viewingInvoice.sgstAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm font-bold text-[#292524] border-t border-[#E7E5E4] pt-2">
-                  <span>Total Invoice Amount:</span>
-                  <span className="text-[#943D24]">
-                    ₹{viewingInvoice.totalAmount.toLocaleString('en-IN')}
-                  </span>
-                </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#78716C]">Buyer & Place of Supply</p>
+                <p className="font-bold text-[#292524] mt-0.5">
+                  {previewInv.buyerDetails?.businessName || previewInv.buyerDetails?.name || previewInv.customerName}
+                </p>
+                <p className="text-[#57534E]">{previewInv.buyerDetails?.shippingAddress}</p>
+                <p className="text-[#57534E] mt-1">
+                  Place of Supply: <strong>{previewInv.buyerDetails?.placeOfSupply}</strong>
+                </p>
+                {previewInv.buyerDetails?.gstin && (
+                  <p className="font-mono font-semibold text-[#292524]">Buyer GSTIN: {previewInv.buyerDetails.gstin}</p>
+                )}
               </div>
             </div>
 
-            <div className="flex justify-end gap-2.5">
-              <Button variant="outline" size="sm" onClick={() => setViewingInvoice(null)}>
-                Close
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => window.print()}
-                leftIcon={<Printer className="w-3.5 h-3.5" />}
-              >
-                Print / Download PDF
+            <div className="border border-[#E7E5E4] rounded-xl overflow-hidden">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-[#FAF9F7] border-b border-[#E7E5E4]">
+                  <tr>
+                    <th className="py-2 px-2.5">Material</th>
+                    <th className="py-2 px-2.5">HSN</th>
+                    <th className="py-2 px-2.5 text-right">Qty</th>
+                    <th className="py-2 px-2.5 text-right">Taxable</th>
+                    <th className="py-2 px-2.5 text-right">Tax</th>
+                    <th className="py-2 px-2.5 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F5F5F4]">
+                  {(previewInv.items || []).map((it) => (
+                    <tr key={it.sNo}>
+                      <td className="py-2 px-2.5">
+                        <p className="font-semibold text-[#292524]">{it.description}</p>
+                        <p className="text-[10px] text-[#78716C]">SKU: {it.sku}</p>
+                      </td>
+                      <td className="py-2 px-2.5 font-mono">{it.hsnCode}</td>
+                      <td className="py-2 px-2.5 text-right">{it.quantity} {it.unit}</td>
+                      <td className="py-2 px-2.5 text-right">₹{it.taxableValue.toFixed(2)}</td>
+                      <td className="py-2 px-2.5 text-right">
+                        {previewInv.isInterState
+                          ? `IGST ${it.igstRate}% (₹${it.igstAmount.toFixed(2)})`
+                          : `CGST ${it.cgstRate}%+SGST ${it.sgstRate}% (₹${it.gstAmount.toFixed(2)})`}
+                      </td>
+                      <td className="py-2 px-2.5 text-right font-bold">₹{it.total.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-[#FAF9F7] border border-[#E7E5E4]">
+              <p className="text-[11px] text-[#57534E]">
+                <ShieldCheck className="w-3.5 h-3.5 inline mr-1 text-emerald-600" />
+                {previewInv.amountInWords}
+              </p>
+              <div className="text-right">
+                <p className="text-sm font-extrabold text-[#292524]">Grand Total: ₹{previewInv.totalAmount.toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-[#78716C]">
+                  CGST: ₹{previewInv.cgstAmount} • SGST: ₹{previewInv.sgstAmount} • IGST: ₹{previewInv.igstAmount}
+                </p>
+              </div>
+            </div>
+
+            {previewInv.creditNotes && previewInv.creditNotes.length > 0 && (
+              <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-800 text-[11px]">
+                Credit Note Issued: <strong>{previewInv.creditNotes[0].creditNoteNumber}</strong> — {previewInv.creditNotes[0].reason}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPreviewInv(null)}>Close</Button>
+              <Button onClick={() => handleDownloadPdf(previewInv)}>
+                <Download className="w-3.5 h-3.5 mr-1.5" /> Download A4 PDF
               </Button>
             </div>
           </div>
@@ -225,5 +238,3 @@ export const VendorInvoicesPage: React.FC = () => {
     </div>
   );
 };
-
-export default VendorInvoicesPage;

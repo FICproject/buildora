@@ -6,7 +6,9 @@ import {
   VendorKycDocument,
   VendorWarehouse,
   VendorRegistrationWizardData,
-  VendorLogoMetadata
+  VendorLogoMetadata,
+  VendorGstStatus,
+  VendorMsmeStatus
 } from '@buildora/types';
 import {
   validateName,
@@ -22,6 +24,12 @@ import {
   validateCityOrState,
   validateGSTIN,
   validatePAN,
+  validateAadhaar,
+  validateUdyamNumber,
+  validateApplicationReference,
+  isTradeLicenseRequired,
+  validateVendorStep4,
+  validateVendorStep5,
   validateBankName,
   validateBankAccount,
   validateConfirmBankAccount,
@@ -58,7 +66,9 @@ import {
   Clock,
   Loader2,
   RotateCcw,
-  Image as ImageIcon
+  Image as ImageIcon,
+  X,
+  ShieldCheck
 } from 'lucide-react';
 
 export const VendorRegisterPage: React.FC = () => {
@@ -144,10 +154,23 @@ export const VendorRegisterPage: React.FC = () => {
   // ----------------------------------------------------
   // STEP 4: KYC & TAX DOCUMENTS (Initially 100% empty)
   // ----------------------------------------------------
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [showAadhaar, setShowAadhaar] = useState(false);
+  const [gstStatus, setGstStatus] = useState<VendorGstStatus>('REGISTERED');
   const [gstin, setGstin] = useState('');
+  const [gstApplicationNumber, setGstApplicationNumber] = useState('');
   const [pan, setPan] = useState('');
+  const [msmeStatus, setMsmeStatus] = useState<VendorMsmeStatus>('NOT_REGISTERED');
+  const [udyamNumber, setUdyamNumber] = useState('');
+  const [msmeApplicationNumber, setMsmeApplicationNumber] = useState('');
   const [documents, setDocuments] = useState<VendorKycDocument[]>([]);
   const [isUploadingDocType, setIsUploadingDocType] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [localPreviewUrls, setLocalPreviewUrls] = useState<Record<string, string>>({});
+  const [previewDoc, setPreviewDoc] = useState<VendorKycDocument | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // ----------------------------------------------------
   // STEP 5: BANK & COMPLIANCE INFORMATION (Initially 100% empty)
@@ -159,7 +182,6 @@ export const VendorRegisterPage: React.FC = () => {
   const [showAccountNumber, setShowAccountNumber] = useState(false);
   const [ifsc, setIfsc] = useState('');
   const [accountType, setAccountType] = useState<'CURRENT' | 'SAVINGS'>('CURRENT');
-  const [chequeDocName] = useState<string | null>(null);
 
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
@@ -243,30 +265,33 @@ export const VendorRegisterPage: React.FC = () => {
         return validateCityOrState(val, 'City / Region').error;
       case 'completeAddress':
         return validateAddress(val).error;
+      case 'aadhaarNumber':
+        return validateAadhaar(val).error;
       case 'gstin': {
-        const cleanGst = val.trim().toUpperCase();
-        const cleanPan = (overrides?.pan ?? pan).trim().toUpperCase();
-        if (!cleanGst) {
+        if (gstStatus !== 'REGISTERED') {
           setSingleFieldWarning('gstin', undefined);
-          if (!cleanPan && (touched.gstin || touched.pan)) {
-            return 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
-          }
           return undefined;
         }
+        const cleanGst = val.trim().toUpperCase();
         const gstRes = validateGSTIN(cleanGst);
         setSingleFieldWarning('gstin', gstRes.isValid ? gstRes.warning : undefined);
         return gstRes.error;
       }
+      case 'gstApplicationNumber': {
+        if (gstStatus !== 'APPLIED' || !val.trim()) return undefined;
+        return validateApplicationReference(val, 'GST Application / ARN Reference Number').error;
+      }
       case 'pan': {
         const cleanPan = val.trim().toUpperCase();
-        const cleanGst = (overrides?.gstin ?? gstin).trim().toUpperCase();
-        if (!cleanPan) {
-          if (!cleanGst && (touched.gstin || touched.pan)) {
-            return 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
-          }
-          return undefined;
-        }
         return validatePAN(cleanPan).error;
+      }
+      case 'udyamNumber': {
+        if (msmeStatus !== 'REGISTERED') return undefined;
+        return validateUdyamNumber(val).error;
+      }
+      case 'msmeApplicationNumber': {
+        if (msmeStatus !== 'APPLIED' || !val.trim()) return undefined;
+        return validateApplicationReference(val, 'MSME Application Reference Number').error;
       }
       case 'accountHolderName':
         return validateAccountBeneficiaryName(val).error;
@@ -325,22 +350,6 @@ export const VendorRegisterPage: React.FC = () => {
     if (field === 'accountNumber' && (touched.confirmAccountNumber || confirmAccountNumber.length > 0)) {
       const confirmAccErr = validateConfirmBankAccount(nextValue, confirmAccountNumber).error;
       setSingleFieldError('confirmAccountNumber', confirmAccErr);
-    }
-    if (field === 'gstin') {
-      const cleanGst = nextValue.trim().toUpperCase();
-      if (cleanGst && !pan.trim()) {
-        clearFieldError('pan');
-      } else if (!cleanGst && !pan.trim() && touched.pan) {
-        setSingleFieldError('pan', 'At least GSTIN or PAN is mandatory for B2B supplier verification.');
-      }
-    }
-    if (field === 'pan') {
-      const cleanPan = nextValue.trim().toUpperCase();
-      if (cleanPan && !gstin.trim()) {
-        clearFieldError('gstin');
-      } else if (!cleanPan && !gstin.trim() && touched.gstin) {
-        setSingleFieldError('gstin', 'At least GSTIN or PAN is mandatory for B2B supplier verification.');
-      }
     }
   };
 
@@ -416,8 +425,16 @@ export const VendorRegisterPage: React.FC = () => {
       if (d.pincode) setPincode(d.pincode);
       if (d.completeAddress) setCompleteAddress(d.completeAddress);
       if (d.warehouses && d.warehouses.length) setWarehouses(d.warehouses);
+      if (d.aadhaarNumber) setAadhaarNumber(d.aadhaarNumber);
+      if (d.gstStatus) setGstStatus(d.gstStatus);
+      else if (d.gstin) setGstStatus('REGISTERED');
       if (d.gstin) setGstin(d.gstin);
+      if (d.gstApplicationNumber) setGstApplicationNumber(d.gstApplicationNumber);
       if (d.pan) setPan(d.pan);
+      if (d.msmeStatus) setMsmeStatus(d.msmeStatus);
+      else if (d.udyamNumber) setMsmeStatus('REGISTERED');
+      if (d.udyamNumber) setUdyamNumber(d.udyamNumber);
+      if (d.msmeApplicationNumber) setMsmeApplicationNumber(d.msmeApplicationNumber);
       if (d.documents && d.documents.length) setDocuments(d.documents);
       if (d.bankDetails?.accountHolderName) setAccountHolderName(d.bankDetails.accountHolderName);
       if (d.bankDetails?.bankName) setBankName(d.bankDetails.bankName);
@@ -714,45 +731,63 @@ export const VendorRegisterPage: React.FC = () => {
   };
 
   // Build normalized wizard payload
-  const buildWizardPayload = (stepOverride?: number): VendorRegistrationWizardData => ({
-    ownerName: ownerName.trim().replace(/\s+/g, ' '),
-    email: email.trim().toLowerCase(),
-    phone: phone.trim(),
-    isEmailVerified,
-    isPhoneVerified: isMobileVerified,
-    legalBusinessName: legalBusinessName.trim().replace(/\s+/g, ' '),
-    storeName: storeName.trim().replace(/\s+/g, ' '),
-    businessType: businessType as any,
-    businessRegistrationType,
-    yearOfEstablishment: yearOfEstablishment.trim(),
-    website: website.trim(),
-    description: description.trim(),
-    logoUrl: logoUrl || undefined,
-    logoMetadata: logoMetadata || undefined,
-    country,
-    state: state.trim(),
-    district: district.trim(),
-    city: city.trim(),
-    area: area.trim(),
-    pincode: pincode.trim(),
-    completeAddress: completeAddress.trim(),
-    dispatchAddress: sameDispatchAddress ? completeAddress.trim() : dispatchAddress.trim(),
-    warehouses,
-    gstin: gstin.trim().toUpperCase(),
-    pan: pan.trim().toUpperCase(),
-    documents,
-    bankDetails: {
-      accountHolderName: accountHolderName.trim().replace(/\s+/g, ' '),
-      bankName: bankName.trim().replace(/\s+/g, ' '),
-      accountNumber: accountNumber.trim(),
-      ifsc: ifsc.trim().toUpperCase(),
-      accountType,
-      chequeDocUrl: chequeDocName || undefined
-    },
-    termsAccepted,
-    privacyAccepted,
-    currentStep: stepOverride ?? currentStep
-  });
+  const buildWizardPayload = (stepOverride?: number): VendorRegistrationWizardData => {
+    const bankProofDoc = documents.find((d) => d.type === 'CANCELLED_CHEQUE');
+    return {
+      ownerName: ownerName.trim().replace(/\s+/g, ' '),
+      email: email.trim().toLowerCase(),
+      phone: phone.trim(),
+      isEmailVerified,
+      isPhoneVerified: isMobileVerified,
+      legalBusinessName: legalBusinessName.trim().replace(/\s+/g, ' '),
+      storeName: storeName.trim().replace(/\s+/g, ' '),
+      businessType: businessType as any,
+      businessRegistrationType,
+      yearOfEstablishment: yearOfEstablishment.trim(),
+      website: website.trim(),
+      description: description.trim(),
+      logoUrl: logoUrl || undefined,
+      logoMetadata: logoMetadata || undefined,
+      country,
+      state: state.trim(),
+      district: district.trim(),
+      city: city.trim(),
+      area: area.trim(),
+      pincode: pincode.trim(),
+      completeAddress: completeAddress.trim(),
+      dispatchAddress: sameDispatchAddress ? completeAddress.trim() : dispatchAddress.trim(),
+      warehouses,
+      aadhaarNumber: aadhaarNumber.replace(/[\s-]+/g, '').trim(),
+      gstStatus,
+      gstin: gstStatus === 'REGISTERED' ? gstin.trim().toUpperCase() : undefined,
+      gstApplicationNumber:
+        gstStatus === 'APPLIED' && gstApplicationNumber.trim()
+          ? gstApplicationNumber.trim().toUpperCase()
+          : undefined,
+      pan: pan.trim().toUpperCase(),
+      msmeStatus,
+      udyamNumber: msmeStatus === 'REGISTERED' ? udyamNumber.trim().toUpperCase() : undefined,
+      msmeApplicationNumber:
+        msmeStatus === 'APPLIED' && msmeApplicationNumber.trim()
+          ? msmeApplicationNumber.trim().toUpperCase()
+          : undefined,
+      documents,
+      bankDetails: {
+        accountHolderName: accountHolderName.trim().replace(/\s+/g, ' '),
+        bankName: bankName.trim().replace(/\s+/g, ' '),
+        accountNumber: accountNumber.trim(),
+        confirmAccountNumber: confirmAccountNumber.trim(),
+        ifsc: ifsc.trim().toUpperCase(),
+        accountType,
+        chequeDocUrl: bankProofDoc?.id || undefined,
+        proofDocumentId: bankProofDoc?.id || undefined,
+        proofFileName: bankProofDoc?.fileName || undefined,
+      },
+      termsAccepted,
+      privacyAccepted,
+      currentStep: stepOverride ?? currentStep
+    };
+  };
 
   // Save draft & optionally navigate back to Review Page if editing from Review
   const saveDraftAndSyncStore = async (stepNum: number) => {
@@ -970,52 +1005,62 @@ export const VendorRegisterPage: React.FC = () => {
     setError(null);
     setTouched((prev) => ({
       ...prev,
+      aadhaarNumber: true,
+      gstStatus: true,
       gstin: true,
+      gstApplicationNumber: true,
       pan: true,
+      msmeStatus: true,
+      udyamNumber: true,
+      msmeApplicationNumber: true,
       documents: true
     }));
 
-    const errors: Record<string, string> = {};
+    const check = validateVendorStep4({
+      aadhaarNumber,
+      gstStatus,
+      gstin: gstStatus === 'REGISTERED' ? gstin : undefined,
+      gstApplicationNumber: gstStatus === 'APPLIED' ? gstApplicationNumber : undefined,
+      pan,
+      msmeStatus,
+      udyamNumber: msmeStatus === 'REGISTERED' ? udyamNumber : undefined,
+      msmeApplicationNumber: msmeStatus === 'APPLIED' ? msmeApplicationNumber : undefined,
+      businessRegistrationType,
+      documents
+    });
 
-    const cleanGst = gstin.trim().toUpperCase();
-    const cleanPan = pan.trim().toUpperCase();
-
-    if (!cleanGst && !cleanPan) {
-      errors.gstin = 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
-      errors.pan = 'At least GSTIN or PAN is mandatory for B2B supplier verification.';
+    if (gstStatus === 'REGISTERED' && gstin.trim()) {
+      const gstCheck = validateGSTIN(gstin.trim().toUpperCase());
+      setSingleFieldWarning('gstin', gstCheck.isValid ? gstCheck.warning : undefined);
     } else {
-      if (cleanGst) {
-        const gstCheck = validateGSTIN(cleanGst);
-        if (!gstCheck.isValid) {
-          errors.gstin = gstCheck.error || 'Enter a valid GSTIN.';
-        }
-        setSingleFieldWarning('gstin', gstCheck.isValid ? gstCheck.warning : undefined);
-      }
-      if (cleanPan) {
-        const panCheck = validatePAN(cleanPan);
-        if (!panCheck.isValid) {
-          errors.pan = panCheck.error || 'Enter a valid 10-character PAN.';
-        }
-      }
+      setSingleFieldWarning('gstin', undefined);
     }
 
-    if (documents.length === 0) {
-      errors.documents = 'Please upload at least one required KYC document (GST Certificate or PAN Card).';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setError('Please provide valid tax identification and upload required verification documents.');
+    if (!check.isValid) {
+      setFieldErrors(check.errors);
+      setError(
+        Object.values(check.errors)[0] ||
+          'Please complete all required identification numbers and upload required verification documents.'
+      );
       return;
     }
 
     setFieldErrors({});
-    if (returnTo === 'review') {
+    setIsLoading(true);
+    try {
+      if (returnTo === 'review') {
+        await saveDraftAndSyncStore(5);
+        navigate('/registration/review');
+        return;
+      }
       await saveDraftAndSyncStore(5);
-      navigate('/registration/review');
-      return;
+      goToStep(5);
+    } catch (err: any) {
+      if (err?.errors) setFieldErrors((prev) => ({ ...prev, ...err.errors }));
+      setError(err?.message || 'Failed to save KYC step progress.');
+    } finally {
+      setIsLoading(false);
     }
-    goToStep(5);
   };
 
   // ----------------------------------------------------
@@ -1057,20 +1102,87 @@ export const VendorRegisterPage: React.FC = () => {
     setWarehouses(warehouses.filter((w) => w.id !== id));
   };
 
+  const getLinkedIdentificationForDocType = (type: VendorKycDocument['type']): string | undefined => {
+    switch (type) {
+      case 'AADHAAR_CARD':
+      case 'AUTHORIZED_ID':
+        return aadhaarNumber.replace(/[\s-]+/g, '').trim() || undefined;
+      case 'PAN_CARD':
+        return pan.trim().toUpperCase() || undefined;
+      case 'GST_CERTIFICATE':
+        return gstStatus === 'REGISTERED' ? gstin.trim().toUpperCase() || undefined : undefined;
+      case 'GST_ACKNOWLEDGEMENT':
+        return gstStatus === 'APPLIED'
+          ? gstApplicationNumber.trim().toUpperCase() || undefined
+          : undefined;
+      case 'UDYAM_CERTIFICATE':
+      case 'MSME_CERTIFICATE':
+        return msmeStatus === 'REGISTERED'
+          ? udyamNumber.trim().toUpperCase() || undefined
+          : undefined;
+      case 'MSME_ACKNOWLEDGEMENT':
+        return msmeStatus === 'APPLIED'
+          ? msmeApplicationNumber.trim().toUpperCase() || undefined
+          : undefined;
+      case 'CANCELLED_CHEQUE':
+        return accountNumber.replace(/\D/g, '') || undefined;
+      default:
+        return undefined;
+    }
+  };
+
+  const handleRemoveDocument = (doc: VendorKycDocument) => {
+    setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+    setLocalPreviewUrls((prev) => {
+      const next = { ...prev };
+      if (next[doc.id]) {
+        URL.revokeObjectURL(next[doc.id]);
+        delete next[doc.id];
+      }
+      return next;
+    });
+  };
+
+  const handleOpenPreview = async (doc: VendorKycDocument) => {
+    setPreviewDoc(doc);
+    setPreviewError(null);
+    if (localPreviewUrls[doc.id]) {
+      setPreviewBlobUrl(localPreviewUrls[doc.id]);
+      setPreviewLoading(false);
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewBlobUrl(null);
+    try {
+      const blob = await vendorApi.fetchOwnKycDocumentBlob(doc.id, false);
+      const url = URL.createObjectURL(blob);
+      setPreviewBlobUrl(url);
+    } catch (err: any) {
+      setPreviewError(err?.message || 'Unable to load document preview. You can replace and re-upload it.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   // Document Upload Handler (Validates MIME, size <= 5MB, magic bytes, and uploads to backend)
-  const handleFileUpload = (type: VendorKycDocument['type'], title: string) => {
+  const handleFileUpload = (
+    type: VendorKycDocument['type'],
+    title: string,
+    errorKey = 'documents'
+  ) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp';
+    input.accept = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
     input.onchange = async (e: any) => {
       const file: File | undefined = e.target.files?.[0];
       if (!file) return;
 
       clearFieldError('documents');
+      clearFieldError(errorKey);
       const metaCheck = validateKycDocumentMetadata(file.type, file.size, file.name);
       if (!metaCheck.isValid) {
         const msg = metaCheck.error || 'Unsupported KYC document file.';
-        setFieldErrors((prev) => ({ ...prev, documents: msg }));
+        setFieldErrors((prev) => ({ ...prev, [errorKey]: msg, documents: msg }));
         setError(msg);
         return;
       }
@@ -1080,21 +1192,27 @@ export const VendorRegisterPage: React.FC = () => {
         const detected = detectKycDocumentSignature(new Uint8Array(headerBuffer));
         if (!detected) {
           const msg =
-            'Corrupted or unsupported file content. Upload a genuine PDF, JPG, JPEG, PNG, or WEBP document.';
-          setFieldErrors((prev) => ({ ...prev, documents: msg }));
+            'Corrupted or unsupported file content. Upload a genuine PDF, JPG, JPEG, or PNG document.';
+          setFieldErrors((prev) => ({ ...prev, [errorKey]: msg, documents: msg }));
           setError(msg);
           return;
         }
       } catch {
         const msg = 'Unable to read selected document file.';
-        setFieldErrors((prev) => ({ ...prev, documents: msg }));
+        setFieldErrors((prev) => ({ ...prev, [errorKey]: msg, documents: msg }));
         setError(msg);
         return;
       }
 
       setIsUploadingDocType(type);
+      setUploadProgress(25);
       try {
-        const uploadedDoc = await vendorApi.uploadDocumentFile(file, type, title);
+        const linkedId = getLinkedIdentificationForDocType(type);
+        setUploadProgress(60);
+        const uploadedDoc = await vendorApi.uploadDocumentFile(file, type, title, linkedId);
+        setUploadProgress(100);
+        const objectUrl = URL.createObjectURL(file);
+        setLocalPreviewUrls((prev) => ({ ...prev, [uploadedDoc.id]: objectUrl }));
         setDocuments((prev) => {
           const existing = prev.find((d) => d.type === type);
           const previousVersions = existing
@@ -1102,12 +1220,13 @@ export const VendorRegisterPage: React.FC = () => {
                 ...(Array.isArray(existing.previousVersions) ? existing.previousVersions : []),
                 {
                   id: existing.id,
+                  version: existing.version || 1,
                   fileName: existing.fileName,
                   fileSize: existing.fileSize,
                   mimeType: existing.mimeType,
-                  fileUrl: existing.fileUrl,
                   storageKey: existing.storageKey,
                   storageProvider: existing.storageProvider,
+                  identificationNumberMasked: existing.identificationNumberMasked,
                   uploadedAt: existing.uploadedAt,
                   verificationStatus: existing.verificationStatus || 'PENDING',
                   rejectionReason: existing.rejectionReason,
@@ -1121,17 +1240,20 @@ export const VendorRegisterPage: React.FC = () => {
             ...prev.filter((d) => d.type !== type),
             {
               ...uploadedDoc,
+              version: previousVersions.length + 1,
               ...(previousVersions.length > 0 ? { previousVersions } : {}),
             },
           ];
         });
         clearFieldError('documents');
+        clearFieldError(errorKey);
       } catch (err: any) {
         const msg = err.message || 'Document upload failed on verification server.';
-        setFieldErrors((prev) => ({ ...prev, documents: msg }));
+        setFieldErrors((prev) => ({ ...prev, [errorKey]: msg, documents: msg }));
         setError(msg);
       } finally {
         setIsUploadingDocType(null);
+        setUploadProgress(0);
       }
     };
     input.click();
@@ -1151,54 +1273,34 @@ export const VendorRegisterPage: React.FC = () => {
       confirmAccountNumber: true,
       ifsc: true,
       accountType: true,
+      bankProofDoc: true,
       termsAccepted: true,
       privacyAccepted: true
     }));
 
-    const errors: Record<string, string> = {};
+    const step5Check = validateVendorStep5(
+      {
+        bankDetails: {
+          accountHolderName,
+          bankName,
+          accountNumber,
+          confirmAccountNumber,
+          ifsc: ifsc.trim().toUpperCase(),
+          accountType
+        },
+        documents,
+        termsAccepted,
+        privacyAccepted
+      },
+      { requireConfirmAccountNumber: true, requireBankProof: true }
+    );
 
-    const nameCheck = validateAccountBeneficiaryName(accountHolderName);
-    if (!nameCheck.isValid) {
-      errors.accountHolderName = nameCheck.error || 'Account Beneficiary Name is required.';
-    }
-
-    const bankCheck = validateBankName(bankName);
-    if (!bankCheck.isValid) {
-      errors.bankName = bankCheck.error || 'Bank Name is required.';
-    }
-
-    const accCheck = validateBankAccount(accountNumber);
-    if (!accCheck.isValid) {
-      errors.accountNumber = accCheck.error || 'Bank account number must be between 9 and 18 digits.';
-    }
-
-    const confirmAccCheck = validateConfirmBankAccount(accountNumber, confirmAccountNumber);
-    if (!confirmAccCheck.isValid) {
-      errors.confirmAccountNumber = confirmAccCheck.error || 'Bank account numbers do not match.';
-    }
-
-    const cleanIfsc = ifsc.trim().toUpperCase();
-    const ifscCheck = validateIFSC(cleanIfsc);
-    if (!ifscCheck.isValid) {
-      errors.ifsc = ifscCheck.error || 'Enter a valid 11-character IFSC code.';
-    }
-
-    const typeCheck = validateBankAccountType(accountType);
-    if (!typeCheck.isValid) {
-      errors.accountType = typeCheck.error || 'Select a valid account type.';
-    }
-
-    if (!termsAccepted) {
-      errors.termsAccepted = 'You must accept the BUILDORA 60 Supplier Terms of Partnership.';
-    }
-
-    if (!privacyAccepted) {
-      errors.privacyAccepted = 'You must confirm the accuracy of submitted documents.';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setError('Please correct the highlighted fields before continuing to review.');
+    if (!step5Check.isValid) {
+      setFieldErrors(step5Check.errors);
+      setError(
+        Object.values(step5Check.errors)[0] ||
+          'Please complete all bank details, upload bank proof, and accept the terms.'
+      );
       return;
     }
 
@@ -2270,227 +2372,543 @@ export const VendorRegisterPage: React.FC = () => {
       {/* ==================================================== */}
       {/* STEP 4: KYC & TAX DOCUMENTS                          */}
       {/* ==================================================== */}
-      {currentStep === 4 && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-[#292524] mb-1">
-                GSTIN (15 Characters) *
-              </label>
-              <input
-                type="text"
-                name="gstin"
-                value={gstin}
-                onChange={(e) =>
-                  handleFieldChange('gstin', e.target.value.toUpperCase(), setGstin, {
-                    autoTouchOnInput: true
-                  })
-                }
-                onBlur={() =>
-                  handleFieldBlur('gstin', gstin, {
-                    normalize: (v) => v.trim().toUpperCase(),
-                    setter: setGstin
-                  })
-                }
-                required
-                placeholder="e.g. 29AABCB9876F1Z8"
-                className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
-                  fieldErrors.gstin
-                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
-                }`}
-              />
-              {fieldErrors.gstin && (
-                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.gstin}</p>
-              )}
-              {!fieldErrors.gstin && fieldWarnings.gstin && (
-                <p className="text-[11px] text-amber-700 mt-1 font-medium">{fieldWarnings.gstin}</p>
-              )}
-            </div>
+      {currentStep === 4 && (() => {
+        const aadhaarDoc = documents.find((d) => d.type === 'AADHAAR_CARD' || d.type === 'AUTHORIZED_ID');
+        const panDoc = documents.find((d) => d.type === 'PAN_CARD');
+        const gstDoc = documents.find((d) => d.type === 'GST_CERTIFICATE');
+        const gstAckDoc = documents.find((d) => d.type === 'GST_ACKNOWLEDGEMENT');
+        const udyamDoc = documents.find((d) => d.type === 'UDYAM_CERTIFICATE' || d.type === 'MSME_CERTIFICATE');
+        const msmeAckDoc = documents.find((d) => d.type === 'MSME_ACKNOWLEDGEMENT');
+        const tradeDoc = documents.find((d) => d.type === 'BUSINESS_REGISTRATION');
+        const tradeRequired = isTradeLicenseRequired(businessRegistrationType);
 
-            <div>
-              <label className="block text-xs font-bold text-[#292524] mb-1">
-                Company / Proprietor PAN *
-              </label>
-              <input
-                type="text"
-                name="pan"
-                value={pan}
-                onChange={(e) =>
-                  handleFieldChange('pan', e.target.value.toUpperCase(), setPan, {
-                    autoTouchOnInput: true
-                  })
-                }
-                onBlur={() =>
-                  handleFieldBlur('pan', pan, {
-                    normalize: (v) => v.trim().toUpperCase(),
-                    setter: setPan
-                  })
-                }
-                required
-                placeholder="e.g. AABCB9876F"
-                className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
-                  fieldErrors.pan
-                    ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
-                    : 'border-[#E7E5E4] focus:ring-[#943D24]'
-                }`}
-              />
-              {fieldErrors.pan && (
-                <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.pan}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Secure Document Vault Cards */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="text-xs font-bold text-[#292524]">
-                Verification Documents (Max 5 MB each) *
-              </h4>
-              {fieldErrors.documents && (
-                <span className="text-[11px] text-rose-600 font-medium">{fieldErrors.documents}</span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[
-                { type: 'GST_CERTIFICATE' as const, title: 'GST Registration Certificate (REG-06)' },
-                { type: 'PAN_CARD' as const, title: 'PAN Card Document' },
-                {
-                  type: 'BUSINESS_REGISTRATION' as const,
-                  title: 'Trade License / Incorporation Certificate'
-                },
-                {
-                  type: 'AUTHORIZED_ID' as const,
-                  title: 'Authorized Signatory Govt ID (Aadhaar / Passport)'
-                }
-              ].map((docType) => {
-                const uploaded = documents.find((d) => d.type === docType.type);
-                const isUploadingThis = isUploadingDocType === docType.type;
-                return (
-                  <div
-                    key={docType.type}
-                    className="p-3.5 rounded-2xl border border-[#E7E5E4] bg-white hover:border-blue-300 transition-all space-y-2"
+        const renderDocUploadBox = (
+          docType: VendorKycDocument['type'],
+          title: string,
+          uploaded: VendorKycDocument | undefined,
+          required: boolean,
+          errorKey: string,
+          helperText = 'PDF, JPG, JPEG, or PNG (Max 5 MB)'
+        ) => {
+          const isUploadingThis = isUploadingDocType === docType;
+          const specificError = fieldErrors[errorKey];
+          return (
+            <div className="p-3.5 rounded-2xl border border-[#E7E5E4] bg-white space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-[#292524]">
+                    {title} {required ? '*' : '(Optional)'}
+                  </span>
+                  <p className="text-[11px] text-[#78716C]">{helperText}</p>
+                </div>
+                {uploaded ? (
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold border shrink-0 ${
+                      uploaded.verificationStatus === 'VERIFIED'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : uploaded.verificationStatus === 'REJECTED'
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-[#292524]">{docType.title}</span>
-                        <p className="text-[11px] text-[#78716C]">PDF, JPG, JPEG, PNG, or WEBP (Max 5 MB)</p>
-                      </div>
-                      {uploaded ? (
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                            uploaded.verificationStatus === 'VERIFIED'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : uploaded.verificationStatus === 'REJECTED'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          {uploaded.verificationStatus === 'VERIFIED'
-                            ? 'Verified'
-                            : uploaded.verificationStatus === 'REJECTED'
-                              ? 'Rejected'
-                              : 'Pending Review'}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F8F7F5] text-[#78716C]">
-                          Required
-                        </span>
-                      )}
-                    </div>
+                    {uploaded.verificationStatus === 'VERIFIED'
+                      ? 'Verified'
+                      : uploaded.verificationStatus === 'REJECTED'
+                        ? 'Rejected'
+                        : 'Uploaded • Pending Review'}
+                  </span>
+                ) : (
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                      required ? 'bg-[#FBF3F0] text-[#943D24]' : 'bg-[#F8F7F5] text-[#78716C]'
+                    }`}
+                  >
+                    {required ? 'Required' : 'Optional'}
+                  </span>
+                )}
+              </div>
 
-                    {uploaded?.verificationStatus === 'REJECTED' && uploaded.rejectionReason && (
-                      <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5">
-                        Rejected: {uploaded.rejectionReason}
-                      </p>
-                    )}
+              {uploaded?.verificationStatus === 'REJECTED' && uploaded.rejectionReason && (
+                <p className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5">
+                  Rejected: {uploaded.rejectionReason}
+                </p>
+              )}
 
-                    {uploaded ? (
-                      <div className="p-2 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <FileText className="w-3.5 h-3.5 text-[#943D24]" />
-                          <span className="truncate font-medium">{uploaded.fileName}</span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleFileUpload(docType.type, docType.title)}
-                            className="text-[11px] font-semibold text-[#943D24] hover:underline cursor-pointer"
-                          >
-                            Replace
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDocuments(documents.filter((d) => d.id !== uploaded.id))}
-                            className="text-[#78716C] hover:text-rose-600 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={Boolean(isUploadingDocType)}
-                        onClick={() => handleFileUpload(docType.type, docType.title)}
-                        className="w-full py-2 px-3 rounded-xl border border-dashed border-[#943D24]/40 text-[#943D24] text-xs font-bold bg-[#FBF3F0]/50 hover:bg-[#FBF3F0] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
-                      >
-                        {isUploadingThis ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <UploadCloud className="w-3.5 h-3.5 text-[#F6C453]" />
-                            Upload Document
-                          </>
-                        )}
-                      </button>
+              {uploaded ? (
+                <div className="p-2.5 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <FileText className="w-3.5 h-3.5 text-[#943D24] shrink-0" />
+                    <span className="truncate font-medium text-[#292524]">{uploaded.fileName}</span>
+                    {uploaded.fileSize > 0 && (
+                      <span className="text-[10px] text-[#78716C] shrink-0">
+                        ({Math.max(1, Math.round(uploaded.fileSize / 1024))} KB)
+                      </span>
                     )}
                   </div>
-                );
-              })}
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenPreview(uploaded)}
+                      className="text-[11px] font-semibold text-[#292524] hover:text-[#943D24] inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3 h-3" /> Preview
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(isUploadingDocType)}
+                      onClick={() => handleFileUpload(docType, title, errorKey)}
+                      className="text-[11px] font-semibold text-[#943D24] hover:underline cursor-pointer disabled:opacity-50"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDocument(uploaded)}
+                      title="Remove document"
+                      className="text-[#78716C] hover:text-rose-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={Boolean(isUploadingDocType)}
+                  onClick={() => handleFileUpload(docType, title, errorKey)}
+                  className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#943D24]/40 text-[#943D24] text-xs font-bold bg-[#FBF3F0]/50 hover:bg-[#FBF3F0] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                >
+                  {isUploadingThis ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Uploading ({uploadProgress || 50}%)...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3.5 h-3.5 text-[#F6C453]" />
+                      Upload {title}
+                    </>
+                  )}
+                </button>
+              )}
+
+              {specificError && (
+                <p className="text-[11px] text-rose-600 font-medium">{specificError}</p>
+              )}
+            </div>
+          );
+        };
+
+        return (
+          <div className="space-y-5">
+            {/* A. Aadhaar Details */}
+            <div className="p-4 rounded-2xl border border-[#E7E5E4] bg-[#FAF7F4] space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs font-bold text-[#292524]">
+                  A. Authorized Signatory Aadhaar Details *
+                </h4>
+                <span className="px-2 py-0.5 rounded bg-white border border-[#E7E5E4] text-[10px] font-bold text-[#5E5946]">
+                  Document Type: Aadhaar Card
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                <div>
+                  <label className="block text-xs font-bold text-[#292524] mb-1">
+                    Aadhaar Number (12 Digits) *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showAadhaar ? 'text' : 'password'}
+                      name="aadhaarNumber"
+                      inputMode="numeric"
+                      maxLength={14}
+                      value={aadhaarNumber}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 12);
+                        handleFieldChange('aadhaarNumber', digits, setAadhaarNumber, {
+                          autoTouchOnInput: true
+                        });
+                      }}
+                      onBlur={() =>
+                        handleFieldBlur('aadhaarNumber', aadhaarNumber, {
+                          normalize: (v) => v.replace(/\D/g, '').slice(0, 12),
+                          setter: setAadhaarNumber
+                        })
+                      }
+                      required
+                      placeholder="Enter 12-digit Aadhaar number"
+                      className={`w-full px-3.5 pr-9 py-2.5 rounded-xl border bg-white font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
+                        fieldErrors.aadhaarNumber
+                          ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                          : 'border-[#E7E5E4] focus:ring-[#943D24]'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAadhaar(!showAadhaar)}
+                      aria-label={showAadhaar ? 'Hide Aadhaar number' : 'Show Aadhaar number'}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#78716C] cursor-pointer"
+                    >
+                      {showAadhaar ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-[#78716C] mt-1">
+                    Encrypted at rest and masked in Admin views (XXXX XXXX 1234).
+                  </p>
+                  {fieldErrors.aadhaarNumber && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                      {fieldErrors.aadhaarNumber}
+                    </p>
+                  )}
+                </div>
+
+                {renderDocUploadBox(
+                  'AADHAAR_CARD',
+                  'Aadhaar Card Document',
+                  aadhaarDoc,
+                  true,
+                  'aadhaarDoc'
+                )}
+              </div>
+            </div>
+
+            {/* B. PAN Details */}
+            <div className="p-4 rounded-2xl border border-[#E7E5E4] bg-[#FAF7F4] space-y-3">
+              <h4 className="text-xs font-bold text-[#292524]">
+                B. Company / Proprietor PAN Details *
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                <div>
+                  <label className="block text-xs font-bold text-[#292524] mb-1">
+                    PAN Number (10 Characters) *
+                  </label>
+                  <input
+                    type="text"
+                    name="pan"
+                    maxLength={10}
+                    value={pan}
+                    onChange={(e) =>
+                      handleFieldChange('pan', e.target.value.toUpperCase(), setPan, {
+                        autoTouchOnInput: true
+                      })
+                    }
+                    onBlur={() =>
+                      handleFieldBlur('pan', pan, {
+                        normalize: (v) => v.trim().toUpperCase(),
+                        setter: setPan
+                      })
+                    }
+                    required
+                    placeholder="e.g. AABCB9876F"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border bg-white font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
+                      fieldErrors.pan
+                        ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                        : 'border-[#E7E5E4] focus:ring-[#943D24]'
+                    }`}
+                  />
+                  {fieldErrors.pan && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.pan}</p>
+                  )}
+                </div>
+
+                {renderDocUploadBox('PAN_CARD', 'PAN Card Document', panDoc, true, 'panDoc')}
+              </div>
+            </div>
+
+            {/* C. GST Registration Details */}
+            <div className="p-4 rounded-2xl border border-[#E7E5E4] bg-[#FAF7F4] space-y-3">
+              <h4 className="text-xs font-bold text-[#292524]">C. GST Registration Details *</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                <div>
+                  <label className="block text-xs font-bold text-[#292524] mb-1">
+                    GST Registration Status *
+                  </label>
+                  <select
+                    name="gstStatus"
+                    value={gstStatus}
+                    onChange={(e) => {
+                      const next = e.target.value as VendorGstStatus;
+                      setGstStatus(next);
+                      clearFieldError('gstStatus');
+                      clearFieldError('gstin');
+                      clearFieldError('gstDoc');
+                      clearFieldError('gstApplicationNumber');
+                      setSingleFieldWarning('gstin', undefined);
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E7E5E4] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#943D24]"
+                  >
+                    <option value="REGISTERED">Registered</option>
+                    <option value="NOT_REGISTERED">Not Registered</option>
+                    <option value="APPLIED">Applied for Registration</option>
+                  </select>
+                </div>
+
+                {gstStatus === 'REGISTERED' && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#292524] mb-1">
+                      GSTIN Number (15 Characters) *
+                    </label>
+                    <input
+                      type="text"
+                      name="gstin"
+                      maxLength={15}
+                      value={gstin}
+                      onChange={(e) =>
+                        handleFieldChange('gstin', e.target.value.toUpperCase(), setGstin, {
+                          autoTouchOnInput: true
+                        })
+                      }
+                      onBlur={() =>
+                        handleFieldBlur('gstin', gstin, {
+                          normalize: (v) => v.trim().toUpperCase(),
+                          setter: setGstin
+                        })
+                      }
+                      required
+                      placeholder="e.g. 29AABCB9876F1Z8"
+                      className={`w-full px-3.5 py-2.5 rounded-xl border bg-white font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
+                        fieldErrors.gstin
+                          ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                          : 'border-[#E7E5E4] focus:ring-[#943D24]'
+                      }`}
+                    />
+                    {fieldErrors.gstin && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.gstin}</p>
+                    )}
+                    {!fieldErrors.gstin && fieldWarnings.gstin && (
+                      <p className="text-[11px] text-amber-700 mt-1 font-medium">{fieldWarnings.gstin}</p>
+                    )}
+                  </div>
+                )}
+
+                {gstStatus === 'APPLIED' && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#292524] mb-1">
+                      GST Application / ARN Reference Number (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      name="gstApplicationNumber"
+                      maxLength={35}
+                      value={gstApplicationNumber}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          'gstApplicationNumber',
+                          e.target.value.toUpperCase(),
+                          setGstApplicationNumber,
+                          { autoTouchOnInput: true }
+                        )
+                      }
+                      placeholder="e.g. AA2905241234567"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#E7E5E4] bg-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#943D24]"
+                    />
+                    {fieldErrors.gstApplicationNumber && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                        {fieldErrors.gstApplicationNumber}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {gstStatus === 'REGISTERED' &&
+                renderDocUploadBox(
+                  'GST_CERTIFICATE',
+                  'GST Registration Certificate (REG-06)',
+                  gstDoc,
+                  true,
+                  'gstDoc'
+                )}
+
+              {gstStatus === 'APPLIED' &&
+                renderDocUploadBox(
+                  'GST_ACKNOWLEDGEMENT',
+                  'GST Application Acknowledgement',
+                  gstAckDoc,
+                  false,
+                  'gstDoc'
+                )}
+
+              {gstStatus === 'NOT_REGISTERED' && (
+                <p className="text-[11px] text-[#78716C] bg-white border border-[#E7E5E4] rounded-xl px-3 py-2">
+                  GST is marked as <strong>Not Registered</strong>. GSTIN and GST Certificate are not
+                  required to continue.
+                </p>
+              )}
+            </div>
+
+            {/* D. MSME Details */}
+            <div className="p-4 rounded-2xl border border-[#E7E5E4] bg-[#FAF7F4] space-y-3">
+              <h4 className="text-xs font-bold text-[#292524]">D. MSME / Udyam Details</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                <div>
+                  <label className="block text-xs font-bold text-[#292524] mb-1">
+                    MSME Registration Status
+                  </label>
+                  <select
+                    name="msmeStatus"
+                    value={msmeStatus}
+                    onChange={(e) => {
+                      const next = e.target.value as VendorMsmeStatus;
+                      setMsmeStatus(next);
+                      clearFieldError('msmeStatus');
+                      clearFieldError('udyamNumber');
+                      clearFieldError('msmeDoc');
+                      clearFieldError('msmeApplicationNumber');
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#E7E5E4] bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#943D24]"
+                  >
+                    <option value="REGISTERED">Yes – MSME Registered</option>
+                    <option value="NOT_REGISTERED">No – Not MSME Registered</option>
+                    <option value="APPLIED">Applied for MSME Registration</option>
+                  </select>
+                </div>
+
+                {msmeStatus === 'REGISTERED' && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#292524] mb-1">
+                      Udyam Registration Number *
+                    </label>
+                    <input
+                      type="text"
+                      name="udyamNumber"
+                      maxLength={20}
+                      value={udyamNumber}
+                      onChange={(e) =>
+                        handleFieldChange('udyamNumber', e.target.value.toUpperCase(), setUdyamNumber, {
+                          autoTouchOnInput: true
+                        })
+                      }
+                      onBlur={() =>
+                        handleFieldBlur('udyamNumber', udyamNumber, {
+                          normalize: (v) => v.trim().toUpperCase(),
+                          setter: setUdyamNumber
+                        })
+                      }
+                      required
+                      placeholder="e.g. UDYAM-KA-03-0012345"
+                      className={`w-full px-3.5 py-2.5 rounded-xl border bg-white font-mono text-sm tracking-wide focus:outline-none focus:ring-2 ${
+                        fieldErrors.udyamNumber
+                          ? 'border-rose-500 bg-rose-50/30 focus:ring-rose-500/30'
+                          : 'border-[#E7E5E4] focus:ring-[#943D24]'
+                      }`}
+                    />
+                    {fieldErrors.udyamNumber && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                        {fieldErrors.udyamNumber}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {msmeStatus === 'APPLIED' && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#292524] mb-1">
+                      MSME Application Reference Number (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      name="msmeApplicationNumber"
+                      maxLength={35}
+                      value={msmeApplicationNumber}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          'msmeApplicationNumber',
+                          e.target.value.toUpperCase(),
+                          setMsmeApplicationNumber,
+                          { autoTouchOnInput: true }
+                        )
+                      }
+                      placeholder="e.g. UDYAM-APP-2026-00912"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-[#E7E5E4] bg-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#943D24]"
+                    />
+                    {fieldErrors.msmeApplicationNumber && (
+                      <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                        {fieldErrors.msmeApplicationNumber}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {msmeStatus === 'REGISTERED' &&
+                renderDocUploadBox(
+                  'UDYAM_CERTIFICATE',
+                  'Udyam Registration Certificate',
+                  udyamDoc,
+                  true,
+                  'msmeDoc'
+                )}
+
+              {msmeStatus === 'APPLIED' &&
+                renderDocUploadBox(
+                  'MSME_ACKNOWLEDGEMENT',
+                  'MSME Application Acknowledgement',
+                  msmeAckDoc,
+                  false,
+                  'msmeDoc'
+                )}
+            </div>
+
+            {/* E. Trade License / Incorporation Certificate */}
+            <div className="p-4 rounded-2xl border border-[#E7E5E4] bg-[#FAF7F4] space-y-3">
+              <h4 className="text-xs font-bold text-[#292524]">
+                E. Business Entity Proof (Trade License / Incorporation Certificate)
+              </h4>
+              {renderDocUploadBox(
+                'BUSINESS_REGISTRATION',
+                'Trade License / Incorporation Certificate',
+                tradeDoc,
+                tradeRequired,
+                'businessRegDoc'
+              )}
+            </div>
+
+            <div className="pt-4 flex items-center justify-between border-t border-[#E7E5E4]">
+              <button
+                type="button"
+                onClick={() => goToStep(3)}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold text-[#78716C] border border-[#E7E5E4] hover:bg-[#F8F7F5] flex items-center gap-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Back to Address
+              </button>
+              <button
+                type="button"
+                disabled={isLoading || Boolean(isUploadingDocType)}
+                onClick={handleStep4Next}
+                className="py-3 px-6 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center gap-2 cursor-pointer disabled:opacity-60"
+              >
+                Next: Bank &amp; Settlement Details
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
-
-          <div className="pt-4 flex items-center justify-between border-t border-[#E7E5E4]">
-            <button
-              type="button"
-              onClick={() => goToStep(3)}
-              className="py-2.5 px-4 rounded-xl text-xs font-bold text-[#78716C] border border-[#E7E5E4] hover:bg-[#F8F7F5] flex items-center gap-1.5 cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Address
-            </button>
-            <button
-              type="button"
-              onClick={handleStep4Next}
-              className="py-3 px-6 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center gap-2 cursor-pointer"
-            >
-              Next: Bank &amp; Product Details
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ==================================================== */}
       {/* STEP 5: BANK & COMPLIANCE INFORMATION                */}
       {/* ==================================================== */}
-      {currentStep === 5 && (
+      {currentStep === 5 && (() => {
+        const bankProofDoc = documents.find((d) => d.type === 'CANCELLED_CHEQUE');
+        return (
         <form onSubmit={handleProceedToReview} noValidate className="space-y-6">
           {/* Bank Settlement Section */}
-          <div className="p-4 bg-[#FBF3F0] rounded-2xl border border-[#E7E5E4] space-y-3">
-            <h4 className="text-xs font-bold text-[#292524] flex items-center gap-1.5">
-              <CreditCard className="w-4 h-4 text-[#943D24]" />
-              Settlement Bank Account Details (7-Day Direct Payouts)
-            </h4>
+          <div className="p-4 bg-[#FBF3F0] rounded-2xl border border-[#E7E5E4] space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-xs font-bold text-[#292524] flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-[#943D24]" />
+                Settlement Bank Account Details (7-Day Direct Payouts)
+              </h4>
+              <span className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-bold text-amber-700">
+                Bank Verification: Pending Admin Check
+              </span>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-[#292524] mb-1">
-                  Account Beneficiary Name *
+                  Account Holder / Beneficiary Name *
                 </label>
                 <input
                   type="text"
@@ -2556,7 +2974,7 @@ export const VendorRegisterPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-[#292524] mb-1">
-                  Bank Account Number *
+                  Account Number *
                 </label>
                 <div className="relative">
                   <input
@@ -2688,6 +3106,104 @@ export const VendorRegisterPage: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Bank Passbook / Cancelled Cheque Upload */}
+            <div className="p-3.5 rounded-2xl border border-[#E7E5E4] bg-white space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="text-xs font-bold text-[#292524]">
+                    Bank Passbook or Cancelled Cheque *
+                  </span>
+                  <p className="text-[11px] text-[#78716C]">
+                    Upload front page of passbook or cancelled cheque leaf showing Account Number &amp;
+                    IFSC (PDF, JPG, JPEG, PNG — Max 5 MB)
+                  </p>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                    bankProofDoc
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'bg-[#FBF3F0] text-[#943D24]'
+                  }`}
+                >
+                  {bankProofDoc ? 'Uploaded • Pending Review' : 'Required'}
+                </span>
+              </div>
+
+              {bankProofDoc ? (
+                <div className="p-2.5 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <FileText className="w-3.5 h-3.5 text-[#943D24] shrink-0" />
+                    <span className="truncate font-medium text-[#292524]">{bankProofDoc.fileName}</span>
+                    {bankProofDoc.fileSize > 0 && (
+                      <span className="text-[10px] text-[#78716C] shrink-0">
+                        ({Math.max(1, Math.round(bankProofDoc.fileSize / 1024))} KB)
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenPreview(bankProofDoc)}
+                      className="text-[11px] font-semibold text-[#292524] hover:text-[#943D24] inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3 h-3" /> Preview
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(isUploadingDocType)}
+                      onClick={() =>
+                        handleFileUpload(
+                          'CANCELLED_CHEQUE',
+                          'Bank Passbook / Cancelled Cheque',
+                          'bankProofDoc'
+                        )
+                      }
+                      className="text-[11px] font-semibold text-[#943D24] hover:underline cursor-pointer disabled:opacity-50"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDocument(bankProofDoc)}
+                      title="Remove document"
+                      className="text-[#78716C] hover:text-rose-600 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={Boolean(isUploadingDocType)}
+                  onClick={() =>
+                    handleFileUpload(
+                      'CANCELLED_CHEQUE',
+                      'Bank Passbook / Cancelled Cheque',
+                      'bankProofDoc'
+                    )
+                  }
+                  className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#943D24]/40 text-[#943D24] text-xs font-bold bg-[#FBF3F0]/50 hover:bg-[#FBF3F0] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+                >
+                  {isUploadingDocType === 'CANCELLED_CHEQUE' ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Uploading ({uploadProgress || 50}%)...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3.5 h-3.5 text-[#F6C453]" />
+                      Upload Bank Passbook / Cancelled Cheque
+                    </>
+                  )}
+                </button>
+              )}
+
+              {fieldErrors.bankProofDoc && (
+                <p className="text-[11px] text-rose-600 font-medium">{fieldErrors.bankProofDoc}</p>
+              )}
+            </div>
           </div>
 
           {/* Terms & Conditions Acceptance */}
@@ -2755,7 +3271,7 @@ export const VendorRegisterPage: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || Boolean(isUploadingDocType)}
               className="py-3 px-8 rounded-xl text-sm font-bold bg-[#943D24] text-white hover:bg-[#7D331E] transition-all shadow-md shadow-[#943D24]/20 flex items-center gap-2 cursor-pointer disabled:opacity-60"
             >
               {isLoading ? (
@@ -2772,6 +3288,60 @@ export const VendorRegisterPage: React.FC = () => {
             </button>
           </div>
         </form>
+        );
+      })()}
+
+      {/* Inline KYC Document Preview Modal */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-[#E7E5E4] overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-4 py-3 bg-[#FAF7F4] border-b border-[#E7E5E4] flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-[#292524] truncate">{previewDoc.title}</p>
+                <p className="text-[11px] text-[#78716C] truncate">{previewDoc.fileName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewDoc(null);
+                  setPreviewBlobUrl(null);
+                  setPreviewError(null);
+                }}
+                className="p-1.5 rounded-lg text-[#78716C] hover:bg-[#E7E5E4]/60 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-[360px] bg-[#F8F7F5] flex items-center justify-center p-4 overflow-auto">
+              {previewLoading ? (
+                <div className="flex flex-col items-center gap-2 text-xs text-[#78716C]">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#943D24]" />
+                  <span>Loading secure document preview...</span>
+                </div>
+              ) : previewError ? (
+                <div className="text-center space-y-2 text-xs text-rose-700 max-w-sm">
+                  <AlertCircle className="w-6 h-6 mx-auto" />
+                  <p>{previewError}</p>
+                </div>
+              ) : previewBlobUrl ? (
+                previewDoc.mimeType === 'application/pdf' ||
+                previewDoc.fileName.toLowerCase().endsWith('.pdf') ? (
+                  <iframe
+                    src={previewBlobUrl}
+                    title={previewDoc.fileName}
+                    className="w-full h-[65vh] rounded-lg border border-[#E7E5E4] bg-white"
+                  />
+                ) : (
+                  <img
+                    src={previewBlobUrl}
+                    alt={previewDoc.fileName}
+                    className="max-h-[65vh] max-w-full object-contain rounded-lg border border-[#E7E5E4] bg-white"
+                  />
+                )
+              ) : null}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

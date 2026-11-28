@@ -1,6 +1,19 @@
 import 'reflect-metadata';
+import * as path from 'path';
+import * as fs from 'fs';
 import * as dotenv from 'dotenv';
-dotenv.config();
+
+const candidateEnvPaths = [
+  path.resolve(__dirname, '../../../../.env'),
+  path.resolve(__dirname, '..', '.env'),
+  path.resolve(process.cwd(), 'services/backend/api/.env'),
+  path.resolve(process.cwd(), '.env'),
+];
+for (const envPath of candidateEnvPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: false });
+  }
+}
 
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -43,7 +56,7 @@ function buildAllowedOriginChecker() {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // Enable strict origin-aware CORS with credentials and OPTIONS preflight support
   app.enableCors({
@@ -57,6 +70,8 @@ async function bootstrap() {
       'X-Requested-With',
       'X-Tenant-ID',
       'x-tenant-id',
+      'idempotency-key',
+      'Idempotency-Key',
       'x-admin-key',
       'x-admin-id',
       'x-refresh-token',
@@ -78,6 +93,10 @@ async function bootstrap() {
     const maskedUri = process.env.MONGODB_URI.replace(/:([^:@]+)@/, ':****@');
     console.log(`[BUILDORA 60 API] MongoDB URI Configured: ${maskedUri}`);
   }
+  const rzpKey = process.env.RAZORPAY_KEY_ID?.trim() || '';
+  const rzpSecret = process.env.RAZORPAY_KEY_SECRET?.trim() || '';
+  const rzpMode = rzpKey.startsWith('rzp_test_') ? 'TEST_MODE' : rzpKey.startsWith('rzp_live_') ? 'LIVE_MODE' : 'UNCONFIGURED';
+  console.log(`[BUILDORA 60 API] Razorpay Status: ${rzpMode}${rzpKey ? ` (${rzpKey.slice(0, 12)}..., secret=${rzpSecret ? 'SET' : 'MISSING'})` : ''}`);
 }
 
 bootstrap();

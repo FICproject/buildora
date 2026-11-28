@@ -1,6 +1,13 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { checkBengaluruServiceability } from '@buildora/constants';
+import {
+  isTradeLicenseRequired,
+  maskAadhaar as sharedMaskAadhaar,
+  maskBankAccount as sharedMaskBankAccount,
+  maskPan as sharedMaskPan,
+} from '@buildora/validation';
+import { vendorSecurityService } from '../../vendors/services/vendor-security.service';
 import { dbStore } from '../../../database/store';
 import {
   platformPersistenceService,
@@ -1337,24 +1344,15 @@ export class CompanyAdminDataService implements OnModuleInit {
   }
 
   private maskPan(pan?: string): string {
-    const clean = String(pan || '').trim().toUpperCase();
-    if (!clean) return '';
-    if (clean.length <= 4) return '••••';
-    return `${clean.slice(0, 2)}•••••${clean.slice(-3)}`;
+    return sharedMaskPan(vendorSecurityService.decryptSensitive(pan));
   }
 
   private maskAadhaar(aadhaar?: string): string {
-    const digits = String(aadhaar || '').replace(/\D/g, '');
-    if (!digits) return '';
-    if (digits.length < 4) return '•••• •••• ••••';
-    return `•••• •••• ${digits.slice(-4)}`;
+    return sharedMaskAadhaar(vendorSecurityService.decryptSensitive(aadhaar));
   }
 
   private maskAccountNumber(acc?: string): string {
-    const clean = String(acc || '').trim();
-    if (!clean) return '';
-    if (clean.length <= 4) return clean;
-    return `••••${clean.slice(-4)}`;
+    return sharedMaskBankAccount(vendorSecurityService.decryptSensitive(acc));
   }
 
   matchesVendorSearch(
@@ -1376,6 +1374,7 @@ export class CompanyAdminDataService implements OnModuleInit {
       normalized.email,
       normalized.phone,
       normalized.gstin,
+      normalized.udyamNumber,
       normalized.fullAddress,
       normalized.city,
       normalized.district,
@@ -1391,12 +1390,12 @@ export class CompanyAdminDataService implements OnModuleInit {
 
     if (includeSensitiveIds) {
       const sensitiveFields = [
-        biz.pan,
-        rawVendor?.pan,
-        reg.pan,
-        rawVendor?.aadhaarNumber,
-        biz.aadhaarNumber,
-        reg.aadhaarNumber,
+        vendorSecurityService.decryptSensitive(biz.pan),
+        vendorSecurityService.decryptSensitive(rawVendor?.pan),
+        vendorSecurityService.decryptSensitive(reg.pan),
+        vendorSecurityService.decryptSensitive(rawVendor?.aadhaarNumber),
+        vendorSecurityService.decryptSensitive(biz.aadhaarNumber),
+        vendorSecurityService.decryptSensitive(reg.aadhaarNumber),
       ];
       const cleanDigitsQ = q.replace(/\s+/g, '');
       if (
@@ -1424,12 +1423,54 @@ export class CompanyAdminDataService implements OnModuleInit {
         ? v.documents
         : [];
 
-    const requiredSlots = [
-      { type: 'GST_CERTIFICATE', title: 'GST Registration Certificate (REG-06)' },
-      { type: 'PAN_CARD', title: 'PAN Card Document' },
-      { type: 'BUSINESS_REGISTRATION', title: 'Trade License / Incorporation Certificate' },
-      { type: 'AUTHORIZED_ID', title: 'Authorized Signatory Government ID (Aadhaar / Passport)' },
-    ];
+    const rawPan = vendorSecurityService.decryptSensitive(biz.pan || v.pan || reg.pan || '');
+    const rawAadhaar = vendorSecurityService.decryptSensitive(
+      v.aadhaarNumber || biz.aadhaarNumber || reg.aadhaarNumber || ''
+    );
+    const panMasked = v.panMasked || biz.panMasked || this.maskPan(rawPan);
+    const aadhaarMasked = v.aadhaarMasked || biz.aadhaarMasked || this.maskAadhaar(rawAadhaar);
+
+    const rawGstin = String(biz.gstin || v.gstin || reg.gstin || '').trim().toUpperCase();
+    const explicitGstStatus = String(
+      v.gstStatus || biz.gstStatus || reg.gstStatus || ''
+    )
+      .trim()
+      .toUpperCase();
+    const gstStatus: 'REGISTERED' | 'NOT_REGISTERED' | 'APPLIED' =
+      explicitGstStatus === 'REGISTERED' ||
+      explicitGstStatus === 'NOT_REGISTERED' ||
+      explicitGstStatus === 'APPLIED'
+        ? (explicitGstStatus as any)
+        : rawGstin
+          ? 'REGISTERED'
+          : 'NOT_REGISTERED';
+    const gstApplicationNumber = String(
+      v.gstApplicationNumber || biz.gstApplicationNumber || reg.gstApplicationNumber || ''
+    ).trim();
+    const resolvedGstin = gstStatus === 'REGISTERED' ? rawGstin : '';
+
+    const rawUdyam = String(
+      v.udyamNumber || biz.udyamNumber || reg.udyamNumber || ''
+    )
+      .trim()
+      .toUpperCase();
+    const explicitMsmeStatus = String(
+      v.msmeStatus || biz.msmeStatus || reg.msmeStatus || ''
+    )
+      .trim()
+      .toUpperCase();
+    const msmeStatus: 'REGISTERED' | 'NOT_REGISTERED' | 'APPLIED' =
+      explicitMsmeStatus === 'REGISTERED' ||
+      explicitMsmeStatus === 'NOT_REGISTERED' ||
+      explicitMsmeStatus === 'APPLIED'
+        ? (explicitMsmeStatus as any)
+        : rawUdyam
+          ? 'REGISTERED'
+          : 'NOT_REGISTERED';
+    const msmeApplicationNumber = String(
+      v.msmeApplicationNumber || biz.msmeApplicationNumber || reg.msmeApplicationNumber || ''
+    ).trim();
+    const resolvedUdyam = msmeStatus === 'REGISTERED' ? rawUdyam : '';
 
     const normalizedDocs = rawDocs.map((d: any) => {
       const rawVer = String(d.verificationStatus || d.status || 'PENDING').toUpperCase();
@@ -1440,6 +1481,42 @@ export class CompanyAdminDataService implements OnModuleInit {
           : rawVer === 'PENDING' && status === 'DRAFT'
             ? 'UPLOADED'
             : rawVer;
+
+      // Link identification number masked for display without ever leaking sensitive full Aadhaar/PAN/Account
+      let identificationNumberMasked = d.identificationNumberMasked || '';
+      if (!identificationNumberMasked) {
+        if (d.type === 'AADHAAR_CARD' || d.type === 'AUTHORIZED_ID') {
+          identificationNumberMasked = aadhaarMasked;
+        } else if (d.type === 'PAN_CARD') {
+          identificationNumberMasked = panMasked;
+        } else if (d.type === 'GST_CERTIFICATE') {
+          identificationNumberMasked = resolvedGstin;
+        } else if (d.type === 'GST_ACKNOWLEDGEMENT') {
+          identificationNumberMasked = gstApplicationNumber;
+        } else if (d.type === 'UDYAM_CERTIFICATE' || d.type === 'MSME_CERTIFICATE') {
+          identificationNumberMasked = resolvedUdyam;
+        } else if (d.type === 'MSME_ACKNOWLEDGEMENT') {
+          identificationNumberMasked = msmeApplicationNumber;
+        }
+      }
+
+      const sanitizedPrevVersions = Array.isArray(d.previousVersions)
+        ? d.previousVersions.map((pv: any) => ({
+            id: pv.id,
+            version: pv.version,
+            fileName: pv.fileName,
+            fileSize: pv.fileSize,
+            mimeType: pv.mimeType,
+            identificationNumberMasked: pv.identificationNumberMasked || identificationNumberMasked,
+            uploadedAt: pv.uploadedAt,
+            verificationStatus: pv.verificationStatus || 'PENDING',
+            rejectionReason: pv.rejectionReason,
+            reviewedAt: pv.reviewedAt,
+            reviewedBy: pv.reviewedBy,
+            replacedAt: pv.replacedAt,
+          }))
+        : [];
+
       return {
         id: d.id,
         type: d.type,
@@ -1447,6 +1524,8 @@ export class CompanyAdminDataService implements OnModuleInit {
         fileName: d.fileName,
         fileSize: d.fileSize,
         mimeType: d.mimeType,
+        version: d.version || sanitizedPrevVersions.length + 1,
+        identificationNumberMasked: identificationNumberMasked || undefined,
         uploadedAt: d.uploadedAt,
         verificationStatus: rawVer,
         status: rawVer,
@@ -1454,7 +1533,7 @@ export class CompanyAdminDataService implements OnModuleInit {
         rejectionReason: d.rejectionReason,
         reviewedAt: d.reviewedAt,
         reviewedBy: d.reviewedBy,
-        previousVersions: Array.isArray(d.previousVersions) ? d.previousVersions : [],
+        previousVersions: sanitizedPrevVersions,
         auditHistory: Array.isArray(d.auditHistory) ? d.auditHistory : [],
         hasStoredFile: Boolean(
           d.storageKey || (typeof d.fileUrl === 'string' && d.fileUrl.includes('/uploads/docs/'))
@@ -1462,27 +1541,160 @@ export class CompanyAdminDataService implements OnModuleInit {
       };
     });
 
-    const slots = requiredSlots.map((slot) => {
-      const found = normalizedDocs.find((d: any) => d.type === slot.type);
+    const findDocByTypes = (types: string[]) =>
+      normalizedDocs.find((d: any) => types.includes(String(d.type || '').toUpperCase()));
+
+    const tradeLicenseNeeded = isTradeLicenseRequired(
+      biz.businessRegistrationType || reg.businessRegistrationType
+    );
+
+    const aadhaarDoc = findDocByTypes(['AADHAAR_CARD', 'AUTHORIZED_ID']);
+    const panDoc = findDocByTypes(['PAN_CARD']);
+    const gstDoc =
+      gstStatus === 'REGISTERED'
+        ? findDocByTypes(['GST_CERTIFICATE'])
+        : gstStatus === 'APPLIED'
+          ? findDocByTypes(['GST_ACKNOWLEDGEMENT', 'GST_CERTIFICATE'])
+          : undefined;
+    const msmeDoc =
+      msmeStatus === 'REGISTERED'
+        ? findDocByTypes(['UDYAM_CERTIFICATE', 'MSME_CERTIFICATE'])
+        : msmeStatus === 'APPLIED'
+          ? findDocByTypes(['MSME_ACKNOWLEDGEMENT', 'UDYAM_CERTIFICATE', 'MSME_CERTIFICATE'])
+          : undefined;
+    const tradeDoc = findDocByTypes(['BUSINESS_REGISTRATION']);
+    const bankProofDoc = findDocByTypes(['CANCELLED_CHEQUE']);
+
+    const gstApplicable =
+      gstStatus === 'REGISTERED' || (gstStatus === 'APPLIED' && Boolean(gstDoc));
+    const msmeApplicable =
+      msmeStatus === 'REGISTERED' || (msmeStatus === 'APPLIED' && Boolean(msmeDoc));
+    const tradeApplicable = tradeLicenseNeeded || Boolean(tradeDoc);
+
+    const rawBank = biz.bankDetails || v.bankAccount || null;
+    const bankAccountNumberMasked = rawBank
+      ? rawBank.accountNumberMasked || this.maskAccountNumber(rawBank.accountNumber)
+      : '';
+    const bankStatusRaw = rawBank
+      ? String(
+          rawBank.verificationStatus || (rawBank.isVerified ? 'VERIFIED' : 'PENDING')
+        ).toUpperCase()
+      : 'PENDING';
+
+    // Link masked bank account number to bank proof document if present
+    if (bankProofDoc && !bankProofDoc.identificationNumberMasked && bankAccountNumberMasked) {
+      bankProofDoc.identificationNumberMasked = bankAccountNumberMasked;
+    }
+
+    const slotDefinitions = [
+      {
+        type: 'AADHAAR_CARD',
+        title: 'Aadhaar Card',
+        applicable: true,
+        doc: aadhaarDoc,
+        identificationMasked: aadhaarMasked || null,
+      },
+      {
+        type: 'PAN_CARD',
+        title: 'PAN Card',
+        applicable: true,
+        doc: panDoc,
+        identificationMasked: panMasked || null,
+      },
+      {
+        type: gstStatus === 'APPLIED' ? 'GST_ACKNOWLEDGEMENT' : 'GST_CERTIFICATE',
+        title:
+          gstStatus === 'APPLIED'
+            ? 'GST Application Acknowledgement'
+            : 'GST Registration Certificate (REG-06)',
+        applicable: gstApplicable,
+        doc: gstDoc,
+        identificationMasked:
+          gstStatus === 'REGISTERED'
+            ? resolvedGstin || null
+            : gstStatus === 'APPLIED'
+              ? gstApplicationNumber || null
+              : null,
+      },
+      {
+        type: msmeStatus === 'APPLIED' ? 'MSME_ACKNOWLEDGEMENT' : 'UDYAM_CERTIFICATE',
+        title:
+          msmeStatus === 'APPLIED'
+            ? 'MSME / Udyam Application Acknowledgement'
+            : 'MSME / Udyam Certificate',
+        applicable: msmeApplicable,
+        doc: msmeDoc,
+        identificationMasked:
+          msmeStatus === 'REGISTERED'
+            ? resolvedUdyam || null
+            : msmeStatus === 'APPLIED'
+              ? msmeApplicationNumber || null
+              : null,
+      },
+      {
+        type: 'BUSINESS_REGISTRATION',
+        title: 'Trade License / Incorporation Certificate',
+        applicable: tradeApplicable,
+        doc: tradeDoc,
+        identificationMasked: null,
+      },
+      {
+        type: 'CANCELLED_CHEQUE',
+        title: 'Bank Passbook / Cancelled Cheque',
+        applicable: true,
+        doc: bankProofDoc,
+        identificationMasked: bankAccountNumberMasked || null,
+      },
+    ];
+
+    const slots = slotDefinitions.map((slot) => {
+      if (!slot.applicable) {
+        return {
+          type: slot.type,
+          title: slot.title,
+          applicable: false,
+          status: 'NOT_APPLICABLE',
+          verificationStatus: 'NOT_APPLICABLE',
+          fileName: null,
+          fileSize: null,
+          mimeType: null,
+          uploadedAt: null,
+          docId: null,
+          identificationMasked: slot.identificationMasked,
+        };
+      }
       return {
         type: slot.type,
         title: slot.title,
-        status: found ? found.displayStatus : 'NOT_UPLOADED',
-        verificationStatus: found ? found.verificationStatus : 'NOT_UPLOADED',
-        fileName: found?.fileName || null,
-        uploadedAt: found?.uploadedAt || null,
-        docId: found?.id || null,
+        applicable: true,
+        status: slot.doc ? slot.doc.displayStatus : 'NOT_UPLOADED',
+        verificationStatus: slot.doc ? slot.doc.verificationStatus : 'NOT_UPLOADED',
+        fileName: slot.doc?.fileName || null,
+        fileSize: slot.doc?.fileSize || null,
+        mimeType: slot.doc?.mimeType || null,
+        uploadedAt: slot.doc?.uploadedAt || null,
+        docId: slot.doc?.id || null,
+        identificationMasked: slot.identificationMasked,
       };
     });
 
-    const verifiedRequiredCount = slots.filter((s) => s.verificationStatus === 'VERIFIED').length;
-    const uploadedRequiredCount = slots.filter((s) => s.status !== 'NOT_UPLOADED').length;
-    const pendingDocCount = normalizedDocs.filter(
-      (d: any) => d.verificationStatus === 'PENDING'
+    const applicableSlots = slots.filter((s) => s.applicable);
+    const verifiedRequiredCount = applicableSlots.filter(
+      (s) => s.verificationStatus === 'VERIFIED'
     ).length;
-    const rejectedDocCount = normalizedDocs.filter(
-      (d: any) => d.verificationStatus === 'REJECTED'
+    const uploadedRequiredCount = applicableSlots.filter(
+      (s) => s.status !== 'NOT_UPLOADED'
     ).length;
+    const pendingDocCount = applicableSlots.filter(
+      (s) => s.verificationStatus === 'PENDING'
+    ).length;
+    const rejectedDocCount = applicableSlots.filter(
+      (s) => s.verificationStatus === 'REJECTED'
+    ).length;
+    const notUploadedCount = applicableSlots.filter(
+      (s) => s.status === 'NOT_UPLOADED'
+    ).length;
+    const notApplicableCount = slots.filter((s) => !s.applicable).length;
 
     const maxDocUploadedMs = normalizedDocs.reduce(
       (max: number, d: any) => Math.max(max, new Date(d.uploadedAt || 0).getTime() || 0),
@@ -1507,8 +1719,6 @@ export class CompanyAdminDataService implements OnModuleInit {
     const lastKycUpdatedAt =
       lastKycUpdatedMs > 0 ? new Date(lastKycUpdatedMs).toISOString() : v.updatedAt || v.createdAt;
 
-    const rawPan = biz.pan || v.pan || reg.pan || '';
-    const rawAadhaar = v.aadhaarNumber || biz.aadhaarNumber || reg.aadhaarNumber || '';
     const district = addr.district || reg.district || '';
     const city = addr.city || v.city || 'Bengaluru';
     const state = addr.state || v.state || 'Karnataka';
@@ -1517,7 +1727,6 @@ export class CompanyAdminDataService implements OnModuleInit {
       .filter(Boolean)
       .join(', ');
 
-    const rawBank = biz.bankDetails || v.bankAccount || null;
     const bankAccount = rawBank
       ? {
           accountHolderName: rawBank.accountHolderName || '',
@@ -1526,9 +1735,15 @@ export class CompanyAdminDataService implements OnModuleInit {
           ifscCode: rawBank.ifscCode || rawBank.ifsc || '',
           accountType: rawBank.accountType || 'CURRENT',
           branch: rawBank.branch || '',
-          isVerified: Boolean(rawBank.isVerified),
-          accountNumberMasked:
-            rawBank.accountNumberMasked || this.maskAccountNumber(rawBank.accountNumber),
+          isVerified: bankStatusRaw === 'VERIFIED',
+          verificationStatus: bankStatusRaw,
+          rejectionReason: rawBank.rejectionReason || undefined,
+          reviewedAt: rawBank.reviewedAt || undefined,
+          reviewedBy: rawBank.reviewedBy || undefined,
+          accountNumberMasked: bankAccountNumberMasked,
+          proofDocumentId: bankProofDoc?.id || rawBank.proofDocumentId || null,
+          proofFileName: bankProofDoc?.fileName || rawBank.proofFileName || null,
+          proofStatus: bankProofDoc?.displayStatus || (bankProofDoc ? bankProofDoc.verificationStatus : 'NOT_UPLOADED'),
         }
       : null;
 
@@ -1542,11 +1757,36 @@ export class CompanyAdminDataService implements OnModuleInit {
       name: v.name || biz.contactPerson || '',
       email: v.email || biz.email || '',
       phone: v.phone || biz.phone || '',
-      gstin: biz.gstin || v.gstin || '',
-      panMasked: this.maskPan(rawPan),
-      aadhaarMasked: this.maskAadhaar(rawAadhaar),
+      gstStatus,
+      gstin: resolvedGstin,
+      gstApplicationNumber: gstStatus === 'APPLIED' ? gstApplicationNumber : '',
+      msmeStatus,
+      udyamNumber: resolvedUdyam,
+      msmeApplicationNumber: msmeStatus === 'APPLIED' ? msmeApplicationNumber : '',
+      panMasked,
+      aadhaarMasked,
+      identificationSummary: {
+        panMasked: panMasked || null,
+        panDocStatus: panDoc?.displayStatus || 'NOT_UPLOADED',
+        aadhaarMasked: aadhaarMasked || null,
+        aadhaarDocStatus: aadhaarDoc?.displayStatus || 'NOT_UPLOADED',
+        gstStatus,
+        gstin: resolvedGstin || null,
+        gstApplicationNumber: gstStatus === 'APPLIED' ? gstApplicationNumber || null : null,
+        gstDocStatus:
+          gstStatus === 'NOT_REGISTERED'
+            ? 'NOT_APPLICABLE'
+            : gstDoc?.displayStatus || (gstStatus === 'APPLIED' ? 'NOT_APPLICABLE' : 'NOT_UPLOADED'),
+        msmeStatus,
+        udyamNumber: resolvedUdyam || null,
+        msmeApplicationNumber: msmeStatus === 'APPLIED' ? msmeApplicationNumber || null : null,
+        msmeDocStatus:
+          msmeStatus === 'NOT_REGISTERED'
+            ? 'NOT_APPLICABLE'
+            : msmeDoc?.displayStatus || (msmeStatus === 'APPLIED' ? 'NOT_APPLICABLE' : 'NOT_UPLOADED'),
+      },
       vendorType: biz.businessType || 'DISTRIBUTOR',
-      businessRegistrationType: biz.businessRegistrationType || '',
+      businessRegistrationType: biz.businessRegistrationType || reg.businessRegistrationType || '',
       fullAddress,
       city,
       district,
@@ -1568,10 +1808,13 @@ export class CompanyAdminDataService implements OnModuleInit {
       lastKycUpdatedAt,
       kycSummary: {
         verifiedCount: verifiedRequiredCount,
-        totalRequired: requiredSlots.length,
+        totalRequired: applicableSlots.length,
+        totalApplicable: applicableSlots.length,
         uploadedCount: uploadedRequiredCount,
         pendingCount: pendingDocCount,
         rejectedCount: rejectedDocCount,
+        notUploadedCount,
+        notApplicableCount,
         slots,
       },
       documents: normalizedDocs,

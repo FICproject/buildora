@@ -5,8 +5,13 @@ import { api } from '../services/api';
 
 interface OrderStoreState {
   orders: Order[];
-  syncWithBackend: () => Promise<void>;
-  placeOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'timeline'>) => Promise<Order>;
+  syncWithBackend: () => Promise<Order[]>;
+  fetchOrderById: (orderIdOrNumber: string) => Promise<Order | null>;
+  placeOrder: (
+    orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt' | 'timeline'>,
+    idempotencyKey?: string
+  ) => Promise<Order>;
+  addConfirmedOrder: (order: Order) => void;
   getOrder: (orderIdOrNumber: string) => Order | undefined;
   cancelOrder: (orderId: string, reason?: string) => Promise<boolean>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
@@ -20,87 +25,48 @@ export const useOrderStore = create<OrderStoreState>()(
       syncWithBackend: async () => {
         try {
           const serverOrders = await api.getOrders();
-          if (serverOrders && serverOrders.length > 0) {
+          if (Array.isArray(serverOrders)) {
             set({ orders: serverOrders });
+            return serverOrders;
           }
         } catch {
           // Keep local state
         }
+        return get().orders;
       },
 
-      placeOrder: async (orderData) => {
+      fetchOrderById: async (orderIdOrNumber) => {
         try {
-          const serverOrder = await api.createOrder(orderData);
-          if (serverOrder) {
+          const fetched = await api.getOrderById(orderIdOrNumber);
+          if (fetched && fetched.orderNumber) {
             set((state) => ({
-              orders: [serverOrder, ...state.orders.filter((o) => o.id !== serverOrder.id)]
+              orders: [
+                fetched,
+                ...state.orders.filter(
+                  (o) => o.id !== fetched.id && o.orderNumber !== fetched.orderNumber
+                ),
+              ],
             }));
-            return serverOrder;
+            return fetched;
           }
         } catch {
-          // Fallback to local creation
+          // Return null when unavailable or unauthorized
         }
+        return null;
+      },
 
-        const id = 'ord-' + Date.now();
-        const orderNumber = 'BLD-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
-        const createdAt = new Date().toISOString();
-
-        const timeline: Order['timeline'] = [
-          {
-            status: 'ORDER_PLACED',
-            title: 'Order Placed',
-            description: 'Your order has been recorded in the BUILDORA 60 dispatch system.',
-            timestamp: 'Just now',
-            completed: true
-          },
-          {
-            status: 'CONFIRMED',
-            title: 'Inventory Reserved',
-            description: 'Allocated from nearest regional warehouse.',
-            timestamp: 'In progress',
-            completed: true
-          },
-          {
-            status: 'PACKED',
-            title: 'Picking & Packing',
-            description: 'Heavy materials undergoing barcode and weight check.',
-            timestamp: 'Scheduled',
-            completed: false
-          },
-          {
-            status: 'OUT_FOR_DELIVERY',
-            title: 'Dispatched to Site',
-            description: 'Driver assigned with route optimization.',
-            timestamp: 'Pending',
-            completed: false
-          },
-          {
-            status: 'DELIVERED',
-            title: 'Delivered & Offloaded',
-            description: 'Confirmation OTP and digital signature receipt.',
-            timestamp: 'Pending',
-            completed: false
-          }
-        ];
-
-        const newOrder: Order = {
-          ...orderData,
-          id,
-          orderNumber,
-          createdAt,
-          timeline,
-          deliveryPartner: {
-            name: 'Prakash Gowda',
-            phone: '+91-9845012345',
-            vehicleNumber: 'KA-04-MB-1029'
-          }
-        };
-
+      placeOrder: async (orderData, idempotencyKey) => {
+        const serverOrder = await api.createOrder(orderData, idempotencyKey);
         set((state) => ({
-          orders: [newOrder, ...state.orders]
+          orders: [serverOrder, ...state.orders.filter((o) => o.id !== serverOrder.id)]
         }));
+        return serverOrder;
+      },
 
-        return newOrder;
+      addConfirmedOrder: (order) => {
+        set((state) => ({
+          orders: [order, ...state.orders.filter((o) => o.id !== order.id && o.orderNumber !== order.orderNumber)]
+        }));
       },
 
       getOrder: (orderIdOrNumber) => {

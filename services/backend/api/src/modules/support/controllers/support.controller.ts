@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Param, Body, NotFoundException, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, NotFoundException, ForbiddenException, Headers } from '@nestjs/common';
 import { dbStore } from '../../../database/store';
 import { SupportTicket } from '@buildora/types';
-import { verifyCustomerToken } from '../../../common/customer-auth.util';
+import { requireCustomer } from '../../../common/customer-auth.util';
 import {
   PlatformSupportTicketModel,
   platformPersistenceService,
@@ -13,11 +13,11 @@ import { realtimeBus } from '../../realtime/realtime-bus';
 export class SupportController {
   @Get('tickets')
   getTickets(@Headers('authorization') authHeader?: string) {
-    const cust = verifyCustomerToken(authHeader);
-    let list = [...dbStore.tickets];
-    if (cust?.sub) {
-      list = list.filter((t: any) => !t.customerId || t.customerId === cust.sub);
-    }
+    const cust = requireCustomer(authHeader);
+    const isSeedDemo = cust.sub === 'cust-9876543210' || cust.sub === 'cust-demo-1';
+    const list = dbStore.tickets.filter((t: any) =>
+      t.customerId ? t.customerId === cust.sub : isSeedDemo
+    );
     return {
       success: true,
       data: list,
@@ -25,15 +25,20 @@ export class SupportController {
   }
 
   @Get('tickets/:id')
-  getTicketById(@Param('id') id: string) {
-    const tkt = dbStore.tickets.find((t) => t.id === id || t.ticketNumber === id);
+  getTicketById(@Param('id') id: string, @Headers('authorization') authHeader?: string) {
+    const cust = requireCustomer(authHeader);
+    const isSeedDemo = cust.sub === 'cust-9876543210' || cust.sub === 'cust-demo-1';
+    const tkt = dbStore.tickets.find((t) => t.id === id || t.ticketNumber === id) as any;
     if (!tkt) throw new NotFoundException('Ticket not found');
+    if (tkt.customerId ? tkt.customerId !== cust.sub : !isSeedDemo) {
+      throw new ForbiddenException('You do not have permission to view this support ticket.');
+    }
     return { success: true, data: tkt };
   }
 
   @Post('tickets')
   async createTicket(@Body() body: any, @Headers('authorization') authHeader?: string) {
-    const cust = verifyCustomerToken(authHeader);
+    const cust = requireCustomer(authHeader);
     const id = 'tkt-' + Date.now();
     const ticketNumber =
       'TKT-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
@@ -42,9 +47,9 @@ export class SupportController {
     const newTicket: SupportTicket & { customerId?: string; customerName?: string; tenantId?: string } = {
       id,
       ticketNumber,
-      customerId: cust?.sub || body.customerId,
-      customerName: cust?.name || body.customerName || 'Customer',
-      tenantId: cust?.tenantId || 'tenant-buildora-blr',
+      customerId: cust.sub,
+      customerName: cust.name || body.customerName || 'Customer',
+      tenantId: cust.tenantId || 'tenant-buildora-blr',
       category: body.category || 'OTHER',
       orderId: body.orderId,
       priority: body.priority || 'MEDIUM',
@@ -81,9 +86,18 @@ export class SupportController {
   }
 
   @Post('tickets/:id/messages')
-  async addMessage(@Param('id') id: string, @Body() body: { message: string }) {
+  async addMessage(
+    @Param('id') id: string,
+    @Body() body: { message: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const isSeedDemo = cust.sub === 'cust-9876543210' || cust.sub === 'cust-demo-1';
     const tkt = dbStore.tickets.find((t) => t.id === id || t.ticketNumber === id) as any;
     if (!tkt) throw new NotFoundException('Ticket not found');
+    if (tkt.customerId ? tkt.customerId !== cust.sub : !isSeedDemo) {
+      throw new ForbiddenException('You do not have permission to post to this support ticket.');
+    }
 
     tkt.messages.push({
       sender: 'CUSTOMER',

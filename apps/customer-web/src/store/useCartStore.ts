@@ -5,8 +5,20 @@ import { calculateBulkDiscount, calculateCartSummary, UnloadingServiceOptions } 
 import { api } from '../services/api';
 import { useStoreConfigStore } from './useStoreConfigStore';
 
+function hasAuthToken(): boolean {
+  try {
+    const raw = localStorage.getItem('buildora-auth-storage');
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed?.state?.isAuthenticated && parsed?.state?.token);
+  } catch {
+    return false;
+  }
+}
+
 interface CartStoreState {
   items: CartItem[];
+  mergeAdjustments: string[];
   coupon: Coupon | null;
   deliverySpeed: DeliverySpeed;
   unloadingOptions: UnloadingServiceOptions;
@@ -19,6 +31,8 @@ interface CartStoreState {
   addItem: (product: Product, quantity?: number, variant?: ProductVariant) => void;
   removeItem: (productId: string, variantId?: string) => void;
   updateQuantity: (productId: string, quantity: number, variantId?: string) => void;
+  clearMergeAdjustments: () => void;
+  syncMergeWithServer: () => Promise<{ items: CartItem[]; adjustments: string[] }>;
   applyCoupon: (couponCode: string, serverCoupon?: Coupon | null) => { success: boolean; message: string };
   removeCoupon: () => void;
   setDeliverySpeed: (speed: DeliverySpeed) => void;
@@ -33,6 +47,7 @@ export const useCartStore = create<CartStoreState>()(
   persist(
     (set, get) => ({
       items: [],
+      mergeAdjustments: [],
       coupon: null,
       deliverySpeed: 'ASAP_60',
       unloadingOptions: {
@@ -101,6 +116,9 @@ export const useCartStore = create<CartStoreState>()(
 
           return { items: updatedItems };
         });
+        if (hasAuthToken()) {
+          void api.saveServerCart(get().items);
+        }
       },
 
       removeItem: (productId, variantId) => {
@@ -109,6 +127,9 @@ export const useCartStore = create<CartStoreState>()(
             (item) => !(item.productId === productId && (item.variantId || undefined) === (variantId || undefined))
           )
         }));
+        if (hasAuthToken()) {
+          void api.saveServerCart(get().items);
+        }
       },
 
       updateQuantity: (productId, quantity, variantId) => {
@@ -137,6 +158,43 @@ export const useCartStore = create<CartStoreState>()(
 
           return { items: updatedItems };
         });
+        if (hasAuthToken()) {
+          void api.saveServerCart(get().items);
+        }
+      },
+
+      clearMergeAdjustments: () => set({ mergeAdjustments: [] }),
+
+      syncMergeWithServer: async () => {
+        const currentGuest = get().items;
+        if (!hasAuthToken()) return { items: currentGuest, adjustments: [] };
+        try {
+          const res = await api.mergeServerCart(currentGuest);
+          if (res?.success && res.data && Array.isArray(res.data.items)) {
+            const existingMap = new Map(
+              currentGuest.map((g) => [`${g.productId}::${g.variantId || ''}`, g])
+            );
+            const mergedItems: CartItem[] = res.data.items.map((srv: any) => {
+              const prev = existingMap.get(`${srv.productId}::${srv.variantId || ''}`);
+              return {
+                ...(prev || {}),
+                ...srv,
+                price: Number(srv.unitPrice ?? srv.effectiveUnitPrice ?? prev?.price ?? 0),
+                effectiveUnitPrice: Number(srv.effectiveUnitPrice ?? srv.unitPrice ?? prev?.effectiveUnitPrice ?? 0),
+                mrp: Number(srv.mrp ?? prev?.mrp ?? srv.effectiveUnitPrice ?? 0),
+                gstRate: Number(prev?.gstRate ?? 18),
+                bulkDiscountPercentage: Number(prev?.bulkDiscountPercentage ?? 0),
+                totalPrice: Number(srv.totalPrice ?? Number(srv.effectiveUnitPrice || 0) * Number(srv.quantity || 1)),
+              } as CartItem;
+            });
+            const adjustments = Array.isArray(res.data.adjustments) ? res.data.adjustments : [];
+            set({ items: mergedItems, mergeAdjustments: adjustments });
+            return { items: mergedItems, adjustments };
+          }
+        } catch {
+          // Retain local cart on offline failure
+        }
+        return { items: currentGuest, adjustments: [] };
       },
 
       applyCoupon: (couponCode, serverCoupon) => {
@@ -190,16 +248,21 @@ export const useCartStore = create<CartStoreState>()(
           saveGstToProfile: false
         }),
 
-      clearCart: () =>
+      clearCart: () => {
         set({
           items: [],
+          mergeAdjustments: [],
           coupon: null,
           unloadingOptions: { required: false, floor: 0, hasLift: true, siteInstructions: '' },
           walletBalanceToUse: 0,
           gstin: undefined,
           companyName: undefined,
           saveGstToProfile: false
-        }),
+        });
+        if (hasAuthToken()) {
+          void api.clearServerCart();
+        }
+      },
 
       getSummary: () => {
         const state = get();

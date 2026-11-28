@@ -9,6 +9,20 @@ const PlatformOrderSchema = new Schema(
   { id: { type: String, required: true, unique: true, index: true }, orderNumber: { type: String, index: true } },
   { collection: 'platform_orders', strict: false }
 );
+const PlatformPaymentSchema = new Schema(
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    tenantId: { type: String, index: true },
+    customerId: { type: String, index: true },
+    orderId: { type: String, index: true },
+    orderNumber: { type: String, index: true },
+    razorpayOrderId: { type: String, index: true, sparse: true },
+    razorpayPaymentId: { type: String, index: true, sparse: true },
+    paymentMethod: { type: String, index: true },
+    status: { type: String, index: true },
+  },
+  { collection: 'platform_payments', strict: false }
+);
 const PlatformReturnSchema = new Schema(
   { id: { type: String, required: true, unique: true, index: true }, orderId: { type: String, index: true } },
   { collection: 'platform_returns', strict: false }
@@ -49,6 +63,18 @@ const PlatformWarehouseSchema = new Schema(
 const PlatformWalletTxnSchema = new Schema(
   { id: { type: String, required: true, unique: true, index: true }, customerId: { type: String, index: true } },
   { collection: 'platform_wallet_txns', strict: false }
+);
+const PlatformCustomerCartSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, customerId: { type: String, index: true } },
+  { collection: 'platform_customer_carts', strict: false }
+);
+const PlatformCustomerWishlistSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, customerId: { type: String, index: true } },
+  { collection: 'platform_customer_wishlists', strict: false }
+);
+const PlatformCustomerAddressSchema = new Schema(
+  { id: { type: String, required: true, unique: true, index: true }, customerId: { type: String, index: true } },
+  { collection: 'platform_customer_addresses', strict: false }
 );
 const MainCategorySchema = new Schema(
   { id: { type: String, required: true, unique: true, index: true }, slug: { type: String, index: true }, tenantId: { type: String, index: true } },
@@ -139,8 +165,26 @@ const DispatchAssignmentSchema = new Schema(
   { orderId: { type: String, required: true, unique: true, index: true }, tenantId: { type: String, index: true } },
   { collection: 'dispatch_assignments', strict: false }
 );
+const PlatformShipmentSchema = new Schema(
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    orderId: { type: String, index: true },
+    orderNumber: { type: String, index: true },
+    vendorOrderId: { type: String, index: true },
+    vendorId: { type: String, index: true },
+    tenantId: { type: String, index: true },
+    status: { type: String, index: true },
+  },
+  { collection: 'platform_shipments', strict: false }
+);
 const VendorInvoiceSchema = new Schema(
-  { id: { type: String, required: true, unique: true, index: true }, vendorId: { type: String, index: true } },
+  {
+    id: { type: String, required: true, unique: true, index: true },
+    invoiceNumber: { type: String, index: true },
+    orderNumber: { type: String, index: true },
+    vendorOrderId: { type: String, index: true },
+    vendorId: { type: String, index: true },
+  },
   { collection: 'vendor_invoices', strict: false }
 );
 
@@ -148,6 +192,8 @@ export const PlatformProductModel: Model<any> =
   mongoose.models.PlatformProduct || mongoose.model('PlatformProduct', PlatformProductSchema);
 export const PlatformOrderModel: Model<any> =
   mongoose.models.PlatformOrder || mongoose.model('PlatformOrder', PlatformOrderSchema);
+export const PlatformPaymentModel: Model<any> =
+  mongoose.models.PlatformPayment || mongoose.model('PlatformPayment', PlatformPaymentSchema);
 export const PlatformReturnModel: Model<any> =
   mongoose.models.PlatformReturn || mongoose.model('PlatformReturn', PlatformReturnSchema);
 export const PlatformNotificationModel: Model<any> =
@@ -205,8 +251,16 @@ export const NotificationTemplateModel: Model<any> =
   mongoose.models.NotificationTemplate || mongoose.model('NotificationTemplate', NotificationTemplateSchema);
 export const DispatchAssignmentModel: Model<any> =
   mongoose.models.DispatchAssignment || mongoose.model('DispatchAssignment', DispatchAssignmentSchema);
+export const PlatformShipmentModel: Model<any> =
+  mongoose.models.PlatformShipment || mongoose.model('PlatformShipment', PlatformShipmentSchema);
 export const VendorInvoiceModel: Model<any> =
   mongoose.models.VendorInvoice || mongoose.model('VendorInvoice', VendorInvoiceSchema);
+export const PlatformCustomerCartModel: Model<any> =
+  mongoose.models.PlatformCustomerCart || mongoose.model('PlatformCustomerCart', PlatformCustomerCartSchema);
+export const PlatformCustomerWishlistModel: Model<any> =
+  mongoose.models.PlatformCustomerWishlist || mongoose.model('PlatformCustomerWishlist', PlatformCustomerWishlistSchema);
+export const PlatformCustomerAddressModel: Model<any> =
+  mongoose.models.PlatformCustomerAddress || mongoose.model('PlatformCustomerAddress', PlatformCustomerAddressSchema);
 
 class PlatformPersistenceService {
   private readonly logger = new Logger(PlatformPersistenceService.name);

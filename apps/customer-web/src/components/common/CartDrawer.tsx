@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { X, Trash2, ShoppingBag, ArrowRight, Zap, ShieldCheck } from 'lucide-react';
 import { useCartStore } from '../../store/useCartStore';
 import { useStoreConfigStore } from '../../store/useStoreConfigStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { formatCurrency } from '@buildora/utils';
 import { QuantityControl } from '../ui/QuantityControl';
 import { Button } from '../ui/Button';
@@ -15,6 +16,7 @@ export interface CartDrawerProps {
 export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { items, updateQuantity, removeItem, getSummary, deliverySpeed } = useCartStore();
+  const { requireAuth } = useAuthStore();
   const freeThreshold = useStoreConfigStore((s) => s.config?.deliveryConfig?.freeShippingThreshold ?? 1000);
   const summary = getSummary();
 
@@ -209,7 +211,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                 size="md"
                 onClick={() => {
                   onClose();
-                  navigate('/checkout');
+                  if (
+                    !requireAuth(
+                      { type: 'CHECKOUT', source: 'CART_DRAWER' },
+                      { reason: 'Sign in to continue with your checkout.' }
+                    )
+                  ) {
+                    return;
+                  }
+                  navigate('/cart?autoCheckout=1');
                 }}
                 className="flex-1"
                 rightIcon={<ArrowRight className="w-4 h-4" />}

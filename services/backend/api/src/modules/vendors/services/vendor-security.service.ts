@@ -330,6 +330,49 @@ export class VendorSecurityService {
     }
     return { isValid: true };
   }
+
+  private getEncryptionKey(): Buffer {
+    const raw =
+      process.env.KYC_ENCRYPTION_KEY ||
+      process.env.JWT_SECRET ||
+      'buildora-vendor-enterprise-secret-key-2026';
+    return crypto.createHash('sha256').update(raw).digest();
+  }
+
+  /**
+   * Encrypts sensitive KYC/bank values (Aadhaar, PAN, account number) at rest with AES-256-GCM.
+   */
+  encryptSensitive(plain?: string): string {
+    const val = String(plain || '').trim();
+    if (!val) return '';
+    if (val.startsWith('enc:v1:')) return val;
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', this.getEncryptionKey(), iv);
+    const encrypted = Buffer.concat([cipher.update(val, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `enc:v1:${iv.toString('base64url')}:${tag.toString('base64url')}:${encrypted.toString('base64url')}`;
+  }
+
+  /**
+   * Decrypts AES-256-GCM protected values; transparently returns legacy plaintext values.
+   */
+  decryptSensitive(stored?: string): string {
+    const val = String(stored || '').trim();
+    if (!val) return '';
+    if (!val.startsWith('enc:v1:')) return val;
+    try {
+      const parts = val.split(':');
+      if (parts.length !== 5) return '';
+      const iv = Buffer.from(parts[2], 'base64url');
+      const tag = Buffer.from(parts[3], 'base64url');
+      const data = Buffer.from(parts[4], 'base64url');
+      const decipher = crypto.createDecipheriv('aes-256-gcm', this.getEncryptionKey(), iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
+    } catch {
+      return '';
+    }
+  }
 }
 
 export const vendorSecurityService = new VendorSecurityService();

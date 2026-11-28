@@ -9,9 +9,14 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { Res as NestRes } from '@nestjs/common';
+import type { Response as ExpressResponse } from 'express';
 import { dbStore } from '../../../database/store';
 import { Order, VendorReturnRequest } from '@buildora/types';
-import { verifyCustomerToken } from '../../../common/customer-auth.util';
+import { gstInvoiceService } from '../services/gst-invoice.service';
+import { fulfilmentLifecycleService } from '../services/fulfilment-lifecycle.service';
+import { vendorRecords } from '../../vendors/controllers/vendor.controller';
+import { requireCustomer } from '../../../common/customer-auth.util';
 import {
   PlatformOrderModel,
   PlatformReturnModel,
@@ -28,19 +33,50 @@ import {
   vendorReturns,
 } from '../../vendors/controllers/vendor.controller';
 import { orderSyncService } from '../services/order-sync.service';
-
-const idempotencyOrderCache = new Map<string, any>();
+import { createAuthoritativeOrder } from '../../payments/payment-ledger.service';
 
 @Controller('api/v1/orders')
 export class OrdersController {
+  private assertOrderAccess(order: any, customerId: string) {
+    const isSeedDemo = customerId === 'cust-9876543210' || customerId === 'cust-demo-1';
+    const owner = order?.customerId;
+    if (owner) {
+      if (owner !== customerId) {
+        throw new ForbiddenException('You do not have permission to access another customer order.');
+      }
+      return;
+    }
+    if (!isSeedDemo) {
+      throw new ForbiddenException('You do not have permission to access this order.');
+    }
+  }
+
   @Get()
   getOrders(@Headers('authorization') authHeader?: string) {
-    const cust = verifyCustomerToken(authHeader);
-    let orders = [...dbStore.orders];
-    if (cust?.sub) {
-      const owned = orders.filter((o: any) => !o.customerId || o.customerId === cust.sub);
-      orders = owned;
-    }
+    const cust = requireCustomer(authHeader);
+    const isSeedDemo = cust.sub === 'cust-9876543210' || cust.sub === 'cust-demo-1';
+    const rawOrders = dbStore.orders.filter((o: any) =>
+      o.customerId ? o.customerId === cust.sub : isSeedDemo
+    );
+    const orders = rawOrders.map((o: any) => ({
+      ...o,
+      shipments: fulfilmentLifecycleService.getOrderShipments(o.orderNumber),
+      invoices: gstInvoiceService.getOrderInvoices(o.orderNumber, o.id),
+      vendorSplits: vendorOrders
+        .filter((vo) => vo.orderNumber === o.orderNumber)
+        .map((vo: any) => {
+          const rec = vendorRecords.get(vo.vendorId);
+          return {
+            vendorOrderId: vo.id,
+            vendorId: vo.vendorId,
+            vendorName: rec?.storeName || rec?.businessInfo?.businessName || 'Verified Supplier',
+            status: vo.status,
+            items: vo.items || [],
+            timeline: vo.timeline || [],
+            updatedAt: vo.updatedAt,
+          };
+        }),
+    }));
     return {
       success: true,
       data: orders,
@@ -52,7 +88,7 @@ export class OrdersController {
     @Param('idOrNumber') idOrNumber: string,
     @Headers('authorization') authHeader?: string
   ) {
-    const cust = verifyCustomerToken(authHeader);
+    const cust = requireCustomer(authHeader);
     const needle = idOrNumber.trim().toLowerCase();
     const order = dbStore.orders.find(
       (o) => o.id.toLowerCase() === needle || o.orderNumber.toLowerCase() === needle
@@ -60,12 +96,44 @@ export class OrdersController {
     if (!order) {
       throw new NotFoundException(`Order ${idOrNumber} not found`);
     }
-    if (cust?.sub && order.customerId && order.customerId !== cust.sub) {
-      throw new ForbiddenException('You do not have permission to view another customer order.');
-    }
+    this.assertOrderAccess(order, cust.sub);
+    const shipments = fulfilmentLifecycleService.getOrderShipments(order.orderNumber);
+    const invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    const splits = vendorOrders
+      .filter((vo) => vo.orderNumber === order.orderNumber)
+      .map((vo: any) => {
+        const rec = vendorRecords.get(vo.vendorId);
+        const shipment = shipments.find((s) => s.vendorOrderId === vo.id) || null;
+        return {
+          vendorOrderId: vo.id,
+          vendorId: vo.vendorId,
+          vendorName: rec?.storeName || rec?.businessInfo?.businessName || 'Verified Supplier',
+          status: vo.status,
+          items: vo.items || [],
+          timeline: vo.timeline || [],
+          updatedAt: vo.updatedAt,
+          packingDetails: vo.packingDetails,
+          hasShortage: vo.hasShortage,
+          shortageReport: vo.shortageReport || [],
+          shipment,
+          driver: (vo as any).driver || (shipment?.driverName ? { name: shipment.driverName, phone: shipment.driverPhone, vehicleNumber: shipment.vehicleNumber, vehicleType: shipment.vehicleType } : null),
+          invoice: invoices.find((inv) => inv.vendorOrderId === vo.id || inv.vendorId === vo.vendorId) || null,
+        };
+      });
     return {
       success: true,
-      data: order,
+      data: {
+        ...order,
+        shipments,
+        invoices,
+        vendorSplits: splits,
+        canCancel: fulfilmentLifecycleService.isPreDispatchStatus(order.status) &&
+          !splits.some((s: any) =>
+            ['DISPATCHED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED'].includes(
+              String(s.status || '').toUpperCase()
+            )
+          ),
+      },
     };
   }
 
@@ -74,7 +142,7 @@ export class OrdersController {
     @Param('idOrNumber') idOrNumber: string,
     @Headers('authorization') authHeader?: string
   ) {
-    const cust = verifyCustomerToken(authHeader);
+    const cust = requireCustomer(authHeader);
     const needle = idOrNumber.trim().toLowerCase();
     const order = dbStore.orders.find(
       (o) => o.id.toLowerCase() === needle || o.orderNumber.toLowerCase() === needle
@@ -82,9 +150,7 @@ export class OrdersController {
     if (!order) {
       throw new NotFoundException(`Order ${idOrNumber} not found`);
     }
-    if (cust?.sub && order.customerId && order.customerId !== cust.sub) {
-      throw new ForbiddenException('You do not have permission to track another customer order.');
-    }
+    this.assertOrderAccess(order, cust.sub);
     const vendorSplits = vendorOrders
       .filter((vo) => vo.orderNumber === order.orderNumber)
       .map((vo) => ({
@@ -101,10 +167,231 @@ export class OrdersController {
         paymentStatus: order.paymentStatus || 'PAID',
         estimatedDeliveryTime: order.estimatedDeliveryTime,
         timeline: order.timeline,
+        statusHistory: order.statusHistory || [],
         deliveryPartner: order.deliveryPartner,
         destination: order.deliveryAddress,
-        vendorSplits,
+        shipments: fulfilmentLifecycleService.getOrderShipments(order.orderNumber),
+        invoices: gstInvoiceService.getOrderInvoices(order.orderNumber, order.id),
+        vendorSplits: vendorSplits.map((vs: any) => {
+          const rec = vendorRecords.get(vs.vendorId);
+          return {
+            ...vs,
+            vendorName: rec?.storeName || rec?.businessInfo?.businessName || vs.vendorName || 'Verified Supplier',
+          };
+        }),
       },
+    };
+  }
+
+  @Get(':idOrNumber/details')
+  getEnrichedOrderDetails(
+    @Param('idOrNumber') idOrNumber: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const order = dbStore.orders.find(
+      (o) => o.id === idOrNumber || o.orderNumber === idOrNumber
+    ) as any;
+    if (!order) {
+      throw new NotFoundException(`Order ${idOrNumber} not found`);
+    }
+    this.assertOrderAccess(order, cust.sub);
+
+    const splits = vendorOrders
+      .filter((vo) => vo.orderNumber === order.orderNumber)
+      .map((vo: any) => {
+        const rec = vendorRecords.get(vo.vendorId);
+        const shipments = fulfilmentLifecycleService.getOrderShipments(order.orderNumber, vo.id);
+        const invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id).filter(
+          (inv) => inv.vendorOrderId === vo.id || inv.vendorId === vo.vendorId
+        );
+        return {
+          vendorOrderId: vo.id,
+          vendorId: vo.vendorId,
+          vendorName: rec?.storeName || rec?.businessInfo?.businessName || 'Verified Supplier',
+          legalName: rec?.businessInfo?.businessName,
+          vendorCity: rec?.businessInfo?.address?.city || 'Bengaluru',
+          status: vo.status,
+          items: vo.items || [],
+          packingDetails: vo.packingDetails,
+          hasShortage: vo.hasShortage,
+          shortageReport: vo.shortageReport || [],
+          timeline: vo.timeline || [],
+          statusHistory: vo.statusHistory || [],
+          acceptedAt: vo.acceptedAt,
+          pickedAt: vo.pickedAt,
+          packedAt: vo.packedAt,
+          readyForDispatchAt: vo.readyForDispatchAt,
+          dispatchedAt: vo.dispatchedAt,
+          deliveredAt: vo.deliveredAt,
+          updatedAt: vo.updatedAt,
+          shipment: shipments[0] || null,
+          driver: (vo as any).driver || (shipments[0]?.driverName ? { name: shipments[0].driverName, phone: shipments[0].driverPhone, vehicleNumber: shipments[0].vehicleNumber, vehicleType: shipments[0].vehicleType } : null),
+          invoice: invoices[0] || null,
+        };
+      });
+
+    const shipments = fulfilmentLifecycleService.getOrderShipments(order.orderNumber);
+    const invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+
+    return {
+      success: true,
+      data: {
+        ...order,
+        shipments,
+        invoices,
+        vendorSplits: splits,
+        canCancel: fulfilmentLifecycleService.isPreDispatchStatus(order.status) &&
+          !splits.some((s: any) =>
+            ['DISPATCHED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED'].includes(
+              String(s.status || '').toUpperCase()
+            )
+          ),
+      },
+    };
+  }
+
+  @Get(':idOrNumber/invoices')
+  getOrderInvoices(
+    @Param('idOrNumber') idOrNumber: string,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const order = dbStore.orders.find(
+      (o) => o.id === idOrNumber || o.orderNumber === idOrNumber
+    ) as any;
+    if (!order) {
+      throw new NotFoundException(`Order ${idOrNumber} not found`);
+    }
+    this.assertOrderAccess(order, cust.sub);
+    const invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    return {
+      success: true,
+      data: invoices,
+    };
+  }
+
+  @Get(':idOrNumber/invoices/:invoiceId/pdf')
+  async downloadInvoicePdf(
+    @Param('idOrNumber') idOrNumber: string,
+    @Param('invoiceId') invoiceId: string,
+    @NestRes() res: ExpressResponse,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const order = dbStore.orders.find(
+      (o) => o.id === idOrNumber || o.orderNumber === idOrNumber
+    ) as any;
+    if (!order) {
+      throw new NotFoundException(`Order ${idOrNumber} not found`);
+    }
+    this.assertOrderAccess(order, cust.sub);
+
+    let invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    if (invoices.length === 0) {
+      // Auto-build tax invoice on demand only for dispatched/delivered splits, otherwise generate preview-safe split
+      const splits = vendorOrders.filter((vo) => vo.orderNumber === order.orderNumber);
+      for (const vo of splits) {
+        await gstInvoiceService.buildVendorGstInvoice(vo as any, order);
+      }
+      invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    }
+
+    const invoice =
+      invoices.find((i) => i.id === invoiceId || i.invoiceNumber === invoiceId) ||
+      (invoiceId === 'primary' ? invoices[0] : undefined);
+    if (!invoice) {
+      throw new NotFoundException(`Invoice ${invoiceId} not found for order ${order.orderNumber}`);
+    }
+
+    const pdfBuf = await gstInvoiceService.renderGstInvoicePdfBuffer(invoice);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${invoice.invoiceNumber}.pdf"`,
+      'Content-Length': pdfBuf.length,
+    });
+    res.end(pdfBuf);
+  }
+
+  @Get(':idOrNumber/summary/pdf')
+  async downloadOrderSummaryPdf(
+    @Param('idOrNumber') idOrNumber: string,
+    @NestRes() res: ExpressResponse,
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const order = dbStore.orders.find(
+      (o) => o.id === idOrNumber || o.orderNumber === idOrNumber
+    ) as any;
+    if (!order) {
+      throw new NotFoundException(`Order ${idOrNumber} not found`);
+    }
+    this.assertOrderAccess(order, cust.sub);
+
+    const splits = vendorOrders.filter((vo) => vo.orderNumber === order.orderNumber).map((vo: any) => {
+      const rec = vendorRecords.get(vo.vendorId);
+      return {
+        vendorOrderId: vo.id,
+        vendorId: vo.vendorId,
+        vendorName: rec?.storeName || rec?.businessInfo?.businessName || vo.vendorId,
+        status: vo.status,
+      };
+    });
+    const invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    const pdfBuf = await gstInvoiceService.renderOrderSummaryPdfBuffer(order, splits, invoices);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="Order-Summary-${order.orderNumber}.pdf"`,
+      'Content-Length': pdfBuf.length,
+    });
+    res.end(pdfBuf);
+  }
+
+  @Post(':idOrNumber/report-issue')
+  async reportOrderIssue(
+    @Param('idOrNumber') idOrNumber: string,
+    @Body() body: { type: 'DAMAGED' | 'MISSING_ITEM' | 'WRONG_MATERIAL' | 'OTHER'; description: string; affectedSku?: string },
+    @Headers('authorization') authHeader?: string
+  ) {
+    const cust = requireCustomer(authHeader);
+    const order = dbStore.orders.find(
+      (o) => o.id === idOrNumber || o.orderNumber === idOrNumber
+    ) as any;
+    if (!order) {
+      throw new NotFoundException(`Order ${idOrNumber} not found`);
+    }
+    this.assertOrderAccess(order, cust.sub);
+    if (!body?.description || body.description.trim().length < 5) {
+      throw new BadRequestException('Please describe the damaged or missing material issue (min 5 chars).');
+    }
+    const nowIso = new Date().toISOString();
+    order.issueReported = {
+      type: body.type || 'DAMAGED',
+      description: body.description.trim(),
+      affectedSku: body.affectedSku,
+      reportedBy: cust.sub,
+      reportedAt: nowIso,
+      status: 'OPEN',
+    };
+    order.updatedAt = nowIso;
+    await platformPersistenceService.upsert(PlatformOrderModel, order);
+
+    await platformNotificationService.dispatch({
+      tenantId: order.tenantId || DEFAULT_TENANT_ID,
+      recipientRole: 'ADMIN',
+      recipientId: 'TENANT_ADMIN',
+      type: 'ORDER',
+      title: `Delivery Issue Reported #${order.orderNumber}`,
+      message: `${body.type || 'DAMAGED'}: ${body.description.trim()}`,
+      severity: 'WARNING',
+      actionUrl: '/orders',
+      metadata: { orderNumber: order.orderNumber, type: body.type },
+    });
+
+    return {
+      success: true,
+      message: 'Delivery issue logged with Buildora Quality & Claims Desk.',
+      data: order.issueReported,
     };
   }
 
@@ -115,184 +402,46 @@ export class OrdersController {
     @Headers('idempotency-key') idempotencyHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string
   ) {
-    const cust = verifyCustomerToken(authHeader);
-    const customerId = cust?.sub || body.customerId || 'cust-guest';
-    const customerPhone = cust?.phone || body.deliveryAddress?.mobile || '';
-    const tenantId = headerTenantId || cust?.tenantId || DEFAULT_TENANT_ID;
-
-    // 0. Check customer account suspension
-    orderSyncService.assertCustomerNotSuspended(customerId, customerPhone);
-
-    // 1. Idempotency / duplicate submission guard
+    const cust = requireCustomer(authHeader);
+    const customerId = cust.sub;
+    const customerPhone = cust.phone || body.deliveryAddress?.mobile || '';
+    const tenantId = headerTenantId || cust.tenantId || DEFAULT_TENANT_ID;
     const idemKey = idempotencyHeader || body.idempotencyKey;
-    if (idemKey && idempotencyOrderCache.has(idemKey)) {
-      return {
-        success: true,
-        duplicatePrevented: true,
-        data: idempotencyOrderCache.get(idemKey),
-      };
-    }
-
-    // 2. Dynamic COD & Payment Configuration Check from Tenant Settings
-    const tenantCfg = companyAdminDataService.getTenantConfig(tenantId);
-    const amountToCheck = Number(body.payableAmount ?? body.grandTotal ?? body.totalAmount ?? 0);
-    if (body.paymentMethod === 'COD') {
-      if (tenantCfg?.paymentConfig?.codEnabled === false) {
-        throw new BadRequestException('Cash on Delivery is currently disabled by Company Admin.');
-      }
-      const maxCod = Number(tenantCfg?.paymentConfig?.codMaxOrderValue ?? 50000);
-      if (maxCod > 0 && amountToCheck > maxCod) {
-        throw new BadRequestException(
-          `Cash on Delivery is available for orders up to ₹${maxCod.toLocaleString('en-IN')} only. Please choose an online payment method.`
-        );
-      }
-    }
 
     if (!Array.isArray(body.items) || body.items.length === 0) {
       throw new BadRequestException('Order items array is required.');
     }
 
-    const id = 'ord-' + Date.now();
-    const orderNumber =
-      'BLD-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
-    const createdAt = new Date().toISOString();
-    const reserveOnly = Boolean(body.reserveOnly && body.paymentMethod !== 'COD');
+    const paymentMethod = body.paymentMethod || 'COD';
+    const reserveOnly = Boolean(body.reserveOnly && paymentMethod !== 'COD');
 
-    // 3. Atomic availability & visibility validation + stock reservation/deduction
-    await orderSyncService.reserveOrDeductItems(body.items, reserveOnly, orderNumber);
-
-    // 4. Wallet deduction
-    const walletUsed = Number(body.walletUsed || 0);
-    if (walletUsed > 0) {
-      const custRec = companyAdminDataService.customers.get(customerId);
-      const currentBal = custRec ? custRec.walletBalance : dbStore.walletBalance;
-      if (walletUsed > currentBal) {
-        throw new BadRequestException('Insufficient Buildora Wallet balance.');
-      }
-      if (custRec) custRec.walletBalance = Math.max(0, custRec.walletBalance - walletUsed);
-      dbStore.walletBalance = Math.max(0, dbStore.walletBalance - walletUsed);
-      const tx: any = {
-        id: 'tx-' + Date.now(),
-        customerId,
-        referenceNumber: 'WTX-' + Date.now().toString().slice(-6),
-        type: 'DEBIT',
-        amount: walletUsed,
-        category: 'CHECKOUT',
-        status: 'COMPLETED',
-        description: `Applied to Order #${orderNumber}`,
-        orderId: orderNumber,
-        createdAt,
-        balanceAfter: custRec ? custRec.walletBalance : dbStore.walletBalance,
-      };
-      dbStore.walletTransactions.unshift(tx);
-      await platformPersistenceService.upsert(PlatformWalletTxnModel, tx);
-    }
-
-    // 5. Create primary customer order
-    const paymentStatus = reserveOnly
-      ? 'PENDING_PAYMENT'
-      : body.paymentMethod === 'COD'
-        ? 'PENDING'
-        : 'PAID';
-
-    const newOrder: Order & Record<string, any> = {
-      ...body,
-      id,
-      orderNumber,
-      tenantId,
+    const result = await createAuthoritativeOrder({
+      body: {
+        items: body.items,
+        couponCode: body.couponCode || null,
+        deliverySpeed: body.deliverySpeed || body.deliveryOption || 'ASAP_60',
+        deliveryAddress: body.deliveryAddress,
+        isBusinessOrder: body.isBusinessOrder,
+        gstin: body.gstin,
+        companyName: body.companyName,
+        unloadingOptions: body.unloadingOptions,
+        walletBalanceToUse: body.walletBalanceToUse ?? body.walletUsed ?? 0,
+        estimatedDeliveryTime: body.estimatedDeliveryTime,
+      },
       customerId,
-      customerName: cust?.name || body.deliveryAddress?.recipientName || 'Buildora Customer',
       customerPhone,
-      createdAt,
-      paymentStatus,
-      stockReservedOnly: reserveOnly,
-      status: 'ORDER_PLACED',
-      timeline: [
-        {
-          status: 'ORDER_PLACED',
-          title: 'Order Placed',
-          description: reserveOnly
-            ? 'Inventory reserved. Awaiting online payment verification.'
-            : body.paymentMethod === 'COD'
-              ? 'Cash on Delivery confirmed.'
-              : 'Payment authorized and verified.',
-          timestamp: createdAt,
-          completed: true,
-        },
-        {
-          status: 'CONFIRMED',
-          title: 'Vendor Dispatch Allocation',
-          description: 'Routed to supplying vendor depot(s).',
-          timestamp: createdAt,
-          completed: !reserveOnly,
-        },
-      ],
-      deliveryPartner: (() => {
-        const pin = body.deliveryAddress?.pincode || '';
-        const partners = Array.from(companyAdminDataService.deliveryPartners.values()).filter(
-          (dp) => dp.tenantId === tenantId && dp.status === 'ACTIVE'
-        );
-        const matchedPartner =
-          partners.find((dp) => dp.servicePincodes?.includes(pin)) || partners[0];
-        return matchedPartner
-          ? {
-              name: matchedPartner.name,
-              phone: matchedPartner.phone,
-              vehicleNumber: matchedPartner.vehicleTypes?.[0] || 'Dispatch Fleet',
-            }
-          : undefined;
-      })(),
-    };
-
-    dbStore.orders.unshift(newOrder);
-
-    // 6. Split cart items by vendor & dispatch VendorOrders
-    await orderSyncService.splitAndCreateVendorOrders(newOrder, tenantId);
-    await platformPersistenceService.upsert(PlatformOrderModel, newOrder);
-
-    // 7. Update customer lifetime KPI in Company Admin registry
-    const existingCustomer = companyAdminDataService.customers.get(customerId);
-    if (existingCustomer) {
-      existingCustomer.totalOrders = (existingCustomer.totalOrders || 0) + 1;
-      existingCustomer.totalSpent = (existingCustomer.totalSpent || 0) + amountToCheck;
-      (existingCustomer as any).lastOrderAt = createdAt;
-    }
-
-    // 8. Notify Admin + Customer & emit real-time order.created
-    await platformNotificationService.dispatch({
+      customerName: cust?.name || body.deliveryAddress?.recipientName || 'Buildora Customer',
+      customerEmail: cust?.email || body.customerEmail,
       tenantId,
-      recipientRole: 'ADMIN',
-      recipientId: 'TENANT_ADMIN',
-      type: 'ORDER',
-      title: `New Order #${orderNumber}`,
-      message: `${newOrder.customerName} placed an order worth ₹${amountToCheck.toLocaleString()}.`,
-      severity: 'INFO',
-      actionUrl: '/orders',
-      metadata: { orderId: id, orderNumber },
+      idempotencyKey: idemKey,
+      paymentMethod,
+      reserveOnly,
     });
-    if (customerId !== 'cust-guest') {
-      await platformNotificationService.dispatch({
-        tenantId,
-        recipientRole: 'CUSTOMER',
-        recipientId: customerId,
-        type: 'ORDER',
-        title: `Order Placed #${orderNumber}`,
-        message: `Your order for ₹${amountToCheck.toLocaleString()} has been received and sent to supplier(s).`,
-        severity: 'SUCCESS',
-        actionUrl: `/orders/${orderNumber}`,
-        metadata: { orderId: id, orderNumber },
-      });
-      realtimeBus.emitToCustomer(customerId, 'order.created', { order: newOrder }, tenantId);
-    }
-    realtimeBus.emitToAdmin('order.created', { order: newOrder }, tenantId);
-
-    if (idemKey) {
-      idempotencyOrderCache.set(idemKey, newOrder);
-    }
 
     return {
       success: true,
-      data: newOrder,
+      duplicatePrevented: result.duplicatePrevented || undefined,
+      data: result.order,
     };
   }
 
@@ -302,21 +451,31 @@ export class OrdersController {
     @Body() body?: { reason?: string },
     @Headers('authorization') authHeader?: string
   ) {
-    const cust = verifyCustomerToken(authHeader);
+    const cust = requireCustomer(authHeader);
     const order = dbStore.orders.find((o) => o.id === id || o.orderNumber === id) as any;
     if (!order) {
       throw new NotFoundException(`Order ${id} not found`);
     }
-    if (cust?.sub && order.customerId && order.customerId !== cust.sub) {
-      throw new ForbiddenException('You can only cancel your own orders.');
-    }
+    this.assertOrderAccess(order, cust.sub);
 
-    if (order.status === 'OUT_FOR_DELIVERY' || order.status === 'DELIVERED') {
+    const siblingVOs = vendorOrders.filter((vo) => vo.orderNumber === order.orderNumber);
+    const anyDispatched = siblingVOs.some((vo) =>
+      ['DISPATCHED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED'].includes(
+        String(vo.status || '').toUpperCase()
+      )
+    );
+    if (!fulfilmentLifecycleService.isPreDispatchStatus(order.status) || anyDispatched) {
       return {
         success: false,
         message:
-          'This order is already out for delivery or delivered and cannot be cancelled directly. Please submit a Return request upon arrival.',
+          'Direct cancellation is allowed only before dispatch. This order is already dispatched or delivered—please submit a Return request upon delivery.',
       };
+    }
+
+    // Issue Credit Notes for any finalized GST invoices linked to cancelled order
+    const existingInvoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    for (const inv of existingInvoices) {
+      await gstInvoiceService.issueCreditNote(inv, body?.reason || 'Customer Pre-Dispatch Cancellation');
     }
 
     const nowIso = new Date().toISOString();
@@ -408,14 +567,12 @@ export class OrdersController {
     @Body() body: { reason: string; items?: string[]; comments?: string },
     @Headers('authorization') authHeader?: string
   ) {
-    const cust = verifyCustomerToken(authHeader);
+    const cust = requireCustomer(authHeader);
     const order = dbStore.orders.find((o) => o.id === id || o.orderNumber === id) as any;
     if (!order) {
       throw new NotFoundException(`Order ${id} not found`);
     }
-    if (cust?.sub && order.customerId && order.customerId !== cust.sub) {
-      throw new ForbiddenException('You can only request returns for your own orders.');
-    }
+    this.assertOrderAccess(order, cust.sub);
 
     const nowIso = new Date().toISOString();
     order.status = 'RETURN_REQUESTED';

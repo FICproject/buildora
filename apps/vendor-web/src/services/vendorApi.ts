@@ -647,11 +647,14 @@ export const vendorApi = {
     return data.document;
   },
 
-  async uploadDocumentFile(file: File, type: string, title: string) {
+  async uploadDocumentFile(file: File, type: string, title: string, identificationNumber?: string) {
     const formData = new FormData();
     formData.append('document', file);
     formData.append('type', type);
     formData.append('title', title);
+    if (identificationNumber && identificationNumber.trim()) {
+      formData.append('identificationNumber', identificationNumber.trim());
+    }
 
     const data = await apiRequest<any>('/vendor/registration/upload-doc-file', {
       method: 'POST',
@@ -661,11 +664,14 @@ export const vendorApi = {
     return data.document;
   },
 
-  async replaceKycDocumentFile(file: File, type: string, title: string) {
+  async replaceKycDocumentFile(file: File, type: string, title: string, identificationNumber?: string) {
     const formData = new FormData();
     formData.append('document', file);
     formData.append('type', type);
     formData.append('title', title);
+    if (identificationNumber && identificationNumber.trim()) {
+      formData.append('identificationNumber', identificationNumber.trim());
+    }
 
     return apiRequest<{ success: boolean; document: any; vendor: any }>('/vendor/profile/kyc-documents/replace', {
       method: 'POST',
@@ -679,10 +685,8 @@ export const vendorApi = {
       typeof window !== 'undefined'
         ? localStorage.getItem('buildora_vendor_token') || sessionStorage.getItem('buildora_vendor_token')
         : null;
-    const base =
-      import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
     const res = await fetch(
-      `${base}/vendor/kyc-documents/${encodeURIComponent(docId)}/file${download ? '?download=true' : ''}`,
+      `${API_BASE_URL}/vendor/kyc-documents/${encodeURIComponent(docId)}/file${download ? '?download=true' : ''}`,
       {
         method: 'GET',
         cache: 'no-store',
@@ -1245,6 +1249,46 @@ export const vendorApi = {
     return request<any>(`/vendor/orders/${encodeURIComponent(id)}/packing-slip`, {});
   },
 
+  async confirmPicking(
+    id: string,
+    payload: {
+      pickedItems?: Array<{ productId: string; sku?: string; pickedQuantity: number; shortageReason?: string }>;
+      notes?: string;
+    }
+  ) {
+    return apiRequest(`/vendor/orders/${encodeURIComponent(id)}/picking`, {
+      method: 'POST',
+      body: payload,
+      fallbackErrorMessage: 'Failed to record material picking.',
+    });
+  },
+
+  async confirmPacking(id: string, payload: any) {
+    return apiRequest(`/vendor/orders/${encodeURIComponent(id)}/packing`, {
+      method: 'POST',
+      body: payload,
+      fallbackErrorMessage: 'Failed to record construction packing details.',
+    });
+  },
+
+  async markReadyForDispatch(id: string) {
+    return apiRequest(`/vendor/orders/${encodeURIComponent(id)}/ready-for-dispatch`, {
+      method: 'POST',
+      fallbackErrorMessage: 'Failed to mark order ready for dispatch.',
+    });
+  },
+
+  async handoverToDriver(
+    id: string,
+    payload: { vehicleNumber?: string; driverName?: string; driverPhone?: string; handoverRef?: string; notes?: string }
+  ) {
+    return apiRequest(`/vendor/orders/${encodeURIComponent(id)}/handover`, {
+      method: 'POST',
+      body: payload,
+      fallbackErrorMessage: 'Failed to complete driver handover.',
+    });
+  },
+
   // Returns & Refunds
   async getReturns(status?: string): Promise<VendorReturnRequest[]> {
     const q = status ? `?status=${status}` : '';
@@ -1309,6 +1353,25 @@ export const vendorApi = {
   // Invoices & GST Documents
   async getInvoices(): Promise<VendorInvoice[]> {
     return request<VendorInvoice[]>('/vendor/invoices', {}, []);
+  },
+
+  async downloadInvoicePdf(id: string, filename?: string): Promise<void> {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('buildora_vendor_token') : null;
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE_URL}/vendor/invoices/${encodeURIComponent(id)}/pdf`, { headers });
+    if (!res.ok) {
+      throw new Error('Failed to download Tax Invoice PDF.');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `Tax-Invoice-${id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   },
 
   async requestSettlementPayout(amount?: number) {
@@ -1499,7 +1562,10 @@ export const vendorApi = {
     return Array.isArray(res) ? res : res?.data || [];
   },
 
-  async assignDelivery(orderId: string, details: { driverName: string; vehicleNumber: string; driverPhone: string; hubName?: string; partnerId?: string }) {
+  async assignDelivery(
+    orderId: string,
+    details: { driverName: string; vehicleNumber: string; driverPhone: string; vehicleType?: string; hubName?: string; partnerId?: string; reassignReason?: string }
+  ) {
     return apiRequest<any>(`/vendor/orders/${encodeURIComponent(orderId)}/assign-delivery`, {
       method: 'POST',
       body: details,

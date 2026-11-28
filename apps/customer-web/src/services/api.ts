@@ -40,6 +40,11 @@ function getStoredToken(): string | null {
   return null;
 }
 
+let unauthorizedHandler: (() => void) | null = null;
+export function registerUnauthorizedHandler(handler: () => void) {
+  unauthorizedHandler = handler;
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -66,6 +71,10 @@ async function request<T>(
       signal: controller.signal
     });
     clearTimeout(timeoutId);
+
+    if (res.status === 401 && token && unauthorizedHandler) {
+      unauthorizedHandler();
+    }
 
     if (res.ok) {
       const json = await res.json();
@@ -94,7 +103,18 @@ async function postJson<T>(endpoint: string, body: any): Promise<T> {
       headers,
       body: JSON.stringify(body)
     });
-    return await res.json();
+    if (res.status === 401 && token && unauthorizedHandler) {
+      unauthorizedHandler();
+    }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok && json.success === undefined) {
+      return {
+        success: false,
+        statusCode: res.status,
+        message: json.message || `Request failed with status ${res.status}`,
+      } as unknown as T;
+    }
+    return json;
   } catch (err: any) {
     return {
       success: false,
@@ -517,6 +537,73 @@ export const api = {
     );
   },
 
+  async getServerCart() {
+    return request<{ items: CartItem[]; adjustments: string[]; itemCount: number }>(
+      '/cart',
+      { cache: 'no-store' },
+      { items: [], adjustments: [], itemCount: 0 }
+    );
+  },
+
+  async saveServerCart(items: CartItem[]) {
+    return request<{ items: CartItem[]; adjustments: string[]; itemCount: number }>(
+      '/cart',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+      },
+      { items, adjustments: [], itemCount: items.reduce((s, i) => s + i.quantity, 0) }
+    );
+  },
+
+  async mergeServerCart(guestItems: CartItem[]) {
+    return postJson<{
+      success: boolean;
+      data?: { items: CartItem[]; adjustments: string[]; itemCount: number };
+      message?: string;
+    }>('/cart/merge', { guestItems });
+  },
+
+  async clearServerCart() {
+    return request<{ items: any[] }>('/cart', { method: 'DELETE' }, { items: [] });
+  },
+
+  async getWishlist() {
+    return request<Product[]>('/customer/wishlist', { cache: 'no-store' }, []);
+  },
+
+  async mergeWishlist(items: Product[]) {
+    return postJson<{ success: boolean; data?: Product[]; message?: string }>('/customer/wishlist/merge', {
+      items,
+    });
+  },
+
+  async toggleWishlistItem(productId: string, product?: Product) {
+    return postJson<{ success: boolean; wishlisted?: boolean; data?: Product[]; message?: string }>(
+      '/customer/wishlist/toggle',
+      { productId, product }
+    );
+  },
+
+  async getAuthSession(): Promise<{ authenticated: boolean; suspended?: boolean; user: CustomerProfile | null }> {
+    const token = getStoredToken();
+    if (!token) return { authenticated: false, user: null };
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/session`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-tenant-id': DEFAULT_TENANT_ID,
+          Authorization: `Bearer ${token}`,
+        },
+        cache: 'no-store',
+      });
+      if (!res.ok) return { authenticated: false, user: null };
+      return await res.json();
+    } catch {
+      return { authenticated: true, user: null };
+    }
+  },
+
   async validateCoupon(code: string, cartSubtotal?: number) {
     return postJson<{ success: boolean; message: string; data?: any }>('/coupons/validate', {
       code,
@@ -651,32 +738,103 @@ export const api = {
   },
 
   // Orders & Payments
-  async createRazorpayOrder(amount: number, buildoraOrderId?: string) {
+  async getRazorpayConfig() {
+    return request<{ configured: boolean; mode: 'TEST' | 'LIVE' | 'UNCONFIGURED'; keyId: string | null; message: string }>(
+      '/payments/razorpay/config',
+      { cache: 'no-store' },
+      { configured: false, mode: 'UNCONFIGURED', keyId: null, message: 'Payment gateway unreachable.' }
+    );
+  },
+
+  async createRazorpayOrder(
+    payload:
+      | number
+      | {
+          buildoraOrderId?: string;
+          items?: Array<{ productId: string; variantId?: string; quantity: number }>;
+          couponCode?: string | null;
+          deliverySpeed?: string;
+          deliveryAddress?: any;
+          isBusinessOrder?: boolean;
+          gstin?: string;
+          companyName?: string;
+          unloadingOptions?: any;
+          walletBalanceToUse?: number;
+          customerEmail?: string;
+          paymentMethod?: string;
+          receipt?: string;
+          idempotencyKey?: string;
+        },
+    buildoraOrderIdArg?: string
+  ) {
+    const body =
+      typeof payload === 'number'
+        ? { amount: payload, buildoraOrderId: buildoraOrderIdArg }
+        : payload;
     return postJson<{
-      success: boolean;
-      data?: { id: string; amount: number; currency: string; keyId: string };
+      success?: boolean;
+      duplicatePrevented?: boolean;
+      code?: string;
+      statusCode?: number;
+      data?: {
+        id: string;
+        amount: number;
+        currency: string;
+        receipt?: string;
+        status?: string;
+        keyId: string;
+        buildoraOrderId?: string;
+        orderNumber?: string;
+        order?: Order;
+      };
       message?: string;
-    }>('/payments/razorpay/order', { amount, buildoraOrderId });
+    }>('/payments/razorpay/order', body);
   },
 
   async verifyRazorpayPayment(payload: {
     razorpayOrderId: string;
     razorpayPaymentId: string;
-    razorpaySignature?: string;
+    razorpaySignature: string;
     buildoraOrderId?: string;
   }) {
-    return postJson<{ success: boolean; data?: any; message?: string }>(
-      '/payments/razorpay/verify',
-      payload
-    );
+    return postJson<{
+      success?: boolean;
+      duplicatePrevented?: boolean;
+      data?: {
+        verified: boolean;
+        paymentId: string;
+        orderId: string;
+        buildoraOrderId?: string;
+        orderNumber?: string;
+        order?: Order;
+        payment?: any;
+        timestamp?: string;
+      };
+      message?: string;
+    }>('/payments/razorpay/verify', payload);
   },
 
   async failRazorpayPayment(payload: {
     razorpayOrderId?: string;
     buildoraOrderId?: string;
+    cancelled?: boolean;
     reason?: string;
   }) {
-    return postJson<{ success: boolean; message?: string }>('/payments/razorpay/fail', payload);
+    return postJson<{
+      success?: boolean;
+      alreadyPaid?: boolean;
+      message?: string;
+      data?: any;
+    }>('/payments/razorpay/fail', payload);
+  },
+
+  async reconcileRazorpayPayment(orderId: string) {
+    return request<{
+      order?: Order;
+      payment?: any;
+      reconciled: boolean;
+      status?: string;
+    } | null>(`/payments/razorpay/reconcile/${encodeURIComponent(orderId)}`, { cache: 'no-store' }, null);
   },
 
   async getOrders(): Promise<Order[]> {
@@ -691,25 +849,104 @@ export const api = {
     return request<any>(`/orders/${idOrNumber}/track`, {}, null);
   },
 
-  async createOrder(orderPayload: any): Promise<Order | null> {
-    return request<Order | null>(
-      '/orders',
-      {
-        method: 'POST',
-        body: JSON.stringify(orderPayload)
-      },
-      null
-    );
+  async createOrder(orderPayload: any, idempotencyKey?: string): Promise<Order> {
+    const token = getStoredToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-tenant-id': DEFAULT_TENANT_ID,
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (idempotencyKey) headers['idempotency-key'] = idempotencyKey;
+
+    const res = await fetch(`${API_BASE_URL}/orders`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...orderPayload, ...(idempotencyKey ? { idempotencyKey } : {}) }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.success === false || !json.data) {
+      throw new Error(json.message || 'Unable to place order. Please review cart and address.');
+    }
+    return json.data as Order;
   },
 
-  async cancelOrder(orderId: string): Promise<Order | null> {
-    return request<Order | null>(
-      `/orders/${orderId}/cancel`,
-      {
-        method: 'POST'
-      },
-      null
+  async cancelOrder(orderId: string, reason?: string): Promise<Order | null> {
+    const token = getStoredToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-tenant-id': DEFAULT_TENANT_ID,
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE_URL}/orders/${encodeURIComponent(orderId)}/cancel`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ reason: reason || 'Customer requested cancellation' }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.success === false) {
+      throw new Error(json.message || 'Unable to cancel order.');
+    }
+    return json.data as Order;
+  },
+
+  async getOrderDetails(idOrNumber: string): Promise<any> {
+    return request<any>(`/orders/${encodeURIComponent(idOrNumber)}/details`, { cache: 'no-store' }, null);
+  },
+
+  async getOrderInvoices(idOrNumber: string): Promise<any[]> {
+    return request<any[]>(`/orders/${encodeURIComponent(idOrNumber)}/invoices`, { cache: 'no-store' }, []);
+  },
+
+  async downloadOrderInvoicePdf(idOrNumber: string, invoiceId = 'primary', filename?: string): Promise<void> {
+    const token = getStoredToken();
+    const headers: Record<string, string> = { 'x-tenant-id': DEFAULT_TENANT_ID };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(
+      `${API_BASE_URL}/orders/${encodeURIComponent(idOrNumber)}/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+      { headers }
     );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to download GST Tax Invoice PDF.');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `Tax-Invoice-${idOrNumber}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  async downloadOrderSummaryPdf(idOrNumber: string): Promise<void> {
+    const token = getStoredToken();
+    const headers: Record<string, string> = { 'x-tenant-id': DEFAULT_TENANT_ID };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(
+      `${API_BASE_URL}/orders/${encodeURIComponent(idOrNumber)}/summary/pdf`,
+      { headers }
+    );
+    if (!res.ok) {
+      throw new Error('Failed to download Order Summary PDF.');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Order-Summary-${idOrNumber}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  async reportOrderIssue(
+    idOrNumber: string,
+    payload: { type: 'DAMAGED' | 'MISSING_ITEM' | 'WRONG_MATERIAL' | 'OTHER'; description: string; affectedSku?: string }
+  ): Promise<any> {
+    return postJson<any>(`/orders/${encodeURIComponent(idOrNumber)}/report-issue`, payload);
   },
 
   async requestReturn(orderId: string, payload: { reason: string; items?: string[]; comments?: string }): Promise<Order | null> {

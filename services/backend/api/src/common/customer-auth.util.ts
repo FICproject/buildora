@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { UnauthorizedException } from '@nestjs/common';
 
 export interface CustomerTokenPayload {
   sub: string;
@@ -78,4 +79,12 @@ export function verifyCustomerToken(authHeaderOrToken?: string): CustomerTokenPa
   } catch {
     return null;
   }
+}
+
+export function requireCustomer(authHeaderOrToken?: string): CustomerTokenPayload {
+  const verified = verifyCustomerToken(authHeaderOrToken);
+  if (!verified) {
+    throw new UnauthorizedException('Authentication required. Please sign in to continue.');
+  }
+  return verified;
 }

@@ -79,7 +79,7 @@ export const VendorsPage: React.FC = () => {
   const [approving, setApproving] = useState(false);
 
   const [actionModal, setActionModal] = useState<{
-    type: 'REJECT' | 'CORRECTION' | 'SUSPEND' | 'DOC_REJECT';
+    type: 'REJECT' | 'CORRECTION' | 'SUSPEND' | 'DOC_REJECT' | 'BANK_REJECT';
     vendor: any;
     doc?: any;
   } | null>(null);
@@ -239,6 +239,25 @@ export const VendorsPage: React.FC = () => {
     setActionModal({ type: 'DOC_REJECT', vendor, doc });
   };
 
+  const handleVerifyBank = async (
+    vendorId: string,
+    status: 'VERIFIED' | 'REJECTED',
+    notes?: string
+  ) => {
+    try {
+      await adminApi.verifyVendorBank(vendorId, status, notes);
+      pushToast({ title: `Bank Account ${status}` });
+      await Promise.all([openVendorDetail(vendorId), loadVendors()]);
+    } catch (err: any) {
+      pushToast({ title: 'Failed', message: err.message, variant: 'error' });
+    }
+  };
+
+  const openRejectBankModal = (vendor: any) => {
+    setReasonText('');
+    setActionModal({ type: 'BANK_REJECT', vendor });
+  };
+
   const openCorrectionModal = (vendor: any) => {
     setReasonText('');
     setSelectedCorrectionDocId('');
@@ -256,6 +275,12 @@ export const VendorsPage: React.FC = () => {
           'REJECTED',
           reasonText.trim()
         );
+        setActionModal(null);
+        setReasonText('');
+        return;
+      }
+      if (actionModal.type === 'BANK_REJECT') {
+        await handleVerifyBank(actionModal.vendor.id, 'REJECTED', reasonText.trim());
         setActionModal(null);
         setReasonText('');
         return;
@@ -679,107 +704,222 @@ export const VendorsPage: React.FC = () => {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         title={selectedDetail?.vendor?.businessName || 'Vendor KYC Review'}
-        subtitle={`GSTIN: ${selectedDetail?.vendor?.gstin || 'N/A'} • ${selectedDetail?.vendor?.city}, ${selectedDetail?.vendor?.state}`}
+        subtitle={`GST: ${
+          selectedDetail?.vendor?.gstStatus === 'REGISTERED'
+            ? selectedDetail?.vendor?.gstin || 'Pending'
+            : selectedDetail?.vendor?.gstStatus === 'APPLIED'
+              ? 'Applied'
+              : 'Not Registered'
+        } • ${selectedDetail?.vendor?.city}, ${selectedDetail?.vendor?.state}`}
       >
-        {selectedDetail && (
+        {selectedDetail && (() => {
+          const v = selectedDetail.vendor;
+          const idSummary = v.identificationSummary || {};
+          const kycSummary = v.kycSummary || {};
+          const slots: any[] = kycSummary.slots || [];
+          const docs: any[] = v.documents || [];
+          const missingApplicableSlots = slots.filter(
+            (s) => s.applicable !== false && s.status === 'NOT_UPLOADED'
+          );
+          const bankProofDoc = v.bankAccount?.proofDocumentId
+            ? docs.find((d) => d.id === v.bankAccount.proofDocumentId)
+            : docs.find((d) => d.type === 'CANCELLED_CHEQUE');
+
+          return (
           <div className="space-y-6">
             {/* Section A: Business Information */}
-            <div className="p-4 border border-[#E5DCD3] rounded-xl bg-[#FAF7F4] space-y-3">
+            <div className="p-4 border border-[#E5DCD3] rounded-xl bg-[#FAF7F4] space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5DCD3] pb-2.5">
                 <h4 className="text-sm font-semibold text-[#5E5946]">A. Business Information</h4>
-                <Badge variant={statusBadgeVariant(selectedDetail.vendor.approvalStatus)}>
-                  {String(selectedDetail.vendor.approvalStatus || '').replace(/_/g, ' ')}
+                <Badge variant={statusBadgeVariant(v.approvalStatus)}>
+                  {String(v.approvalStatus || '').replace(/_/g, ' ')}
                 </Badge>
               </div>
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
                 <div>
                   <dt className="text-[#6E6859]">Business Name</dt>
-                  <dd className="font-semibold text-[#5E5946]">{selectedDetail.vendor.businessName}</dd>
+                  <dd className="font-semibold text-[#5E5946]">{v.businessName}</dd>
                 </div>
                 <div>
                   <dt className="text-[#6E6859]">Contact Person</dt>
-                  <dd className="font-semibold text-[#5E5946]">{selectedDetail.vendor.contactPerson || '—'}</dd>
+                  <dd className="font-semibold text-[#5E5946]">{v.contactPerson || '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-[#6E6859]">Registered Email</dt>
-                  <dd className="font-medium text-[#5E5946] break-all">{selectedDetail.vendor.email}</dd>
+                  <dd className="font-medium text-[#5E5946] break-all">{v.email}</dd>
                 </div>
                 <div>
                   <dt className="text-[#6E6859]">Phone Number</dt>
-                  <dd className="font-medium text-[#5E5946]">{selectedDetail.vendor.phone || '—'}</dd>
+                  <dd className="font-medium text-[#5E5946]">{v.phone || '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-[#6E6859]">Business Type</dt>
-                  <dd className="font-medium text-[#5E5946]">{selectedDetail.vendor.vendorType || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[#6E6859]">GSTIN</dt>
-                  <dd className="font-mono font-medium text-[#5E5946]">{selectedDetail.vendor.gstin || 'Pending'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[#6E6859]">PAN (Masked)</dt>
-                  <dd className="font-mono font-medium text-[#5E5946]">
-                    {selectedDetail.vendor.panMasked || 'Not provided'}
-                  </dd>
-                </div>
-                {selectedDetail.vendor.aadhaarMasked && (
-                  <div>
-                    <dt className="text-[#6E6859]">Aadhaar (Masked)</dt>
-                    <dd className="font-mono font-medium text-[#5E5946]">
-                      {selectedDetail.vendor.aadhaarMasked}
-                    </dd>
-                  </div>
-                )}
-                <div className="sm:col-span-2">
-                  <dt className="text-[#6E6859]">Registered Address</dt>
-                  <dd className="font-medium text-[#5E5946]">{selectedDetail.vendor.fullAddress || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[#6E6859]">City / District / State / Pincode</dt>
                   <dd className="font-medium text-[#5E5946]">
-                    {[
-                      selectedDetail.vendor.city,
-                      selectedDetail.vendor.district,
-                      selectedDetail.vendor.state,
-                      selectedDetail.vendor.pincode,
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
+                    {v.vendorType || '—'}
+                    {v.businessRegistrationType ? ` (${v.businessRegistrationType})` : ''}
                   </dd>
                 </div>
                 <div>
                   <dt className="text-[#6E6859]">Registration Date</dt>
-                  <dd className="font-medium text-[#5E5946]">{formatDateTime(selectedDetail.vendor.createdAt)}</dd>
+                  <dd className="font-medium text-[#5E5946]">{formatDateTime(v.createdAt)}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-[#6E6859]">Registered Address</dt>
+                  <dd className="font-medium text-[#5E5946]">{v.fullAddress || '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-[#6E6859]">City / District / State / Pincode</dt>
+                  <dd className="font-medium text-[#5E5946]">
+                    {[v.city, v.district, v.state, v.pincode].filter(Boolean).join(', ')}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-[#6E6859]">Latest KYC Application Date</dt>
                   <dd className="font-semibold text-[#5E5946]">
-                    {selectedDetail.vendor.applicationSubmittedAt
-                      ? formatDateTime(selectedDetail.vendor.applicationSubmittedAt)
+                    {v.applicationSubmittedAt
+                      ? formatDateTime(v.applicationSubmittedAt)
                       : 'Draft / Not submitted'}
                   </dd>
                 </div>
               </dl>
+
+              {/* Identification Information */}
+              <div className="pt-3 border-t border-[#E5DCD3] space-y-2.5">
+                <h5 className="text-xs font-semibold text-[#5E5946]">Identification Information</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E5DCD3] flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] text-[#6E6859]">PAN Number (Masked)</p>
+                      <p className="font-mono font-semibold text-[#5E5946]">
+                        {idSummary.panMasked || v.panMasked || 'Not Provided'}
+                      </p>
+                    </div>
+                    <Badge variant={statusBadgeVariant(idSummary.panDocStatus || 'NOT_UPLOADED')}>
+                      {String(idSummary.panDocStatus || 'NOT_UPLOADED').replace(/_/g, ' ')}
+                    </Badge>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E5DCD3] flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] text-[#6E6859]">Aadhaar Number (Masked)</p>
+                      <p className="font-mono font-semibold text-[#5E5946]">
+                        {idSummary.aadhaarMasked || v.aadhaarMasked || 'Not Provided'}
+                      </p>
+                    </div>
+                    <Badge variant={statusBadgeVariant(idSummary.aadhaarDocStatus || 'NOT_UPLOADED')}>
+                      {String(idSummary.aadhaarDocStatus || 'NOT_UPLOADED').replace(/_/g, ' ')}
+                    </Badge>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E5DCD3] flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-[#6E6859]">
+                        GST Status:{' '}
+                        <span className="font-semibold text-[#5E5946]">
+                          {v.gstStatus === 'REGISTERED'
+                            ? 'REGISTERED'
+                            : v.gstStatus === 'APPLIED'
+                              ? 'APPLIED FOR REGISTRATION'
+                              : 'NOT REGISTERED'}
+                        </span>
+                      </p>
+                      <p className="font-mono font-semibold text-[#5E5946] truncate">
+                        {v.gstStatus === 'REGISTERED'
+                          ? `GSTIN: ${v.gstin || 'Not Provided'}`
+                          : v.gstStatus === 'APPLIED'
+                            ? `Ref: ${v.gstApplicationNumber || 'Not Provided'}`
+                            : 'Not Applicable'}
+                      </p>
+                    </div>
+                    <Badge variant={statusBadgeVariant(idSummary.gstDocStatus || 'NOT_APPLICABLE')}>
+                      {String(idSummary.gstDocStatus || 'NOT_APPLICABLE').replace(/_/g, ' ')}
+                    </Badge>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E5DCD3] flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] text-[#6E6859]">
+                        MSME Status:{' '}
+                        <span className="font-semibold text-[#5E5946]">
+                          {v.msmeStatus === 'REGISTERED'
+                            ? 'YES – REGISTERED'
+                            : v.msmeStatus === 'APPLIED'
+                              ? 'APPLIED'
+                              : 'NOT REGISTERED'}
+                        </span>
+                      </p>
+                      <p className="font-mono font-semibold text-[#5E5946] truncate">
+                        {v.msmeStatus === 'REGISTERED'
+                          ? `Udyam: ${v.udyamNumber || 'Not Provided'}`
+                          : v.msmeStatus === 'APPLIED'
+                            ? `Ref: ${v.msmeApplicationNumber || 'Not Provided'}`
+                            : 'Not Applicable'}
+                      </p>
+                    </div>
+                    <Badge variant={statusBadgeVariant(idSummary.msmeDocStatus || 'NOT_APPLICABLE')}>
+                      {String(idSummary.msmeDocStatus || 'NOT_APPLICABLE').replace(/_/g, ' ')}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Section B: KYC Verification Progress */}
             <div className="p-4 border border-[#E5DCD3] rounded-xl bg-white space-y-3">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="text-sm font-semibold text-[#5E5946]">B. KYC Verification Progress</h4>
                 <Badge
                   variant={
-                    (selectedDetail.vendor.kycSummary?.verifiedCount || 0) >= 4 ? 'success' : 'warning'
+                    (kycSummary.totalApplicable || 0) > 0 &&
+                    (kycSummary.verifiedCount || 0) >= (kycSummary.totalApplicable || 0)
+                      ? 'success'
+                      : 'warning'
                   }
                 >
-                  Overall Progress: {selectedDetail.vendor.kycSummary?.verifiedCount || 0}/
-                  {selectedDetail.vendor.kycSummary?.totalRequired || 4} Documents Verified
+                  Overall Progress: {kycSummary.verifiedCount || 0}/
+                  {kycSummary.totalApplicable ?? kycSummary.totalRequired ?? 0} Applicable Verified
                 </Badge>
               </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px]">
+                <div className="p-2 rounded-lg bg-[#FAF7F4] border border-[#E5DCD3]">
+                  <span className="text-[#6E6859] block">Total Applicable</span>
+                  <strong className="text-[#5E5946]">{kycSummary.totalApplicable ?? 0}</strong>
+                </div>
+                <div className="p-2 rounded-lg bg-[#ECFDF5] border border-[#15966B]/20">
+                  <span className="text-[#15966B] block">Verified</span>
+                  <strong className="text-[#15966B]">{kycSummary.verifiedCount ?? 0}</strong>
+                </div>
+                <div className="p-2 rounded-lg bg-[#FFFBEB] border border-[#B45309]/20">
+                  <span className="text-[#B45309] block">Pending</span>
+                  <strong className="text-[#B45309]">{kycSummary.pendingCount ?? 0}</strong>
+                </div>
+                <div className="p-2 rounded-lg bg-[#FEF2F2] border border-[#C94444]/20">
+                  <span className="text-[#C94444] block">Rejected</span>
+                  <strong className="text-[#C94444]">{kycSummary.rejectedCount ?? 0}</strong>
+                </div>
+                <div className="p-2 rounded-lg bg-[#F8F7F5] border border-[#E5DCD3]">
+                  <span className="text-[#6E6859] block">Not Applicable</span>
+                  <strong className="text-[#5E5946]">{kycSummary.notApplicableCount ?? 0}</strong>
+                </div>
+              </div>
               <div className="divide-y divide-[#F0EAE2] border border-[#E5DCD3] rounded-lg text-xs">
-                {(selectedDetail.vendor.kycSummary?.slots || []).map((slot: any) => (
+                {slots.map((slot: any) => (
                   <div key={slot.type} className="px-3 py-2 flex items-center justify-between gap-2">
-                    <span className="font-medium text-[#5E5946]">{slot.title}</span>
-                    <Badge variant={statusBadgeVariant(slot.status)}>
+                    <div className="min-w-0">
+                      <span className="font-medium text-[#5E5946]">{slot.title}</span>
+                      {slot.identificationMasked && (
+                        <span className="ml-2 font-mono text-[11px] text-[#6E6859]">
+                          ({slot.identificationMasked})
+                        </span>
+                      )}
+                    </div>
+                    <Badge
+                      variant={
+                        slot.status === 'NOT_APPLICABLE'
+                          ? 'default'
+                          : statusBadgeVariant(slot.status)
+                      }
+                    >
                       {String(slot.status || '').replace(/_/g, ' ')}
                     </Badge>
                   </div>
@@ -790,13 +930,13 @@ export const VendorsPage: React.FC = () => {
             {/* Section C: KYC & Compliance Documents */}
             <div>
               <h4 className="text-sm font-semibold text-[#5E5946] mb-2">C. KYC & Compliance Documents</h4>
-              {(selectedDetail.vendor.documents || []).length === 0 ? (
+              {docs.length === 0 && missingApplicableSlots.length === 0 ? (
                 <p className="text-xs text-[#6E6859] p-3 border border-[#E5DCD3] rounded-lg">
                   No KYC documents uploaded yet.
                 </p>
               ) : (
                 <div className="space-y-2.5">
-                  {selectedDetail.vendor.documents.map((doc: any) => {
+                  {docs.map((doc: any) => {
                     const docStatus = doc.displayStatus || doc.verificationStatus || doc.status || 'PENDING';
                     const rawVerStatus = doc.verificationStatus || doc.status || 'PENDING';
                     const prevVersions: any[] = Array.isArray(doc.previousVersions)
@@ -820,11 +960,19 @@ export const VendorsPage: React.FC = () => {
                             <div className="min-w-0">
                               <p className="font-semibold text-[#5E5946] group-hover:text-[#AE887B] transition-colors">
                                 {doc.title || doc.type}
+                                {doc.version ? (
+                                  <span className="ml-1.5 text-[10px] font-mono text-[#6E6859]">
+                                    v{doc.version}
+                                  </span>
+                                ) : null}
                               </p>
                               <p className="text-[#6E6859] truncate">
                                 File: <span className="font-medium text-[#5E5946]">{doc.fileName}</span>
                                 {doc.fileSize
                                   ? ` • ${Math.max(1, Math.round(doc.fileSize / 1024))} KB`
+                                  : ''}
+                                {doc.identificationNumberMasked
+                                  ? ` • Linked ID: ${doc.identificationNumberMasked}`
                                   : ''}
                               </p>
                               <p className="text-[11px] text-[#6E6859]">
@@ -849,7 +997,7 @@ export const VendorsPage: React.FC = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleDownloadDoc(selectedDetail.vendor.id, doc)}
+                            onClick={() => handleDownloadDoc(v.id, doc)}
                           >
                             <Download className="w-3.5 h-3.5" /> Download
                           </Button>
@@ -857,7 +1005,7 @@ export const VendorsPage: React.FC = () => {
                             <Button
                               size="sm"
                               variant="success"
-                              onClick={() => handleVerifyDoc(selectedDetail.vendor.id, doc.id, 'VERIFIED')}
+                              onClick={() => handleVerifyDoc(v.id, doc.id, 'VERIFIED')}
                             >
                               Verify
                             </Button>
@@ -866,7 +1014,7 @@ export const VendorsPage: React.FC = () => {
                             <Button
                               size="sm"
                               variant="danger"
-                              onClick={() => openRejectDocModal(selectedDetail.vendor, doc)}
+                              onClick={() => openRejectDocModal(v, doc)}
                             >
                               Reject
                             </Button>
@@ -915,6 +1063,19 @@ export const VendorsPage: React.FC = () => {
                       </div>
                     );
                   })}
+
+                  {missingApplicableSlots.map((slot: any) => (
+                    <div
+                      key={`missing-${slot.type}`}
+                      className="p-3 border border-dashed border-[#E5DCD3] rounded-xl text-xs bg-[#FAF7F4] flex items-center justify-between gap-2"
+                    >
+                      <div>
+                        <p className="font-semibold text-[#5E5946]">{slot.title}</p>
+                        <p className="text-[11px] text-[#6E6859]">Not Uploaded</p>
+                      </div>
+                      <Badge variant="warning">Not Uploaded</Badge>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -955,35 +1116,99 @@ export const VendorsPage: React.FC = () => {
             {/* Section E: Settlement Bank Account */}
             <div>
               <h4 className="text-sm font-semibold text-[#5E5946] mb-2">E. Settlement Bank Account</h4>
-              {selectedDetail.vendor.bankAccount ? (
-                <div className="p-3.5 border border-[#E5DCD3] rounded-xl text-xs space-y-1.5 bg-[#FAF7F4]">
-                  <div className="flex items-center justify-between">
+              {v.bankAccount ? (
+                <div className="p-3.5 border border-[#E5DCD3] rounded-xl text-xs space-y-2.5 bg-[#FAF7F4]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <p>
                       <span className="text-[#6E6859]">Beneficiary Name:</span>{' '}
                       <span className="font-semibold text-[#5E5946]">
-                        {selectedDetail.vendor.bankAccount.accountHolderName || '—'}
+                        {v.bankAccount.accountHolderName || '—'}
                       </span>
                     </p>
-                    <Badge variant={selectedDetail.vendor.bankAccount.isVerified ? 'success' : 'warning'}>
-                      {selectedDetail.vendor.bankAccount.isVerified ? 'Bank Verified' : 'Pending Bank Check'}
+                    <Badge
+                      variant={
+                        v.bankAccount.isVerified
+                          ? 'success'
+                          : v.bankAccount.verificationStatus === 'REJECTED'
+                            ? 'error'
+                            : 'warning'
+                      }
+                    >
+                      {v.bankAccount.isVerified
+                        ? 'Bank Verified'
+                        : v.bankAccount.verificationStatus === 'REJECTED'
+                          ? 'Bank Rejected'
+                          : 'Pending Bank Verification'}
                     </Badge>
                   </div>
-                  <p>
-                    <span className="text-[#6E6859]">Bank / IFSC:</span>{' '}
-                    <span className="font-semibold text-[#5E5946]">
-                      {selectedDetail.vendor.bankAccount.bankName || '—'} (
-                      {selectedDetail.vendor.bankAccount.ifsc ||
-                        selectedDetail.vendor.bankAccount.ifscCode ||
-                        '—'}
-                      )
-                    </span>
-                  </p>
-                  <p>
-                    <span className="text-[#6E6859]">Account Number (Masked):</span>{' '}
-                    <span className="font-mono text-[#5E5946]">
-                      {selectedDetail.vendor.bankAccount.accountNumberMasked || '—'}
-                    </span>
-                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <p>
+                      <span className="text-[#6E6859]">Bank Name:</span>{' '}
+                      <span className="font-semibold text-[#5E5946]">
+                        {v.bankAccount.bankName || '—'}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-[#6E6859]">IFSC Code:</span>{' '}
+                      <span className="font-mono font-semibold text-[#5E5946]">
+                        {v.bankAccount.ifsc || v.bankAccount.ifscCode || '—'}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-[#6E6859]">Account Number (Masked):</span>{' '}
+                      <span className="font-mono text-[#5E5946]">
+                        {v.bankAccount.accountNumberMasked || '—'}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-[#6E6859]">Passbook / Cancelled Cheque:</span>{' '}
+                      <span className="font-medium text-[#5E5946]">
+                        {bankProofDoc?.fileName || v.bankAccount.proofFileName || 'Not Uploaded'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {v.bankAccount.verificationStatus === 'REJECTED' && v.bankAccount.rejectionReason && (
+                    <div className="px-3 py-2 rounded-lg bg-[#FEF2F2] border border-[#C94444]/25 text-[11px] text-[#C94444]">
+                      <span className="font-semibold">Bank Rejection Reason:</span>{' '}
+                      {v.bankAccount.rejectionReason}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[#E5DCD3]">
+                    {bankProofDoc && (
+                      <>
+                        <Button size="sm" variant="primary" onClick={() => setPreviewDoc(bankProofDoc)}>
+                          <Eye className="w-3.5 h-3.5" /> View Document
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDownloadDoc(v.id, bankProofDoc)}
+                        >
+                          <Download className="w-3.5 h-3.5" /> Download
+                        </Button>
+                      </>
+                    )}
+                    {!v.bankAccount.isVerified && (
+                      <Button
+                        size="sm"
+                        variant="success"
+                        onClick={() => handleVerifyBank(v.id, 'VERIFIED')}
+                      >
+                        Verify Bank Account
+                      </Button>
+                    )}
+                    {v.bankAccount.verificationStatus !== 'REJECTED' && (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => openRejectBankModal(v)}
+                      >
+                        Reject Bank
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <p className="text-xs text-[#6E6859] p-3 border border-[#E5DCD3] rounded-lg">
@@ -1095,7 +1320,8 @@ export const VendorsPage: React.FC = () => {
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
       </Drawer>
 
       {/* Approve Vendor Confirmation Dialog */}
@@ -1114,8 +1340,18 @@ export const VendorsPage: React.FC = () => {
                 </p>
                 <p className="text-[#6E6859]">
                   Verified KYC progress: {approveConfirmVendor.kycSummary?.verifiedCount || 0}/
-                  {approveConfirmVendor.kycSummary?.totalRequired || 4} documents verified. GSTIN:{' '}
-                  <span className="font-mono">{approveConfirmVendor.gstin || 'Pending'}</span>.
+                  {approveConfirmVendor.kycSummary?.totalApplicable ??
+                    approveConfirmVendor.kycSummary?.totalRequired ??
+                    0}{' '}
+                  applicable documents verified. GST:{' '}
+                  <span className="font-mono">
+                    {approveConfirmVendor.gstStatus === 'REGISTERED'
+                      ? approveConfirmVendor.gstin || 'Pending'
+                      : approveConfirmVendor.gstStatus === 'APPLIED'
+                        ? 'Applied'
+                        : 'Not Registered'}
+                  </span>
+                  .
                 </p>
               </div>
             </div>
@@ -1155,11 +1391,13 @@ export const VendorsPage: React.FC = () => {
         title={
           actionModal?.type === 'DOC_REJECT'
             ? `Reject Document: ${actionModal.doc?.title || actionModal.doc?.type || ''}`
-            : actionModal?.type === 'REJECT'
-              ? 'Reject Vendor Application'
-              : actionModal?.type === 'CORRECTION'
-                ? 'Request Document / Profile Correction'
-                : 'Suspend Vendor Account'
+            : actionModal?.type === 'BANK_REJECT'
+              ? 'Reject Bank Account Verification'
+              : actionModal?.type === 'REJECT'
+                ? 'Reject Vendor Application'
+                : actionModal?.type === 'CORRECTION'
+                  ? 'Request Document / Profile Correction'
+                  : 'Suspend Vendor Account'
         }
       >
         <form onSubmit={submitReasonModal} className="space-y-4">
@@ -1213,7 +1451,9 @@ export const VendorsPage: React.FC = () => {
             <Button
               type="submit"
               variant={
-                actionModal?.type === 'REJECT' || actionModal?.type === 'DOC_REJECT'
+                actionModal?.type === 'REJECT' ||
+                actionModal?.type === 'DOC_REJECT' ||
+                actionModal?.type === 'BANK_REJECT'
                   ? 'danger'
                   : 'primary'
               }

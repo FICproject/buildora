@@ -4,6 +4,7 @@ import { RootLayout } from '../layouts/RootLayout';
 import { PublicStoreLayout } from '../layouts/PublicStoreLayout';
 import { CustomerAccountLayout } from '../layouts/CustomerAccountLayout';
 import { CheckoutLayout } from '../layouts/CheckoutLayout';
+import { ProtectedRouteGate } from '../components/common/ProtectedRouteGate';
 
 import { HomePage } from '../pages/HomePage';
 import { ProductListingPage } from '../pages/ProductListingPage';
@@ -71,7 +72,18 @@ export const router = createBrowserRouter([
       { path: 'estimator', element: <MaterialEstimatorPage /> },
       { path: 'knowledge-hub', element: <KnowledgeHubPage /> },
       { path: 'knowledge-hub/:slug', element: <KnowledgeHubPage /> },
-      { path: 'orders/:orderId/track', element: <OrderTrackingPage /> },
+      {
+        path: 'orders/:orderId/track',
+        element: (
+          <ProtectedRouteGate
+            title="Track Your Site Delivery"
+            description="Sign in with your mobile number to view live order tracking, delivery status, and driver details."
+            reason="Sign in to track your Buildora orders."
+          >
+            <OrderTrackingPage />
+          </ProtectedRouteGate>
+        )
+      },
       { path: 'about', element: <AboutPage /> },
       { path: 'contact', element: <ContactPage /> },
       { path: 'faq', element: <FaqPage /> },
@@ -91,7 +103,20 @@ export const router = createBrowserRouter([
   {
     path: '/checkout',
     element: <CheckoutLayout />,
-    children: [{ index: true, element: <CheckoutPage /> }]
+    children: [
+      {
+        index: true,
+        element: (
+          <ProtectedRouteGate
+            title="Sign In to Continue Checkout"
+            description="Sign in with your mobile number to confirm your delivery address and complete your order."
+            reason="Sign in to proceed to checkout and complete payment."
+          >
+            <CheckoutPage />
+          </ProtectedRouteGate>
+        )
+      }
+    ]
   },
 
   // Complete Customer Account Area

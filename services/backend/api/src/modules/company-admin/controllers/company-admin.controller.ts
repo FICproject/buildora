@@ -61,6 +61,11 @@ import {
 import { realtimeBus } from '../../realtime/realtime-bus';
 import { platformNotificationService } from '../../notifications/platform-notification.service';
 import { orderSyncService } from '../../orders/services/order-sync.service';
+import { gstInvoiceService } from '../../orders/services/gst-invoice.service';
+import {
+  fulfilmentLifecycleService,
+  VEHICLE_CAPACITY_SPECS,
+} from '../../orders/services/fulfilment-lifecycle.service';
 import {
   companyAdminSecurityService,
   CompanyAdminRole,
@@ -470,8 +475,8 @@ export class CompanyAdminController {
         kycStatus: pendingKycStatuses.has(v.approvalStatus)
           ? 'PENDING_VERIFICATION'
           : v.approvalStatus === 'APPROVED' || v.approvalStatus === 'ACTIVE'
-          ? 'VERIFIED'
-          : v.approvalStatus,
+            ? 'VERIFIED'
+            : v.approvalStatus,
         accountStatus: v.isActive ? 'ACTIVE' : v.approvalStatus,
         approvalStatus: v.approvalStatus,
         needsVerification: pendingKycStatuses.has(v.approvalStatus),
@@ -784,9 +789,10 @@ export class CompanyAdminController {
         'Cannot approve vendor while rejected KYC documents remain unreplaced.'
       );
     }
-    if (vendor.registrationData?.documents && docs.length < 4) {
+    const preCheck = companyAdminDataService.normalizeVendor(vendor);
+    if (vendor.registrationData && (preCheck.kycSummary?.notUploadedCount || 0) > 0) {
       throw new BadRequestException(
-        'All 4 required KYC documents must be uploaded before final vendor approval.'
+        `All ${preCheck.kycSummary.totalApplicable} applicable KYC & bank proof documents must be uploaded before final vendor approval.`
       );
     }
 
@@ -1420,6 +1426,94 @@ export class CompanyAdminController {
       vendor.id,
       'vendor.document.reviewed',
       { vendorId: vendor.id, docId, status: targetStatus, rejectionReason: doc.rejectionReason },
+      tenantId
+    );
+
+    return { success: true, data: normalized };
+  }
+
+  @Patch('vendors/:id/bank/verify')
+  async verifyVendorBankAccount(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body() body?: { status?: 'VERIFIED' | 'REJECTED'; notes?: string },
+    @Req() req?: any
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'vendors:manage', headerTenantId);
+    const vendor = vendorRecords.get(id) as any;
+    if (!vendor) throw new NotFoundException('Vendor not found.');
+    if ((vendor.tenantId || DEFAULT_TENANT_ID) !== tenantId) {
+      throw new ForbiddenException('Tenant isolation error.');
+    }
+    if (!vendor.businessInfo?.bankDetails) {
+      throw new BadRequestException('Vendor has not submitted settlement bank account details yet.');
+    }
+
+    const targetStatus = body?.status === 'REJECTED' ? 'REJECTED' : 'VERIFIED';
+    const cleanReason = String(body?.notes || '').trim();
+    if (targetStatus === 'REJECTED' && !cleanReason) {
+      throw new BadRequestException('A rejection reason is required when rejecting bank account verification.');
+    }
+
+    const nowIso = new Date().toISOString();
+    vendor.businessInfo.bankDetails = {
+      ...vendor.businessInfo.bankDetails,
+      isVerified: targetStatus === 'VERIFIED',
+      verificationStatus: targetStatus,
+      reviewedAt: nowIso,
+      reviewedBy: admin.email,
+      rejectionReason: targetStatus === 'REJECTED' ? cleanReason : undefined,
+    };
+    if (vendor.registrationData?.bankDetails) {
+      vendor.registrationData.bankDetails = {
+        ...vendor.registrationData.bankDetails,
+        isVerified: targetStatus === 'VERIFIED',
+        verificationStatus: targetStatus,
+        reviewedAt: nowIso,
+        reviewedBy: admin.email,
+        rejectionReason: targetStatus === 'REJECTED' ? cleanReason : undefined,
+      };
+    }
+
+    vendor.updatedAt = nowIso;
+    await vendorPersistenceService.saveVendorRecord(vendor);
+
+    const normalized = companyAdminDataService.normalizeVendor(vendor);
+
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: targetStatus === 'REJECTED' ? 'VENDOR_BANK_REJECTED' : 'VENDOR_BANK_VERIFIED',
+      module: 'Vendors',
+      entityType: 'VendorBank',
+      entityId: vendor.id,
+      details: `${targetStatus === 'REJECTED' ? 'Rejected' : 'Verified'} settlement bank account for ${normalized.businessName}${targetStatus === 'REJECTED' ? ` — Reason: ${cleanReason}` : ''}.`,
+      ipAddress: req?.ip || '127.0.0.1',
+    });
+
+    if (targetStatus === 'REJECTED') {
+      await platformNotificationService.dispatch({
+        tenantId,
+        recipientRole: 'VENDOR',
+        recipientId: vendor.id,
+        type: 'VENDOR_ONBOARDING',
+        title: 'Settlement Bank Verification Rejected',
+        message: `Your bank settlement verification was rejected: ${cleanReason}. Please update your bank details or upload a clearer passbook/cancelled cheque.`,
+        severity: 'WARNING',
+        actionUrl: '/profile',
+        metadata: { vendorId: vendor.id, rejectionReason: cleanReason },
+        email: normalized.email,
+        phone: normalized.phone,
+      });
+    }
+
+    realtimeBus.emitVendorAndAdmin(
+      vendor.id,
+      'vendor.document.reviewed',
+      { vendorId: vendor.id, bankVerificationStatus: targetStatus, rejectionReason: cleanReason || undefined },
       tenantId
     );
 
@@ -3585,19 +3679,101 @@ export class CompanyAdminController {
     @Query('search') search?: string
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'orders:read', headerTenantId);
-    let orders = companyAdminDataService.getTenantOrders(tenantId);
+    let orders = companyAdminDataService.getTenantOrders(tenantId).map((o: any) => {
+      const splits = vendorOrders
+        .filter((vo) => vo.orderNumber === o.orderNumber)
+        .map((vo: any) => {
+          const rec = vendorRecords.get(vo.vendorId);
+          return {
+            vendorOrderId: vo.id,
+            vendorId: vo.vendorId,
+            vendorName: rec?.storeName || rec?.businessInfo?.businessName || vo.vendorId,
+            status: vo.status,
+            items: vo.items || [],
+            packingDetails: vo.packingDetails,
+            hasShortage: vo.hasShortage,
+          };
+        });
+      const shipments = fulfilmentLifecycleService.getOrderShipments(o.orderNumber);
+      const invoices = gstInvoiceService.getOrderInvoices(o.orderNumber, o.id);
+      return {
+        ...o,
+        vendorSplits: splits,
+        shipments,
+        invoices,
+      };
+    });
+
+    const exceptions = fulfilmentLifecycleService.detectOrderExceptions(tenantId);
+    const exceptionOrderSet = new Set(exceptions.map((e) => e.orderNumber));
+
     if (status && status !== 'ALL') {
-      orders = orders.filter((o) => String(o.status).toUpperCase() === status.toUpperCase());
+      const st = status.toUpperCase();
+      if (st === 'EXCEPTIONS' || st === 'FAILED_DELAYED') {
+        orders = orders.filter(
+          (o) =>
+            exceptionOrderSet.has(o.orderNumber) ||
+            ['FAILED_ATTEMPT', 'DELIVERY_DELAYED'].includes(String(o.status).toUpperCase())
+        );
+      } else {
+        orders = orders.filter((o) => String(o.status).toUpperCase() === st);
+      }
     }
-    if (search) {
-      const q = search.toLowerCase();
-      orders = orders.filter(
-        (o) =>
-          String(o.orderNumber || o.id).toLowerCase().includes(q) ||
-          String(o.customerName || '').toLowerCase().includes(q)
-      );
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      orders = orders.filter((o: any) => {
+        const hay = [
+          o.orderNumber,
+          o.id,
+          o.customerName,
+          o.customerPhone,
+          o.customerEmail,
+          o.gstin,
+          o.deliveryAddress?.city,
+          o.deliveryAddress?.pincode,
+          ...(o.items || []).flatMap((i: any) => [i.name, i.sku, i.hsnCode]),
+          ...(o.vendorSplits || []).map((v: any) => v.vendorName),
+          ...(o.invoices || []).map((inv: any) => inv.invoiceNumber),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return hay.includes(q);
+      });
     }
     return { success: true, data: orders };
+  }
+
+  @Get('orders/kpis')
+  getOrdersKpisAndExceptions(
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'orders:read', headerTenantId);
+    const all = companyAdminDataService.getTenantOrders(tenantId);
+    const exceptions = fulfilmentLifecycleService.detectOrderExceptions(tenantId);
+    const byStatus: Record<string, number> = {};
+    for (const o of all) {
+      const st = String(o.status || 'ORDER_PLACED').toUpperCase();
+      byStatus[st] = (byStatus[st] || 0) + 1;
+    }
+    return {
+      success: true,
+      data: {
+        totalOrders: all.length,
+        pendingAcceptance: (byStatus['ORDER_PLACED'] || 0) + (byStatus['PAYMENT_VERIFIED'] || 0) + (byStatus['PARTIALLY_ACCEPTED'] || 0),
+        pickingPacking: (byStatus['PICKING_IN_PROGRESS'] || 0) + (byStatus['PACKING_IN_PROGRESS'] || 0),
+        readyForDispatch: byStatus['READY_FOR_DISPATCH'] || 0,
+        inTransit: (byStatus['DISPATCHED'] || 0) + (byStatus['IN_TRANSIT'] || 0) + (byStatus['OUT_FOR_DELIVERY'] || 0) + (byStatus['PARTIALLY_DISPATCHED'] || 0),
+        deliveredCompleted: (byStatus['DELIVERED'] || 0) + (byStatus['COMPLETED'] || 0) + (byStatus['PARTIALLY_DELIVERED'] || 0),
+        cancelledRejected: (byStatus['CANCELLED'] || 0) + (byStatus['REJECTED'] || 0),
+        exceptionsCount: exceptions.length,
+        byStatus,
+        exceptions,
+        vehicleCapacitySpecs: VEHICLE_CAPACITY_SPECS,
+      },
+    };
   }
 
   @Get('orders/:id')
@@ -3608,7 +3784,7 @@ export class CompanyAdminController {
   ) {
     const { tenantId } = this.requireAdmin(authHeader, 'orders:read', headerTenantId);
     const all = companyAdminDataService.getTenantOrders(tenantId);
-    const order = all.find((o) => o.id === id || o.orderNumber === id);
+    const order = all.find((o) => o.id === id || o.orderNumber === id) as any;
     if (!order) {
       const foreign = companyAdminDataService.tenantOrders.find((o) => o.id === id);
       if (foreign && foreign.tenantId !== tenantId) {
@@ -3616,7 +3792,75 @@ export class CompanyAdminController {
       }
       throw new NotFoundException('Order not found.');
     }
-    return { success: true, data: order };
+    const shipments = fulfilmentLifecycleService.getOrderShipments(order.orderNumber);
+    const invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    const splits = vendorOrders
+      .filter((vo) => vo.orderNumber === order.orderNumber)
+      .map((vo: any) => {
+        const rec = vendorRecords.get(vo.vendorId);
+        return {
+          vendorOrderId: vo.id,
+          vendorId: vo.vendorId,
+          vendorName: rec?.storeName || rec?.businessInfo?.businessName || vo.vendorId,
+          vendorGstin: rec?.businessInfo?.gstin,
+          status: vo.status,
+          items: vo.items || [],
+          packingDetails: vo.packingDetails,
+          hasShortage: vo.hasShortage,
+          shortageReport: vo.shortageReport || [],
+          statusHistory: vo.statusHistory || [],
+          shipment: shipments.find((s) => s.vendorOrderId === vo.id) || null,
+          invoice: invoices.find((inv) => inv.vendorOrderId === vo.id || inv.vendorId === vo.vendorId) || null,
+        };
+      });
+    const exceptions = fulfilmentLifecycleService
+      .detectOrderExceptions(tenantId)
+      .filter((e) => e.orderNumber === order.orderNumber);
+    return {
+      success: true,
+      data: {
+        ...order,
+        vendorSplits: splits,
+        shipments,
+        invoices,
+        exceptions,
+        vehicleCapacitySpecs: VEHICLE_CAPACITY_SPECS,
+      },
+    };
+  }
+
+  @Get('orders/:id/invoices/:invoiceId/pdf')
+  async downloadAdminOrderInvoicePdf(
+    @Param('id') id: string,
+    @Param('invoiceId') invoiceId: string,
+    @Res() res: Response,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { tenantId } = this.requireAdmin(authHeader, 'orders:read', headerTenantId);
+    const order = companyAdminDataService
+      .getTenantOrders(tenantId)
+      .find((o) => o.id === id || o.orderNumber === id) as any;
+    if (!order) throw new NotFoundException('Order not found.');
+    let invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    if (invoices.length === 0) {
+      const splits = vendorOrders.filter((vo) => vo.orderNumber === order.orderNumber);
+      for (const vo of splits) {
+        await gstInvoiceService.buildVendorGstInvoice(vo as any, order);
+      }
+      invoices = gstInvoiceService.getOrderInvoices(order.orderNumber, order.id);
+    }
+    const invoice =
+      invoices.find((i) => i.id === invoiceId || i.invoiceNumber === invoiceId) ||
+      invoices[0];
+    if (!invoice) throw new NotFoundException('Invoice not found.');
+    const pdfBuf = await gstInvoiceService.renderGstInvoicePdfBuffer(invoice);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${invoice.invoiceNumber}.pdf"`,
+      'Content-Length': pdfBuf.length,
+    });
+    res.end(pdfBuf);
   }
 
   @Patch('orders/:id/status')
@@ -4846,21 +5090,27 @@ export class CompanyAdminController {
   }
 
   @Post('delivery/assign')
-  assignDelivery(
+  async assignDelivery(
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
     @Body()
     body?: {
       orderId: string;
+      vendorOrderId?: string;
       partnerId: string;
       vehicleNumber: string;
+      vehicleType?: string;
       driverName: string;
       driverPhone: string;
+      dispatchHub?: string;
+      estimatedDispatchTime?: string;
+      estimatedArrivalTime?: string;
+      reassignReason?: string;
       eta?: string;
     },
     @Req() req?: any
   ) {
-    const { tenantId } = this.requireAdmin(authHeader, 'delivery:manage', headerTenantId);
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'delivery:manage', headerTenantId);
     if (!body?.orderId || !body?.partnerId) {
       throw new BadRequestException('orderId and partnerId are required.');
     }
@@ -4868,32 +5118,35 @@ export class CompanyAdminController {
     if (!partner || partner.tenantId !== tenantId) {
       throw new NotFoundException('Delivery partner not found in company.');
     }
-    const order = companyAdminDataService
-      .getTenantOrders(tenantId)
-      .find((o) => o.id === body.orderId || o.orderNumber === body.orderId);
-    if (!order) throw new NotFoundException('Order not found.');
-
-    const nowIso = new Date().toISOString();
-    const assignment = {
-      orderId: order.id,
-      tenantId,
-      partnerId: partner.id,
-      partnerName: partner.name,
+    const resData = await fulfilmentLifecycleService.assignDispatchVehicle(tenantId, {
+      orderIdOrNumber: body.orderId,
+      vendorOrderId: body.vendorOrderId,
+      partnerId: body.partnerId,
+      driverName: body.driverName,
+      driverPhone: body.driverPhone,
       vehicleNumber: body.vehicleNumber || 'KA-01-BLD-6060',
-      driverName: body.driverName || partner.contactPerson,
-      driverPhone: body.driverPhone || partner.phone,
-      status: 'ASSIGNED' as const,
-      assignedAt: nowIso,
-      updatedAt: nowIso,
-      eta: body.eta || 'Within 60 mins',
-    };
-    companyAdminDataService.dispatchAssignments.set(order.id, assignment);
-    void platformPersistenceService.upsert(DispatchAssignmentModel, assignment, 'orderId');
+      vehicleType: body.vehicleType,
+      dispatchHub: body.dispatchHub,
+      estimatedDispatchTime: body.estimatedDispatchTime,
+      estimatedArrivalTime: body.estimatedArrivalTime,
+      reassignReason: body.reassignReason,
+      actorName: admin.name,
+    });
     partner.activeDeliveries += 1;
+    companyAdminDataService.recordAuditLog({
+      tenantId,
+      actorId: admin.sub,
+      actorName: admin.name,
+      actorRole: admin.role,
+      action: 'DELIVERY_VEHICLE_ASSIGNED',
+      module: 'Delivery',
+      entityType: 'Dispatch',
+      entityId: resData.assignment.orderId,
+      details: `${resData.assignment.vehicleType} (${resData.assignment.vehicleNumber}) assigned to ${resData.assignment.partnerName}`,
+      ipAddress: req?.ip,
+    });
 
-    this.updateOrderStatus(order.id, authHeader, headerTenantId, { status: 'DISPATCHED' }, req);
-
-    return { success: true, data: assignment };
+    return { success: true, data: resData.assignment, shipments: resData.shipments };
   }
 
   @Patch('delivery/partners/:id')
@@ -4966,25 +5219,56 @@ export class CompanyAdminController {
   }
 
   @Patch('delivery/assignments/:orderId/status')
-  updateDeliveryStatus(
+  async updateDeliveryStatus(
     @Param('orderId') orderId: string,
     @Headers('authorization') authHeader?: string,
     @Headers('x-tenant-id') headerTenantId?: string,
-    @Body() body?: { status: 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED' },
+    @Body()
+    body?: {
+      status: 'PICKED_UP' | 'DISPATCHED' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED_ATTEMPT' | 'DELIVERY_DELAYED' | 'FAILED';
+      vendorOrderId?: string;
+      location?: string;
+      note?: string;
+      delayReason?: string;
+      failureReason?: string;
+      otp?: string;
+      recipientName?: string;
+    },
     @Req() req?: any
   ) {
     const { admin, tenantId } = this.requireAdmin(authHeader, 'delivery:manage', headerTenantId);
-    const assignment = companyAdminDataService.dispatchAssignments.get(orderId);
-    if (!assignment || assignment.tenantId !== tenantId) {
-      throw new NotFoundException('Dispatch assignment not found.');
-    }
-    assignment.status = body?.status || 'IN_TRANSIT';
-    assignment.updatedAt = new Date().toISOString();
-    void platformPersistenceService.upsert(DispatchAssignmentModel, assignment, 'orderId');
+    const requested = String(body?.status || 'IN_TRANSIT').toUpperCase();
 
-    if (assignment.status === 'DELIVERED') {
-      this.updateOrderStatus(orderId, authHeader, headerTenantId, { status: 'DELIVERED' }, req);
+    if (requested === 'DELIVERED') {
+      if (!body?.otp && !body?.recipientName) {
+        throw new BadRequestException(
+          'Site Delivery confirmation requires verified OTP and Recipient Name.'
+        );
+      }
+      const resData = await fulfilmentLifecycleService.confirmSiteDelivery({
+        orderIdOrNumber: orderId,
+        vendorOrderId: body?.vendorOrderId,
+        otp: body?.otp,
+        recipientName: body?.recipientName || 'Site Receiver',
+        notes: body?.note,
+        actorRole: 'ADMIN',
+        actorId: admin.sub,
+        actorName: admin.name,
+      });
+      return { success: true, data: resData };
     }
+
+    const mapped = requested === 'FAILED' ? 'FAILED_ATTEMPT' : requested;
+    const resData = await fulfilmentLifecycleService.updateShipmentTransitStatus({
+      orderIdOrNumber: orderId,
+      vendorOrderId: body?.vendorOrderId,
+      status: mapped as any,
+      location: body?.location,
+      note: body?.note,
+      delayReason: body?.delayReason,
+      failureReason: body?.failureReason,
+      actorName: admin.name,
+    });
 
     companyAdminDataService.recordAuditLog({
       tenantId,
@@ -4995,11 +5279,66 @@ export class CompanyAdminController {
       module: 'Delivery',
       entityType: 'Dispatch',
       entityId: orderId,
-      details: `Delivery updated to ${assignment.status}.`,
-      ipAddress: req?.ip || '127.0.0.1',
+      details: `${mapped}${body?.location ? ` (${body.location})` : ''}`,
+      ipAddress: req?.ip,
     });
 
-    return { success: true, data: assignment };
+    return { success: true, data: resData };
+  }
+
+  @Post('delivery/assignments/:orderId/confirm-delivery')
+  async confirmAdminSiteDelivery(
+    @Param('orderId') orderId: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string,
+    @Body()
+    body?: {
+      vendorOrderId?: string;
+      otp: string;
+      recipientName: string;
+      proofOfDeliveryUrl?: string;
+      notes?: string;
+      markCompleted?: boolean;
+    }
+  ) {
+    const { admin } = this.requireAdmin(authHeader, 'delivery:manage', headerTenantId);
+    const resData = await fulfilmentLifecycleService.confirmSiteDelivery({
+      orderIdOrNumber: orderId,
+      vendorOrderId: body?.vendorOrderId,
+      otp: body?.otp,
+      recipientName: body?.recipientName || '',
+      proofOfDeliveryUrl: body?.proofOfDeliveryUrl,
+      notes: body?.notes,
+      markCompleted: body?.markCompleted,
+      actorRole: 'ADMIN',
+      actorId: admin.sub,
+      actorName: admin.name,
+    });
+    return {
+      success: true,
+      message: `Site delivery verified for #${resData.orderNumber}.`,
+      data: resData,
+    };
+  }
+
+  @Post('orders/:id/complete')
+  async completeAdminOrder(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader?: string,
+    @Headers('x-tenant-id') headerTenantId?: string
+  ) {
+    const { admin, tenantId } = this.requireAdmin(authHeader, 'orders:manage', headerTenantId);
+    const order = companyAdminDataService
+      .getTenantOrders(tenantId)
+      .find((o) => o.id === id || o.orderNumber === id);
+    if (!order) throw new NotFoundException('Order not found.');
+    const siblings = vendorOrders.filter((vo) => vo.orderNumber === order.orderNumber);
+    for (const vo of siblings) {
+      if (String(vo.status).toUpperCase() === 'DELIVERED') {
+        await fulfilmentLifecycleService.completeVendorOrder(vo.id, admin.name);
+      }
+    }
+    return { success: true, message: `Order #${order.orderNumber} marked COMPLETED.` };
   }
 
   // ==================== 11. PAYMENTS, SETTLEMENTS & FINANCE ====================
@@ -5036,6 +5375,14 @@ export class CompanyAdminController {
         }, 0)
     );
 
+    const paymentMethodBreakdown = orders.reduce((acc: Record<string, { count: number; amount: number }>, o: any) => {
+      const m = String(o.paymentMethod || 'RAZORPAY').toUpperCase();
+      if (!acc[m]) acc[m] = { count: 0, amount: 0 };
+      acc[m].count += 1;
+      if (o.status !== 'CANCELLED') acc[m].amount += Number(o.totalAmount || 0);
+      return acc;
+    }, {});
+
     return {
       success: true,
       data: {
@@ -5048,14 +5395,17 @@ export class CompanyAdminController {
           totalPendingPayout,
           pendingSettlementCount: pendingSettlements.length,
         },
+        paymentMethodBreakdown,
         settlements,
         invoices,
-        transactions: orders.slice(0, 25).map((o) => ({
+        transactions: orders.slice(0, 25).map((o: any) => ({
           id: `txn-${o.id}`,
           orderNumber: o.orderNumber || o.id,
           customerName: o.customerName,
           amount: o.totalAmount,
           method: o.paymentMethod || 'RAZORPAY',
+          paymentChannelDetails: o.paymentChannelDetails || undefined,
+          razorpayPaymentId: o.razorpayPaymentId || undefined,
           paymentStatus: o.paymentStatus || 'PAID',
           date: o.createdAt,
         })),
@@ -5385,12 +5735,25 @@ export class CompanyAdminController {
 
     const reportRowsMap: Record<string, any[]> = {
       sales: salesByCategory,
-      orders: orders.slice(0, 50).map((o) => ({
+      orders: orders.slice(0, 50).map((o: any) => ({
         orderNumber: o.orderNumber || o.id,
         customerName: o.customerName,
         status: o.status,
         paymentMethod: o.paymentMethod || 'RAZORPAY',
+        paymentStatus: o.paymentStatus || 'PAID',
+        razorpayPaymentId: o.razorpayPaymentId || '—',
         totalAmount: o.totalAmount,
+        createdAt: o.createdAt,
+      })),
+      payments: orders.slice(0, 50).map((o: any) => ({
+        orderNumber: o.orderNumber || o.id,
+        customerName: o.customerName,
+        paymentMethod: o.paymentMethod || 'RAZORPAY',
+        paymentChannel: o.paymentChannelDetails || '—',
+        paymentStatus: o.paymentStatus || 'PAID',
+        razorpayOrderId: o.razorpayOrderId || '—',
+        razorpayPaymentId: o.razorpayPaymentId || '—',
+        amount: o.totalAmount,
         createdAt: o.createdAt,
       })),
       vendors: vendors.map((v) => ({

@@ -17,6 +17,7 @@ import { formatCurrency } from '@buildora/utils';
 import { useCartStore } from '../store/useCartStore';
 import { useWishlistStore } from '../store/useWishlistStore';
 import { useCompareStore } from '../store/useCompareStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { ProductCard } from '../components/common/ProductCard';
 import { ProductInfoAccordion } from '../components/common/ProductInfoAccordion';
 import { ProductDeliveryInfoBar } from '../components/common/ProductDeliveryInfoBar';
@@ -37,7 +38,7 @@ function findVariantForAttributes(
   variants?: ProductVariant[]
 ): ProductVariant | undefined {
   if (!variants || variants.length === 0) return undefined;
-  
+
   // 1. Exact match where every key in attrs matches variant.attributes
   const exact = variants.find((v) => {
     if (!v.attributes) return false;
@@ -96,6 +97,7 @@ export const ProductDetailPage: React.FC = () => {
   const { addItem } = useCartStore();
   const { isInWishlist, toggleItem } = useWishlistStore();
   const { isInCompare, addItem: addToCompare } = useCompareStore();
+  const { requireAuth } = useAuthStore();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -267,9 +269,8 @@ export const ProductDetailPage: React.FC = () => {
             <img
               src={product.images[activeImageIndex] || product.images[0]}
               alt={product.name}
-              className={`max-h-full max-w-full object-contain transition-transform duration-300 ${
-                isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'
-              }`}
+              className={`max-h-full max-w-full object-contain transition-transform duration-300 ${isZoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'
+                }`}
               onClick={() => setIsZoomed(!isZoomed)}
             />
             {activeDiscount > 0 && (
@@ -281,12 +282,21 @@ export const ProductDetailPage: React.FC = () => {
             )}
             <button
               type="button"
-              onClick={() => toggleItem(product)}
-              className={`absolute top-3.5 right-3.5 p-2 rounded-full shadow-md transition-colors ${
-                isWishlisted
+              onClick={() => {
+                if (
+                  !requireAuth(
+                    { type: 'WISHLIST_ADD', product },
+                    { reason: `Sign in to save "${product.name}" to your Wishlist.` }
+                  )
+                ) {
+                  return;
+                }
+                toggleItem(product);
+              }}
+              className={`absolute top-3.5 right-3.5 p-2 rounded-full shadow-md transition-colors cursor-pointer ${isWishlisted
                   ? 'bg-rose-50 text-rose-600'
                   : 'bg-white text-slate-400 hover:text-rose-500'
-              }`}
+                }`}
               title="Save to wishlist"
             >
               <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
@@ -329,9 +339,8 @@ export const ProductDetailPage: React.FC = () => {
                   key={idx}
                   type="button"
                   onClick={() => setActiveImageIndex(idx)}
-                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 overflow-hidden bg-white flex-shrink-0 cursor-pointer ${
-                    activeImageIndex === idx ? 'border-brand-blue-600 shadow-sm' : 'border-slate-200'
-                  }`}
+                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 overflow-hidden bg-white flex-shrink-0 cursor-pointer ${activeImageIndex === idx ? 'border-brand-blue-600 shadow-sm' : 'border-slate-200'
+                    }`}
                 >
                   <img src={img} alt="Thumbnail" className="w-full h-full object-cover" />
                 </button>
@@ -430,13 +439,12 @@ export const ProductDetailPage: React.FC = () => {
                               key={optVal}
                               type="button"
                               onClick={() => handleAttributeChange(attr.name, optVal)}
-                              className={`px-5 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all select-none ${
-                                isSelected
+                              className={`px-5 py-2 rounded-full text-xs sm:text-sm font-semibold transition-all select-none ${isSelected
                                   ? 'bg-black text-white shadow-xs cursor-pointer'
                                   : isAvailable
-                                  ? 'bg-white text-slate-800 border border-slate-300 hover:border-slate-500 cursor-pointer'
-                                  : 'bg-slate-50 text-slate-400 border border-slate-200 line-through opacity-50 cursor-pointer'
-                              }`}
+                                    ? 'bg-white text-slate-800 border border-slate-300 hover:border-slate-500 cursor-pointer'
+                                    : 'bg-slate-50 text-slate-400 border border-slate-200 line-through opacity-50 cursor-pointer'
+                                }`}
                             >
                               {optLabel}
                             </button>
@@ -484,11 +492,10 @@ export const ProductDetailPage: React.FC = () => {
                               type="button"
                               onClick={() => handleAttributeChange(attr.name, optVal)}
                               title={optLabel}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all cursor-pointer select-none ${
-                                isSelected
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all cursor-pointer select-none ${isSelected
                                   ? 'border-brand-blue-600 bg-brand-blue-50 text-brand-blue-900 ring-2 ring-brand-blue-500/20'
                                   : 'border-slate-300 hover:border-slate-400 bg-white text-slate-700'
-                              }`}
+                                }`}
                             >
                               <span
                                 className="w-4 h-4 rounded-full border border-slate-300 flex-shrink-0"
@@ -558,9 +565,8 @@ export const ProductDetailPage: React.FC = () => {
                             <label
                               key={optVal}
                               onClick={() => handleAttributeChange(attr.name, optVal)}
-                              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                                isSelected ? 'border-brand-blue-500 bg-brand-blue-50/50' : 'border-slate-200 bg-white'
-                              }`}
+                              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-brand-blue-500 bg-brand-blue-50/50' : 'border-slate-200 bg-white'
+                                }`}
                             >
                               <input
                                 type="radio"
@@ -601,7 +607,7 @@ export const ProductDetailPage: React.FC = () => {
                         const cardMrp = prospectiveVariant ? prospectiveVariant.mrp : activeMrp;
                         const cardInStock = prospectiveVariant
                           ? prospectiveVariant.inStock &&
-                            (prospectiveVariant.stock === undefined || prospectiveVariant.stock > 0)
+                          (prospectiveVariant.stock === undefined || prospectiveVariant.stock > 0)
                           : true;
                         const cardDiscount =
                           cardMrp > cardPrice ? Math.round(((cardMrp - cardPrice) / cardMrp) * 100) : 0;
@@ -612,13 +618,12 @@ export const ProductDetailPage: React.FC = () => {
                             type="button"
                             disabled={!isCombinationValid}
                             onClick={() => handleAttributeChange(attr.name, optVal)}
-                            className={`p-3 rounded-2xl border text-left transition-all relative ${
-                              !isCombinationValid
+                            className={`p-3 rounded-2xl border text-left transition-all relative ${!isCombinationValid
                                 ? 'border-dashed border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'
                                 : isSelected
-                                ? 'border-[#f59e0b] bg-[#fef9c3]/70 ring-2 ring-amber-500/20 shadow-xs cursor-pointer'
-                                : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'
-                            }`}
+                                  ? 'border-[#f59e0b] bg-[#fef9c3]/70 ring-2 ring-amber-500/20 shadow-xs cursor-pointer'
+                                  : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'
+                              }`}
                           >
                             {cardDiscount > 0 && isCombinationValid && (
                               <span className="absolute top-2 right-2 text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded-xs">
@@ -679,13 +684,12 @@ export const ProductDetailPage: React.FC = () => {
                           if (idx >= 0) setActiveImageIndex(idx);
                         }
                       }}
-                      className={`p-3 rounded-2xl border text-left transition-all relative ${
-                        !isAvail
+                      className={`p-3 rounded-2xl border text-left transition-all relative ${!isAvail
                           ? 'border-dashed border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'
                           : isSelected
-                          ? 'border-[#f59e0b] bg-[#fef9c3]/70 ring-2 ring-amber-500/20 shadow-xs cursor-pointer'
-                          : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'
-                      }`}
+                            ? 'border-[#f59e0b] bg-[#fef9c3]/70 ring-2 ring-amber-500/20 shadow-xs cursor-pointer'
+                            : 'border-slate-200 hover:border-slate-300 bg-white cursor-pointer'
+                        }`}
                     >
                       {vDiscount > 0 && isAvail && (
                         <span className="absolute top-2 right-2 text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded-xs">
@@ -755,11 +759,10 @@ export const ProductDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCompareClick}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
-                  inCompare
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${inCompare
                     ? 'border-brand-blue-500 bg-brand-blue-50 text-brand-blue-900'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <Scale className="w-3.5 h-3.5" />
                 {inCompare ? 'In Comparison' : 'Compare Specs'}
