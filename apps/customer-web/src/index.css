@@ -3,9 +3,43 @@
 @tailwind utilities;
 
 @layer base {
+  html,
   body {
+    overflow-x: clip;
+    max-width: 100%;
     @apply bg-slate-50 text-slate-800 antialiased font-sans;
   }
+
+  #root {
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  img,
+  video {
+    max-width: 100%;
+  }
+}
+
+.scrollbar-none,
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.safe-pb {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
 /* Custom scrollbars */

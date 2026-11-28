@@ -64,12 +64,12 @@ export const CustomersPage: React.FC = () => {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full sm:w-auto">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, phone, email..."
-            className="px-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg focus:outline-none focus:border-[#AE887B]"
+            className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg focus:outline-none focus:border-[#AE887B]"
           />
           <Button size="sm" variant="secondary" onClick={loadCustomers}>
             Search
@@ -142,7 +142,7 @@ export const CustomersPage: React.FC = () => {
       >
         {detail && (
           <div className="space-y-5 text-xs">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3 border border-[#E5DCD3] bg-[#F9F2EC] rounded-lg">
                 <p className="text-[#6E6859]">Lifetime Spend</p>
                 <p className="text-base font-bold text-[#AE887B]">
@@ -282,10 +282,10 @@ export const DeliveryLogisticsPage: React.FC = () => {
               <p className="py-6 text-center text-[#6E6859]">All confirmed orders have been dispatched.</p>
             ) : (
               data.readyForDispatchOrders.map((o: any) => (
-                <div key={o.id} className="py-3 flex items-center justify-between gap-2">
-                  <div>
+                <div key={o.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-[#AE887B]">{o.orderNumber || o.id}</p>
-                    <p className="text-[#6E6859]">{o.customerName} • {o.deliveryAddress}</p>
+                    <p className="text-[#6E6859] break-words">{o.customerName} • {o.deliveryAddress}</p>
                   </div>
                   <Button size="sm" variant="dark" onClick={() => setAssignModal(o)}>
                     <Navigation className="w-3.5 h-3.5" /> Assign Fleet
@@ -355,14 +355,14 @@ export const DeliveryLogisticsPage: React.FC = () => {
         <Card title="Delivery Partners & SLAs">
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(data.partners || []).map((p: any) => (
-              <div key={p.id} className="py-3 flex justify-between items-center gap-2">
-                <div>
+              <div key={p.id} className="py-3 flex flex-wrap justify-between items-center gap-2">
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold text-[#5E5946]">{p.name}</p>
-                  <p className="text-[#6E6859]">
+                  <p className="text-[#6E6859] break-words">
                     {p.contactPerson} • {p.phone} • Base {formatINR(p.baseCharge)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <div className="text-right">
                     <Badge variant="success">{p.onTimeRate}% On-Time</Badge>
                     <p className="text-[#6E6859] mt-0.5">{p.completedDeliveries} deliveries</p>
@@ -410,7 +410,7 @@ export const DeliveryLogisticsPage: React.FC = () => {
               return (
                 <div
                   key={code || idx}
-                  className="px-3 py-2 border border-[#E5DCD3] rounded-lg text-xs flex items-center gap-2 bg-[#F9F2EC]"
+                  className="px-3 py-2 border border-[#E5DCD3] rounded-lg text-xs flex flex-wrap items-center gap-2 bg-[#F9F2EC] max-w-full"
                 >
                   <MapPin className="w-3.5 h-3.5 text-[#AE887B]" />
                   <span className="font-mono font-semibold text-[#5E5946]">{code}</span>
@@ -475,11 +475,11 @@ export const DeliveryLogisticsPage: React.FC = () => {
               </option>
             ))}
           </select>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <select
               value={assignForm.vehicleType}
               onChange={(e) => setAssignForm({ ...assignForm, vehicleType: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full min-w-0 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             >
               <option value="2-Wheeler Express">2-Wheeler Express (max 25 kg)</option>
               <option value="Mini Truck">Mini Truck (max 800 kg)</option>
@@ -493,10 +493,10 @@ export const DeliveryLogisticsPage: React.FC = () => {
               placeholder="Vehicle Number"
               value={assignForm.vehicleNumber}
               onChange={(e) => setAssignForm({ ...assignForm, vehicleNumber: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
+              className="w-full min-w-0 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               required
               placeholder="Driver Name"
@@ -607,29 +607,29 @@ export const DeliveryLogisticsPage: React.FC = () => {
           }}
           className="space-y-3 text-xs"
         >
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               required
               pattern="[1-9][0-9]{5}"
               placeholder="6-digit Pincode *"
               value={pinForm.pincode}
               onChange={(e) => setPinForm({ ...pinForm, pincode: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg font-mono"
             />
             <input
               required
               placeholder="Locality / Hub Name *"
               value={pinForm.locality}
               onChange={(e) => setPinForm({ ...pinForm, locality: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               placeholder="City"
               value={pinForm.city}
               onChange={(e) => setPinForm({ ...pinForm, city: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
             <input
               type="number"
@@ -637,7 +637,7 @@ export const DeliveryLogisticsPage: React.FC = () => {
               placeholder="ETA Minutes (e.g. 60)"
               value={pinForm.etaMinutes}
               onChange={(e) => setPinForm({ ...pinForm, etaMinutes: Number(e.target.value) })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
           <input
@@ -646,7 +646,7 @@ export const DeliveryLogisticsPage: React.FC = () => {
             onChange={(e) => setPinForm({ ...pinForm, assignedWarehouse: e.target.value })}
             className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
           />
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3 sm:gap-4">
             <label className="flex items-center gap-1.5">
               <input
                 type="checkbox"

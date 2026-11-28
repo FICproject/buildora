@@ -154,7 +154,7 @@ export const VendorSupportPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-4 py-3 border-t border-[#E7E5E4] text-xs text-[#78716C] flex items-center justify-between">
+          <div className="px-4 py-3 border-t border-[#E7E5E4] text-xs text-[#78716C] flex flex-wrap items-center justify-between gap-2">
             <span>Partner Helpline: 1800-419-6060</span>
             <span>Mon–Sat, 8 AM–8 PM</span>
           </div>
@@ -216,7 +216,7 @@ export const VendorSupportPage: React.FC = () => {
                   onChange={(e) => setReplyText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendReply()}
                   placeholder="Write a reply..."
-                  className="portal-input flex-1"
+                  className="portal-input flex-1 min-w-0"
                 />
                 <Button
                   type="button"

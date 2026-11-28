@@ -56,7 +56,7 @@ export const BulkPricingModal: React.FC = () => {
 
       {/* Centered Modal Card */}
       <div
-        className="relative z-10 w-full max-w-sm sm:max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col animate-in fade-in zoom-in-95 duration-200"
+        className="relative z-10 w-full max-w-sm sm:max-w-md max-h-[90vh] max-h-[90dvh] bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col animate-in fade-in zoom-in-95 duration-200 my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Blue Header Area */}
@@ -83,13 +83,13 @@ export const BulkPricingModal: React.FC = () => {
         </div>
 
         {/* Modal Content: Bulk Pricing Tiers List */}
-        <div className="p-5 sm:p-6 space-y-3.5 bg-white">
+        <div className="p-4 sm:p-6 space-y-3.5 bg-white overflow-y-auto">
           <ul className="space-y-3 text-sm sm:text-base text-slate-800">
             {sortedTiers.map((tier, idx) => {
               const isBestTier = tier.minQuantity === maxMinQty;
 
               return (
-                <li key={idx} className="flex items-center gap-2 select-none">
+                <li key={idx} className="flex flex-wrap items-center gap-2 select-none">
                   {/* Bullet */}
                   <span className="text-slate-800 text-lg leading-none">&bull;</span>
 

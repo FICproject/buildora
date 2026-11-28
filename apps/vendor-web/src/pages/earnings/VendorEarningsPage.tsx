@@ -154,7 +154,7 @@ export const VendorEarningsPage: React.FC = () => {
           subtitle="Click any settlement row to view itemized deductions and UTR details."
         />
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[820px] text-left text-xs">
             <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
               <tr>
                 <th className="py-3 px-4">Settlement ID</th>
@@ -297,14 +297,14 @@ export const VendorEarningsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-between text-[#78716C]">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[#78716C]">
               <span>UTR Reference:</span>
-              <span className="font-mono text-[#292524]">
+              <span className="font-mono text-[#292524] break-all">
                 {selectedSettlement.utr || selectedSettlement.paymentReference || 'Pending'}
               </span>
             </div>
 
-            <div className="pt-2 flex justify-end gap-2">
+            <div className="pt-2 flex flex-wrap justify-end gap-2">
               <Button
                 variant="outline"
                 size="sm"

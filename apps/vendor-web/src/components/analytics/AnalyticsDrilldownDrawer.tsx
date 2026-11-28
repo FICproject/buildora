@@ -80,7 +80,7 @@ export const AnalyticsDrilldownDrawer: React.FC<AnalyticsDrilldownDrawerProps> =
       ) : (
         <div className="space-y-4">
           <div className="overflow-x-auto rounded-xl border border-[#E7E5E4]">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[560px] text-left text-xs">
               <thead className="bg-[#FAF7F5] text-[#78716C] border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-2.5 px-3">Order</th>
@@ -100,9 +100,11 @@ export const AnalyticsDrilldownDrawer: React.FC<AnalyticsDrilldownDrawerProps> =
                     }}
                     className="hover:bg-[#FAF7F5] cursor-pointer"
                   >
-                    <td className="py-2.5 px-3 font-semibold text-[#943D24] inline-flex items-center gap-1">
-                      {o.orderNumber}
-                      <ExternalLink className="w-3 h-3" />
+                    <td className="py-2.5 px-3 font-semibold text-[#943D24] whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1">
+                        {o.orderNumber}
+                        <ExternalLink className="w-3 h-3" />
+                      </span>
                     </td>
                     <td className="py-2.5 px-3 text-[#292524]">{o.customerName || 'Customer'}</td>
                     <td className="py-2.5 px-3 text-[#78716C]">

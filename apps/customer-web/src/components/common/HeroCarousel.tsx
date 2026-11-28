@@ -132,7 +132,7 @@ export const HeroCarousel: React.FC = () => {
 
   return (
     <div
-      className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/15 shadow-2xl bg-slate-900 aspect-[16/11] sm:aspect-[16/10] lg:aspect-auto lg:h-[390px] xl:h-[410px] flex flex-col justify-between group select-none w-full max-w-full"
+      className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/15 shadow-2xl bg-slate-900 min-h-[300px] sm:min-h-[340px] lg:min-h-0 aspect-[4/3] sm:aspect-[16/10] lg:aspect-auto lg:h-[390px] xl:h-[410px] flex flex-col justify-between group select-none w-full max-w-full"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={handleTouchStart}
@@ -254,7 +254,7 @@ export const HeroCarousel: React.FC = () => {
         type="button"
         onClick={prevSlide}
         aria-label="Previous Slide"
-        className="absolute left-2.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-900/60 hover:bg-brand-orange-500 text-white backdrop-blur-md flex items-center justify-center border border-white/20 transition-all opacity-0 group-hover:opacity-100 hover:scale-110 shadow-lg"
+        className="absolute left-2 sm:left-2.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-900/60 hover:bg-brand-orange-500 text-white backdrop-blur-md flex items-center justify-center border border-white/20 transition-all opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 shadow-lg"
       >
         <ChevronLeft className="w-5 h-5" />
       </button>
@@ -263,13 +263,13 @@ export const HeroCarousel: React.FC = () => {
         type="button"
         onClick={nextSlide}
         aria-label="Next Slide"
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-900/60 hover:bg-brand-orange-500 text-white backdrop-blur-md flex items-center justify-center border border-white/20 transition-all opacity-0 group-hover:opacity-100 hover:scale-110 shadow-lg"
+        className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 z-30 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-900/60 hover:bg-brand-orange-500 text-white backdrop-blur-md flex items-center justify-center border border-white/20 transition-all opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 shadow-lg"
       >
         <ChevronRight className="w-5 h-5" />
       </button>
 
       {/* Pagination Dots */}
-      <div className="absolute bottom-16 sm:bottom-18 left-0 right-0 z-30 flex items-center justify-center gap-1.5">
+      <div className="absolute bottom-16 sm:bottom-20 left-0 right-0 z-30 flex items-center justify-center gap-1.5">
         {slides.map((_, dotIdx) => {
           const isCurrent = dotIdx === currentSlide % Math.max(1, slides.length);
           return (

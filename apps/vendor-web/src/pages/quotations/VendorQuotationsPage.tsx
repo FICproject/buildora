@@ -165,7 +165,7 @@ export const VendorQuotationsPage: React.FC = () => {
       {/* Requests Table */}
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[720px] text-left text-xs">
             <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
               <tr>
                 <th className="py-3 px-4">RFQ Number</th>
@@ -273,7 +273,7 @@ export const VendorQuotationsPage: React.FC = () => {
             <div>
               <h4 className="font-semibold text-[#292524] mb-2">Material Requirements & Pricing</h4>
               <div className="border border-[#E7E5E4] rounded-xl overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[540px] text-left text-xs">
                   <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                     <tr>
                       <th className="py-2.5 px-3">Material</th>

@@ -199,7 +199,7 @@ export const ProfilePage: React.FC = () => {
 
             {/* Registered Phone (Verified with Secure Change Flow) */}
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                 <label className="font-bold text-slate-700">Phone Number</label>
                 <button
                   type="button"

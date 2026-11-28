@@ -64,7 +64,7 @@ export const SecurityPage: React.FC = () => {
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">New 4-Digit PIN</label>
               <input
@@ -98,10 +98,10 @@ export const SecurityPage: React.FC = () => {
 
       {/* 2. Two-Factor Authentication */}
       <div className="pt-6 border-t border-slate-100 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-brand-blue-700" />
+              <Smartphone className="w-4 h-4 text-brand-blue-700 flex-shrink-0" />
               <h3 className="font-bold text-sm text-slate-900">SMS OTP Login Authentication</h3>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -111,7 +111,7 @@ export const SecurityPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsOtpEnabled(!isOtpEnabled)}
-            className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+            className={`w-11 h-6 flex-shrink-0 flex items-center rounded-full p-1 transition-colors ${
               isOtpEnabled ? 'bg-brand-blue-900 justify-end' : 'bg-slate-300 justify-start'
             }`}
           >

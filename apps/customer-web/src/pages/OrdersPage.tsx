@@ -324,7 +324,7 @@ export const OrdersPage: React.FC = () => {
           </div>
         )}
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Link
             to="/account/orders"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900"
@@ -437,7 +437,7 @@ export const OrdersPage: React.FC = () => {
 
           {/* VERTICAL DELIVERY PROGRESS TIMELINE */}
           <div ref={deliverySectionRef} id="delivery-progress" className="space-y-3 scroll-mt-24">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] font-bold tracking-wider uppercase text-slate-500">
                 DELIVERY PROGRESS {activeSplit ? `• ${activeSplit.vendorName}` : ''}
               </p>
@@ -551,7 +551,7 @@ export const OrdersPage: React.FC = () => {
               </div>
 
               <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
                     <Truck className="w-4 h-4 text-blue-600" />
                     <span>Assigned Delivery Vehicle & Supplier</span>
@@ -646,13 +646,13 @@ export const OrdersPage: React.FC = () => {
                   <span className="font-medium text-slate-900">{formatCurrency(currentOrder.gstTotal)}</span>
                 </div>
                 {activeInvoice && (
-                  <div className="flex justify-between text-[11px] text-slate-500 pl-2">
+                  <div className="flex flex-wrap justify-between gap-1 text-[11px] text-slate-500 pl-2">
                     <span>
                       {activeInvoice.isInterState
                         ? `IGST: ₹${activeInvoice.igstAmount}`
                         : `CGST: ₹${activeInvoice.cgstAmount} • SGST: ₹${activeInvoice.sgstAmount}`}
                     </span>
-                    <span>{activeInvoice.invoiceNumber}</span>
+                    <span className="break-all">{activeInvoice.invoiceNumber}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs text-slate-600">
@@ -688,7 +688,7 @@ export const OrdersPage: React.FC = () => {
                   <span className="font-semibold text-slate-700">{currentOrder.paymentStatus || 'PENDING'}</span>
                 </p>
                 {currentOrder.razorpayPaymentId && (
-                  <p className="text-[11px] font-mono text-slate-400">
+                  <p className="text-[11px] font-mono text-slate-400 break-all">
                     Payment Ref: {currentOrder.razorpayPaymentId}
                   </p>
                 )}

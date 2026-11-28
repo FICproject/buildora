@@ -61,7 +61,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Free Delivery Bar */}
-        <div className="bg-amber-50 px-4 py-2 border-b border-amber-100 text-xs text-amber-800 flex items-center justify-between font-medium">
+        <div className="bg-amber-50 px-4 py-2 border-b border-amber-100 text-xs text-amber-800 flex flex-wrap items-center justify-between gap-1 font-medium">
           {summary.discountedSubtotal >= freeThreshold ? (
             <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
               <Zap className="w-3.5 h-3.5 fill-current text-emerald-600" />
@@ -113,9 +113,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Info */}
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
+                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="text-[11px] font-semibold text-brand-blue-700 uppercase">
                         {item.brand}
                       </div>

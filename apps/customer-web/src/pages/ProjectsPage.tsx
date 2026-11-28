@@ -139,14 +139,14 @@ export const ProjectsPage: React.FC = () => {
                   placeholder="Location"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  className="flex-1 p-2 border rounded"
+                  className="flex-1 min-w-0 p-2 border rounded"
                 />
                 <input
                   type="text"
                   placeholder="Pincode"
                   value={pincode}
                   onChange={(e) => setPincode(e.target.value)}
-                  className="w-24 p-2 border rounded"
+                  className="w-24 flex-shrink-0 p-2 border rounded"
                 />
               </div>
             </div>
@@ -292,7 +292,7 @@ export const ProjectsPage: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
                         <span className="font-bold text-slate-900">{formatCurrency(mat.totalCost)}</span>
                         <button
                           onClick={() => removeMaterialFromProject(activeProject.id, mat.id)}

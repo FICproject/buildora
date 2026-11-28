@@ -270,8 +270,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               </div>
 
               {/* Spec tag & Delivery time */}
-              <div className="flex items-center justify-between text-[10px] text-slate-500 gap-1 pt-0.5">
-                <span className="truncate max-w-[120px]" title={specSubtitle}>
+              <div className="flex items-center justify-between text-[10px] text-slate-500 gap-1 pt-0.5 min-w-0">
+                <span className="truncate min-w-0 flex-1" title={specSubtitle}>
                   {specSubtitle}
                 </span>
                 {isAsap && (

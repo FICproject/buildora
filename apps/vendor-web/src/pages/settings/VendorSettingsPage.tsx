@@ -226,7 +226,7 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
             }
           />
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[600px] text-left text-xs">
               <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Member</th>
@@ -297,8 +297,8 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
               subtitle="Protect your vendor account with 2FA and strong passwords."
             />
             <CardContent className="space-y-5">
-              <label className="flex items-center justify-between p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] cursor-pointer">
-                <div>
+              <label className="flex items-center justify-between gap-3 p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] cursor-pointer">
+                <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold text-[#292524]">
                     Two-Factor Authentication (SMS OTP)
                   </p>
@@ -370,9 +370,9 @@ export const VendorSettingsPage: React.FC<{ initialTab?: SettingsTab }> = ({
               ].map((item) => (
                 <label
                   key={item.key}
-                  className="flex items-center justify-between p-3.5 rounded-xl border border-[#E7E5E4] hover:bg-[#F8F7F5] cursor-pointer text-xs"
+                  className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-[#E7E5E4] hover:bg-[#F8F7F5] cursor-pointer text-xs"
                 >
-                  <span className="font-medium text-[#292524]">{item.label}</span>
+                  <span className="font-medium text-[#292524] min-w-0 flex-1">{item.label}</span>
                   <input
                     type="checkbox"
                     checked={(notifPrefs as any)[item.key]}

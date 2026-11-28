@@ -68,11 +68,9 @@ export const Header: React.FC = () => {
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Active mega menu department dropdown & hierarchy hover states
+  // Active mega menu department dropdown & click-selected category state
   const [activeDepartment, setActiveDepartment] = useState<string | null>(null);
   const [selectedParentCategorySlug, setSelectedParentCategorySlug] = useState<string | null>(null);
-  const [hoveredChildCategorySlug, setHoveredChildCategorySlug] = useState<string | null>(null);
-  const [hoveredChildMasterSlug, setHoveredChildMasterSlug] = useState<string | null>(null);
   const [isAllCategoriesOpen, setIsAllCategoriesOpen] = useState(false);
 
   // Live navigation sections & Desktop Navigation items (100% backend-driven)
@@ -89,7 +87,6 @@ export const Header: React.FC = () => {
 
   const headerContainerRef = useRef<HTMLElement>(null);
   const megaMenuRef = useRef<HTMLDivElement>(null);
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load live backend taxonomy + desktop navigation (syncs automatically on Admin publish or focus)
   useEffect(() => {
@@ -251,52 +248,30 @@ export const Header: React.FC = () => {
     });
   };
 
-  // Debounced hover handlers for smooth, flicker-free mega menu opening/closing
-  const handleDeptMouseEnter = (deptSlug: string) => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    if (activeDepartment !== deptSlug) {
-      setActiveDepartment(deptSlug);
-      const isNL = deptSlug === 'new-launches';
-      const cats = isNL ? liveNewLaunchCollections : getMainChildCategories(deptSlug);
-      setSelectedParentCategorySlug(cats[0]?.slug || 'all');
-      setHoveredChildCategorySlug(null);
-      setHoveredChildMasterSlug(null);
-    }
-  };
-
-  const handleDeptMouseLeave = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-    }
-    hoverTimeoutRef.current = setTimeout(() => {
+  // Click-controlled mega menu toggle (no hover-triggered opening)
+  const handleToggleDepartment = (deptSlug: string) => {
+    if (activeDepartment === deptSlug) {
       setActiveDepartment(null);
-      setHoveredChildCategorySlug(null);
-      setHoveredChildMasterSlug(null);
-    }, 180);
+      return;
+    }
+    setActiveDepartment(deptSlug);
+    const isNL = deptSlug === 'new-launches';
+    const cats = isNL ? liveNewLaunchCollections : getMainChildCategories(deptSlug);
+    setSelectedParentCategorySlug(cats[0]?.slug || 'all');
   };
 
   // Close menus on route change, outside click, or escape
   useEffect(() => {
     setActiveDepartment(null);
-    setHoveredChildCategorySlug(null);
-    setHoveredChildMasterSlug(null);
     setIsMobileMenuOpen(false);
     setMobileExpandedDept(null);
     setMobileExpandedCat(null);
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-    }
   }, [location.pathname]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (headerContainerRef.current && !headerContainerRef.current.contains(event.target as Node)) {
         setActiveDepartment(null);
-        setHoveredChildCategorySlug(null);
-        setHoveredChildMasterSlug(null);
         setIsAllCategoriesOpen(false);
         setIsMobileMenuOpen(false);
       }
@@ -305,8 +280,6 @@ export const Header: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setActiveDepartment(null);
-        setHoveredChildCategorySlug(null);
-        setHoveredChildMasterSlug(null);
         setIsAllCategoriesOpen(false);
         setIsMobileMenuOpen(false);
       }
@@ -317,9 +290,6 @@ export const Header: React.FC = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
     };
   }, []);
 
@@ -389,30 +359,30 @@ export const Header: React.FC = () => {
   return (
     <>
       <header ref={headerContainerRef} className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm transition-all duration-200">
-        {/* MAIN HEADER ROW */}
-        <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3">
+        {/* MAIN HEADER ROW (Compact Vertical Height, Full Screen Width) */}
+        <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-1.5 lg:py-2">
           {/* A. DESKTOP LAYOUT (lg & above)
               3 CLEAR SECTIONS: [Brand & Location] → [Flexible Center Search] → [User Actions]
           */}
-          <div className="hidden lg:flex items-center justify-between gap-4 xl:gap-8">
+          <div className="hidden lg:flex items-center justify-between gap-4 xl:gap-6">
             {/* 1. LEFT SECTION — Brand & Location */}
             <div
               onClick={openLocationModal}
-              className="flex items-center gap-3 p-1.5 -ml-1.5 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer flex-shrink-0 group select-none"
+              className="flex items-center gap-2.5 p-1 -ml-1 rounded-xl hover:bg-slate-50 transition-all cursor-pointer flex-shrink-0 group select-none"
               title="Click to check pincode or select delivery address"
             >
-              <div className="w-10 h-10 rounded-xl bg-brand-blue-900 flex items-center justify-center text-white font-black text-xl shadow-md group-hover:bg-brand-orange-500 transition-colors flex-shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-brand-blue-900 flex items-center justify-center text-white font-black text-base shadow-sm group-hover:bg-brand-orange-500 transition-colors flex-shrink-0">
                 B
               </div>
               <div className="flex flex-col text-left leading-none">
-                <span className="font-black text-xl xl:text-2xl tracking-tight text-slate-900 leading-none">
+                <span className="font-black text-base xl:text-lg tracking-tight text-slate-900 leading-none">
                   BUILDORA <span className="text-brand-orange-500">60</span>
                 </span>
-                <div className="flex items-center gap-1 text-xs font-black text-slate-900 group-hover:text-brand-blue-900 transition-colors mt-1.5">
+                <div className="flex items-center gap-1 text-[11px] font-black text-slate-900 group-hover:text-brand-blue-900 transition-colors mt-0.5">
                   <span>{getLocationDisplayETA()}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-blue-600 group-hover:translate-y-0.5 transition-all" />
+                  <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-brand-blue-600 transition-all" />
                 </div>
-                <span className="text-[11px] text-slate-500 font-medium truncate max-w-[170px] xl:max-w-[210px] leading-tight mt-0.5">
+                <span className="text-[10px] text-slate-500 font-medium truncate max-w-[175px] xl:max-w-[215px] leading-tight">
                   {getLocationDisplaySubtitle()}
                 </span>
               </div>
@@ -424,15 +394,15 @@ export const Header: React.FC = () => {
             </div>
 
             {/* 3. RIGHT SECTION — User Actions (Order: Profile → Wishlist → Notifications → Wallet → Cart) */}
-            <div className="flex-shrink-0 flex items-center gap-2 xl:gap-2.5">
+            <div className="flex-shrink-0 flex items-center gap-1.5 xl:gap-2">
               {/* 1. Profile / Account */}
               {isAuthenticated && user ? (
                 <Link
                   to="/account"
-                  className="h-10 flex items-center gap-2 px-2.5 xl:px-3 rounded-xl border border-slate-200 hover:border-brand-blue-400 hover:bg-slate-50 text-xs font-bold text-slate-800 bg-white shadow-2xs hover:shadow-xs transition-all flex-shrink-0"
+                  className="h-9 flex items-center gap-1.5 px-2.5 rounded-xl border border-slate-200 hover:border-brand-blue-400 hover:bg-slate-50 text-xs font-bold text-slate-800 bg-white shadow-2xs hover:shadow-xs transition-all flex-shrink-0"
                   title="My Account Dashboard"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-brand-blue-900 text-white flex items-center justify-center font-black text-xs shadow-xs flex-shrink-0">
+                  <div className="w-6 h-6 rounded-md bg-brand-blue-900 text-white flex items-center justify-center font-black text-[11px] shadow-xs flex-shrink-0">
                     {user.name ? user.name.charAt(0) : 'U'}
                   </div>
                   <span className="hidden xl:inline truncate max-w-[90px] xl:max-w-[110px] text-xs font-bold text-slate-800">
@@ -443,10 +413,10 @@ export const Header: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => openAuthModal(undefined, 'Sign in to access your Buildora account and saved details.')}
-                  className="h-10 flex items-center gap-1.5 px-3 xl:px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-800 transition-colors shadow-2xs flex-shrink-0 cursor-pointer"
+                  className="h-9 flex items-center gap-1.5 px-2.5 xl:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-800 transition-colors shadow-2xs flex-shrink-0 cursor-pointer"
                   title="Sign In to Account"
                 >
-                  <User className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                  <User className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
                   <span className="font-bold">Sign In</span>
                 </button>
               )}
@@ -455,12 +425,12 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={handleWishlistClick}
-                className="h-10 w-10 relative rounded-xl text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
+                className="h-9 w-9 relative rounded-xl text-slate-700 hover:text-brand-blue-900 hover:bg-slate-100 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
                 title={isAuthenticated ? 'View Saved Materials (Wishlist)' : 'Sign In to View Wishlist'}
               >
-                <Heart className="w-5 h-5" />
+                <Heart className="w-[18px] h-[18px]" />
                 {wishlistItems.length > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs">
+                  <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-xs">
                     {wishlistItems.length}
                   </span>
                 )}
@@ -475,10 +445,10 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={handleWalletClick}
-                className="h-10 flex items-center gap-1.5 px-2.5 xl:px-3 rounded-xl border border-slate-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/40 text-xs font-bold text-slate-800 transition-all shadow-2xs hover:shadow-xs flex-shrink-0"
+                className="h-9 flex items-center gap-1.5 px-2.5 rounded-xl border border-slate-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/40 text-xs font-bold text-slate-800 transition-all shadow-2xs hover:shadow-xs flex-shrink-0 cursor-pointer"
                 title={isAuthenticated ? 'Buildora Wallet Balance' : 'Sign in to access Buildora Cash'}
               >
-                <Wallet className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <Wallet className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                 {isAuthenticated && user ? (
                   <span className="text-emerald-700 font-extrabold truncate max-w-[85px]">
                     {formatCurrency(user.walletBalance)}
@@ -491,10 +461,10 @@ export const Header: React.FC = () => {
               {/* 5. Cart */}
               <Link
                 to="/cart"
-                className="h-10 flex items-center gap-2 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black px-3.5 xl:px-4 rounded-xl shadow-xs hover:shadow-md transition-all flex-shrink-0"
+                className="h-9 flex items-center gap-1.5 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black px-3 xl:px-3.5 rounded-xl shadow-xs hover:shadow-md transition-all flex-shrink-0"
                 title="View Shopping Cart"
               >
-                <ShoppingCart className="w-4 h-4 flex-shrink-0" />
+                <ShoppingCart className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="text-xs font-black tracking-tight whitespace-nowrap">
                   Cart ({summary.itemCount})
                 </span>
@@ -647,11 +617,11 @@ export const Header: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-1 flex-shrink-0">
-                {/* Wallet Button */}
+                {/* Wallet Button (visible >= 375px; also inside mobile drawer for <=374px) */}
                 <button
                   type="button"
                   onClick={handleWalletClick}
-                  className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-emerald-50/50 text-slate-800 min-h-[36px] flex items-center justify-center"
+                  className="hidden xs:flex p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-emerald-50/50 text-slate-800 min-w-[36px] min-h-[36px] items-center justify-center"
                   title={isAuthenticated ? 'Buildora Wallet' : 'Sign in for Wallet'}
                 >
                   <Wallet className="w-4 h-4 text-emerald-600" />
@@ -661,12 +631,12 @@ export const Header: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleWishlistClick}
-                  className="relative p-1.5 rounded-xl text-slate-700 hover:bg-slate-100 min-h-[36px] flex items-center justify-center cursor-pointer"
+                  className="relative p-1.5 rounded-xl text-slate-700 hover:bg-slate-100 min-w-[36px] min-h-[36px] flex items-center justify-center cursor-pointer"
                   title={isAuthenticated ? 'Saved Materials' : 'Sign In for Wishlist'}
                 >
                   <Heart className="w-4 h-4" />
                   {wishlistItems.length > 0 && (
-                    <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                    <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
                       {wishlistItems.length}
                     </span>
                   )}
@@ -678,12 +648,12 @@ export const Header: React.FC = () => {
                 {/* Cart Button - Product Count Only & Direct Navigation */}
                 <Link
                   to="/cart"
-                  className="flex items-center gap-1 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black py-1.5 px-2 rounded-xl shadow-sm text-xs min-h-[36px]"
+                  className="flex items-center gap-1 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-black py-1.5 px-2 xs:px-2.5 rounded-xl shadow-sm text-xs min-h-[36px] flex-shrink-0"
                   title="Shopping Cart"
                 >
-                  <ShoppingCart className="w-3.5 h-3.5" />
-                  <span className="text-[11px] font-bold">
-                    Cart ({summary.itemCount})
+                  <ShoppingCart className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="text-[11px] font-bold whitespace-nowrap">
+                    <span className="hidden xs:inline">Cart </span>({summary.itemCount})
                   </span>
                 </Link>
               </div>
@@ -696,17 +666,18 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* 3. DESKTOP ROW 2: API-DRIVEN CENTRALIZED NAVIGATION */}
+        {/* 3. DESKTOP ROW 2: API-DRIVEN COMPACT NAVIGATION (CLICK-BASED DROPDOWNS) */}
         <div ref={megaMenuRef} className="bg-slate-50 border-t border-slate-200/80 px-4 sm:px-6 lg:px-8 hidden lg:block relative">
           <div className="w-full max-w-[1680px] mx-auto flex items-center justify-center">
-            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-700 py-1.5 flex-wrap">
+            <div className="flex items-center justify-center gap-1 xl:gap-1.5 text-xs font-bold text-slate-700 py-1 flex-wrap">
               {visibleDesktopNavigation.map((nav) => {
                 if (nav.itemType === 'HOME') {
                   return (
                     <Link
                       key={nav.id}
                       to={nav.route || '/'}
-                      className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl font-black text-xs transition-all mr-1 shadow-sm ${
+                      onClick={() => setActiveDepartment(null)}
+                      className={`flex items-center gap-1.5 py-1.5 px-3 rounded-xl font-black text-xs transition-all mr-0.5 shadow-2xs ${
                         isHomeActive
                           ? 'bg-brand-blue-900 text-white'
                           : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70 bg-white border border-slate-200/80'
@@ -722,25 +693,23 @@ export const Header: React.FC = () => {
                 if (nav.itemType === 'NEW_LAUNCHES') {
                   const nlKey = 'new-launches';
                   const isOpen = nav.hasDropdown && activeDepartment === nlKey;
-                  return (
-                    <div
-                      key={nav.id}
-                      onMouseEnter={() => (nav.hasDropdown ? handleDeptMouseEnter(nlKey) : setActiveDepartment(null))}
-                      onMouseLeave={handleDeptMouseLeave}
-                    >
-                      <Link
-                        to={nav.route || '/new-launches'}
+                  const btnClass = `flex items-center gap-1.5 py-1.5 px-2.5 xl:px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
+                    isOpen
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : isNewLaunchesActive
+                      ? 'bg-brand-blue-900 text-white shadow-sm'
+                      : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
+                  }`;
+
+                  if (nav.hasDropdown) {
+                    return (
+                      <button
+                        key={nav.id}
+                        type="button"
                         aria-expanded={isOpen}
-                        aria-haspopup={nav.hasDropdown ? 'true' : undefined}
-                        onFocus={() => nav.hasDropdown && handleDeptMouseEnter(nlKey)}
-                        onClick={() => setActiveDepartment(null)}
-                        className={`flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
-                          isNewLaunchesActive
-                            ? 'bg-brand-blue-900 text-white shadow-sm'
-                            : isOpen
-                            ? 'bg-slate-900 text-white shadow-xs'
-                            : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
-                        }`}
+                        aria-haspopup="true"
+                        onClick={() => handleToggleDepartment(nlKey)}
+                        className={btnClass}
                       >
                         <Rocket
                           className={`w-3.5 h-3.5 ${
@@ -748,15 +717,27 @@ export const Header: React.FC = () => {
                           }`}
                         />
                         <span>{nav.label}</span>
-                        {nav.hasDropdown && (
-                          <ChevronDown
-                            className={`w-3 h-3 transition-transform duration-150 ${
-                              isNewLaunchesActive || isOpen ? 'text-white/80' : 'text-slate-400'
-                            } ${isOpen ? 'rotate-180' : ''}`}
-                          />
-                        )}
-                      </Link>
-                    </div>
+                        <ChevronDown
+                          className={`w-3 h-3 transition-transform duration-150 ${
+                            isNewLaunchesActive || isOpen ? 'text-white/80' : 'text-slate-400'
+                          } ${isOpen ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <Link
+                      key={nav.id}
+                      to={nav.route || '/new-launches'}
+                      onClick={() => setActiveDepartment(null)}
+                      className={btnClass}
+                    >
+                      <Rocket
+                        className={`w-3.5 h-3.5 ${isNewLaunchesActive ? 'text-white' : 'text-brand-orange-500'}`}
+                      />
+                      <span>{nav.label}</span>
+                    </Link>
                   );
                 }
 
@@ -765,8 +746,8 @@ export const Header: React.FC = () => {
                     <Link
                       key={nav.id}
                       to={nav.route || '/deals'}
-                      onMouseEnter={() => setActiveDepartment(null)}
-                      className={`py-2 px-3 rounded-xl font-black text-xs flex items-center gap-1 transition-all ${
+                      onClick={() => setActiveDepartment(null)}
+                      className={`py-1.5 px-2.5 xl:px-3 rounded-xl font-black text-xs flex items-center gap-1 transition-all ${
                         isDealsActive || location.pathname === nav.route
                           ? 'bg-brand-blue-900 text-white shadow-sm'
                           : 'text-brand-orange-600 hover:bg-orange-50'
@@ -790,73 +771,71 @@ export const Header: React.FC = () => {
                     : visibleMainCategories.find((m) => m.slug === targetSlug);
                 const dropdownKey = linkedMain?.slug || targetSlug;
                 const Icon = DEPARTMENT_ICONS[dropdownKey] || Building2;
-                const isOpen = nav.hasDropdown && activeDepartment === dropdownKey;
+                const hasDrop = Boolean(nav.hasDropdown && linkedMain);
+                const isOpen = hasDrop && activeDepartment === dropdownKey;
                 const fallbackDept = CONSTRUCTION_DEPARTMENTS.find((d) => d.slug === dropdownKey);
                 const isActive =
                   location.pathname === nav.route ||
                   (linkedMain ? isDeptActive({ slug: dropdownKey, categorySlugs: fallbackDept?.categorySlugs }) : false);
                 const isExternalRoute = /^https?:\/\//i.test(String(nav.route || ''));
                 const resolvedHref = nav.route || `/categories/${dropdownKey}`;
-                const navLinkClass = `flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all font-bold text-xs ${
-                  isActive
-                    ? 'bg-brand-blue-900 text-white shadow-sm'
-                    : isOpen
+                const navLinkClass = `flex items-center gap-1.5 py-1.5 px-2.5 xl:px-3 rounded-xl transition-all font-bold text-xs cursor-pointer select-none ${
+                  isOpen
                     ? 'bg-slate-900 text-white shadow-xs'
+                    : isActive
+                    ? 'bg-brand-blue-900 text-white shadow-sm'
                     : 'text-slate-700 hover:text-brand-blue-900 hover:bg-slate-200/70'
                 }`;
 
-                return (
-                  <div
+                if (hasDrop) {
+                  return (
+                    <button
+                      key={nav.id}
+                      type="button"
+                      aria-expanded={isOpen}
+                      aria-haspopup="true"
+                      onClick={() => handleToggleDepartment(dropdownKey)}
+                      className={navLinkClass}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${isActive || isOpen ? 'text-white' : 'text-brand-orange-500'}`} />
+                      <span>{nav.label}</span>
+                      <ChevronDown
+                        className={`w-3 h-3 transition-transform duration-150 ${
+                          isActive || isOpen ? 'text-white/80' : 'text-slate-400'
+                        } ${isOpen ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                  );
+                }
+
+                return isExternalRoute ? (
+                  <a
                     key={nav.id}
-                    onMouseEnter={() => {
-                      if (nav.hasDropdown && linkedMain) {
-                        handleDeptMouseEnter(dropdownKey);
-                      } else {
-                        setActiveDepartment(null);
-                      }
-                    }}
-                    onMouseLeave={handleDeptMouseLeave}
+                    href={resolvedHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setActiveDepartment(null)}
+                    className={navLinkClass}
                   >
-                    {isExternalRoute ? (
-                      <a
-                        href={resolvedHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={navLinkClass}
-                      >
-                        <Icon className={`w-3.5 h-3.5 ${isActive || isOpen ? 'text-white' : 'text-brand-orange-500'}`} />
-                        <span>{nav.label}</span>
-                      </a>
-                    ) : (
-                      <Link
-                        to={resolvedHref}
-                        aria-expanded={nav.hasDropdown ? isOpen : undefined}
-                        aria-haspopup={nav.hasDropdown ? 'true' : undefined}
-                        onFocus={() => nav.hasDropdown && linkedMain && handleDeptMouseEnter(dropdownKey)}
-                        onClick={() => {
-                          setActiveDepartment(null);
-                          setHoveredChildCategorySlug(null);
-                        }}
-                        className={navLinkClass}
-                      >
-                        <Icon className={`w-3.5 h-3.5 ${isActive || isOpen ? 'text-white' : 'text-brand-orange-500'}`} />
-                        <span>{nav.label}</span>
-                        {nav.hasDropdown && linkedMain && (
-                          <ChevronDown
-                            className={`w-3 h-3 transition-transform duration-150 ${
-                              isActive || isOpen ? 'text-white/80' : 'text-slate-400'
-                            } ${isOpen ? 'rotate-180' : ''}`}
-                          />
-                        )}
-                      </Link>
-                    )}
-                  </div>
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-brand-orange-500'}`} />
+                    <span>{nav.label}</span>
+                  </a>
+                ) : (
+                  <Link
+                    key={nav.id}
+                    to={resolvedHref}
+                    onClick={() => setActiveDepartment(null)}
+                    className={navLinkClass}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-brand-orange-500'}`} />
+                    <span>{nav.label}</span>
+                  </Link>
                 );
               })}
             </div>
           </div>
 
-          {/* TWO-COLUMN HOVER CATEGORY DROPDOWN (PANEL 1: MAIN CATEGORIES, PANEL 2: CHILD CATEGORIES) */}
+          {/* TWO-PANEL WIDE RECTANGULAR MEGA-MENU DROPDOWN (PANEL 1: MAIN CATEGORIES, PANEL 2: CHILD CATEGORIES) */}
           {activeDepartment && (() => {
             const isNewLaunches = activeDepartment === 'new-launches';
             const activeDept = !isNewLaunches
@@ -866,15 +845,12 @@ export const Header: React.FC = () => {
 
             if (!isNewLaunches && !activeDept) return null;
 
-            // Main Categories listed in Panel 1 (Cement & Concrete, Tiling, Adhesives, etc. OR Admin New Launch Collections)
             const menuCategories = isNewLaunches
               ? liveNewLaunchCollections
               : getMainChildCategories(activeDept!.slug);
 
-            // Currently hovered Main Category or New Launch Collection in Panel 1
             const currentCat = menuCategories.find((c: any) => c.slug === selectedParentCategorySlug);
 
-            // Child Categories for Panel 2 (mapped from Product Types or NewLaunchCategoryMappings)
             type MenuChildCategory = {
               id: string;
               name: string;
@@ -925,76 +901,58 @@ export const Header: React.FC = () => {
               }
             }
 
-            // All Child Categories in this section when 'all' is hovered
             const allChildCategories: MenuChildCategory[] = menuCategories.flatMap((cat: any) => {
               if (isNewLaunches) {
                 return mapNewLaunchShortcuts(cat);
-              } else {
-                const deptCat = cat as Category;
-                const rawChildren = (deptCat as any).childCategories || deptCat.subcategories || [];
-                return rawChildren.map((sub: any) => ({
-                  id: sub.id,
-                  name: sub.name,
-                  slug: sub.slug,
-                  targetMasterSlug: deptCat.slug,
-                  targetMasterName: deptCat.name,
-                  productCount: sub.productCount ?? sub.itemCount,
-                }));
               }
+              const deptCat = cat as Category;
+              const rawChildren = (deptCat as any).childCategories || deptCat.subcategories || [];
+              return rawChildren.map((sub: any) => ({
+                id: sub.id,
+                name: sub.name,
+                slug: sub.slug,
+                targetMasterSlug: deptCat.slug,
+                targetMasterName: deptCat.name,
+                productCount: sub.productCount ?? sub.itemCount,
+              }));
             });
 
             const displayedChildCategories =
               selectedParentCategorySlug === 'all' ? allChildCategories : childCategories;
 
+            const viewAllUrl = currentCat
+              ? isNewLaunches
+                ? `/new-launches/${currentCat.slug}`
+                : `/categories/${currentCat.slug}`
+              : isNewLaunches
+              ? '/new-launches'
+              : `/categories/${activeDept?.slug}`;
+
             return (
-              <div
-                className="absolute top-full left-0 right-0 pt-2 z-50 flex justify-center px-4 sm:px-6 lg:px-8 pointer-events-none"
-              >
-                <div
-                  className="w-full max-w-[660px] lg:max-w-[700px] bg-white rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden transition-all duration-150 animate-in fade-in-0 slide-in-from-top-1 pointer-events-auto"
-                  onMouseEnter={() => {
-                    if (hoverTimeoutRef.current) {
-                      clearTimeout(hoverTimeoutRef.current);
-                      hoverTimeoutRef.current = null;
-                    }
-                  }}
-                  onMouseLeave={handleDeptMouseLeave}
-                >
-                  <div className="flex min-h-[360px] max-h-[480px]">
-                    {/* PANEL 1: MAIN CATEGORIES */}
-                    <div className="w-[260px] sm:w-[290px] flex-shrink-0 border-r border-slate-100 bg-white p-4 sm:p-5 overflow-y-auto no-scrollbar">
-                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3 px-3">
+              <div className="absolute top-full left-0 right-0 pt-1.5 z-50 flex justify-center px-4 sm:px-6 lg:px-8 pointer-events-none">
+                <div className="w-full max-w-[1160px] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden transition-all duration-150 animate-in fade-in-0 slide-in-from-top-1 pointer-events-auto">
+                  <div className="flex min-h-[260px] max-h-[min(410px,calc(100vh-130px))]">
+                    {/* LEFT PANEL: MAIN CATEGORIES (Click to select) */}
+                    <div className="w-[260px] xl:w-[295px] flex-shrink-0 border-r border-slate-100 bg-white p-3.5 overflow-y-auto">
+                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-2 px-2.5">
                         {isNewLaunches ? 'FEATURED COLLECTIONS' : 'MAIN CATEGORIES'}
                       </div>
                       <div className="space-y-1">
-                        {/* ALL Main Categories Option */}
+                        {/* ALL option */}
                         <button
                           type="button"
-                          onMouseEnter={() => {
-                            setSelectedParentCategorySlug('all');
-                            setHoveredChildCategorySlug(null);
-                            setHoveredChildMasterSlug(null);
-                          }}
-                          onFocus={() => {
-                            setSelectedParentCategorySlug('all');
-                            setHoveredChildCategorySlug(null);
-                            setHoveredChildMasterSlug(null);
-                          }}
-                          onClick={() => {
-                            setActiveDepartment(null);
-                            navigate(isNewLaunches ? '/new-launches' : `/categories/${activeDept?.slug}`);
-                          }}
-                          className={`w-full group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                          onClick={() => setSelectedParentCategorySlug('all')}
+                          className={`w-full group flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all text-left cursor-pointer ${
                             selectedParentCategorySlug === 'all'
                               ? 'bg-slate-900 text-white font-black shadow-xs'
                               : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
                           }`}
                         >
                           <span className="truncate">
-                            {isNewLaunches ? 'ALL NEW LAUNCHES' : `All in ${activeDept?.name}`}
+                            {isNewLaunches ? 'All New Launches' : `All in ${activeDept?.name}`}
                           </span>
                           <ChevronRight
-                            className={`w-4 h-4 flex-shrink-0 transition-transform ${
+                            className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${
                               selectedParentCategorySlug === 'all'
                                 ? 'text-brand-orange-400 translate-x-0.5'
                                 : 'text-slate-300 group-hover:text-slate-500'
@@ -1005,118 +963,78 @@ export const Header: React.FC = () => {
                         {/* Main Category / Collection Items */}
                         {menuCategories.map((cat: any) => {
                           const isSelected = selectedParentCategorySlug === cat.slug;
-                          const targetUrl = isNewLaunches
-                            ? `/new-launches/${cat.slug}`
-                            : `/categories/${cat.slug}`;
-
                           return (
-                            <Link
+                            <button
                               key={cat.id}
-                              to={targetUrl}
-                              onClick={() => {
-                                setActiveDepartment(null);
-                                setHoveredChildCategorySlug(null);
-                              }}
-                              onMouseEnter={() => {
-                                setSelectedParentCategorySlug(cat.slug);
-                                setHoveredChildCategorySlug(null);
-                                setHoveredChildMasterSlug(null);
-                              }}
-                              onFocus={() => {
-                                setSelectedParentCategorySlug(cat.slug);
-                                setHoveredChildCategorySlug(null);
-                                setHoveredChildMasterSlug(null);
-                              }}
-                              className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                              type="button"
+                              onClick={() => setSelectedParentCategorySlug(cat.slug)}
+                              className={`w-full group flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-all text-left cursor-pointer ${
                                 isSelected
                                   ? 'bg-slate-900 text-white font-black shadow-xs'
                                   : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-bold'
                               }`}
-                              title={`View all ${cat.name}`}
+                              title={`Show child categories for ${cat.name}`}
                             >
-                              <span className="truncate flex-1 min-w-0">{cat.name}</span>
+                              <span className="truncate flex-1 min-w-0 pr-2">{cat.name}</span>
                               <ChevronRight
-                                className={`w-4 h-4 flex-shrink-0 transition-transform ${
+                                className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${
                                   isSelected
                                     ? 'text-brand-orange-400 translate-x-0.5'
                                     : 'text-slate-300 group-hover:text-slate-500'
                                 }`}
                               />
-                            </Link>
+                            </button>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* PANEL 2: CHILD CATEGORIES FOR HOVERED MAIN CATEGORY */}
-                    <div className="flex-1 min-w-0 bg-slate-50/40 p-4 sm:p-5 overflow-y-auto no-scrollbar flex flex-col">
-                      <div className="flex items-center justify-between gap-2 mb-3 px-1">
-                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 truncate">
-                          {currentCat ? `${currentCat.name} → Child Categories` : 'CHILD CATEGORIES'}
+                    {/* RIGHT PANEL: CHILD CATEGORIES FOR SELECTED MAIN CATEGORY */}
+                    <div className="flex-1 min-w-0 bg-slate-50/40 p-4 sm:p-5 overflow-y-auto flex flex-col">
+                      <div className="flex items-center justify-between gap-3 mb-3 pb-2 border-b border-slate-200/70">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 truncate">
+                          {currentCat
+                            ? `${currentCat.name} → Child Categories`
+                            : isNewLaunches
+                            ? 'All New Launches → Child Categories'
+                            : `All in ${activeDept?.name} → Child Categories`}
                         </span>
+                        <Link
+                          to={viewAllUrl}
+                          onClick={() => setActiveDepartment(null)}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-brand-blue-800 hover:text-brand-blue-950 hover:underline flex-shrink-0"
+                        >
+                          <span>View all</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
                       </div>
 
                       {displayedChildCategories.length > 0 ? (
-                        <div className="space-y-1">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                           {displayedChildCategories.map((sub) => {
                             const subUrl = sub.targetUrl || `/categories/${sub.targetMasterSlug}/${sub.slug}`;
-                            const isChildHovered =
-                              hoveredChildCategorySlug === sub.slug &&
-                              (!hoveredChildMasterSlug || hoveredChildMasterSlug === sub.targetMasterSlug);
-
                             return (
                               <Link
                                 key={`${sub.targetMasterSlug}-${sub.id}`}
                                 to={subUrl}
-                                onClick={() => {
-                                  setActiveDepartment(null);
-                                  setHoveredChildCategorySlug(null);
-                                }}
-                                onMouseEnter={() => {
-                                  setHoveredChildCategorySlug(sub.slug);
-                                  setHoveredChildMasterSlug(sub.targetMasterSlug);
-                                }}
-                                onFocus={() => {
-                                  setHoveredChildCategorySlug(sub.slug);
-                                  setHoveredChildMasterSlug(sub.targetMasterSlug);
-                                }}
-                                className={`group flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                                  isChildHovered
-                                    ? 'bg-brand-blue-900 text-white font-bold shadow-xs'
-                                    : 'text-slate-700 hover:text-brand-blue-900 hover:bg-white border border-transparent hover:border-slate-200/80'
-                                }`}
+                                onClick={() => setActiveDepartment(null)}
+                                className="group flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-white/80 hover:bg-white border border-slate-200/60 hover:border-brand-blue-300 hover:text-brand-blue-900 hover:shadow-xs transition-all cursor-pointer"
                               >
                                 <div className="min-w-0 flex-1 pr-2">
-                                  <div className="truncate">{sub.name}</div>
+                                  <div className="truncate font-semibold">{sub.name}</div>
                                   {selectedParentCategorySlug === 'all' && (
-                                    <div
-                                      className={`text-[10px] truncate ${
-                                        isChildHovered ? 'text-blue-200' : 'text-slate-400'
-                                      }`}
-                                    >
+                                    <div className="text-[10px] text-slate-400 truncate mt-0.5">
                                       {sub.targetMasterName}
                                     </div>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-1.5 flex-shrink-0">
                                   {typeof sub.productCount === 'number' && (
-                                    <span
-                                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                                        isChildHovered
-                                          ? 'bg-white/20 text-white'
-                                          : 'bg-slate-200/70 text-slate-600'
-                                      }`}
-                                    >
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600 group-hover:bg-brand-blue-50 group-hover:text-brand-blue-800">
                                       {sub.productCount}
                                     </span>
                                   )}
-                                  <ChevronRight
-                                    className={`w-3.5 h-3.5 transition-all ${
-                                      isChildHovered
-                                        ? 'text-brand-orange-400 translate-x-0.5'
-                                        : 'text-slate-300 group-hover:text-brand-blue-900'
-                                    }`}
-                                  />
+                                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-blue-800 group-hover:translate-x-0.5 transition-all" />
                                 </div>
                               </Link>
                             );
@@ -1137,7 +1055,7 @@ export const Header: React.FC = () => {
 
         {/* 4. DEDICATED RESPONSIVE MOBILE DRAWER */}
         {isMobileMenuOpen && (
-          <div className="lg:hidden bg-white border-t border-slate-200 px-4 py-4 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+          <div className="lg:hidden bg-white border-t border-slate-200 px-4 py-4 space-y-4 shadow-2xl max-h-[calc(100vh-105px)] max-h-[calc(100dvh-105px)] overflow-y-auto safe-pb">
             {/* Mobile Account Status */}
             {isAuthenticated && user ? (
               <div className="p-3 bg-brand-blue-50/60 rounded-xl border border-brand-blue-100 flex items-center justify-between">

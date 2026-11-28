@@ -209,14 +209,14 @@ export const VendorReportsPage: React.FC = () => {
                       setBrandPage(1);
                     }}
                     placeholder="Filter brands..."
-                    className="pl-7 pr-3 py-1 rounded-lg border border-[#E7E5E4] text-xs"
+                    className="w-full sm:w-auto pl-7 pr-3 py-1 rounded-lg border border-[#E7E5E4] text-xs"
                   />
                 </div>
               </div>
             }
           />
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[680px] text-left text-xs">
               <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Brand</th>
@@ -300,8 +300,11 @@ export const VendorReportsPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader title="Daily Sales Trend" subtitle="Gross revenue by day" />
-            <CardContent>
-              <div className="h-56 flex items-end gap-4 pt-4 pb-2 border-b border-[#E7E5E4]">
+            <CardContent className="overflow-x-auto">
+              <div
+                style={{ minWidth: dailySummary.length > 7 ? `${dailySummary.length * 44}px` : undefined }}
+                className="h-56 flex items-end gap-3 sm:gap-4 pt-4 pb-2 border-b border-[#E7E5E4]"
+              >
                 {dailySummary.map((d, idx) => {
                   const pct = Math.max(12, Math.round((d.sales / maxSales) * 100));
                   return (
@@ -352,7 +355,7 @@ export const VendorReportsPage: React.FC = () => {
         <Card>
           <CardHeader title="Order Summary" />
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[540px] text-left text-xs">
               <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Order ID</th>
@@ -392,7 +395,7 @@ export const VendorReportsPage: React.FC = () => {
         <Card>
           <CardHeader title="Top Performing Categories" />
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[540px] text-left text-xs">
               <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Category</th>
@@ -420,7 +423,7 @@ export const VendorReportsPage: React.FC = () => {
         <Card>
           <CardHeader title="Inventory Health Report" />
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[540px] text-left text-xs">
               <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Product</th>
@@ -461,7 +464,7 @@ export const VendorReportsPage: React.FC = () => {
         <Card>
           <CardHeader title="Settlements Summary" />
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[540px] text-left text-xs">
               <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Settlement ID</th>

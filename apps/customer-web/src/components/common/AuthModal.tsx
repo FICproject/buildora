@@ -1,6 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Smartphone, KeyRound, CheckCircle2, ShieldCheck, Lock, AlertCircle, RotateCcw } from 'lucide-react';
+import {
+  Smartphone,
+  KeyRound,
+  CheckCircle2,
+  ShieldCheck,
+  Lock,
+  AlertCircle,
+  RotateCcw,
+  Terminal,
+} from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -11,6 +20,7 @@ export interface AuthModalProps {
 }
 
 const RESEND_COOLDOWN_SECONDS = 30;
+const EMPTY_OTP_DIGITS = ['', '', '', ''];
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClose: propOnClose }) => {
   const navigate = useNavigate();
@@ -23,12 +33,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
   } = useAuthStore();
 
   const isOpen = propIsOpen !== undefined ? propIsOpen : storeIsOpen;
-  const handleClose = () => {
+
+  const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
+  const [phone, setPhone] = useState('');
+  const [otpDigits, setOtpDigits] = useState<string[]>(EMPTY_OTP_DIGITS);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [countdown, setCountdown] = useState(0);
+  const [resendUnlockAt, setResendUnlockAt] = useState(0);
+
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const isSubmittingRef = useRef(false);
+
+  const startCooldown = (seconds: number) => {
+    const cleanSeconds = Math.max(0, Math.ceil(seconds));
+    setCountdown(cleanSeconds);
+    setResendUnlockAt(cleanSeconds > 0 ? Date.now() + cleanSeconds * 1000 : 0);
+  };
+
+  const resetModalState = () => {
     setStep('PHONE');
-    setOtp('');
+    setOtpDigits([...EMPTY_OTP_DIGITS]);
+    setDevOtp(null);
     setErrorMsg('');
     setSuccessMsg('');
     setCountdown(0);
+    setResendUnlockAt(0);
+    isSubmittingRef.current = false;
+  };
+
+  const handleClose = () => {
+    resetModalState();
     if (propOnClose) {
       propOnClose();
     } else {
@@ -36,54 +73,77 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
     }
   };
 
-  const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [countdown, setCountdown] = useState(0);
-
   useEffect(() => {
     if (!isOpen) {
-      setStep('PHONE');
-      setOtp('');
-      setErrorMsg('');
-      setSuccessMsg('');
-      setCountdown(0);
+      resetModalState();
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (countdown <= 0) return;
-    const timer = setInterval(() => {
-      setCountdown((c) => (c > 1 ? c - 1 : 0));
-    }, 1000);
+    if (step === 'OTP') {
+      const focusTimer = setTimeout(() => {
+        otpInputRefs.current[0]?.focus();
+      }, 60);
+      return () => clearTimeout(focusTimer);
+    }
+  }, [step]);
+
+  useEffect(() => {
+    if (!resendUnlockAt) {
+      setCountdown(0);
+      return;
+    }
+    const updateRemaining = () => {
+      const remaining = Math.max(0, Math.ceil((resendUnlockAt - Date.now()) / 1000));
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        setResendUnlockAt(0);
+      }
+    };
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 250);
     return () => clearInterval(timer);
-  }, [countdown]);
+  }, [resendUnlockAt]);
+
+  const cleanOtp = otpDigits.join('');
+  const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
   const sendOtpRequest = async () => {
-    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (isSubmittingRef.current || isLoading) return;
     if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
       setErrorMsg('Please enter a valid 10-digit Indian mobile number.');
       return;
     }
+
+    isSubmittingRef.current = true;
     setErrorMsg('');
     setSuccessMsg('');
     setIsLoading(true);
     try {
       const res = await requestOtp(cleanPhone);
       if (res.success) {
+        const returnedDevOtp =
+          res.otpMode === 'development' && (res.devOtp || res.devOtpHint)
+            ? String(res.devOtp || res.devOtpHint)
+            : null;
         setStep('OTP');
-        setOtp('');
-        setCountdown(res.cooldownSeconds || RESEND_COOLDOWN_SECONDS);
-        setSuccessMsg(res.message || `OTP sent to +91 ${cleanPhone}`);
+        setOtpDigits([...EMPTY_OTP_DIGITS]);
+        setDevOtp(returnedDevOtp);
+        startCooldown(res.cooldownSeconds || RESEND_COOLDOWN_SECONDS);
+        setSuccessMsg(res.message || `OTP sent successfully to +91 ${cleanPhone}`);
+        setTimeout(() => {
+          otpInputRefs.current[0]?.focus();
+        }, 60);
       } else {
+        if (typeof res.retryAfterSeconds === 'number' && res.retryAfterSeconds > 0) {
+          startCooldown(res.retryAfterSeconds);
+        }
         setErrorMsg(res.message || 'Unable to send OTP. Please try again.');
       }
     } catch {
       setErrorMsg('Network error while requesting OTP. Please check your connection.');
     } finally {
+      isSubmittingRef.current = false;
       setIsLoading(false);
     }
   };
@@ -94,41 +154,111 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
   };
 
   const handleResendOtp = async () => {
-    if (countdown > 0 || isLoading) return;
+    if (countdown > 0 || isLoading || isSubmittingRef.current) return;
     await sendOtpRequest();
+  };
+
+  const handleOtpDigitChange = (index: number, rawValue: string) => {
+    const digitsOnly = rawValue.replace(/\D/g, '');
+    setErrorMsg('');
+
+    if (!digitsOnly) {
+      const next = [...otpDigits];
+      next[index] = '';
+      setOtpDigits(next);
+      return;
+    }
+
+    // Handle multi-digit input (paste or SMS autofill)
+    if (digitsOnly.length > 1) {
+      const next = [...otpDigits];
+      const chars = digitsOnly.slice(0, 4).split('');
+      chars.forEach((ch, offset) => {
+        if (index + offset < 4) {
+          next[index + offset] = ch;
+        }
+      });
+      setOtpDigits(next);
+      const nextFocusIndex = Math.min(3, index + chars.length);
+      otpInputRefs.current[nextFocusIndex]?.focus();
+      return;
+    }
+
+    const next = [...otpDigits];
+    next[index] = digitsOnly[0];
+    setOtpDigits(next);
+    if (index < 3) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      setErrorMsg('');
+      if (otpDigits[index]) {
+        const next = [...otpDigits];
+        next[index] = '';
+        setOtpDigits(next);
+        e.preventDefault();
+      } else if (index > 0) {
+        const next = [...otpDigits];
+        next[index - 1] = '';
+        setOtpDigits(next);
+        otpInputRefs.current[index - 1]?.focus();
+        e.preventDefault();
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < 3) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 4);
+    if (!pasted) return;
+    e.preventDefault();
+    setErrorMsg('');
+    const next = ['', '', '', ''];
+    for (let i = 0; i < pasted.length; i++) {
+      next[i] = pasted[i];
+    }
+    setOtpDigits(next);
+    const focusIndex = Math.min(3, pasted.length - 1);
+    otpInputRefs.current[Math.max(0, focusIndex)]?.focus();
   };
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanOtp = otp.replace(/\D/g, '');
-    if (cleanOtp.length !== 4) {
-      setErrorMsg('Please enter the 4-digit OTP code.');
+    if (isSubmittingRef.current || isLoading) return;
+    if (cleanOtp.length !== 4 || !/^\d{4}$/.test(cleanOtp)) {
+      setErrorMsg('Please enter all 4 numeric digits of the OTP.');
       return;
     }
+
+    isSubmittingRef.current = true;
     setErrorMsg('');
     setIsLoading(true);
     try {
-      const res = await verifyOtp(phone, cleanOtp);
+      const res = await verifyOtp(cleanPhone, cleanOtp);
       if (res.success) {
-        setSuccessMsg('Signed in! Continuing...');
+        setSuccessMsg('Signed in successfully! Continuing...');
         const nextRoute = res.redirectTo;
         setTimeout(() => {
           closeAuthModal(false);
-          setStep('PHONE');
-          setOtp('');
           setPhone('');
-          setSuccessMsg('');
-          setCountdown(0);
+          resetModalState();
           if (nextRoute) {
             navigate(nextRoute);
           }
-        }, 350);
+        }, 180);
       } else {
-        setErrorMsg(res.message || 'Invalid OTP. Please check and try again.');
+        setErrorMsg(res.message || 'Invalid OTP. Please check the 4-digit code and try again.');
       }
     } catch {
       setErrorMsg('Network error during OTP verification. Please try again.');
     } finally {
+      isSubmittingRef.current = false;
       setIsLoading(false);
     }
   };
@@ -190,6 +320,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
               size="lg"
               className="w-full font-black shadow-md"
               isLoading={isLoading}
+              disabled={isLoading || cleanPhone.length !== 10}
               leftIcon={<Smartphone className="w-4 h-4" />}
             >
               Continue
@@ -204,7 +335,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
           <form onSubmit={handleVerify} className="space-y-4">
             <p className="text-slate-600">
               Enter the 4-digit OTP sent to{' '}
-              <strong className="text-slate-900">+91 {phone}</strong>
+              <strong className="text-slate-900">+91 {cleanPhone}</strong>
             </p>
 
             {successMsg && (
@@ -214,24 +345,58 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
               </div>
             )}
 
-            <div className="flex justify-center py-2">
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={otp}
-                onChange={(e) => {
-                  setOtp(e.target.value.replace(/\D/g, '').slice(0, 4));
-                  setErrorMsg('');
-                }}
-                placeholder="• • • •"
-                className="w-44 text-center tracking-[0.5em] text-3xl font-black py-2.5 border-2 border-brand-blue-500 rounded-2xl focus:outline-none shadow-sm"
-                autoFocus
-              />
+            {devOtp && (
+              <div
+                data-testid="dev-otp-banner"
+                className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-brand-blue-900 flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-brand-blue-700 flex-shrink-0" />
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-brand-blue-700">
+                      Development Mode
+                    </p>
+                    <p className="text-xs font-semibold text-slate-700">
+                      Your Development OTP:{' '}
+                      <span
+                        data-testid="dev-otp-value"
+                        className="font-mono font-black text-sm tracking-[0.2em] text-brand-blue-900 bg-white px-2 py-0.5 rounded-md border border-blue-200 ml-1"
+                      >
+                        {devOtp}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-center gap-2.5 py-1.5" role="group" aria-label="4-digit OTP input">
+              {otpDigits.map((digit, index) => (
+                <input
+                  key={index}
+                  ref={(el) => {
+                    otpInputRefs.current[index] = el;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                  aria-label={`OTP digit ${index + 1}`}
+                  maxLength={index === 0 ? 4 : 1}
+                  value={digit}
+                  onChange={(e) => handleOtpDigitChange(index, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                  onPaste={handleOtpPaste}
+                  className="w-12 h-13 text-center text-2xl font-black border-2 border-slate-300 focus:border-brand-blue-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue-200 shadow-sm text-slate-900 transition-colors"
+                />
+              ))}
             </div>
 
             {errorMsg && (
-              <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 font-semibold flex items-center justify-center gap-1.5">
+              <div
+                role="alert"
+                className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 font-semibold flex items-center justify-center gap-1.5 text-center"
+              >
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{errorMsg}</span>
               </div>
@@ -242,6 +407,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
               size="lg"
               className="w-full font-black shadow-md"
               isLoading={isLoading}
+              disabled={isLoading || cleanOtp.length !== 4}
               leftIcon={<KeyRound className="w-4 h-4" />}
             >
               Verify OTP &amp; Continue
@@ -252,10 +418,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen: propIsOpen, onClos
                 type="button"
                 disabled={isLoading}
                 onClick={() => {
-                  setStep('PHONE');
-                  setOtp('');
-                  setErrorMsg('');
-                  setSuccessMsg('');
+                  resetModalState();
                 }}
                 className="hover:underline text-slate-600 font-semibold cursor-pointer disabled:opacity-50"
               >

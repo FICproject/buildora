@@ -65,23 +65,23 @@ export const VendorHeader: React.FC<VendorHeaderProps> = ({ onOpenMobileMenu, ti
     vendor?.businessInfo?.contactPerson || vendor?.name || 'Vendor Partner';
 
   return (
-    <header className="h-16 bg-white border-b border-[#E7E5E4] px-4 md:px-6 flex items-center justify-between gap-4 sticky top-0 z-30">
+    <header className="h-16 bg-white border-b border-[#E7E5E4] px-3 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4 sticky top-0 z-30">
       {/* Left: Mobile trigger, Mobile Logo & Page Title */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <button
           type="button"
           onClick={onOpenMobileMenu}
           aria-label="Open navigation menu"
-          className="md:hidden p-2 rounded-lg text-[#78716C] hover:text-[#943D24] hover:bg-[#F8F7F5] cursor-pointer"
+          className="lg:hidden p-2 -ml-1 rounded-lg text-[#78716C] hover:text-[#943D24] hover:bg-[#F8F7F5] cursor-pointer shrink-0"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <Link to="/dashboard" className="flex md:hidden items-center gap-1.5 shrink-0">
+        <Link to="/dashboard" className="flex lg:hidden items-center gap-1.5 shrink-0">
           <div className="w-7 h-7 rounded-lg bg-[#943D24] text-white font-bold text-xs flex items-center justify-center">
             B
           </div>
-          <span className="font-bold text-sm text-[#943D24]">BUILDORA</span>
+          <span className="font-bold text-xs xs:text-sm text-[#943D24]">BUILDORA</span>
           <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-[#F6C453] text-[#292524]">
             60
           </span>
@@ -127,7 +127,7 @@ export const VendorHeader: React.FC<VendorHeaderProps> = ({ onOpenMobileMenu, ti
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-[#E7E5E4] py-2 z-50">
+            <div className="fixed left-4 right-4 top-[4.25rem] sm:left-auto sm:right-0 sm:top-auto sm:absolute sm:mt-2 sm:w-80 bg-white rounded-xl shadow-lg border border-[#E7E5E4] py-2 z-50">
               <div className="px-4 py-2 border-b border-[#E7E5E4] flex items-center justify-between">
                 <span className="font-semibold text-xs text-[#292524]">Notifications</span>
                 <Link

@@ -40,30 +40,30 @@ export const AccountDashboardPage: React.FC = () => {
     <div className="space-y-6">
       {/* 1. Welcome Header Banner */}
       <div className="bg-gradient-to-r from-brand-blue-950 via-brand-blue-900 to-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-card flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="flex items-center gap-4 z-10">
-          <div className="w-16 h-16 rounded-2xl bg-brand-orange-500 text-white flex items-center justify-center font-black text-2xl shadow-lg border-2 border-white/20">
+        <div className="flex items-center gap-3.5 sm:gap-4 z-10 min-w-0">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-brand-orange-500 text-white flex items-center justify-center font-black text-xl sm:text-2xl shadow-lg border-2 border-white/20 flex-shrink-0">
             {user?.name ? user.name.charAt(0) : 'U'}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black">{user?.name || 'Customer Account'}</h1>
-              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-black break-words">{user?.name || 'Customer Account'}</h1>
+              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">
                 Verified Contractor
               </span>
             </div>
-            <p className="text-xs text-slate-300 mt-1">
+            <p className="text-xs text-slate-300 mt-1 break-all">
               +91 {user?.phone || '9876543210'} &bull; {user?.email || 'customer@buildora.com'}
             </p>
             {user?.businessName && (
-              <div className="text-xs text-amber-300 font-semibold flex items-center gap-1.5 mt-1">
-                <Building2 className="w-3.5 h-3.5" />
+              <div className="text-xs text-amber-300 font-semibold flex items-center gap-1.5 mt-1 break-words">
+                <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>{user.businessName} (GSTIN: {user.gstin})</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-3 z-10">
+        <div className="flex flex-wrap items-center gap-3 z-10">
           <Button
             variant="outline"
             size="sm"

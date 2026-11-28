@@ -234,16 +234,16 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
       {/* Click-away backdrop overlay when a dropdown is open */}
       {openDropdownId && (
         <div
-          className="fixed inset-0 z-20"
+          className="fixed inset-0 z-40 sm:z-20 bg-slate-900/25 sm:bg-transparent"
           onClick={() => setOpenDropdownId(null)}
           aria-hidden="true"
         />
       )}
 
       {/* Main Horizontal Filter Bar Container */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs py-2 px-3 sm:px-4 flex flex-wrap items-center justify-between gap-2.5">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm py-2 px-3 sm:px-4 flex flex-wrap items-center justify-between gap-2.5">
         {/* Left Side: 'Filter:' Label + Horizontal Filter Dropdown Buttons */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 min-w-0 py-1">
+        <div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible sm:flex-wrap no-scrollbar flex-1 min-w-0 py-1">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 flex-shrink-0 mr-1 select-none">
             <SlidersHorizontal className="w-3.5 h-3.5 text-brand-blue-900" />
             <span>Filter:</span>
@@ -281,10 +281,10 @@ export const CategoryHorizontalFilterBar: React.FC<CategoryHorizontalFilterBarPr
                   />
                 </button>
 
-                {/* Popover Dropdown Panel */}
+                {/* Popover Dropdown Panel (bottom sheet on <640px so overflow-x-auto never clips; anchored dropdown on >=640px) */}
                 {isOpen && (
                   <div
-                    className="absolute top-full left-0 mt-2 z-30 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 min-w-[260px] max-w-xs animate-in fade-in zoom-in-95 duration-150"
+                    className="fixed inset-x-3 bottom-4 max-h-[75dvh] overflow-y-auto z-50 sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-full sm:left-0 sm:mt-2 sm:z-30 sm:max-h-none bg-white rounded-2xl border border-slate-200 shadow-2xl sm:shadow-xl p-4 sm:min-w-[260px] sm:max-w-xs animate-in fade-in zoom-in-95 duration-150"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {/* Popover Header */}

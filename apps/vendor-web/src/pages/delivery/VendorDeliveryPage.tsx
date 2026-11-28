@@ -111,7 +111,7 @@ export const VendorDeliveryPage: React.FC = () => {
   const renderDispatchTable = (rows: any[], showAssign: boolean) => (
     <Card>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
+        <table className="w-full min-w-[680px] text-left text-xs">
           <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
             <tr>
               <th className="py-3 px-4">Order ID</th>
@@ -292,7 +292,7 @@ export const VendorDeliveryPage: React.FC = () => {
             />
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {darkStores.length === 0 ? (
-                <p className="text-xs text-[#78716C] col-span-2 py-4">
+                <p className="text-xs text-[#78716C] md:col-span-2 py-4">
                   No tenant dark stores configured by Company Admin yet.
                 </p>
               ) : (

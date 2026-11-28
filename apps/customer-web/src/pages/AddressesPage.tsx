@@ -232,9 +232,9 @@ export const AddressesPage: React.FC = () => {
             }`}
           >
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 text-sm">{addr.recipientName || 'Site Contact'}</span>
-                <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-slate-900 text-sm break-words">{addr.recipientName || 'Site Contact'}</span>
+                <div className="flex flex-wrap items-center gap-1.5">
                   {addr.pincode && checkBengaluruServiceability(addr.pincode).isServiceable ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                       Serviceable
@@ -260,8 +260,8 @@ export const AddressesPage: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {addr.isDefault ? (
                   <span className="text-brand-blue-900 font-extrabold flex items-center gap-1 text-[11px] bg-brand-blue-50 px-2 py-0.5 rounded-lg border border-brand-blue-200">
                     <CheckCircle2 className="w-3.5 h-3.5 text-brand-blue-700" /> Default Address

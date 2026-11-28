@@ -235,7 +235,7 @@ export const VendorReturnsPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-[#E7E5E4]">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#E7E5E4]">
               <Button
                 type="button"
                 variant="outline"
@@ -244,7 +244,7 @@ export const VendorReturnsPage: React.FC = () => {
               >
                 Cancel
               </Button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant="danger"

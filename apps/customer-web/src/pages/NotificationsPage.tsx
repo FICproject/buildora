@@ -32,14 +32,14 @@ export const NotificationsPage: React.FC = () => {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card p-6 sm:p-8 space-y-6">
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-100">
+        <div className="min-w-0">
           <h2 className="text-xl font-black text-slate-900">Notifications &amp; Site Alerts</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Real-time material dispatch alerts, warehouse updates, and wallet notifications.
           </p>
         </div>
-        <div className="flex gap-3 text-xs">
+        <div className="flex gap-3 text-xs flex-shrink-0">
           <button
             type="button"
             onClick={() => markAllAsRead(isAuthenticated)}
@@ -83,8 +83,8 @@ export const NotificationsPage: React.FC = () => {
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${colorCls}`}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <div className="flex-1 text-xs">
-                  <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-1">
                     <h4 className={`font-bold ${!n.read ? 'text-slate-900' : 'text-slate-700'}`}>
                       {n.title}
                     </h4>

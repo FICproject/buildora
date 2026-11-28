@@ -126,7 +126,7 @@ export const ContactPage: React.FC = () => {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <h3 className="font-bold text-slate-900 text-sm">Send a Direct Message</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="text"
                   placeholder="Your Name"

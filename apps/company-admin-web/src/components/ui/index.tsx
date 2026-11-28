@@ -41,7 +41,7 @@ export const ToastContainer: React.FC = () => {
   if (!toasts.length) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 z-50 flex flex-col gap-2 sm:max-w-sm sm:w-full pointer-events-none">
       {toasts.map((t) => {
         const colors =
           t.variant === 'error'
@@ -215,7 +215,7 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <button
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#AE887B]/45 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center text-center leading-snug gap-2 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#AE887B]/45 disabled:opacity-50 disabled:cursor-not-allowed sm:whitespace-nowrap ${variants[variant]} ${sizes[size]} ${className}`}
       {...rest}
     >
       {loading && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}
@@ -263,15 +263,15 @@ export const Card: React.FC<{
     className={`${tone === 'soft' ? 'bg-[#F9F2EC]' : 'bg-white'} border border-[#E5DCD3] rounded-xl shadow-card ${className}`}
   >
     {(title || action) && (
-      <div className="px-5 py-4 border-b border-[#E5DCD3] flex items-center justify-between gap-3">
-        <div>
-          {title && <h3 className="text-sm font-semibold text-[#5E5946]">{title}</h3>}
-          {subtitle && <p className="text-xs text-[#6E6859] mt-0.5">{subtitle}</p>}
+      <div className="px-3.5 sm:px-5 py-3.5 sm:py-4 border-b border-[#E5DCD3] flex flex-wrap items-start sm:items-center justify-between gap-2.5 sm:gap-3">
+        <div className="min-w-0 flex-1">
+          {title && <h3 className="text-sm font-semibold text-[#5E5946] break-words">{title}</h3>}
+          {subtitle && <p className="text-xs text-[#6E6859] mt-0.5 break-words">{subtitle}</p>}
         </div>
-        {action && <div>{action}</div>}
+        {action && <div className="flex flex-wrap items-center gap-2 max-w-full min-w-0">{action}</div>}
       </div>
     )}
-    <div className={noPadding ? '' : 'p-5'}>{children}</div>
+    <div className={noPadding ? '' : 'p-3.5 sm:p-5'}>{children}</div>
   </div>
 );
 
@@ -300,17 +300,17 @@ export const StatCard: React.FC<{
   return (
     <div
       onClick={onClick}
-      className={`bg-white border border-[#E5DCD3] rounded-xl p-4 shadow-card transition-all ${
+      className={`bg-white border border-[#E5DCD3] rounded-xl p-3.5 sm:p-4 shadow-card transition-all min-w-0 ${
         onClick ? 'cursor-pointer hover:border-[#AE887B] hover:shadow-elevated' : ''
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium text-[#6E6859]">{heading}</p>
-          <p className="text-2xl font-bold text-[#5E5946] mt-1 tracking-tight">{value}</p>
-          {hint && <p className="text-xs text-[#6E6859] mt-1">{hint}</p>}
+      <div className="flex items-start justify-between gap-2.5 sm:gap-3 min-w-0">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-[#6E6859] break-words">{heading}</p>
+          <p className="text-lg sm:text-2xl font-bold text-[#5E5946] mt-1 tracking-tight break-words">{value}</p>
+          {hint && <p className="text-xs text-[#6E6859] mt-1 break-words">{hint}</p>}
         </div>
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${toneClasses[tone]}`}>
+        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0 ${toneClasses[tone]}`}>
           {icon}
         </div>
       </div>
@@ -343,21 +343,21 @@ export const Modal: React.FC<{
 }> = ({ open, onClose, title, children, maxWidth = 'max-w-lg' }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#5E5946]/45 backdrop-blur-[1px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-[#5E5946]/45 backdrop-blur-[1px]">
       <div
-        className={`bg-white rounded-xl border border-[#E5DCD3] w-full ${maxWidth} max-h-[90vh] flex flex-col shadow-xl`}
+        className={`bg-white rounded-xl border border-[#E5DCD3] w-full ${maxWidth} max-h-[90vh] max-h-[90dvh] flex flex-col shadow-xl overflow-hidden`}
       >
-        <div className="px-5 py-4 bg-[#FAF7F4] border-b border-[#E5DCD3] rounded-t-xl flex items-center justify-between">
-          <h3 className="text-base font-semibold text-[#5E5946]">{title}</h3>
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-[#FAF7F4] border-b border-[#E5DCD3] rounded-t-xl flex items-center justify-between gap-3">
+          <h3 className="text-base font-semibold text-[#5E5946] min-w-0 truncate">{title}</h3>
           <button
             onClick={onClose}
-            className="text-[#6E6859] hover:text-[#5E5946] p-1 rounded-lg hover:bg-[#F0DED0]/60 transition-colors"
+            className="text-[#6E6859] hover:text-[#5E5946] p-1 rounded-lg hover:bg-[#F0DED0]/60 transition-colors shrink-0"
             aria-label="Close modal"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto">{children}</div>
+        <div className="p-4 sm:p-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
@@ -374,21 +374,21 @@ export const Drawer: React.FC<{
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-[#5E5946]/45 backdrop-blur-[1px]">
-      <div className="bg-white w-full max-w-2xl h-full border-l border-[#E5DCD3] flex flex-col shadow-xl">
-        <div className="px-6 py-4 bg-[#FAF7F4] border-b border-[#E5DCD3] flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-[#5E5946]">{title}</h3>
-            {subtitle && <p className="text-xs text-[#6E6859] mt-0.5">{subtitle}</p>}
+      <div className="bg-white w-full max-w-2xl h-full h-dvh border-l border-[#E5DCD3] flex flex-col shadow-xl">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#FAF7F4] border-b border-[#E5DCD3] flex items-start sm:items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold text-[#5E5946] break-words">{title}</h3>
+            {subtitle && <p className="text-xs text-[#6E6859] mt-0.5 break-words">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="text-[#6E6859] hover:text-[#5E5946] p-1.5 rounded-lg hover:bg-[#F0DED0]/60 transition-colors"
+            className="text-[#6E6859] hover:text-[#5E5946] p-1.5 rounded-lg hover:bg-[#F0DED0]/60 transition-colors shrink-0"
             aria-label="Close drawer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto flex-1">{children}</div>
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>
   );
@@ -423,7 +423,7 @@ export const TablePagination: React.FC<{
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (total <= pageSize) return null;
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-[#E5DCD3] bg-[#FAF7F4]/60 text-xs text-[#6E6859]">
+    <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 sm:px-4 py-3 border-t border-[#E5DCD3] bg-[#FAF7F4]/60 text-xs text-[#6E6859]">
       <span>
         Showing {Math.min((page - 1) * pageSize + 1, total)}–{Math.min(page * pageSize, total)} of{' '}
         {total}

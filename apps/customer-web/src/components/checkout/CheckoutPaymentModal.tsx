@@ -403,15 +403,15 @@ export const CheckoutPaymentModal: React.FC<CheckoutPaymentModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/55 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/55 backdrop-blur-sm overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="delivering-to-modal-title"
     >
-      <div className="relative w-full max-w-[440px] bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="relative w-full max-w-[440px] max-h-[90vh] max-h-[90dvh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
         {/* Top Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-3">
-          <h2 id="delivering-to-modal-title" className="text-lg font-bold text-slate-900">
+        <div className="flex items-center justify-between px-4 sm:px-6 pt-4 sm:pt-5 pb-3 flex-shrink-0">
+          <h2 id="delivering-to-modal-title" className="text-base sm:text-lg font-bold text-slate-900">
             Delivering To
           </h2>
           <button
@@ -427,7 +427,7 @@ export const CheckoutPaymentModal: React.FC<CheckoutPaymentModalProps> = ({
           </button>
         </div>
 
-        <div className="px-6 pb-6 space-y-5">
+        <div className="px-4 sm:px-6 pb-5 sm:pb-6 space-y-4 sm:space-y-5 overflow-y-auto">
           {/* Selected Delivery Address Box */}
           <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200/80 flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
@@ -558,12 +558,12 @@ export const CheckoutPaymentModal: React.FC<CheckoutPaymentModalProps> = ({
           )}
 
           {/* Primary Payment Choice Buttons */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-2.5 sm:gap-3 pt-1">
             <button
               type="button"
               disabled={isBusy}
               onClick={handlePayOnDelivery}
-              className="w-full py-3 px-4 rounded-xl bg-white border border-[#15803d] text-[#15803d] hover:bg-emerald-50 font-bold text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl bg-white border border-[#15803d] text-[#15803d] hover:bg-emerald-50 font-bold text-xs sm:text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Pay On Delivery
             </button>
@@ -572,7 +572,7 @@ export const CheckoutPaymentModal: React.FC<CheckoutPaymentModalProps> = ({
               type="button"
               disabled={isBusy}
               onClick={() => void launchRazorpayCheckout(pendingOrderId)}
-              className="w-full py-3 px-4 rounded-xl bg-[#15803d] hover:bg-[#166534] text-white font-bold text-sm shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl bg-[#15803d] hover:bg-[#166534] text-white font-bold text-xs sm:text-sm shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isBusy && (uiState === 'CREATING_RZP_ORDER' || uiState === 'VERIFYING') ? (
                 <>

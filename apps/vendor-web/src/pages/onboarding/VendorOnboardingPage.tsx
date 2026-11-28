@@ -283,7 +283,7 @@ export const VendorOnboardingPage: React.FC = () => {
                 <label className="portal-label">Primary Fulfillment Hub *</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {hubList.length === 0 ? (
-                    <p className="text-xs text-[#78716C] col-span-2 py-2">Loading configured tenant hubs...</p>
+                    <p className="text-xs text-[#78716C] sm:col-span-2 py-2">Loading configured tenant hubs...</p>
                   ) : (
                     hubList.map((hub) => (
                       <div
@@ -386,11 +386,11 @@ export const VendorOnboardingPage: React.FC = () => {
                 })}
               </div>
 
-              <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] text-xs grid grid-cols-2 gap-2 text-[#78716C]">
-                <div>
+              <div className="p-4 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] text-xs grid grid-cols-1 sm:grid-cols-2 gap-2 text-[#78716C]">
+                <div className="break-words">
                   <strong className="text-[#292524]">Legal Entity:</strong> {legalName || '—'}
                 </div>
-                <div>
+                <div className="break-all">
                   <strong className="text-[#292524]">GSTIN:</strong> {gstin}
                 </div>
                 <div>

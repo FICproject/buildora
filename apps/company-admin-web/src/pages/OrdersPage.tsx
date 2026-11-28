@@ -141,7 +141,7 @@ export const OrdersPage: React.FC = () => {
       />
 
       {/* 8 Summary KPIs covering 12 lifecycle buckets */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 2xl:grid-cols-8 gap-3">
         <StatCard label="Total Orders" value={kpis?.totalOrders ?? orders.length} icon={<Package className="w-4 h-4" />} onClick={() => setActiveTab('ALL')} />
         <StatCard label="Awaiting Vendor" value={kpis?.pendingAcceptance ?? 0} tone="amber" icon={<Package className="w-4 h-4" />} onClick={() => setActiveTab('ORDER_PLACED')} />
         <StatCard label="Picking & Packing" value={kpis?.pickingPacking ?? 0} tone="primary" icon={<Package className="w-4 h-4" />} onClick={() => setActiveTab('PICKING_IN_PROGRESS')} />
@@ -158,11 +158,11 @@ export const OrdersPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
             {kpis.exceptions.slice(0, 6).map((ex: any) => (
               <div key={ex.id} className="p-2.5 bg-white border border-amber-200 rounded-lg flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-bold text-[#5E5946]">
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-[#5E5946] break-words">
                     {ex.orderNumber} • {ex.type.replace(/_/g, ' ')}
                   </p>
-                  <p className="text-[#6E6859] mt-0.5">{ex.message}</p>
+                  <p className="text-[#6E6859] mt-0.5 break-words">{ex.message}</p>
                 </div>
                 <Badge variant={ex.severity === 'CRITICAL' ? 'error' : 'warning'}>{ex.severity}</Badge>
               </div>
@@ -221,8 +221,8 @@ export const OrdersPage: React.FC = () => {
           ) : (
             <div className="space-y-2 text-xs">
               {returnsList.map((r: any) => (
-                <div key={r.id} className="p-3 border border-[#E5DCD3] rounded-lg flex items-center justify-between">
-                  <div>
+                <div key={r.id} className="p-3 border border-[#E5DCD3] rounded-lg flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
                     <p className="font-bold text-[#5E5946]">{r.orderNumber} • {r.customerName}</p>
                     <p className="text-[#6E6859]">{r.comments || r.items?.[0]?.reason} • {formatINR(r.totalRefundAmount)}</p>
                   </div>
@@ -252,7 +252,7 @@ export const OrdersPage: React.FC = () => {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full min-w-[780px] text-left border-collapse text-xs">
                   <thead>
                     <tr className={tableHeadClassName}>
                       <th className="py-3 px-4">Order # & Time</th>
@@ -394,8 +394,8 @@ export const OrdersPage: React.FC = () => {
               </p>
               {(selectedOrder.vendorSplits || []).map((sp: any) => (
                 <div key={sp.vendorOrderId} className="p-3 border border-[#E5DCD3] rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#5E5946] flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold text-[#5E5946] flex flex-wrap items-center gap-1.5 min-w-0">
                       <Building2 className="w-4 h-4 text-[#AE887B]" /> {sp.vendorName}
                       {sp.vendorGstin ? <span className="font-mono text-[10px] text-[#6E6859]">({sp.vendorGstin})</span> : null}
                     </span>
@@ -428,8 +428,8 @@ export const OrdersPage: React.FC = () => {
               ) : (
                 <div className="space-y-2">
                   {(selectedOrder.invoices || []).map((inv: any) => (
-                    <div key={inv.id} className="p-3 border border-[#E5DCD3] rounded-xl flex items-center justify-between bg-[#FAF7F4]">
-                      <div>
+                    <div key={inv.id} className="p-3 border border-[#E5DCD3] rounded-xl flex flex-wrap items-center justify-between gap-2 bg-[#FAF7F4]">
+                      <div className="min-w-0 flex-1">
                         <p className="font-bold text-[#5E5946] flex items-center gap-1.5">
                           <FileText className="w-3.5 h-3.5" /> {inv.invoiceNumber}
                         </p>

@@ -237,8 +237,26 @@ export const SmartSearchBar: React.FC = () => {
 
   return (
     <div ref={searchContainerRef} className="relative w-full">
-      {/* 1. DESKTOP & TABLET INLINE SEARCH BAR */}
-      <form onSubmit={handleSearchSubmit} className="relative flex items-center w-full">
+      {/* 1A. MOBILE SEARCH TRIGGER (< 768px) — avoids triggering mobile keyboard flicker before full-screen modal */}
+      <button
+        type="button"
+        onClick={() => setIsMobileSearchOpen(true)}
+        className="flex md:hidden items-center justify-between w-full h-9 pl-3 pr-1.5 bg-slate-100/90 hover:bg-slate-100 rounded-xl text-left transition-all shadow-inner"
+        aria-label="Search construction materials"
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+          <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <span className="text-xs text-slate-500 font-medium truncate">
+            {query.trim() ? query : placeholderPhrases[placeholderIndex]}
+          </span>
+        </div>
+        <span className="bg-brand-blue-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg flex-shrink-0">
+          Search
+        </span>
+      </button>
+
+      {/* 1B. DESKTOP & TABLET INLINE SEARCH BAR (>= 768px) */}
+      <form onSubmit={handleSearchSubmit} className="hidden md:flex relative items-center w-full">
         <input
           ref={inputRef}
           type="text"
@@ -251,14 +269,14 @@ export const SmartSearchBar: React.FC = () => {
           onBlur={() => setIsFocused(false)}
           placeholder=""
           aria-label="Search construction materials"
-          className="w-full h-10 sm:h-11 pl-10 pr-24 text-xs sm:text-sm bg-slate-100/90 hover:bg-slate-100 focus:bg-white border border-transparent focus:border-brand-blue-500 rounded-2xl focus:outline-none transition-all shadow-inner font-medium text-slate-900"
+          className="w-full h-9 pl-9 pr-24 lg:pr-28 text-[13px] bg-slate-100/90 hover:bg-slate-100 focus:bg-white border border-transparent focus:border-brand-blue-500 rounded-xl focus:outline-none transition-all shadow-inner font-medium text-slate-900"
         />
 
         {/* Animated Rotating Placeholder overlay */}
         {query.length === 0 && (
           <div
             onClick={handleDesktopInputFocus}
-            className="absolute left-10 right-24 pointer-events-none overflow-hidden h-5 flex items-center text-xs sm:text-sm text-slate-400 font-medium cursor-text"
+            className="absolute left-9 right-24 pointer-events-none overflow-hidden h-5 flex items-center text-[13px] text-slate-400 font-medium cursor-text"
           >
             <span
               key={placeholderIndex}
@@ -269,7 +287,7 @@ export const SmartSearchBar: React.FC = () => {
           </div>
         )}
 
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
 
         {query.length > 0 && (
           <button
@@ -278,7 +296,7 @@ export const SmartSearchBar: React.FC = () => {
               setQuery('');
               inputRef.current?.focus();
             }}
-            className="absolute right-20 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 rounded-full"
+            className="absolute right-[82px] top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 rounded-full"
             aria-label="Clear search input"
           >
             <X className="w-3.5 h-3.5" />
@@ -287,7 +305,7 @@ export const SmartSearchBar: React.FC = () => {
 
         <button
           type="submit"
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-brand-blue-900 hover:bg-brand-blue-800 text-white text-xs font-bold px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-colors shadow-sm flex items-center justify-center"
+          className="absolute right-1 top-1/2 -translate-y-1/2 bg-brand-blue-900 hover:bg-brand-blue-800 text-white text-[11px] font-bold px-3.5 py-1.5 rounded-lg transition-colors shadow-sm flex items-center justify-center cursor-pointer"
         >
           Search
         </button>
@@ -295,7 +313,7 @@ export const SmartSearchBar: React.FC = () => {
 
       {/* 2. DESKTOP & TABLET ANCHORED SEARCH PANEL (>= 768px) */}
       {isOpen && (
-        <div className="hidden md:block absolute top-full left-0 right-0 mt-2 bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150 max-h-[520px] overflow-y-auto">
+        <div className="hidden md:block absolute top-full left-0 right-0 mt-2 bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150 max-h-[min(520px,calc(100vh-160px))] max-h-[min(520px,calc(100dvh-160px))] overflow-y-auto">
           {query.trim().length > 0 ? (
             /* LIVE TYPED SUGGESTIONS */
             <div className="p-4 space-y-4">

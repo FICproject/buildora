@@ -189,13 +189,13 @@ export const WalletPage: React.FC = () => {
 
       {/* Filter Tabs */}
       <div className="flex items-center justify-between gap-4 pt-2 border-b border-slate-100 pb-3">
-        <div className="flex gap-2 overflow-x-auto text-xs font-bold text-slate-600">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar text-xs font-bold text-slate-600">
           {(['ALL', 'CREDIT', 'DEBIT', 'REFUND'] as const).map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setActiveFilter(tab)}
-              className={`px-3 py-1.5 rounded-xl transition-all ${
+              className={`px-3 py-1.5 rounded-xl whitespace-nowrap flex-shrink-0 transition-all ${
                 activeFilter === tab
                   ? 'bg-brand-blue-900 text-white shadow-sm'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -232,11 +232,11 @@ export const WalletPage: React.FC = () => {
                 <div
                   key={tx.id}
                   onClick={() => setSelectedTx(tx)}
-                  className="p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors cursor-pointer"
+                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold flex-shrink-0 ${
                         isCredit
                           ? 'bg-emerald-100 text-emerald-800'
                           : 'bg-slate-100 text-slate-700'
@@ -248,15 +248,15 @@ export const WalletPage: React.FC = () => {
                         <ArrowUpRight className="w-5 h-5 text-slate-600" />
                       )}
                     </div>
-                    <div>
-                      <div className="font-black text-slate-900 text-sm">{tx.description}</div>
-                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-black text-slate-900 text-sm truncate">{tx.description}</div>
+                      <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
                         Ref: {tx.referenceNumber} &bull; {new Date(tx.createdAt).toLocaleDateString()}
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <div
                       className={`font-black text-sm ${
                         isCredit ? 'text-emerald-700' : 'text-slate-900'
@@ -289,7 +289,7 @@ export const WalletPage: React.FC = () => {
 
             <div className="space-y-2">
               <label className="block font-bold text-slate-800">Select Amount</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[500, 1000, 2500, 5000].map((amt) => (
                   <button
                     key={amt}
@@ -320,7 +320,7 @@ export const WalletPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex gap-2 justify-end pt-2">
+            <div className="flex flex-wrap gap-2 justify-end pt-2">
               <Button
                 variant="ghost"
                 size="sm"

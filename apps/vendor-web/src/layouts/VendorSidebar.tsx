@@ -107,8 +107,8 @@ export const VendorSidebar: React.FC<VendorSidebarProps> = ({
   return (
     <aside
       className={`${
-        collapsed ? 'w-[72px]' : 'w-64'
-      } bg-[#943D24] text-white flex flex-col h-screen border-r border-[#7D331E] shrink-0 select-none transition-all duration-200 ease-in-out`}
+        collapsed ? 'w-[72px]' : 'w-64 max-w-[85vw]'
+      } bg-[#943D24] text-white flex flex-col h-full border-r border-[#7D331E] shrink-0 select-none transition-all duration-200 ease-in-out`}
     >
       {/* Brand Header */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-white/15 shrink-0">
@@ -134,13 +134,24 @@ export const VendorSidebar: React.FC<VendorSidebarProps> = ({
             onClick={onToggleCollapse}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="hidden md:flex p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-[#A6482D] transition-colors cursor-pointer"
+            className="hidden lg:flex p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-[#A6482D] transition-colors cursor-pointer"
           >
             {collapsed ? (
               <PanelLeftOpen className="w-4 h-4" />
             ) : (
               <PanelLeftClose className="w-4 h-4" />
             )}
+          </button>
+        )}
+
+        {onCloseMobile && (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Close navigation menu"
+            className="lg:hidden p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-[#A6482D] transition-colors cursor-pointer"
+          >
+            <span className="text-base font-bold leading-none px-1">&times;</span>
           </button>
         )}
       </div>

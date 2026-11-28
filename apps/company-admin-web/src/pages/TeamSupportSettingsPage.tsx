@@ -145,7 +145,7 @@ export const TeamAccessPage: React.FC = () => {
           <div className="divide-y divide-[#E5DCD3] max-h-96 overflow-y-auto text-xs">
             {auditLogs.slice(0, 25).map((l) => (
               <div key={l.id} className="py-2.5">
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-1">
                   <span className="font-semibold text-[#5E5946]">{l.action}</span>
                   <span className="text-[#6E6859]">{formatDateTime(l.createdAt)}</span>
                 </div>
@@ -228,7 +228,7 @@ export const SupportNotificationsPage: React.FC = () => {
         title="Notifications, Support & Templates"
         description="Respond to customer/vendor tickets, review system alerts & customize automated messaging."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -265,7 +265,7 @@ export const SupportNotificationsPage: React.FC = () => {
                   a.isRead ? 'bg-white border-[#E5DCD3]' : 'bg-[#F0DED0]/60 border-[#AE887B]/45'
                 }`}
               >
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-1">
                   <span className="font-semibold text-[#5E5946]">{a.title}</span>
                   <Badge variant={a.severity === 'WARNING' ? 'warning' : 'info'}>{a.type}</Badge>
                 </div>
@@ -278,16 +278,16 @@ export const SupportNotificationsPage: React.FC = () => {
         <Card title="Customer & Vendor Support Tickets">
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(data.tickets || []).map((t: any) => (
-              <div key={t.id} className="py-3 flex justify-between items-center gap-2">
-                <div>
-                  <p className="font-semibold text-[#5E5946]">
+              <div key={t.id} className="py-3 flex flex-wrap justify-between items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-[#5E5946] break-words">
                     {t.subject || t.ticketNumber}
                   </p>
                   <p className="text-[#6E6859]">
                     {t.source} • Priority: {t.priority}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <Badge variant={statusBadgeVariant(t.status)}>{t.status}</Badge>
                   {t.status !== 'RESOLVED' && (
                     <Button
@@ -314,8 +314,8 @@ export const SupportNotificationsPage: React.FC = () => {
           {(data.templates || []).map((tpl: any) => (
             <div key={tpl.id} className="p-3.5 border border-[#E5DCD3] bg-[#FAF7F4] rounded-lg space-y-1.5 flex flex-col justify-between">
               <div>
-                <div className="flex justify-between items-center gap-1">
-                  <span className="font-semibold text-[#5E5946]">{tpl.name}</span>
+                <div className="flex flex-wrap justify-between items-center gap-1.5">
+                  <span className="font-semibold text-[#5E5946] min-w-0 break-words">{tpl.name}</span>
                   <Badge variant="info">{tpl.channel}</Badge>
                 </div>
                 <p className="font-medium text-[#AE887B] mt-1">{tpl.subject}</p>
@@ -380,11 +380,11 @@ export const SupportNotificationsPage: React.FC = () => {
             onChange={(e) => setTplForm({ ...tplForm, name: e.target.value })}
             className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <select
               value={tplForm.channel}
               onChange={(e) => setTplForm({ ...tplForm, channel: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             >
               <option value="EMAIL">EMAIL</option>
               <option value="SMS">SMS</option>
@@ -505,7 +505,7 @@ export const CompanySettingsPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-2">
                 <div>
                   <label className="block font-semibold text-[#5E5946] mb-1">GSTIN</label>
                   <input
@@ -523,7 +523,7 @@ export const CompanySettingsPage: React.FC = () => {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-2">
                 <div>
                   <label className="block font-semibold text-[#5E5946] mb-1">Support Phone</label>
                   <input
@@ -559,7 +559,7 @@ export const CompanySettingsPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-2">
                 <div>
                   <label className="block font-semibold text-[#5E5946] mb-1">Account Number</label>
                   <input
@@ -595,7 +595,7 @@ export const CompanySettingsPage: React.FC = () => {
       {settingsTab === 'PAYMENTS_TAX' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs">
           <Card title="Payments, COD & Platform Commission">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold text-[#5E5946] mb-1">Commission Rate (%)</label>
                 <input
@@ -679,7 +679,7 @@ export const CompanySettingsPage: React.FC = () => {
           </Card>
 
           <Card title="GST & TDS Tax Configuration">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold text-[#5E5946] mb-1">Default GST Rate (%)</label>
                 <input

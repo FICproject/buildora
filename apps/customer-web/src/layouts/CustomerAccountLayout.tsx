@@ -247,7 +247,7 @@ export const CustomerAccountLayout: React.FC = () => {
                 </aside>
 
                 {/* Account Content Area */}
-                <div className="lg:col-span-3">
+                <div className="lg:col-span-3 min-w-0">
                   <Outlet />
                 </div>
               </div>

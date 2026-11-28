@@ -417,7 +417,7 @@ export const VendorBusinessProfilePage: React.FC = () => {
         title="Business Profile"
         description="Manage your registered business details, GST & PAN records, KYC documents, and bank information."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="secondary"
@@ -489,7 +489,7 @@ export const VendorBusinessProfilePage: React.FC = () => {
                 <p className="text-[11px] text-[#78716C]">
                   {logoFileName ? `Uploaded: ${logoFileName}` : 'JPG, PNG, or WEBP up to 5 MB'}
                 </p>
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex flex-wrap items-center gap-2 pt-1">
                   <label className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#943D24] text-white hover:bg-[#7D331E] cursor-pointer inline-flex items-center gap-1.5">
                     <UploadCloud className="w-3.5 h-3.5" />
                     <span>{logoPreview ? 'Change Logo' : 'Upload Logo'}</span>
@@ -785,7 +785,7 @@ export const VendorBusinessProfilePage: React.FC = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={async () => {
@@ -961,9 +961,9 @@ export const VendorBusinessProfilePage: React.FC = () => {
               warehouses.map((wh: any, idx: number) => (
                 <div
                   key={wh.id || idx}
-                  className="p-3 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] flex items-start justify-between gap-3"
+                  className="p-3 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] flex flex-wrap items-start justify-between gap-3"
                 >
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
                     <Warehouse className="w-4 h-4 text-[#943D24] shrink-0 mt-0.5" />
                     <div>
                       <p className="font-semibold text-[#292524]">

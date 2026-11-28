@@ -1272,7 +1272,7 @@ export const VendorProductsPage: React.FC = () => {
       {/* Products Table */}
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[820px] text-left text-xs">
             <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
               <tr>
                 <th className="py-3 px-4">Product</th>
@@ -1834,7 +1834,7 @@ export const VendorProductsPage: React.FC = () => {
 
               {/* Extra Technical Specifications & Description & Images */}
               <div className="space-y-3 pt-2 border-t border-[#E7E5E4]">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="portal-label mb-0">Additional Technical Specifications (Optional)</label>
                   <Button
                     type="button"
@@ -1846,7 +1846,7 @@ export const VendorProductsPage: React.FC = () => {
                   </Button>
                 </div>
                 {extraSpecRows.map((row, rIdx) => (
-                  <div key={rIdx} className="grid grid-cols-12 gap-2">
+                  <div key={rIdx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                     <input
                       placeholder="Spec Label (e.g. Country of Origin)"
                       value={row.key}
@@ -1855,7 +1855,7 @@ export const VendorProductsPage: React.FC = () => {
                           prev.map((r, i) => (i === rIdx ? { ...r, key: e.target.value } : r))
                         )
                       }
-                      className="col-span-5 portal-input text-xs py-1.5"
+                      className="sm:col-span-5 portal-input text-xs py-1.5"
                     />
                     <input
                       placeholder="Spec Value (e.g. India)"
@@ -1865,12 +1865,13 @@ export const VendorProductsPage: React.FC = () => {
                           prev.map((r, i) => (i === rIdx ? { ...r, value: e.target.value } : r))
                         )
                       }
-                      className="col-span-6 portal-input text-xs py-1.5"
+                      className="sm:col-span-6 portal-input text-xs py-1.5"
                     />
                     <button
                       type="button"
                       onClick={() => setExtraSpecRows((prev) => prev.filter((_, i) => i !== rIdx))}
-                      className="col-span-1 text-[#DC4545] flex items-center justify-center"
+                      className="sm:col-span-1 text-[#DC4545] flex items-center justify-end sm:justify-center p-1.5 rounded-lg hover:bg-rose-50"
+                      aria-label="Remove specification row"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -1889,7 +1890,7 @@ export const VendorProductsPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                     <label className="portal-label mb-0">Product Images (Upload or paste URLs)</label>
                     <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#FBF3F0] border border-[#943D24]/30 text-[#943D24] text-xs font-semibold cursor-pointer">
                       <Upload className="w-3.5 h-3.5" />
@@ -2325,7 +2326,7 @@ export const VendorProductsPage: React.FC = () => {
               </div>
 
               <div className="p-3.5 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4] space-y-2 text-xs">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="flex items-center gap-2 font-semibold text-[#292524] cursor-pointer">
                     <input
                       type="checkbox"
@@ -2339,7 +2340,7 @@ export const VendorProductsPage: React.FC = () => {
                   </span>
                 </div>
                 {enableBulkPricing && (
-                  <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div>
                       <label className="portal-label">10+ Units Discount (%)</label>
                       <input
@@ -2411,7 +2412,7 @@ export const VendorProductsPage: React.FC = () => {
                 <p className="font-bold text-sm text-[#292524]">{name || '—'}</p>
                 <p className="text-[#78716C]">Brand: {brand || '—'}</p>
                 {activeCategoryFields.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#E7E5E4]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-[#E7E5E4]">
                     {activeCategoryFields.map((f) => {
                       const v = categoryAttributes[f.fieldKey];
                       const disp = Array.isArray(v)
@@ -2452,7 +2453,7 @@ export const VendorProductsPage: React.FC = () => {
           )}
 
           {/* Footer Navigation Controls */}
-          <div className="pt-3 flex items-center justify-between gap-3 border-t border-[#E7E5E4]">
+          <div className="pt-3 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#E7E5E4]">
             <div>
               {wizardStep > 1 && (
                 <Button

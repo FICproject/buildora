@@ -129,7 +129,7 @@ export const WebsiteContentPage: React.FC = () => {
               )}
               <p className="text-xs text-[#6E6859] mb-3">{item.subtitle}</p>
               <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#E5DCD3]">
-                <span className="text-[11px] font-mono text-[#6E6859]">
+                <span className="text-[11px] font-mono text-[#6E6859] break-all min-w-0">
                   CTA: {item.ctaLabel} → {item.ctaUrl}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
@@ -187,12 +187,12 @@ export const WebsiteContentPage: React.FC = () => {
         <Card title="Knowledge Hub Articles & Guides">
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(knowledge.articles || []).map((art) => (
-              <div key={art.id} className="py-3 flex justify-between items-start gap-4">
-                <div className="min-w-0">
-                  <p className="font-semibold text-[#5E5946]">{art.title}</p>
-                  <p className="text-[#6E6859] mt-0.5">{art.summary}</p>
+              <div key={art.id} className="py-3 flex flex-wrap justify-between items-start gap-3 sm:gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-[#5E5946] break-words">{art.title}</p>
+                  <p className="text-[#6E6859] mt-0.5 break-words">{art.summary}</p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <Badge variant="info">{art.category}</Badge>
                   <Button
                     size="sm"
@@ -231,12 +231,12 @@ export const WebsiteContentPage: React.FC = () => {
         <Card title="Customer & Trade FAQs" subtitle="Published dynamically on Storefront Help / Static pages">
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(knowledge.faqs || []).map((faq: any) => (
-              <div key={faq.id} className="py-3 flex justify-between items-start gap-4">
-                <div>
-                  <p className="font-semibold text-[#5E5946]">{faq.question}</p>
-                  <p className="text-[#6E6859] mt-0.5">{faq.answer}</p>
+              <div key={faq.id} className="py-3 flex flex-wrap justify-between items-start gap-3 sm:gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-[#5E5946] break-words">{faq.question}</p>
+                  <p className="text-[#6E6859] mt-0.5 break-words">{faq.answer}</p>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                   <Badge variant="info">{faq.category || 'General'}</Badge>
                   <Button
                     size="sm"
@@ -358,26 +358,26 @@ export const WebsiteContentPage: React.FC = () => {
             onChange={(e) => setForm({ ...form, subtitle: e.target.value })}
             className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               placeholder="CTA Button Label"
               value={form.ctaLabel}
               onChange={(e) => setForm({ ...form, ctaLabel: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
             <input
               placeholder="CTA Target Route (/deals)"
               value={form.ctaUrl}
               onChange={(e) => setForm({ ...form, ctaUrl: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               placeholder="Banner Image URL (or upload below)"
               value={form.imageUrl}
               onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
             <input
               type="file"
@@ -388,21 +388,21 @@ export const WebsiteContentPage: React.FC = () => {
                 const uploaded = await adminApi.uploadCatalogImage(file);
                 setForm((prev) => ({ ...prev, imageUrl: uploaded.url }));
               }}
-              className="px-2 py-1.5 bg-white border border-[#E5DCD3] rounded-lg text-[11px]"
+              className="w-full px-2 py-1.5 bg-white border border-[#E5DCD3] rounded-lg text-[11px]"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               type="date"
               value={form.startDate}
               onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
             <input
               type="date"
               value={form.endDate}
               onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-              className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">

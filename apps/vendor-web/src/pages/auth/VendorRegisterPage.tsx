@@ -1320,7 +1320,7 @@ export const VendorRegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-[#E7E5E4] space-y-7 animate-in fade-in-0 duration-200">
+    <div className="w-full bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 lg:p-10 shadow-xl border border-[#E7E5E4] space-y-6 sm:space-y-7 animate-in fade-in-0 duration-200">
       {/* Header and Step Indicators */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E7E5E4] pb-4">
@@ -1343,7 +1343,7 @@ export const VendorRegisterPage: React.FC = () => {
         </div>
 
         {/* 5-Step Horizontal Progress Stepper */}
-        <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+        <div className="grid grid-cols-5 gap-1 sm:gap-2">
           {[
             { step: 1, title: 'Account', icon: User },
             { step: 2, title: 'Business', icon: Building2 },
@@ -1356,7 +1356,7 @@ export const VendorRegisterPage: React.FC = () => {
             return (
               <div
                 key={item.step}
-                className={`p-2 rounded-xl text-center border transition-all ${
+                className={`p-1.5 sm:p-2 rounded-xl text-center border transition-all min-w-0 ${
                   isCurrent
                     ? 'bg-[#943D24] text-white border-[#943D24] shadow-sm'
                     : isCompleted
@@ -1364,14 +1364,14 @@ export const VendorRegisterPage: React.FC = () => {
                     : 'bg-[#FBF3F0] text-[#78716C] border-[#E7E5E4]'
                 }`}
               >
-                <div className="flex items-center justify-center mb-1">
+                <div className="flex items-center justify-center mb-0.5 sm:mb-1">
                   {isCompleted ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
                   ) : (
-                    <span className="text-xs font-black">0{item.step}</span>
+                    <span className="text-[11px] sm:text-xs font-black">0{item.step}</span>
                   )}
                 </div>
-                <div className="text-[10px] sm:text-xs font-bold truncate">{item.title}</div>
+                <div className="hidden xs:block text-[9.5px] sm:text-xs font-bold truncate">{item.title}</div>
               </div>
             );
           })}
@@ -1440,8 +1440,8 @@ export const VendorRegisterPage: React.FC = () => {
               <label className="block text-xs font-bold text-[#292524]">
                 Official Business Email Address *
               </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
+              <div className="flex flex-wrap xs:flex-nowrap gap-2">
+                <div className="relative flex-1 min-w-0">
                   <Mail className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
@@ -1494,7 +1494,7 @@ export const VendorRegisterPage: React.FC = () => {
               )}
 
               {isEmailOtpSent && !isEmailVerified && (
-                <div className="p-3 bg-[#FBF3F0]/70 rounded-xl border border-[#943D24]/25 flex items-center justify-between gap-2">
+                <div className="p-3 bg-[#FBF3F0]/70 rounded-xl border border-[#943D24]/25 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-semibold text-[#943D24]">Enter Email Code:</span>
                     <input
@@ -1522,8 +1522,8 @@ export const VendorRegisterPage: React.FC = () => {
               <label className="block text-xs font-bold text-[#292524]">
                 Mobile Number (For Dispatch &amp; Dark Store SMS) *
               </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
+              <div className="flex flex-wrap xs:flex-nowrap gap-2">
+                <div className="relative flex-1 min-w-0">
                   <Phone className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
@@ -1577,7 +1577,7 @@ export const VendorRegisterPage: React.FC = () => {
               )}
 
               {isMobileOtpSent && !isMobileVerified && (
-                <div className="p-3 bg-[#FBF3F0]/70 rounded-xl border border-[#943D24]/25 flex items-center justify-between gap-2">
+                <div className="p-3 bg-[#FBF3F0]/70 rounded-xl border border-[#943D24]/25 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-semibold text-[#943D24]">Enter SMS OTP:</span>
                     <input
@@ -1727,7 +1727,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-4 flex items-center justify-between">
+          <div className="pt-4 flex flex-wrap items-center justify-between gap-2.5">
             <Link to="/login" className="text-xs font-bold text-[#78716C] hover:underline">
               Already have an account? Sign In
             </Link>
@@ -1991,7 +1991,7 @@ export const VendorRegisterPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-[#E7E5E4] bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs relative">
                 {isUploadingLogo ? (
                   <Loader2 className="w-6 h-6 text-[#943D24] animate-spin" />
@@ -2049,7 +2049,7 @@ export const VendorRegisterPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-4 flex items-center justify-between border-t border-[#E7E5E4]">
+          <div className="pt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#E7E5E4]">
             <button
               type="button"
               onClick={() => goToStep(1)}
@@ -2077,7 +2077,7 @@ export const VendorRegisterPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 1. PINCODE (First Field - Required, Strict ^[1-9][0-9]{5}$) */}
             <div className="md:col-span-2">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                 <label className="block text-xs font-bold text-[#292524]">
                   1. Pincode (Postal Code) *
                 </label>
@@ -2126,7 +2126,7 @@ export const VendorRegisterPage: React.FC = () => {
                 <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.pincode}</p>
               )}
               {pincodeLookupError && !fieldErrors.pincode && (
-                <div className="mt-1.5 p-2.5 bg-rose-50 rounded-xl border border-rose-200 flex items-center justify-between text-[11px] text-rose-700">
+                <div className="mt-1.5 p-2.5 bg-rose-50 rounded-xl border border-rose-200 flex flex-wrap items-center justify-between gap-2 text-[11px] text-rose-700">
                   <span>{pincodeLookupError}</span>
                   <div className="flex items-center gap-2">
                     <button
@@ -2298,7 +2298,7 @@ export const VendorRegisterPage: React.FC = () => {
 
           {/* Dispatch Hubs / Warehouses */}
           <div className="p-4 bg-[#FBF3F0] rounded-2xl border border-[#E7E5E4] space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h4 className="text-xs font-bold text-[#292524]">
                   Dispatch Warehouses &amp; Dark Store Hubs
@@ -2349,7 +2349,7 @@ export const VendorRegisterPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-4 flex items-center justify-between border-t border-[#E7E5E4]">
+          <div className="pt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#E7E5E4]">
             <button
               type="button"
               onClick={() => goToStep(2)}
@@ -2503,11 +2503,11 @@ export const VendorRegisterPage: React.FC = () => {
           <div className="space-y-5">
             {/* A. Aadhaar Details */}
             <div className="p-4 rounded-2xl border border-[#E7E5E4] bg-[#FAF7F4] space-y-3">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="text-xs font-bold text-[#292524]">
                   A. Authorized Signatory Aadhaar Details *
                 </h4>
-                <span className="px-2 py-0.5 rounded bg-white border border-[#E7E5E4] text-[10px] font-bold text-[#5E5946]">
+                <span className="px-2 py-0.5 rounded bg-white border border-[#E7E5E4] text-[10px] font-bold text-[#5E5946] shrink-0">
                   Document Type: Aadhaar Card
                 </span>
               </div>
@@ -2864,7 +2864,7 @@ export const VendorRegisterPage: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-4 flex items-center justify-between border-t border-[#E7E5E4]">
+            <div className="pt-4 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#E7E5E4]">
               <button
                 type="button"
                 onClick={() => goToStep(3)}
@@ -3261,7 +3261,7 @@ export const VendorRegisterPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-2 flex items-center justify-between border-t border-[#E7E5E4]">
+          <div className="pt-2 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#E7E5E4]">
             <button
               type="button"
               onClick={() => goToStep(4)}
@@ -3293,8 +3293,8 @@ export const VendorRegisterPage: React.FC = () => {
 
       {/* Inline KYC Document Preview Modal */}
       {previewDoc && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-[#E7E5E4] overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-[#E7E5E4] overflow-hidden flex flex-col max-h-[92vh] max-h-[92dvh] my-auto">
             <div className="px-4 py-3 bg-[#FAF7F4] border-b border-[#E7E5E4] flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-bold text-[#292524] truncate">{previewDoc.title}</p>
@@ -3307,12 +3307,12 @@ export const VendorRegisterPage: React.FC = () => {
                   setPreviewBlobUrl(null);
                   setPreviewError(null);
                 }}
-                className="p-1.5 rounded-lg text-[#78716C] hover:bg-[#E7E5E4]/60 cursor-pointer"
+                className="p-1.5 rounded-lg text-[#78716C] hover:bg-[#E7E5E4]/60 cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 min-h-[360px] bg-[#F8F7F5] flex items-center justify-center p-4 overflow-auto">
+            <div className="flex-1 min-h-[260px] bg-[#F8F7F5] flex items-center justify-center p-3 sm:p-4 overflow-auto">
               {previewLoading ? (
                 <div className="flex flex-col items-center gap-2 text-xs text-[#78716C]">
                   <Loader2 className="w-6 h-6 animate-spin text-[#943D24]" />
@@ -3329,13 +3329,13 @@ export const VendorRegisterPage: React.FC = () => {
                   <iframe
                     src={previewBlobUrl}
                     title={previewDoc.fileName}
-                    className="w-full h-[65vh] rounded-lg border border-[#E7E5E4] bg-white"
+                    className="w-full h-[65vh] h-[65dvh] rounded-lg border border-[#E7E5E4] bg-white"
                   />
                 ) : (
                   <img
                     src={previewBlobUrl}
                     alt={previewDoc.fileName}
-                    className="max-h-[65vh] max-w-full object-contain rounded-lg border border-[#E7E5E4] bg-white"
+                    className="max-h-[65vh] max-h-[65dvh] max-w-full object-contain rounded-lg border border-[#E7E5E4] bg-white"
                   />
                 )
               ) : null}

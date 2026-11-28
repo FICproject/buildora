@@ -13,6 +13,16 @@ export interface CustomerTokenPayload {
   exp: number;
 }
 
+export interface CustomerRefreshTokenPayload {
+  sub: string;
+  phone: string;
+  tenantId: string;
+  tokenType: 'CUSTOMER_REFRESH';
+  jti: string;
+  iat: number;
+  exp: number;
+}
+
 function getCustomerJwtSecret(): string {
   return (
     process.env.CUSTOMER_JWT_SECRET ||
@@ -87,4 +97,58 @@ export function requireCustomer(authHeaderOrToken?: string): CustomerTokenPayloa
     throw new UnauthorizedException('Authentication required. Please sign in to continue.');
   }
   return verified;
+}
+
+export function signCustomerRefreshToken(user: {
+  id: string;
+  phone: string;
+  tenantId?: string;
+}): { refreshToken: string; refreshExpiresIn: number } {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const refreshExpiresIn = 86400 * 30;
+  const payloadObj: CustomerRefreshTokenPayload = {
+    sub: user.id,
+    phone: user.phone,
+    tenantId: user.tenantId || 'tenant-buildora-blr',
+    tokenType: 'CUSTOMER_REFRESH',
+    jti: crypto.randomUUID(),
+    iat: now,
+    exp: now + refreshExpiresIn,
+  };
+  const payload = Buffer.from(JSON.stringify(payloadObj)).toString('base64url');
+  const signature = crypto
+    .createHmac('sha256', getCustomerJwtSecret())
+    .update(`${header}.${payload}`)
+    .digest('base64url');
+
+  return {
+    refreshToken: `${header}.${payload}.${signature}`,
+    refreshExpiresIn,
+  };
+}
+
+export function verifyCustomerRefreshToken(token?: string): CustomerRefreshTokenPayload | null {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.trim().split('.');
+  if (parts.length !== 3) return null;
+
+  try {
+    const [header, payload, signature] = parts;
+    const expectedSig = crypto
+      .createHmac('sha256', getCustomerJwtSecret())
+      .update(`${header}.${payload}`)
+      .digest('base64url');
+
+    if (signature.length !== expectedSig.length) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) return null;
+
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const now = Math.floor(Date.now() / 1000);
+    if (decoded.exp && decoded.exp < now) return null;
+    if (decoded.tokenType !== 'CUSTOMER_REFRESH' || !decoded.sub) return null;
+    return decoded as CustomerRefreshTokenPayload;
+  } catch {
+    return null;
+  }
 }

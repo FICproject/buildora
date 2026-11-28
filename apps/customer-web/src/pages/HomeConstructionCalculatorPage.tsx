@@ -429,7 +429,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50/70 pb-24 text-slate-900 selection:bg-brand-orange-500 selection:text-white">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-brand-blue-950 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-brand-orange-500/40 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div className="fixed bottom-20 sm:bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 bg-brand-blue-950 text-white px-4 sm:px-5 py-3.5 rounded-2xl shadow-2xl border border-brand-orange-500/40 flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
           <span className="text-xs sm:text-sm font-semibold">{toastMessage}</span>
           <Button
@@ -565,7 +565,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
 
                 {/* 3. Built-up Area */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                       3. Built-up Area
                     </label>
@@ -667,7 +667,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
                     7. Construction Quality Tier
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {[
                       { id: 'BASIC', label: 'Basic', tag: 'Economical', rate: 1650 },
                       { id: 'STANDARD', label: 'Standard', tag: 'Recommended', rate: 2050 },
@@ -685,7 +685,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
                               : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
                           }`}
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap items-center justify-between gap-1.5">
                             <span className="text-xs font-black">{tier.label}</span>
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
                               {tier.tag}
@@ -762,7 +762,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
                     </div>
 
                     {/* Extra inclusions checkboxes */}
-                    <div className="sm:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div className="sm:col-span-2 lg:col-span-4 grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
                       <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
                         <input
                           type="checkbox"
@@ -806,7 +806,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="primary"
                     size="lg"
@@ -893,7 +893,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
                         key={key}
                         className="p-3.5 rounded-2xl border border-slate-100 bg-slate-50/60 hover:bg-white hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between"
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
                           <div
                             className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold"
                             style={{ backgroundColor: config.color }}
@@ -1109,7 +1109,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
                               : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span
                               className="w-3 h-3 rounded-md flex-shrink-0"
                               style={{ backgroundColor: seg.color }}
@@ -1138,7 +1138,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
                   </div>
 
                   {/* Filter Tabs: ALL (13) vs BUILDORA DELIVERS */}
-                  <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
+                  <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold">
                     <button
                       type="button"
                       onClick={() => setMaterialFilter('ALL')}
@@ -1165,8 +1165,8 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
 
                 {/* Overrides notice */}
                 {activeOverrideCount > 0 && (
-                  <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between text-xs text-amber-900">
-                    <div className="flex items-center gap-2">
+                  <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs text-amber-900">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Sparkles className="w-4 h-4 text-brand-orange-500" />
                       <span>
                         <strong>{activeOverrideCount}</strong> category quality override(s) active.
@@ -1263,7 +1263,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
                           </div>
 
                           {/* Middle: Basic / Standard / Premium Controls */}
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                             {/* Quality Tier Selector */}
                             <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
                               {(['BASIC', 'STANDARD', 'PREMIUM'] as ConstructionQualityTier[]).map((q) => (
@@ -1596,8 +1596,8 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
           MODAL: REQUEST QUOTE FOR NON-DELIVERABLES (Phase 17)
          ======================================================== */}
       {isQuoteModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[90vh] max-h-[90dvh] overflow-y-auto p-5 sm:p-8 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <span className="text-[10px] font-black uppercase text-brand-orange-600 tracking-wider">
@@ -1682,8 +1682,8 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
           MODAL: SAVE PROJECT (Phase 18)
          ======================================================== */}
       {isSaveModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full max-h-[90vh] max-h-[90dvh] overflow-y-auto p-5 sm:p-8 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-base font-black text-slate-900">Save Construction Project</h3>
               <button
@@ -1729,7 +1729,7 @@ export const HomeConstructionCalculatorPage: React.FC = () => {
           <div className="bg-white w-full max-w-md h-full shadow-2xl p-6 sm:p-8 space-y-6 overflow-y-auto animate-in slide-in-from-right duration-200 flex flex-col justify-between">
             <div className="space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Bookmark className="w-5 h-5 text-brand-orange-500" />
                   <h3 className="text-lg font-black text-slate-900">Saved Projects</h3>
                 </div>

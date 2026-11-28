@@ -82,7 +82,7 @@ export const PricingPromotionsPage: React.FC = () => {
         title="Pricing, Bulk Tiers & Promotions"
         description="Manage storefront coupon codes, bulk volume pricing ladders & vendor promotional campaigns."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => setPromoModal(true)}>
               <Percent className="w-4 h-4" /> Create Campaign
             </Button>
@@ -108,7 +108,7 @@ export const PricingPromotionsPage: React.FC = () => {
             {(data.coupons || []).map((c: any) => (
               <div key={c.code} className="py-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <p className="font-mono font-bold text-[#AE887B]">{c.code}</p>
                     <Badge variant={c.isActive !== false ? 'success' : 'error'}>
                       {c.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
@@ -116,7 +116,7 @@ export const PricingPromotionsPage: React.FC = () => {
                   </div>
                   <p className="text-[#6E6859]">{c.description}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <div className="text-right mr-1">
                     <Badge variant="orange">
                       {c.discountType === 'PERCENTAGE' ? `${c.discountValue}% OFF` : `${formatINR(c.discountValue)} OFF`}
@@ -181,7 +181,7 @@ export const PricingPromotionsPage: React.FC = () => {
                   <p className="font-semibold text-[#5E5946]">{vp.title}</p>
                   <p className="text-[#6E6859]">{vp.description}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <Badge variant={statusBadgeVariant(vp.status)}>{vp.status}</Badge>
                   <Button
                     size="sm"
@@ -255,7 +255,7 @@ export const PricingPromotionsPage: React.FC = () => {
             onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value })}
             className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg uppercase font-mono disabled:bg-[#FAF7F4]"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <select
               value={couponForm.type}
               onChange={(e) => setCouponForm({ ...couponForm, type: e.target.value as any })}
@@ -273,7 +273,7 @@ export const PricingPromotionsPage: React.FC = () => {
               className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className="block text-[11px] text-[#6E6859] mb-0.5">Min Order Value (₹)</label>
               <input
@@ -333,7 +333,7 @@ export const PricingPromotionsPage: React.FC = () => {
             onChange={(e) => setPromoForm({ ...promoForm, description: e.target.value })}
             className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <select
               value={promoForm.discountType}
               onChange={(e) => setPromoForm({ ...promoForm, discountType: e.target.value as any })}
@@ -351,7 +351,7 @@ export const PricingPromotionsPage: React.FC = () => {
               className="px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               type="date"
               value={promoForm.startDate}
@@ -378,7 +378,7 @@ export const PricingPromotionsPage: React.FC = () => {
         {bulkModal && (
           <div className="space-y-3 text-xs">
             {bulkTiers.map((t, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+              <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2 sm:p-0 rounded-lg bg-[#FAF7F4] sm:bg-transparent">
                 <input
                   type="number"
                   min={2}
@@ -389,7 +389,7 @@ export const PricingPromotionsPage: React.FC = () => {
                     setBulkTiers(next);
                   }}
                   placeholder="Min Qty"
-                  className="col-span-5 px-2.5 py-1.5 border border-[#E5DCD3] rounded-lg"
+                  className="sm:col-span-5 w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
                 />
                 <input
                   type="number"
@@ -401,12 +401,12 @@ export const PricingPromotionsPage: React.FC = () => {
                     setBulkTiers(next);
                   }}
                   placeholder="Unit Price (₹)"
-                  className="col-span-5 px-2.5 py-1.5 border border-[#E5DCD3] rounded-lg"
+                  className="sm:col-span-5 w-full px-2.5 py-1.5 bg-white border border-[#E5DCD3] rounded-lg"
                 />
                 <Button
                   size="sm"
                   variant="outline"
-                  className="col-span-2"
+                  className="sm:col-span-2 w-full"
                   onClick={() => setBulkTiers(bulkTiers.filter((_, i) => i !== idx))}
                 >
                   Del

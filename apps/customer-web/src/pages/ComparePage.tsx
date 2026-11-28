@@ -36,9 +36,9 @@ export const ComparePage: React.FC = () => {
 
   return (
     <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-6">
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900">
             Compare Material Specifications ({items.length}/4)
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -47,7 +47,7 @@ export const ComparePage: React.FC = () => {
         </div>
         <button
           onClick={clearCompare}
-          className="text-xs font-semibold text-slate-400 hover:text-red-600 flex items-center gap-1"
+          className="text-xs font-semibold text-slate-400 hover:text-red-600 flex items-center gap-1 flex-shrink-0"
         >
           <Trash2 className="w-3.5 h-3.5" /> Clear All
         </button>

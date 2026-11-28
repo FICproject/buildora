@@ -325,7 +325,7 @@ export const VendorLoginPage: React.FC = () => {
 
         {/* RIGHT COLUMN: Reference-Based White Login Card */}
         <div className="lg:col-span-5 flex justify-center lg:justify-end z-20">
-          <div className="w-full max-w-[420px] bg-white rounded-[28px] border border-[#F6C453] shadow-[0_20px_50px_rgba(16,43,99,0.08)] p-7 sm:p-9 relative transition-all">
+          <div className="w-full max-w-[420px] bg-white rounded-3xl sm:rounded-[28px] border border-[#F6C453] shadow-[0_20px_50px_rgba(16,43,99,0.08)] p-5 sm:p-8 lg:p-9 relative transition-all">
             {/* Card Top Storefront Icon Badge */}
             <div className="w-14 h-14 rounded-full bg-[#943D24] flex items-center justify-center text-white shadow-lg shadow-[#F6C453]/25 mx-auto mb-3.5 select-none">
               <svg
@@ -518,8 +518,8 @@ export const VendorLoginPage: React.FC = () => {
               <form onSubmit={handleOtpSubmit} className="space-y-4">
                 {/* Mobile Number / Email Input */}
                 <div className="space-y-1">
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
+                  <div className="flex flex-wrap xs:flex-nowrap gap-2">
+                    <div className="relative flex-1 min-w-0">
                       <Phone className="w-4 h-4 text-[#78716C] absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
@@ -629,8 +629,8 @@ export const VendorLoginPage: React.FC = () => {
       {/* MODAL 1: Forgot Password Workflow                             */}
       {/* ------------------------------------------------------------- */}
       {isForgotPasswordOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in-0 duration-200">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-[#E7E5E4] relative space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in-0 duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 max-w-md w-full max-h-[90vh] max-h-[90dvh] overflow-y-auto shadow-2xl border border-[#E7E5E4] relative space-y-4 my-auto">
             <button
               type="button"
               onClick={() => setIsForgotPasswordOpen(false)}
@@ -755,8 +755,8 @@ export const VendorLoginPage: React.FC = () => {
       {/* DRAWER 2: Discreet QA & Developer Test Persona Switcher (DEV ONLY) */}
       {/* ------------------------------------------------------------- */}
       {isDevEnv && isDemoDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-xs p-4 animate-in fade-in-0 duration-200">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[#E7E5E4] space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in-0 duration-200">
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 max-w-sm w-full max-h-[90vh] max-h-[90dvh] overflow-y-auto shadow-2xl border border-[#E7E5E4] space-y-4 my-auto">
             <div className="flex items-center justify-between pb-2 border-b border-[#E7E5E4]">
               <div className="flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-[#F6C453]" />

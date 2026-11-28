@@ -195,14 +195,14 @@ export const QuotationsPage: React.FC = () => {
               <h4 className="font-semibold text-sm text-[#5E5946] mb-2">Customer Material Request</h4>
               <div className="border border-[#E5DCD3] rounded-lg divide-y divide-[#E5DCD3] bg-white">
                 {(selectedQuote.items || []).map((it: any, i: number) => (
-                  <div key={i} className="p-3 flex justify-between">
-                    <div>
-                      <p className="font-medium text-[#5E5946]">{it.name}</p>
+                  <div key={i} className="p-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-[#5E5946] break-words">{it.name}</p>
                       <p className="text-[#6E6859]">
                         {it.quantity} {it.unit} • Target {formatINR(it.targetPrice)}/{it.unit}
                       </p>
                     </div>
-                    <p className="font-semibold text-[#5E5946]">{formatINR(it.quantity * it.targetPrice)}</p>
+                    <p className="font-semibold text-[#5E5946] shrink-0">{formatINR(it.quantity * it.targetPrice)}</p>
                   </div>
                 ))}
               </div>
@@ -216,7 +216,7 @@ export const QuotationsPage: React.FC = () => {
                   <select
                     value={assignVendorId}
                     onChange={(e) => setAssignVendorId(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                    className="flex-1 min-w-0 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
                   >
                     {vendors.map((v) => (
                       <option key={v.id} value={v.id}>
@@ -235,7 +235,7 @@ export const QuotationsPage: React.FC = () => {
                     placeholder="Vendor Quote Total (₹)"
                     value={vendorQuoteAmount}
                     onChange={(e) => setVendorQuoteAmount(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                    className="flex-1 min-w-0 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
                   />
                   <Button size="sm" variant="outline" type="submit">
                     Log Vendor Quote
@@ -258,13 +258,13 @@ export const QuotationsPage: React.FC = () => {
                       key={vq.vendorId}
                       className="p-3.5 border border-[#E5DCD3] rounded-lg flex flex-wrap items-center justify-between gap-2 bg-white"
                     >
-                      <div>
-                        <p className="font-semibold text-[#5E5946]">{vq.vendorName}</p>
-                        <p className="text-[#6E6859]">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-[#5E5946] break-words">{vq.vendorName}</p>
+                        <p className="text-[#6E6859] break-words">
                           Lead time: {vq.deliveryDays}d • {vq.notes}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-bold text-[#AE887B]">
                           {vq.totalQuotedAmount > 0 ? formatINR(vq.totalQuotedAmount) : 'Pending'}
                         </span>
@@ -302,7 +302,7 @@ export const QuotationsPage: React.FC = () => {
               <div className="space-y-2 mb-3">
                 {(selectedQuote.negotiationHistory || []).map((n: any) => (
                   <div key={n.id} className="p-2.5 bg-[#FAF7F4] rounded-lg border border-[#E5DCD3]">
-                    <div className="flex justify-between text-[11px] text-[#6E6859]">
+                    <div className="flex flex-wrap justify-between gap-1 text-[11px] text-[#6E6859]">
                       <span className="font-semibold text-[#5E5946]">
                         {n.actor} ({n.role})
                       </span>
@@ -322,13 +322,13 @@ export const QuotationsPage: React.FC = () => {
                     setNegNote('');
                     pushToast({ title: 'Negotiation Note Logged' });
                   }}
-                  className="flex gap-2"
+                  className="flex flex-wrap sm:flex-nowrap gap-2"
                 >
                   <input
                     value={negNote}
                     onChange={(e) => setNegNote(e.target.value)}
                     placeholder="Add internal/negotiation remark..."
-                    className="flex-1 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+                    className="flex-1 min-w-0 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
                   />
                   <Button size="sm" type="submit">
                     <MessageSquare className="w-3.5 h-3.5" /> Post
@@ -380,13 +380,13 @@ export const QuotationsPage: React.FC = () => {
             onChange={(e) => setNewForm({ ...newForm, projectName: e.target.value })}
             className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
           />
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
               required
               placeholder="Material"
               value={newForm.itemName}
               onChange={(e) => setNewForm({ ...newForm, itemName: e.target.value })}
-              className="col-span-2 px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
+              className="sm:col-span-2 w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
             />
             <input
               type="number"

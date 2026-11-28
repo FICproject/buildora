@@ -175,43 +175,53 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-5 bg-[#3D392C]/65 backdrop-blur-[2px]">
-      <div className="bg-white border border-[#E5DCD3] rounded-2xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-5 bg-[#3D392C]/65 backdrop-blur-[2px]">
+      <div className="bg-white border border-[#E5DCD3] rounded-2xl w-full max-w-5xl h-[94dvh] sm:h-[88dvh] flex flex-col shadow-2xl overflow-hidden">
         {/* Top Modal Header */}
-        <div className="px-5 py-3.5 bg-[#FAF7F4] border-b border-[#E5DCD3] flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-[#F0DED0] text-[#5E5946] flex items-center justify-center shrink-0">
-              <FileText className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-[#5E5946] truncate">
-                  {doc.title || doc.type}
-                </h3>
-                <Badge variant={statusBadgeVariant(docStatus)}>{docStatus}</Badge>
+        <div className="px-3.5 sm:px-5 py-3 bg-[#FAF7F4] border-b border-[#E5DCD3] flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex items-start sm:items-center justify-between gap-2 min-w-0 flex-1">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#F0DED0] text-[#5E5946] flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4" />
               </div>
-              <p className="text-xs text-[#6E6859] truncate">
-                {vendorName ? `${vendorName} • ` : ''}
-                File: <span className="font-medium text-[#5E5946]">{doc.fileName}</span>
-                {doc.identificationNumberMasked
-                  ? ` • Linked ID: ${doc.identificationNumberMasked}`
-                  : ''}
-                {doc.uploadedAt ? ` • Uploaded ${formatDateTime(doc.uploadedAt)}` : ''}
-                {signedInfo?.fileSize || doc.fileSize
-                  ? ` • ${Math.max(1, Math.round((signedInfo?.fileSize || doc.fileSize) / 1024))} KB`
-                  : ''}
-              </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-[#5E5946] truncate max-w-full">
+                    {doc.title || doc.type}
+                  </h3>
+                  <Badge variant={statusBadgeVariant(docStatus)}>{docStatus}</Badge>
+                </div>
+                <p className="text-[11px] sm:text-xs text-[#6E6859] truncate">
+                  {vendorName ? `${vendorName} • ` : ''}
+                  File: <span className="font-medium text-[#5E5946]">{doc.fileName}</span>
+                  {doc.identificationNumberMasked
+                    ? ` • Linked ID: ${doc.identificationNumberMasked}`
+                    : ''}
+                  {doc.uploadedAt ? ` • Uploaded ${formatDateTime(doc.uploadedAt)}` : ''}
+                  {signedInfo?.fileSize || doc.fileSize
+                    ? ` • ${Math.max(1, Math.round((signedInfo?.fileSize || doc.fileSize) / 1024))} KB`
+                    : ''}
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="md:hidden p-1.5 rounded-lg text-[#6E6859] hover:text-[#5E5946] hover:bg-[#F0DED0]/60 transition-colors shrink-0 cursor-pointer"
+              aria-label="Close document preview"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
           {/* Preview Controls Toolbar */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
             {(isPdf || isImage) && blobUrl && !error && !renderFailed && (
               <>
                 <Button size="sm" variant="outline" onClick={handleZoomOut} title="Zoom Out">
                   <ZoomOut className="w-3.5 h-3.5" />
                 </Button>
-                <span className="px-2 text-xs font-semibold text-[#5E5946] min-w-[46px] text-center">
+                <span className="px-1.5 sm:px-2 text-xs font-semibold text-[#5E5946] min-w-[42px] text-center">
                   {fitMode === 'fit' ? 'Fit' : `${zoom}%`}
                 </span>
                 <Button size="sm" variant="outline" onClick={handleZoomIn} title="Zoom In">
@@ -223,20 +233,20 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
                   onClick={handleFit}
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
-                  {isPdf ? 'Fit Width' : 'Fit Screen'}
+                  <span className="hidden xs:inline">{isPdf ? 'Fit Width' : 'Fit Screen'}</span>
                 </Button>
               </>
             )}
             <Button size="sm" variant="outline" onClick={handleOpenInNewTab}>
-              <ExternalLink className="w-3.5 h-3.5" /> Open Tab
+              <ExternalLink className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Open Tab</span>
             </Button>
             <Button size="sm" variant="outline" onClick={handleDirectDownload}>
-              <Download className="w-3.5 h-3.5" /> Download
+              <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span>
             </Button>
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-[#6E6859] hover:text-[#5E5946] hover:bg-[#F0DED0]/60 transition-colors cursor-pointer"
+              className="hidden md:inline-flex p-1.5 rounded-lg text-[#6E6859] hover:text-[#5E5946] hover:bg-[#F0DED0]/60 transition-colors cursor-pointer"
               aria-label="Close document preview"
             >
               <X className="w-5 h-5" />
@@ -245,14 +255,14 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
         </div>
 
         {/* Main Viewer Body */}
-        <div className="flex-1 min-h-0 bg-[#F4EFEA] relative overflow-auto flex items-center justify-center p-3 sm:p-4">
+        <div className="flex-1 min-h-0 bg-[#F4EFEA] relative overflow-auto flex items-center justify-center p-2.5 sm:p-4">
           {loading ? (
             <div className="flex flex-col items-center gap-3 text-xs text-[#6E6859]">
               <Loader2 className="w-7 h-7 animate-spin text-[#AE887B]" />
               <p className="font-medium text-[#5E5946]">Decrypting & streaming KYC document...</p>
             </div>
           ) : error || renderFailed ? (
-            <div className="bg-white border border-[#E5DCD3] rounded-xl p-6 max-w-md w-full text-center space-y-3 shadow-card">
+            <div className="bg-white border border-[#E5DCD3] rounded-xl p-5 sm:p-6 max-w-md w-full text-center space-y-3 shadow-card">
               <div className="w-11 h-11 rounded-full bg-[#FEF2F2] text-[#C94444] mx-auto flex items-center justify-center">
                 <AlertTriangle className="w-5 h-5" />
               </div>
@@ -260,7 +270,7 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
               <p className="text-xs text-[#6E6859] leading-relaxed">
                 {error || 'The file could not be rendered inline. Try reloading or downloading the original file.'}
               </p>
-              <div className="flex items-center justify-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 <Button size="sm" variant="primary" onClick={loadPreview}>
                   <RefreshCw className="w-3.5 h-3.5" /> Retry
                 </Button>
@@ -274,11 +284,11 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
               key={`${doc.id}-${fitMode}-${zoom}`}
               title={`Preview: ${doc.fileName}`}
               src={`${blobUrl}#toolbar=1&navpanes=0&view=${fitMode === 'fit' ? 'FitH' : 'Fit'}&zoom=${zoom}`}
-              className="w-full h-full min-h-[60vh] bg-white rounded-lg border border-[#E5DCD3] shadow-sm"
+              className="w-full h-full min-h-[260px] bg-white rounded-lg border border-[#E5DCD3] shadow-sm"
               onError={() => setRenderFailed(true)}
             />
           ) : isImage && blobUrl ? (
-            <div className="w-full h-full overflow-auto flex items-center justify-center">
+            <div className="w-full h-full overflow-auto flex p-1">
               <img
                 src={blobUrl}
                 alt={doc.fileName}
@@ -288,11 +298,11 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
                     ? { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }
                     : { width: `${zoom}%`, maxWidth: 'none', height: 'auto' }
                 }
-                className="rounded-lg border border-[#E5DCD3] bg-white shadow-sm transition-all"
+                className="m-auto rounded-lg border border-[#E5DCD3] bg-white shadow-sm transition-all"
               />
             </div>
           ) : (
-            <div className="bg-white border border-[#E5DCD3] rounded-xl p-6 max-w-md w-full text-center space-y-3 shadow-card">
+            <div className="bg-white border border-[#E5DCD3] rounded-xl p-5 sm:p-6 max-w-md w-full text-center space-y-3 shadow-card">
               <FileText className="w-9 h-9 text-[#AE887B] mx-auto" />
               <h4 className="text-sm font-bold text-[#5E5946]">Preview Not Supported</h4>
               <p className="text-xs text-[#6E6859]">
@@ -306,10 +316,10 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
         </div>
 
         {/* Footer Inspection & Verification Actions */}
-        <div className="px-5 py-3 bg-[#FAF7F4] border-t border-[#E5DCD3] flex flex-wrap items-center justify-between gap-3">
+        <div className="px-3.5 sm:px-5 py-3 bg-[#FAF7F4] border-t border-[#E5DCD3] flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-2.5 sm:gap-3 safe-pb">
           <div className="text-xs text-[#6E6859] min-w-0 flex-1">
             {docStatus === 'REJECTED' && doc.rejectionReason ? (
-              <p className="text-[#C94444] font-medium truncate" title={doc.rejectionReason}>
+              <p className="text-[#C94444] font-medium break-words" title={doc.rejectionReason}>
                 Rejection Reason: {doc.rejectionReason}
               </p>
             ) : isHistorical ? (
@@ -319,7 +329,7 @@ export const KycDocumentPreviewModal: React.FC<KycDocumentPreviewModalProps> = (
             )}
           </div>
           {!isHistorical && (
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 w-full sm:w-auto">
               {docStatus !== 'VERIFIED' && (
                 <Button size="sm" variant="success" onClick={() => onVerify(doc)}>
                   <CheckCircle2 className="w-3.5 h-3.5" /> Verify Document

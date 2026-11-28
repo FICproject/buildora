@@ -219,7 +219,7 @@ export const VendorDashboardPage: React.FC = () => {
       />
 
       {analyticsError && (
-        <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between gap-3 text-xs text-red-800">
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 flex flex-wrap items-center justify-between gap-3 text-xs text-red-800">
           <span>{analyticsError}</span>
           <Button size="sm" variant="secondary" onClick={handleRefreshAll} disabled={refreshing}>
             {refreshing ? 'Retrying...' : 'Retry'}
@@ -227,8 +227,8 @@ export const VendorDashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Row 1: 6 KPI Cards matching screenshot */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      {/* Row 1: 6 KPI Cards */}
+      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3.5 sm:gap-4">
         <div
           onClick={() => navigate('/orders')}
           className="bg-white rounded-xl border border-[#E7E5E4] p-4 shadow-card hover:border-[#943D24]/60 cursor-pointer transition-colors"
@@ -471,10 +471,10 @@ export const VendorDashboardPage: React.FC = () => {
                 {actionOrders.slice(0, 4).map((ord) => (
                   <div
                     key={ord.id}
-                    className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#F8F7F5] transition-colors"
+                    className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 hover:bg-[#F8F7F5] transition-colors"
                   >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-[#292524]">
                           {ord.orderNumber}
                         </span>
@@ -547,15 +547,15 @@ export const VendorDashboardPage: React.FC = () => {
                 {lowStockItems.slice(0, 4).map((item) => (
                   <div
                     key={item.id}
-                    className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[#F8F7F5] transition-colors"
+                    className="px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 hover:bg-[#F8F7F5] transition-colors"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-[#292524] truncate">{item.name}</p>
                       <p className="text-xs text-[#78716C] mt-0.5">
                         SKU: {item.sku} • Threshold: {item.lowStockThreshold}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                       <Badge variant={item.stock === 0 ? 'danger' : 'warning'} size="sm">
                         {item.stock} left
                       </Badge>

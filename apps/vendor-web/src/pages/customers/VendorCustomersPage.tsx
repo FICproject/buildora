@@ -126,7 +126,7 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
 
           <Card>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                   <tr>
                     <th className="py-3 px-4">Customer</th>
@@ -301,7 +301,7 @@ export const VendorCustomersPage: React.FC<{ initialTab?: CustomersTab }> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="p-4 rounded-xl border border-[#E7E5E4] bg-white">
                 <span className="text-[#78716C] block">Total Orders</span>
                 <span className="text-lg font-bold text-[#292524]">

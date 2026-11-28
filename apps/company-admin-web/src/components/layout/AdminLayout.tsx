@@ -94,6 +94,7 @@ export const AdminLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState<string | null>('/products');
   const [globalSearch, setGlobalSearch] = useState('');
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [pwdModalOpen, setPwdModalOpen] = useState(false);
   const [pwdForm, setPwdForm] = useState({ currentPassword: '', newPassword: '' });
@@ -332,49 +333,59 @@ export const AdminLayout: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#FAF7F4] text-[#3D392C] flex">
+    <div className="min-h-screen min-h-dvh bg-[#FAF7F4] text-[#3D392C] flex overflow-x-clip">
       {/* Desktop Sidebar */}
       <aside
         className={`hidden lg:block shrink-0 transition-all duration-200 ease-out ${
           collapsed ? 'w-[72px]' : 'w-64'
         }`}
       >
-        <div className="sticky top-0 h-screen">{renderSidebarContent(false)}</div>
+        <div className="sticky top-0 h-screen h-dvh">{renderSidebarContent(false)}</div>
       </aside>
 
-      {/* Mobile Drawer Sidebar */}
+      {/* Tablet & Mobile Drawer Sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
           <div
             className="fixed inset-0 bg-[#5E5946]/45 backdrop-blur-[1px]"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="relative w-72 max-w-[85vw] h-full z-10">{renderSidebarContent(true)}</div>
+          <div className="relative w-72 max-w-[85vw] h-full h-dvh z-10">{renderSidebarContent(true)}</div>
         </div>
       )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 h-16 bg-white border-b border-[#E5DCD3] px-4 lg:px-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="sticky top-0 z-30 h-16 bg-white border-b border-[#E5DCD3] px-3 sm:px-4 lg:px-6 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden p-2 rounded-lg text-[#5E5946] hover:bg-[#F0DED0]/50 transition-colors"
+              className="lg:hidden p-2 -ml-1 rounded-lg text-[#5E5946] hover:bg-[#F0DED0]/50 transition-colors shrink-0"
               aria-label="Open menu"
             >
               <Menu className="w-5 h-5" />
             </button>
             <div className="min-w-0 flex items-center gap-2.5">
-              <span className="hidden sm:inline-block w-1.5 h-5 rounded-full bg-[#AE887B]" />
-              <h2 className="text-base font-semibold text-[#5E5946] truncate">
+              <span className="hidden sm:inline-block w-1.5 h-5 rounded-full bg-[#AE887B] shrink-0" />
+              <h2 className="text-sm sm:text-base font-semibold text-[#5E5946] truncate">
                 {currentNav?.label || 'Company Admin Portal'}
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Search */}
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* Mobile Search Toggle (< md) */}
+            <button
+              type="button"
+              onClick={() => setMobileSearchOpen((v) => !v)}
+              className="md:hidden p-2 rounded-lg text-[#5E5946] hover:bg-[#F0DED0]/60 transition-colors"
+              aria-label="Toggle order search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
+            {/* Desktop Search */}
             <form onSubmit={handleSearchSubmit} className="hidden md:flex items-center relative">
               <Search className="w-4 h-4 text-[#6E6859] absolute left-3 pointer-events-none" />
               <input
@@ -382,7 +393,7 @@ export const AdminLayout: React.FC = () => {
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
                 placeholder="Search order #, customer..."
-                className="pl-9 pr-3 py-1.5 w-56 lg:w-64 text-sm bg-[#FAF7F4] border border-[#E5DCD3] rounded-lg focus:outline-none focus:bg-white focus:border-[#AE887B]"
+                className="pl-9 pr-3 py-1.5 w-48 lg:w-64 text-sm bg-[#FAF7F4] border border-[#E5DCD3] rounded-lg focus:outline-none focus:bg-white focus:border-[#AE887B]"
               />
             </form>
 
@@ -418,7 +429,7 @@ export const AdminLayout: React.FC = () => {
               </button>
 
               {profileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-[#E5DCD3] rounded-xl shadow-lg py-1.5 z-40">
+                <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-2rem)] bg-white border border-[#E5DCD3] rounded-xl shadow-lg py-1.5 z-40">
                   <div className="px-3.5 py-2 border-b border-[#E5DCD3] bg-[#FAF7F4]">
                     <p className="text-xs font-semibold text-[#5E5946]">{user?.name}</p>
                     <p className="text-[11px] text-[#6E6859] truncate">{user?.email}</p>
@@ -445,8 +456,39 @@ export const AdminLayout: React.FC = () => {
           </div>
         </header>
 
+        {/* Mobile Search Bar Dropdown (< md) */}
+        {mobileSearchOpen && (
+          <div className="md:hidden bg-white border-b border-[#E5DCD3] px-3 py-2.5">
+            <form
+              onSubmit={(e) => {
+                setMobileSearchOpen(false);
+                handleSearchSubmit(e);
+              }}
+              className="relative flex items-center gap-2"
+            >
+              <div className="relative flex-1 min-w-0">
+                <Search className="w-4 h-4 text-[#6E6859] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                  placeholder="Search order #, customer..."
+                  className="w-full pl-9 pr-3 py-1.5 text-sm bg-[#FAF7F4] border border-[#E5DCD3] rounded-lg focus:outline-none focus:bg-white focus:border-[#AE887B]"
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-3 py-1.5 rounded-lg bg-[#AE887B] text-white text-xs font-semibold shrink-0"
+              >
+                Go
+              </button>
+            </form>
+          </div>
+        )}
+
         {/* Page Body */}
-        <main className="flex-1 p-4 lg:p-6 max-w-[1440px] w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1680px] w-full mx-auto min-w-0">
           <Outlet />
         </main>
       </div>

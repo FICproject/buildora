@@ -741,8 +741,8 @@ export const CheckoutPage: React.FC = () => {
             {/* If Active Address Exists and Not Changing -> Compact Delivery View (Phase 8) */}
             {activeAddress && !isChangingAddress && !isAddingNewAddress ? (
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-black text-slate-900 text-sm">{activeAddress.recipientName}</span>
                     <span className="font-mono text-slate-500">({activeAddress.mobile})</span>
                     <span className="bg-brand-blue-50 text-brand-blue-900 font-bold px-2 py-0.5 rounded text-[10px] uppercase">
@@ -807,7 +807,7 @@ export const CheckoutPage: React.FC = () => {
                             : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                             }`}
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <strong className="text-slate-900">{a.recipientName}</strong>
                             <span className="text-[10px] uppercase font-bold text-slate-400">{a.type}</span>
                           </div>
@@ -927,7 +927,7 @@ export const CheckoutPage: React.FC = () => {
 
           {/* Phase 7: GSTIN Flow */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-brand-blue-900" />
@@ -1018,27 +1018,27 @@ export const CheckoutPage: React.FC = () => {
             <div className="space-y-3 text-xs">
               {/* Online Payment (Razorpay UPI, Cards, NetBanking) */}
               <label
-                className={`p-4 rounded-xl border flex items-start justify-between cursor-pointer transition-all ${selectedPayment === 'RAZORPAY_UPI'
+                className={`p-3.5 sm:p-4 rounded-xl border flex flex-wrap sm:flex-nowrap items-start justify-between gap-2 cursor-pointer transition-all ${selectedPayment === 'RAZORPAY_UPI'
                   ? 'border-brand-blue-500 bg-brand-blue-50/40 ring-1 ring-brand-blue-500'
                   : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
                   <input
                     type="radio"
                     name="paymentMethod"
                     checked={selectedPayment === 'RAZORPAY_UPI'}
                     onChange={() => setSelectedPayment('RAZORPAY_UPI')}
-                    className="mt-0.5 text-brand-blue-900 cursor-pointer"
+                    className="mt-0.5 text-brand-blue-900 cursor-pointer flex-shrink-0"
                   />
-                  <div>
+                  <div className="min-w-0">
                     <strong className="text-sm text-slate-900 block">
                       Pay Online (Instant UPI, Cards &amp; NetBanking)
                     </strong>
                     <p className="text-[11px] text-slate-500 mt-0.5">
                       Secure Razorpay gateway with instant ITC tax invoice generation and priority dark-store dispatch.
                     </p>
-                    <div className="flex gap-2 pt-2 text-[10px] font-bold text-slate-500">
+                    <div className="flex flex-wrap gap-1.5 pt-2 text-[10px] font-bold text-slate-500">
                       <span className="bg-white border px-1.5 py-0.5 rounded">Google Pay</span>
                       <span className="bg-white border px-1.5 py-0.5 rounded">PhonePe</span>
                       <span className="bg-white border px-1.5 py-0.5 rounded">Paytm UPI</span>
@@ -1046,14 +1046,14 @@ export const CheckoutPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex-shrink-0">
                   Recommended
                 </span>
               </label>
 
               {/* Pay on Delivery (COD) */}
               <label
-                className={`p-4 rounded-xl border flex items-start justify-between cursor-pointer transition-all ${selectedPayment === 'COD'
+                className={`p-3.5 sm:p-4 rounded-xl border flex flex-wrap items-start justify-between gap-2 cursor-pointer transition-all ${selectedPayment === 'COD'
                   ? 'border-brand-blue-500 bg-brand-blue-50/40 ring-1 ring-brand-blue-500'
                   : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}

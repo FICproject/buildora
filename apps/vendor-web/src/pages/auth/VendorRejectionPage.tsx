@@ -144,7 +144,7 @@ export const VendorRejectionPage: React.FC = () => {
       </form>
 
       {/* Footer */}
-      <div className="pt-3 border-t border-[#E7E5E4] flex items-center justify-between text-xs text-[#78716C]">
+      <div className="pt-3 border-t border-[#E7E5E4] flex flex-wrap items-center justify-between gap-2 text-xs text-[#78716C]">
         <div className="flex items-center gap-1.5">
           <HelpCircle className="w-4 h-4 text-[#78716C]" />
           <span>Questions? Contact compliance: 1800-60-BUILD</span>

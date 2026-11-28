@@ -61,7 +61,7 @@ export const VendorInvoicesPage: React.FC = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full min-w-[920px] text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-[#E7E5E4] text-[#78716C] bg-[#FAF9F7]">
                   <th className="py-3 px-3 font-semibold">Invoice # / FY</th>
@@ -154,27 +154,27 @@ export const VendorInvoicesPage: React.FC = () => {
                 <p className="text-[10px] font-bold uppercase text-[#78716C]">Supplier (Your Legal Entity)</p>
                 <p className="font-bold text-[#292524] mt-0.5">{previewInv.supplierDetails?.legalBusinessName}</p>
                 <p className="text-[#57534E]">{previewInv.supplierDetails?.address}</p>
-                <p className="font-mono font-bold text-[#943D24] mt-1">
+                <p className="font-mono font-bold text-[#943D24] mt-1 break-all">
                   GSTIN: {previewInv.supplierDetails?.gstin} (State Code: {previewInv.supplierDetails?.stateCode})
                 </p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase text-[#78716C]">Buyer & Place of Supply</p>
-                <p className="font-bold text-[#292524] mt-0.5">
+                <p className="font-bold text-[#292524] mt-0.5 break-words">
                   {previewInv.buyerDetails?.businessName || previewInv.buyerDetails?.name || previewInv.customerName}
                 </p>
-                <p className="text-[#57534E]">{previewInv.buyerDetails?.shippingAddress}</p>
+                <p className="text-[#57534E] break-words">{previewInv.buyerDetails?.shippingAddress}</p>
                 <p className="text-[#57534E] mt-1">
                   Place of Supply: <strong>{previewInv.buyerDetails?.placeOfSupply}</strong>
                 </p>
                 {previewInv.buyerDetails?.gstin && (
-                  <p className="font-mono font-semibold text-[#292524]">Buyer GSTIN: {previewInv.buyerDetails.gstin}</p>
+                  <p className="font-mono font-semibold text-[#292524] break-all">Buyer GSTIN: {previewInv.buyerDetails.gstin}</p>
                 )}
               </div>
             </div>
 
-            <div className="border border-[#E7E5E4] rounded-xl overflow-hidden">
-              <table className="w-full text-left text-[11px]">
+            <div className="border border-[#E7E5E4] rounded-xl overflow-x-auto">
+              <table className="w-full min-w-[540px] text-left text-[11px]">
                 <thead className="bg-[#FAF9F7] border-b border-[#E7E5E4]">
                   <tr>
                     <th className="py-2 px-2.5">Material</th>
@@ -226,7 +226,7 @@ export const VendorInvoicesPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" onClick={() => setPreviewInv(null)}>Close</Button>
               <Button onClick={() => handleDownloadPdf(previewInv)}>
                 <Download className="w-3.5 h-3.5 mr-1.5" /> Download A4 PDF

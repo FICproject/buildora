@@ -331,7 +331,7 @@ export const VendorOrdersPage: React.FC = () => {
       />
 
       {/* 9 KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-9 gap-2.5">
         {kpis.map((k) => (
           <button
             key={k.label}
@@ -388,7 +388,7 @@ export const VendorOrdersPage: React.FC = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full min-w-[760px] text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-[#E7E5E4] text-[#78716C] bg-[#FAF9F7]">
                   <th className="py-3 px-3 font-semibold">Order #</th>
@@ -622,8 +622,8 @@ export const VendorOrdersPage: React.FC = () => {
             )}
 
             {selectedOrder.invoice && (
-              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between">
-                <div>
+              <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="min-w-0 flex-1">
                   <p className="font-bold text-emerald-900 flex items-center gap-1.5">
                     <FileText className="w-4 h-4" /> {selectedOrder.invoice.invoiceNumber}
                   </p>
@@ -678,12 +678,12 @@ export const VendorOrdersPage: React.FC = () => {
         <form onSubmit={submitPicking} className="space-y-3 text-xs">
           {pickedDraft.map((p, idx) => (
             <div key={p.productId} className="p-3 border border-[#E7E5E4] rounded-xl space-y-2 bg-[#FAF9F7]">
-              <div className="flex items-center justify-between gap-2">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
                   <p className="font-bold text-[#292524]">{p.name}</p>
                   <p className="text-[#78716C]">SKU: {p.sku} • Ordered: {p.ordered}</p>
                 </div>
-                <div className="w-24">
+                <div className="w-24 shrink-0">
                   <label className="text-[10px] text-[#78716C] block">Picked Qty</label>
                   <input
                     type="number"
@@ -739,7 +739,7 @@ export const VendorOrdersPage: React.FC = () => {
         subtitle="Record package counts and verified load weight (kg) so Dispatch assigns the right commercial vehicle."
       >
         <form onSubmit={submitPacking} className="space-y-3 text-xs">
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             {[
               { key: 'bagCount', label: 'Bags' },
               { key: 'boxCount', label: 'Boxes' },
@@ -759,7 +759,7 @@ export const VendorOrdersPage: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] font-semibold text-[#78716C] mb-1">Total Shipment Weight (kg) *</label>
               <input
@@ -787,7 +787,7 @@ export const VendorOrdersPage: React.FC = () => {
             onChange={(e) => setPackingForm({ ...packingForm, loadingRequirements: e.target.value })}
             className="w-full px-3 py-2 border border-[#E7E5E4] rounded-lg"
           />
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <label className="flex items-center gap-2 font-medium text-[#57534E]">
               <input
                 type="checkbox"
@@ -805,7 +805,7 @@ export const VendorOrdersPage: React.FC = () => {
               Mark Ready for Dispatch
             </label>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setPackingOrder(null)}>
               Cancel
             </Button>
@@ -824,7 +824,7 @@ export const VendorOrdersPage: React.FC = () => {
         subtitle="Confirm vehicle handover. Dispatches shipment and issues supplier GST Tax Invoice."
       >
         <form onSubmit={submitHandover} className="space-y-3 text-xs">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               required
               placeholder="Vehicle Registration (e.g. KA-01-AB-4412)"
@@ -840,7 +840,7 @@ export const VendorOrdersPage: React.FC = () => {
               className="px-3 py-2 border border-[#E7E5E4] rounded-lg"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               required
               placeholder="Driver Name"
@@ -862,7 +862,7 @@ export const VendorOrdersPage: React.FC = () => {
             onChange={(e) => setHandoverForm({ ...handoverForm, notes: e.target.value })}
             className="w-full px-3 py-2 border border-[#E7E5E4] rounded-lg"
           />
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setHandoverOrder(null)}>
               Cancel
             </Button>

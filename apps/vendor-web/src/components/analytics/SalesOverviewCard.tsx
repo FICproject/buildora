@@ -92,7 +92,7 @@ export const SalesOverviewCard: React.FC<SalesOverviewCardProps> = ({
     <Card className="flex flex-col">
       <div className="px-5 py-4 border-b border-[#E7E5E4] flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <h3 className="text-base font-bold text-[#943D24]">Sales Overview</h3>
             {hasData && !loading && (
               <span
@@ -196,7 +196,11 @@ export const SalesOverviewCard: React.FC<SalesOverviewCardProps> = ({
             </div>
 
             {/* Area Chart SVG + X labels */}
-            <div className="relative flex-1 flex flex-col">
+            <div className="flex-1 overflow-x-auto scrollbar-none min-w-0">
+              <div
+                style={{ minWidth: series.length > 6 ? `${series.length * 52}px` : undefined }}
+                className="relative h-full flex flex-col"
+              >
               {/* Callout badge over active/latest point */}
               {highlighted && (
                 <div
@@ -293,6 +297,7 @@ export const SalesOverviewCard: React.FC<SalesOverviewCardProps> = ({
                     {s.label}
                   </button>
                 ))}
+              </div>
               </div>
             </div>
           </div>

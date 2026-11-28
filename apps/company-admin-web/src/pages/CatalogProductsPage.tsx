@@ -482,7 +482,7 @@ export const CatalogProductsPage: React.FC<{
       </div>
 
       {taxonomyError && (
-        <div className="p-3.5 rounded-xl border border-red-200 bg-red-50 text-red-900 text-xs flex items-center justify-between gap-3">
+        <div className="p-3.5 rounded-xl border border-red-200 bg-red-50 text-red-900 text-xs flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{taxonomyError}</span>
@@ -519,7 +519,7 @@ export const CatalogProductsPage: React.FC<{
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               {selectedIds.length > 0 && (
                 <Button size="sm" variant="dark" onClick={handleBulkApprove}>
                   <CheckCircle2 className="w-3.5 h-3.5" /> Bulk Approve ({selectedIds.length})
@@ -530,16 +530,16 @@ export const CatalogProductsPage: React.FC<{
                   e.preventDefault();
                   loadProducts();
                 }}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
               >
-                <div className="relative">
+                <div className="relative flex-1 sm:flex-initial min-w-0">
                   <Search className="w-4 h-4 text-[#6E6859] absolute left-3 top-2.5" />
                   <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search SKU, name, vendor..."
-                    className="pl-9 pr-3 py-2 text-xs bg-white border border-[#E5DCD3] rounded-lg w-60 focus:outline-none focus:border-[#AE887B]"
+                    className="pl-9 pr-3 py-2 text-xs bg-white border border-[#E5DCD3] rounded-lg w-full sm:w-60 focus:outline-none focus:border-[#AE887B]"
                   />
                 </div>
                 <Button type="submit" size="sm" variant="secondary">
@@ -741,11 +741,11 @@ export const CatalogProductsPage: React.FC<{
                         </div>
 
                         {isOpen && (linkedMain || nav.itemType === 'NEW_LAUNCHES') && (
-                          <div className="absolute left-0 top-full pt-1.5 z-40">
-                            <div className="w-[480px] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex text-xs">
+                          <div className="absolute left-0 top-full pt-1.5 z-40 max-w-[calc(100vw-2rem)]">
+                            <div className="w-[min(480px,calc(100vw-2rem))] bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col sm:flex-row text-xs">
                               {nav.itemType === 'NEW_LAUNCHES' ? (
                                 <>
-                                  <div className="w-56 border-r border-slate-100 p-3 space-y-1 max-h-64 overflow-y-auto">
+                                  <div className="w-full sm:w-56 sm:border-r border-b sm:border-b-0 border-slate-100 p-3 space-y-1 max-h-56 sm:max-h-64 overflow-y-auto">
                                     <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-2 mb-1">
                                       Featured Collections
                                     </p>
@@ -792,7 +792,7 @@ export const CatalogProductsPage: React.FC<{
                                 </>
                               ) : (
                                 <>
-                                  <div className="w-56 border-r border-slate-100 p-3 space-y-1 max-h-64 overflow-y-auto">
+                                  <div className="w-full sm:w-56 sm:border-r border-b sm:border-b-0 border-slate-100 p-3 space-y-1 max-h-56 sm:max-h-64 overflow-y-auto">
                                     <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold px-2 mb-1">
                                       Category Groups
                                     </p>
@@ -1109,15 +1109,15 @@ export const CatalogProductsPage: React.FC<{
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E5DCD3]/70">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="relative">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                      <div className="relative flex-1 sm:flex-initial min-w-0">
                         <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
                         <input
                           type="text"
                           placeholder="Search Main or Child categories..."
                           value={catSearch}
                           onChange={(e) => setCatSearch(e.target.value)}
-                          className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-60"
+                          className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-full sm:w-60"
                         />
                       </div>
                       {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((st) => (
@@ -1349,7 +1349,7 @@ export const CatalogProductsPage: React.FC<{
                                         </Badge>
                                       </div>
 
-                                      <div className="flex items-center gap-1.5 shrink-0">
+                                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                                         <Button
                                           size="sm"
                                           variant={isChildActive ? 'success' : 'outline'}
@@ -1486,15 +1486,15 @@ export const CatalogProductsPage: React.FC<{
                 <Card
                   title={`Product Types (${filteredTypes.length}${filteredTypes.length !== totalTypesCount ? ` of ${totalTypesCount}` : ''})`}
                   action={
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="relative">
+                    <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                      <div className="relative flex-1 sm:flex-initial min-w-0">
                         <Search className="w-3.5 h-3.5 text-[#6E6859] absolute left-2.5 top-2" />
                         <input
                           type="text"
                           placeholder="Search product type, category..."
                           value={ptSearch}
                           onChange={(e) => setPtSearch(e.target.value)}
-                          className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-52"
+                          className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg w-full sm:w-52"
                         />
                       </div>
                       <select
@@ -1504,7 +1504,7 @@ export const CatalogProductsPage: React.FC<{
                           setPtMainFilter(e.target.value);
                           setPtChildFilter('ALL');
                         }}
-                        className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                        className="w-full sm:w-auto px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
                       >
                         <option value="ALL">All Desktop Navigation ({mainCategoryOptions.length})</option>
                         {mainCategoryOptions.map((opt) => (
@@ -1517,7 +1517,7 @@ export const CatalogProductsPage: React.FC<{
                         aria-label="Filter by Main Category"
                         value={ptChildFilter}
                         onChange={(e) => setPtChildFilter(e.target.value)}
-                        className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                        className="w-full sm:w-auto px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
                       >
                         <option value="ALL">All Main Categories ({groupOptions.length})</option>
                         {groupOptions.map((cc) => (
@@ -1530,7 +1530,7 @@ export const CatalogProductsPage: React.FC<{
                         aria-label="Filter by Status"
                         value={ptStatusFilter}
                         onChange={(e) => setPtStatusFilter(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')}
-                        className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+                        className="w-full sm:w-auto px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
                       >
                         <option value="ALL">All Status</option>
                         <option value="ACTIVE">Active Only</option>
@@ -2105,7 +2105,7 @@ export const CatalogProductsPage: React.FC<{
                         Multi-Select filters support multiple values • Price uses numeric From / To range
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                       {STANDARD_CHECKLIST_FILTERS.map((item) => {
                         const checked = checkedKeySet.has(item.fieldKey.toLowerCase());
                         return (
@@ -2389,7 +2389,7 @@ export const CatalogProductsPage: React.FC<{
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div>
                 <label className="block font-semibold text-[#5E5946] mb-1">MRP (₹)</label>
                 <input
@@ -3214,7 +3214,7 @@ export const CatalogProductsPage: React.FC<{
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div>
                 <label className="block font-semibold text-[#5E5946] mb-1">Field Type *</label>
                 <select

@@ -455,7 +455,7 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
     <div className="space-y-4">
       {/* Compact Overview Strip */}
       <div className="bg-white border border-[#E5DCD3] rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 flex-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full lg:w-auto flex-1">
           <div>
             <p className="text-[11px] font-medium text-[#6E6859]">Total Collections</p>
             <p className="text-lg font-bold text-[#5E5946]">{overviewStats.totalCollections}</p>
@@ -634,8 +634,8 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                     No existing categories mapped to this collection yet.
                   </p>
                 ) : (
-                  <div className="border border-[#E5DCD3] rounded-lg overflow-hidden max-h-52 overflow-y-auto">
-                    <table className="w-full text-left border-collapse text-xs">
+                  <div className="border border-[#E5DCD3] rounded-lg overflow-x-auto max-h-52 overflow-y-auto">
+                    <table className="w-full min-w-[460px] text-left border-collapse text-xs">
                       <thead className="bg-[#FAF7F4] border-b border-[#E5DCD3] text-[#6E6859] text-[11px]">
                         <tr>
                           <th className="py-2 px-3 font-semibold">Desktop Navigation</th>
@@ -671,8 +671,8 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                     No products manually pinned to this collection yet. Use Edit Collection to select eligible products.
                   </p>
                 ) : (
-                  <div className="border border-[#E5DCD3] rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                    <table className="w-full text-left border-collapse text-xs">
+                  <div className="border border-[#E5DCD3] rounded-lg overflow-x-auto max-h-64 overflow-y-auto">
+                    <table className="w-full min-w-[540px] text-left border-collapse text-xs">
                       <thead className="bg-[#FAF7F4] border-b border-[#E5DCD3] text-[#6E6859] text-[11px]">
                         <tr>
                           <th className="py-2 px-3 font-semibold">Product</th>
@@ -858,7 +858,7 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
 
               {/* Mapped Existing Categories */}
               <div className="p-3.5 rounded-xl bg-[#FAF7F4] border border-[#E5DCD3] space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <span className="font-bold text-[#5E5946]">
                     Mapped Categories ({mappedItems.length})
                   </span>
@@ -867,7 +867,7 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
                   <div>
                     <label className="block text-[11px] font-medium text-[#6E6859] mb-1">
                       Desktop Navigation
@@ -990,7 +990,7 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                       placeholder="Search eligible approved products..."
                       value={productSearch}
                       onChange={(e) => setProductSearch(e.target.value)}
-                      className="pl-8 pr-3 py-1.5 bg-white border border-[#E5DCD3] rounded-lg w-64"
+                      className="pl-8 pr-3 py-1.5 bg-white border border-[#E5DCD3] rounded-lg w-full sm:w-64"
                     />
                   </div>
                 </div>
@@ -1041,7 +1041,7 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                               <p className="text-[11px] text-[#6E6859] font-mono">{p.sku}</p>
                             </div>
                           </div>
-                          <span className="text-[11px] text-[#6E6859] shrink-0">
+                          <span className="text-[11px] text-[#6E6859] shrink-0 hidden xs:inline max-w-[140px] truncate">
                             {[p.childCategoryName, p.productTypeName].filter(Boolean).join(' → ')}
                           </span>
                         </label>
@@ -1051,7 +1051,7 @@ export const NewLaunchesAdminSection: React.FC<NewLaunchesAdminSectionProps> = (
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#E5DCD3]">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#E5DCD3]">
                 <Button
                   type="button"
                   size="sm"

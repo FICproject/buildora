@@ -72,7 +72,7 @@ async function request<T>(
     });
     clearTimeout(timeoutId);
 
-    if (res.status === 401 && token && unauthorizedHandler) {
+    if (res.status === 401 && token && unauthorizedHandler && !endpoint.startsWith('/auth/')) {
       unauthorizedHandler();
     }
 
@@ -103,15 +103,18 @@ async function postJson<T>(endpoint: string, body: any): Promise<T> {
       headers,
       body: JSON.stringify(body)
     });
-    if (res.status === 401 && token && unauthorizedHandler) {
+    if (res.status === 401 && token && unauthorizedHandler && !endpoint.startsWith('/auth/')) {
       unauthorizedHandler();
     }
     const json = await res.json().catch(() => ({}));
     if (!res.ok && json.success === undefined) {
       return {
+        ...json,
         success: false,
         statusCode: res.status,
-        message: json.message || `Request failed with status ${res.status}`,
+        message: Array.isArray(json.message)
+          ? json.message.join(', ')
+          : json.message || `Request failed with status ${res.status}`,
       } as unknown as T;
     }
     return json;
@@ -620,8 +623,19 @@ export const api = {
   },
 
   // Authentication
-  async requestOtp(phone: string): Promise<{ success: boolean; message: string; devOtpHint?: string }> {
-    return postJson<{ success: boolean; message: string; devOtpHint?: string }>('/auth/request-otp', {
+  async requestOtp(phone: string): Promise<{
+    success: boolean;
+    message: string;
+    otpMode?: string;
+    cooldownSeconds?: number;
+    expiresInSeconds?: number;
+    retryAfterSeconds?: number;
+    code?: string;
+    statusCode?: number;
+    devOtp?: string;
+    devOtpHint?: string;
+  }> {
+    return postJson('/auth/request-otp', {
       phone,
     });
   },
@@ -629,11 +643,30 @@ export const api = {
   async verifyOtp(
     phone: string,
     otp: string
-  ): Promise<{ success: boolean; message: string; token?: string; user?: CustomerProfile }> {
-    return postJson<{ success: boolean; message: string; token?: string; user?: CustomerProfile }>(
-      '/auth/verify-otp',
-      { phone, otp }
-    );
+  ): Promise<{
+    success: boolean;
+    message: string;
+    token?: string;
+    refreshToken?: string;
+    expiresIn?: number;
+    refreshExpiresIn?: number;
+    statusCode?: number;
+    user?: CustomerProfile;
+  }> {
+    return postJson('/auth/verify-otp', { phone, otp });
+  },
+
+  async refreshAuthSession(refreshToken: string): Promise<{
+    success: boolean;
+    token?: string;
+    expiresIn?: number;
+    message?: string;
+  }> {
+    return postJson('/auth/refresh', { refreshToken });
+  },
+
+  async logoutSession(refreshToken?: string | null): Promise<{ success: boolean }> {
+    return postJson('/auth/logout', refreshToken ? { refreshToken } : {});
   },
 
   // Customer Profile & Address Book

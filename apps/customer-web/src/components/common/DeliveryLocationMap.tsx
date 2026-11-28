@@ -57,15 +57,15 @@ export const DeliveryLocationMap: React.FC<DeliveryLocationMapProps> = ({
     return (x / Math.pow(2, z)) * 360 - 180;
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const startDrag = (clientX: number, clientY: number) => {
     setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
+    setDragStart({ x: clientX, y: clientY });
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const moveDrag = (clientX: number, clientY: number) => {
     if (!isDragging || !dragStart) return;
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
+    const dx = clientX - dragStart.x;
+    const dy = clientY - dragStart.y;
 
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
       // Convert pixel offset to coordinate shifts based on current zoom
@@ -78,11 +78,11 @@ export const DeliveryLocationMap: React.FC<DeliveryLocationMapProps> = ({
 
       setCurrentLat(newLat);
       setCurrentLng(newLng);
-      setDragStart({ x: e.clientX, y: e.clientY });
+      setDragStart({ x: clientX, y: clientY });
     }
   };
 
-  const handleMouseUp = async () => {
+  const endDrag = async () => {
     if (isDragging) {
       setIsDragging(false);
       setDragStart(null);
@@ -91,6 +91,17 @@ export const DeliveryLocationMap: React.FC<DeliveryLocationMapProps> = ({
       onLocationChange(result);
     }
   };
+
+  const handleMouseDown = (e: React.MouseEvent) => startDrag(e.clientX, e.clientY);
+  const handleMouseMove = (e: React.MouseEvent) => moveDrag(e.clientX, e.clientY);
+  const handleMouseUp = () => void endDrag();
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) startDrag(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchEnd = () => void endDrag();
 
   const handleMapClick = async (e: React.MouseEvent<HTMLDivElement>) => {
     if (isDragging) return;
@@ -145,11 +156,14 @@ export const DeliveryLocationMap: React.FC<DeliveryLocationMapProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full h-[360px] md:h-full min-h-[380px] rounded-2xl overflow-hidden bg-slate-100 select-none border border-slate-200/80 shadow-inner group ${className}`}
+      className={`relative w-full h-[300px] sm:h-[360px] md:h-full md:min-h-[420px] rounded-2xl overflow-hidden bg-slate-100 select-none touch-none border border-slate-200/80 shadow-inner group ${className}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       onClick={handleMapClick}
       style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
     >
@@ -207,7 +221,7 @@ export const DeliveryLocationMap: React.FC<DeliveryLocationMapProps> = ({
       {/* EXACT REFERENCE GREEN SPEECH BUBBLE & CENTER PIN (Screenshot 4) */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full pointer-events-none z-20 flex flex-col items-center">
         {/* Green Speech Bubble */}
-        <div className="bg-[#1b5e20] text-white py-1.5 px-3 rounded-lg shadow-xl text-center leading-tight whitespace-nowrap animate-in fade-in zoom-in-95 duration-150">
+        <div className="bg-[#1b5e20] text-white py-1.5 px-3 rounded-lg shadow-xl text-center leading-tight max-w-[230px] sm:max-w-none sm:whitespace-nowrap animate-in fade-in zoom-in-95 duration-150">
           <p className="text-xs font-black tracking-tight">Your order would be delivered here</p>
           <p className="text-[11px] font-normal text-emerald-100 opacity-95">Place the pin to your exact location</p>
         </div>

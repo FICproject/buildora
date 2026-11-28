@@ -8,8 +8,10 @@ export const BottomStickyCartBar: React.FC = () => {
   const navigate = useNavigate();
   const { items, getSummary } = useCartStore();
 
-  // Hide when cart is empty, or when already on cart, checkout or confirmation pages
+  // Hide when cart is empty, or when already on cart, checkout or confirmation pages.
+  // On product detail pages, ProductDetailPage renders its own mobile (< lg) sticky Add-to-Cart bar.
   const hideOnRoutes = ['/cart', '/checkout', '/orders/confirmation'];
+  const isProductDetailRoute = location.pathname.startsWith('/products/');
   const shouldHide =
     items.length === 0 ||
     hideOnRoutes.some((route) => location.pathname.startsWith(route));
@@ -22,7 +24,7 @@ export const BottomStickyCartBar: React.FC = () => {
   return (
     <aside
       aria-label="Sticky shopping cart summary bar"
-      className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] animate-in slide-in-from-bottom duration-200 print:hidden"
+      className={`${isProductDetailRoute ? 'hidden lg:block ' : ''}fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] animate-in slide-in-from-bottom duration-200 print:hidden safe-pb`}
     >
       <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-8 py-2.5 sm:py-3 flex items-center justify-between gap-4">
         {/* Left Section: Total Items & Total Price */}

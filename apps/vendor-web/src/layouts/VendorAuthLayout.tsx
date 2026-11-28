@@ -82,7 +82,7 @@ export const VendorAuthLayout: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#F8F7F5] flex flex-col lg:flex-row text-[#292524]">
+    <div className="min-h-screen min-h-dvh lg:h-screen lg:h-dvh lg:overflow-hidden bg-[#F8F7F5] flex flex-col lg:flex-row text-[#292524]">
       {/* Mobile & Tablet Compact Brand Header (< lg) */}
       <div className="lg:hidden bg-[#943D24] text-white px-5 py-5 relative overflow-hidden">
         <div className="relative z-10 flex items-center justify-between gap-4">
@@ -142,7 +142,7 @@ export const VendorAuthLayout: React.FC = () => {
       </div>
 
       {/* Left Branding Panel (Desktop Only - Fixed Terracotta #943D24) */}
-      <aside className="hidden lg:flex lg:w-[46%] xl:w-[46%] lg:h-screen lg:sticky lg:top-0 bg-[#943D24] text-white flex-col justify-between px-8 py-7 xl:px-12 xl:py-9 relative overflow-hidden shrink-0">
+      <aside className="hidden lg:flex lg:w-[46%] xl:w-[46%] lg:h-screen lg:h-dvh lg:sticky lg:top-0 bg-[#943D24] text-white flex-col justify-between px-8 py-7 xl:px-12 xl:py-9 relative overflow-y-auto shrink-0">
         {/* Subtle Warm Highlight */}
         <div
           className="absolute inset-0 opacity-[0.06] pointer-events-none"
@@ -217,13 +217,12 @@ export const VendorAuthLayout: React.FC = () => {
                     {[1, 2, 3, 4, 5].map((dot) => (
                       <span
                         key={dot}
-                        className={`h-1.5 rounded-full transition-all duration-300 ${
-                          dot === activeHero.step
+                        className={`h-1.5 rounded-full transition-all duration-300 ${dot === activeHero.step
                             ? 'w-5 bg-[#F6C453]'
                             : dot < activeHero.step
                               ? 'w-2 bg-white/85'
                               : 'w-1.5 bg-white/40'
-                        }`}
+                          }`}
                       />
                     ))}
                   </div>
@@ -282,7 +281,7 @@ export const VendorAuthLayout: React.FC = () => {
       </aside>
 
       {/* Right Content Form Area */}
-      <main className="w-full lg:w-[54%] xl:w-[54%] lg:h-screen lg:overflow-y-auto flex flex-col p-5 sm:p-8 lg:p-10 xl:p-12 bg-[#F8F7F5]">
+      <main className="w-full lg:w-[54%] xl:w-[54%] lg:h-screen lg:h-dvh lg:overflow-y-auto flex flex-col p-4 sm:p-8 lg:p-10 xl:p-12 bg-[#F8F7F5]">
         <div className="w-full max-w-xl mx-auto my-auto">
           <Outlet />
         </div>

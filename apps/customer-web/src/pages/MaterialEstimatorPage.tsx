@@ -132,7 +132,7 @@ export const MaterialEstimatorPage: React.FC = () => {
       </div>
 
       {addedAlert && (
-        <div className="max-w-xl mx-auto p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between">
+        <div className="max-w-xl mx-auto p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex flex-wrap items-center justify-between gap-2">
           <span className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             {addedAlert}

@@ -315,14 +315,14 @@ export const VendorReviewPage: React.FC = () => {
               {data.documents.map((doc) => (
                 <div
                   key={doc.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]"
+                  className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#F8F7F5] border border-[#E7E5E4]"
                 >
-                  <div className="flex items-center gap-2 truncate">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span className="font-semibold text-[#292524] truncate">{doc.title}</span>
                     <span className="text-[11px] text-[#78716C] truncate">({doc.fileName})</span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
                     {doc.verificationStatus || 'PENDING'}
                   </span>
                 </div>

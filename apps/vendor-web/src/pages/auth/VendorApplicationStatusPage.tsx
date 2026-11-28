@@ -163,12 +163,12 @@ export const VendorApplicationStatusPage: React.FC = () => {
   return (
     <div className="w-full bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-[#E7E5E4] space-y-6 animate-in fade-in-0 duration-200">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 border-b border-[#E7E5E4] pb-4">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4 border-b border-[#E7E5E4] pb-4">
+        <div className="min-w-0 flex-1">
           <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#FBF3F0] text-[#943D24] text-[10px] font-extrabold uppercase tracking-wider mb-1">
             Application Status
           </span>
-          <h2 className="text-2xl font-black text-[#292524] tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-black text-[#292524] tracking-tight break-words">
             Vendor Application Submitted
           </h2>
         </div>
@@ -208,14 +208,14 @@ export const VendorApplicationStatusPage: React.FC = () => {
       )}
 
       {/* Application Summary Details */}
-      <div className="p-5 rounded-2xl bg-[#FBF3F0] border border-[#E7E5E4] space-y-4">
-        <div className="flex items-center justify-between border-b border-[#E7E5E4]/80 pb-3">
-          <div>
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#FBF3F0] border border-[#E7E5E4] space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E7E5E4]/80 pb-3">
+          <div className="min-w-0 flex-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#78716C] block">
               Application Reference ID
             </span>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="font-mono text-base font-black text-[#943D24]">
+            <div className="flex items-center gap-2 mt-0.5 min-w-0">
+              <span className="font-mono text-sm sm:text-base font-black text-[#943D24] break-all">
                 {statusData?.applicationId}
               </span>
               <button

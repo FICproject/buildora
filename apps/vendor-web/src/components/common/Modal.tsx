@@ -52,30 +52,30 @@ export const Modal: React.FC<ModalProps> = ({
         onClick={onClose}
       />
 
-      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
         <div
           className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-xl shadow-lg border border-[#E7E5E4] overflow-hidden`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#E7E5E4] bg-[#F8F7F5]">
-            <div>
-              <h2 className="text-base font-semibold text-[#943D24]">{title}</h2>
-              {subtitle && <p className="text-xs text-[#78716C] mt-0.5">{subtitle}</p>}
+          <div className="flex items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[#E7E5E4] bg-[#F8F7F5]">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-semibold text-[#943D24] break-words">{title}</h2>
+              {subtitle && <p className="text-xs text-[#78716C] mt-0.5 break-words">{subtitle}</p>}
             </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close dialog"
-              className="p-1.5 rounded-lg text-[#78716C] hover:text-[#292524] hover:bg-[#E7E5E4]/60 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-[#78716C] hover:text-[#292524] hover:bg-[#E7E5E4]/60 transition-colors cursor-pointer shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="p-6 max-h-[75vh] overflow-y-auto bg-white">{children}</div>
+          <div className="p-4 sm:p-6 max-h-[75vh] max-h-[75dvh] overflow-y-auto bg-white">{children}</div>
 
           {footer && (
-            <div className="px-6 py-4 bg-[#F8F7F5] border-t border-[#E7E5E4] flex items-center justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#F8F7F5] border-t border-[#E7E5E4] flex flex-wrap items-center justify-end gap-2 sm:gap-3">
               {footer}
             </div>
           )}

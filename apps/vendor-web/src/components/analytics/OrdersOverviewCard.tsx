@@ -63,7 +63,7 @@ export const OrdersOverviewCard: React.FC<OrdersOverviewCardProps> = ({
     <Card className="flex flex-col">
       <div className="px-5 py-4 border-b border-[#E7E5E4] flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <h3 className="text-base font-bold text-[#943D24]">Orders Overview</h3>
             {hasData && !loading && (
               <span
@@ -164,9 +164,9 @@ export const OrdersOverviewCard: React.FC<OrdersOverviewCardProps> = ({
             description="Orders for the selected timeframe will appear here."
           />
         ) : (
-          <div className="relative flex gap-3 h-56 pt-4">
+          <div className="relative flex gap-2 sm:gap-3 h-56 pt-4">
             {/* Y-axis ticks */}
-            <div className="flex flex-col justify-between text-[11px] text-[#78716C] pr-1 pb-6 select-none">
+            <div className="flex flex-col justify-between text-[11px] text-[#78716C] pr-1 pb-6 select-none shrink-0">
               {yTicks.map((t, i) => (
                 <span key={i} className="leading-none text-right min-w-[26px]">
                   {t}
@@ -174,8 +174,12 @@ export const OrdersOverviewCard: React.FC<OrdersOverviewCardProps> = ({
               ))}
             </div>
 
-            {/* Bars canvas */}
-            <div className="relative flex-1 flex items-end gap-2 sm:gap-3 border-b border-[#E7E5E4] pb-6">
+            {/* Scrollable Bars canvas */}
+            <div className="flex-1 overflow-x-auto scrollbar-none pb-6">
+              <div
+                style={{ minWidth: series.length > 6 ? `${series.length * 46}px` : undefined }}
+                className="relative h-full flex items-end gap-2 sm:gap-3 border-b border-[#E7E5E4]"
+              >
               {/* Subtle horizontal gridlines */}
               <div className="absolute inset-0 bottom-6 flex flex-col justify-between pointer-events-none">
                 {yTicks.map((_, i) => (
@@ -229,6 +233,7 @@ export const OrdersOverviewCard: React.FC<OrdersOverviewCardProps> = ({
                   </div>
                 );
               })}
+              </div>
             </div>
           </div>
         )}

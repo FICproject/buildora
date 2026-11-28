@@ -185,17 +185,17 @@ export const FinancePage: React.FC = () => {
           )}
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(data.transactions || []).slice(0, 8).map((t: any) => (
-              <div key={t.id} className="py-2.5 flex justify-between items-center gap-2">
-                <div>
+              <div key={t.id} className="py-2.5 flex flex-wrap justify-between items-center gap-2">
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold text-[#5E5946]">{t.orderNumber}</p>
-                  <p className="text-[#6E6859]">
+                  <p className="text-[#6E6859] break-words">
                     {t.customerName} • {t.paymentChannelDetails || t.method}
                   </p>
                   {t.razorpayPaymentId && (
-                    <p className="text-[10px] font-mono text-[#8A8373]">{t.razorpayPaymentId}</p>
+                    <p className="text-[10px] font-mono text-[#8A8373] break-all">{t.razorpayPaymentId}</p>
                   )}
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <p className="font-semibold text-[#5E5946]">{formatINR(t.amount)}</p>
                   <Badge variant={statusBadgeVariant(t.paymentStatus)}>{t.paymentStatus}</Badge>
                 </div>
@@ -207,12 +207,12 @@ export const FinancePage: React.FC = () => {
         <Card title="GST Tax Invoices">
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(data.invoices || []).slice(0, 8).map((inv: any) => (
-              <div key={inv.id} className="py-2.5 flex justify-between items-center">
-                <div>
-                  <p className="font-mono font-semibold text-[#AE887B]">{inv.invoiceNumber}</p>
-                  <p className="text-[#6E6859]">{inv.customerName}</p>
+              <div key={inv.id} className="py-2.5 flex flex-wrap justify-between items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono font-semibold text-[#AE887B] break-all">{inv.invoiceNumber}</p>
+                  <p className="text-[#6E6859] truncate">{inv.customerName}</p>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <p className="font-semibold text-[#5E5946]">{formatINR(inv.totalAmount)}</p>
                   <p className="text-[11px] text-[#6E6859]">
                     GST: {formatINR((inv.cgstAmount || 0) + (inv.sgstAmount || 0) + (inv.igstAmount || 0))}
@@ -240,7 +240,7 @@ export const FinancePage: React.FC = () => {
               <Badge variant={rzpConfig?.mode === 'TEST' ? 'warning' : 'error'}>
                 Mode: {rzpConfig?.mode || 'UNKNOWN'}
               </Badge>
-              <span className="font-mono bg-[#FAF7F4] border border-[#E5DCD3] px-2 py-0.5 rounded">
+              <span className="font-mono bg-[#FAF7F4] border border-[#E5DCD3] px-2 py-0.5 rounded break-all max-w-full">
                 Key ID: {rzpConfig?.maskedKeyId || 'Not Configured'}
               </span>
               {rzpConfig?.enabledMethods && (
@@ -397,19 +397,19 @@ export const ReportsPage: React.FC = () => {
         title="Reports & Business Analytics"
         description="Cross-portal intelligence across sales, vendors, catalog, stock valuation, customers & logistics."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <input
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full xs:w-auto px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
             />
             <span className="text-xs text-[#6E6859]">to</span>
             <input
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
+              className="w-full xs:w-auto px-2.5 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg"
             />
             <Button size="sm" variant="outline" onClick={exportCsv}>
               <Download className="w-4 h-4" /> Export CSV
@@ -468,11 +468,11 @@ export const ReportsPage: React.FC = () => {
           <Card title="Category Valuation & Catalog Depth">
             <div className="divide-y divide-[#E5DCD3] text-xs">
               {(data.salesSummary?.salesByCategory || []).map((c: any) => (
-                <div key={c.category} className="py-2.5 flex justify-between">
-                  <span className="font-medium text-[#5E5946]">
+                <div key={c.category} className="py-2.5 flex flex-wrap justify-between gap-2">
+                  <span className="font-medium text-[#5E5946] min-w-0">
                     {c.category} ({c.skuCount} SKUs)
                   </span>
-                  <span className="font-semibold text-[#AE887B]">{formatINR(c.stockValue)}</span>
+                  <span className="font-semibold text-[#AE887B] shrink-0">{formatINR(c.stockValue)}</span>
                 </div>
               ))}
             </div>
@@ -481,12 +481,12 @@ export const ReportsPage: React.FC = () => {
           <Card title="Vendor SLA & Fulfillment Benchmarks">
             <div className="divide-y divide-[#E5DCD3] text-xs">
               {(data.vendorPerformance || []).map((v: any) => (
-                <div key={v.id} className="py-2.5 flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-[#5E5946]">{v.businessName}</p>
+                <div key={v.id} className="py-2.5 flex flex-wrap justify-between items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-[#5E5946] break-words">{v.businessName}</p>
                     <p className="text-[#6E6859]">{v.skuCount} SKUs listed</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <Badge variant="success">{v.fulfillmentRate}% Fulfillment</Badge>
                     <p className="text-[11px] text-[#6E6859] mt-0.5">{v.onTimeDispatchRate}% On-Time</p>
                   </div>
@@ -497,23 +497,23 @@ export const ReportsPage: React.FC = () => {
 
           <Card title="Inventory & Financial Snapshot">
             <dl className="space-y-2.5 text-xs">
-              <div className="flex justify-between">
+              <div className="flex flex-wrap justify-between gap-2">
                 <dt className="text-[#6E6859]">Total Inventory Valuation</dt>
                 <dd className="font-bold text-[#AE887B]">
                   {formatINR(data.inventorySummary?.totalStockValue)}
                 </dd>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-wrap justify-between gap-2">
                 <dt className="text-[#6E6859]">Average Order Value</dt>
                 <dd className="font-semibold text-[#5E5946]">{formatINR(data.salesSummary?.averageOrderValue)}</dd>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-wrap justify-between gap-2">
                 <dt className="text-[#6E6859]">Settled Payouts</dt>
                 <dd className="font-semibold text-[#15966B]">
                   {formatINR(data.financialSummary?.paidSettlements)}
                 </dd>
               </div>
-              <div className="flex justify-between">
+              <div className="flex flex-wrap justify-between gap-2">
                 <dt className="text-[#6E6859]">Pending Payouts</dt>
                 <dd className="font-semibold text-[#C9821E]">
                   {formatINR(data.financialSummary?.pendingSettlements)}
@@ -525,9 +525,9 @@ export const ReportsPage: React.FC = () => {
           <Card title="Fleet & Delivery Summary">
             <div className="divide-y divide-[#E5DCD3] text-xs">
               {(data.deliveryMetrics || []).map((dm: any) => (
-                <div key={dm.id} className="py-2.5 flex justify-between">
-                  <span className="font-medium text-[#5E5946]">{dm.name}</span>
-                  <span className="text-[#15966B] font-semibold">
+                <div key={dm.id} className="py-2.5 flex flex-wrap justify-between gap-2">
+                  <span className="font-medium text-[#5E5946] min-w-0">{dm.name}</span>
+                  <span className="text-[#15966B] font-semibold shrink-0">
                     {dm.onTimeRate}% On-Time ({dm.completedDeliveries} trips)
                   </span>
                 </div>

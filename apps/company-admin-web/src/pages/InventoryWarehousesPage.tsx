@@ -157,12 +157,12 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
                 </button>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search SKU or name..."
-                className="px-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg focus:outline-none focus:border-[#AE887B]"
+                className="flex-1 min-w-0 px-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg focus:outline-none focus:border-[#AE887B]"
               />
               <Button size="sm" variant="secondary" onClick={loadAll}>
                 Search
@@ -267,7 +267,7 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
                     <span className="text-[#6E6859]">Manager / Contact</span>
                     <span className="font-medium text-[#5E5946]">{wh.contactPerson || 'Assigned Desk'}</span>
                   </div>
-                  <div className="flex gap-1.5 pt-2 border-t border-[#E5DCD3]">
+                  <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[#E5DCD3]">
                     <Button
                       size="sm"
                       variant="outline"
@@ -322,16 +322,16 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
         <Card title="Stock Adjustment & Dispatch Ledger">
           <div className="divide-y divide-[#E5DCD3] text-xs">
             {(invData.movements || []).map((m: any) => (
-              <div key={m.id} className="py-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-[#5E5946]">
+              <div key={m.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-[#5E5946] break-words">
                     {m.productName} ({m.sku})
                   </p>
-                  <p className="text-[#6E6859]">
+                  <p className="text-[#6E6859] break-words">
                     {m.reason} • By {m.performedBy}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-left sm:text-right shrink-0">
                   <Badge variant={m.quantityDelta >= 0 ? 'success' : 'warning'}>
                     {m.quantityDelta >= 0 ? `+${m.quantityDelta}` : m.quantityDelta} units
                   </Badge>
@@ -355,7 +355,7 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
           <p className="text-[#6E6859]">
             Current Stock: <strong className="text-[#5E5946]">{adjustModal?.stock}</strong>
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-[#5E5946] mb-1">Action</label>
               <select
@@ -424,7 +424,7 @@ export const InventoryPage: React.FC<{ defaultTab?: 'INVENTORY' | 'WAREHOUSES' }
             onChange={(e) => setWhForm({ ...whForm, address: e.target.value })}
             className="w-full px-3 py-2 bg-white border border-[#E5DCD3] rounded-lg"
           />
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
               required
               placeholder="City"

@@ -125,7 +125,7 @@ export const DashboardPage: React.FC = () => {
         title="Company Overview"
         description="Monitor your vendors, approvals, orders and payments in one place."
         actions={
-          <div className="flex items-center gap-1 bg-white border border-[#E5DCD3] rounded-lg p-1 shadow-card">
+          <div className="flex flex-wrap items-center gap-1 bg-white border border-[#E5DCD3] rounded-lg p-1 shadow-card max-w-full">
             {DATE_PRESETS.map((p) => (
               <button
                 key={p.id}
@@ -491,57 +491,57 @@ export const DashboardPage: React.FC = () => {
               }
             >
               <div className="divide-y divide-[#E5DCD3] text-xs">
-                <div className="py-2.5 flex items-center justify-between gap-3">
-                  <div>
+                <div className="py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-[#5E5946]">Total Successful Payments</p>
                     <p className="text-[11px] text-[#6E6859]">
                       {paymentSummary.successfulPaymentsCount ?? 0} captured customer payment(s) in {periodLabel}
                     </p>
                   </div>
-                  <span className="text-sm font-bold text-[#15966B]">
+                  <span className="text-sm font-bold text-[#15966B] shrink-0">
                     {formatINR(paymentSummary.successfulPaymentsAmount)}
                   </span>
                 </div>
 
-                <div className="py-2.5 flex items-center justify-between gap-3">
-                  <div>
+                <div className="py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-[#5E5946]">Total Refunded Amount</p>
                     <p className="text-[11px] text-[#6E6859]">
                       {paymentSummary.refundedCount ?? 0} processed customer refund(s) in {periodLabel}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-[#5E5946]">
+                  <span className="text-sm font-semibold text-[#5E5946] shrink-0">
                     {formatINR(paymentSummary.totalRefundedAmount)}
                   </span>
                 </div>
 
-                <div className="py-2.5 flex items-center justify-between gap-3">
-                  <div>
+                <div className="py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-[#5E5946]">Pending Vendor Settlements</p>
                     <p className="text-[11px] text-[#6E6859]">
                       {paymentSummary.pendingSettlementCount ?? 0} payout batch(es) awaiting transfer
                     </p>
                   </div>
-                  <span className="text-sm font-bold text-[#B45309]">
+                  <span className="text-sm font-bold text-[#B45309] shrink-0">
                     {formatINR(paymentSummary.pendingSettlementAmount)}
                   </span>
                 </div>
 
-                <div className="py-2.5 flex items-center justify-between gap-3">
-                  <div>
+                <div className="py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-[#5E5946]">Completed Settlements</p>
                     <p className="text-[11px] text-[#6E6859]">
                       {paymentSummary.completedSettlementCount ?? 0} settled vendor payout batch(es)
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-[#5E5946]">
+                  <span className="text-sm font-semibold text-[#5E5946] shrink-0">
                     {formatINR(paymentSummary.completedSettlementAmount)}
                   </span>
                 </div>
 
                 {(paymentSummary.failedTransactionsCount ?? 0) > 0 && (
-                  <div className="py-2.5 flex items-center justify-between gap-3">
-                    <div>
+                  <div className="py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium text-[#C94444]">Failed Transactions</p>
                       <p className="text-[11px] text-[#6E6859]">Requires investigation in Payments & Finance</p>
                     </div>

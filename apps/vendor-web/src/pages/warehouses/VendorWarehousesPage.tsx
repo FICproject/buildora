@@ -204,7 +204,7 @@ export const VendorWarehousesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-[#E7E5E4] flex items-center justify-between text-xs">
+                  <div className="pt-3 border-t border-[#E7E5E4] flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div>
                       <span className="text-[#78716C]">Stock: </span>
                       <strong className="text-[#292524]">{whUnits} units</strong>

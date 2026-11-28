@@ -440,7 +440,7 @@ export const VendorsPage: React.FC = () => {
         title="Vendor Management"
         description="Manage vendor registrations, review KYC documents, and monitor vendor verification status."
         actions={
-          <div className="relative w-full sm:w-96">
+          <div className="relative w-full md:w-80 lg:w-96">
             <Search className="w-4 h-4 text-[#6E6859] absolute left-3 top-2.5 pointer-events-none" />
             <input
               type="text"
@@ -523,7 +523,7 @@ export const VendorsPage: React.FC = () => {
           })}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0">
           <label htmlFor="vendor-sort" className="text-xs text-[#6E6859] font-medium">
             Sort:
           </label>
@@ -534,7 +534,7 @@ export const VendorsPage: React.FC = () => {
               setSortBy(e.target.value as any);
               setPage(1);
             }}
-            className="px-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg text-[#5E5946] focus:outline-none focus:border-[#AE887B]"
+            className="w-full sm:w-auto max-w-full px-3 py-1.5 text-xs bg-white border border-[#E5DCD3] rounded-lg text-[#5E5946] focus:outline-none focus:border-[#AE887B]"
           >
             <option value="newest">Newest KYC Application First</option>
             <option value="oldest">Oldest First</option>
@@ -572,7 +572,7 @@ export const VendorsPage: React.FC = () => {
         ) : (
           <>
             <div className="overflow-x-auto rounded-t-xl">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[920px] text-left border-collapse">
                 <thead>
                   <tr className="bg-[#F0DED0]/75 border-b border-[#E5DCD3] text-[11px] font-semibold text-[#5E5946] uppercase">
                     <th className="py-3 px-4">Vendor / Business</th>
@@ -904,8 +904,8 @@ export const VendorsPage: React.FC = () => {
               </div>
               <div className="divide-y divide-[#F0EAE2] border border-[#E5DCD3] rounded-lg text-xs">
                 {slots.map((slot: any) => (
-                  <div key={slot.type} className="px-3 py-2 flex items-center justify-between gap-2">
-                    <div className="min-w-0">
+                  <div key={slot.type} className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
                       <span className="font-medium text-[#5E5946]">{slot.title}</span>
                       {slot.identificationMasked && (
                         <span className="ml-2 font-mono text-[11px] text-[#6E6859]">
@@ -1067,9 +1067,9 @@ export const VendorsPage: React.FC = () => {
                   {missingApplicableSlots.map((slot: any) => (
                     <div
                       key={`missing-${slot.type}`}
-                      className="p-3 border border-dashed border-[#E5DCD3] rounded-xl text-xs bg-[#FAF7F4] flex items-center justify-between gap-2"
+                      className="p-3 border border-dashed border-[#E5DCD3] rounded-xl text-xs bg-[#FAF7F4] flex flex-wrap items-center justify-between gap-2"
                     >
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="font-semibold text-[#5E5946]">{slot.title}</p>
                         <p className="text-[11px] text-[#6E6859]">Not Uploaded</p>
                       </div>
@@ -1103,7 +1103,7 @@ export const VendorsPage: React.FC = () => {
                           <p className="text-[#C94444] font-medium">Reason: {h.reason}</p>
                         )}
                       </div>
-                      <div className="text-right shrink-0 space-y-1">
+                      <div className="text-left sm:text-right shrink-0 space-y-1">
                         <p className="text-[11px] text-[#6E6859]">{formatDateTime(h.timestamp)}</p>
                         <Badge variant={statusBadgeVariant(h.status)}>{h.status}</Badge>
                       </div>
@@ -1362,7 +1362,7 @@ export const VendorsPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"

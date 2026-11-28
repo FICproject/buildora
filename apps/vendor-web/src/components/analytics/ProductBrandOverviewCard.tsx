@@ -82,7 +82,7 @@ const InteractiveDonut: React.FC<SingleDonutProps> = ({
       </div>
 
       {/* Legend */}
-      <div className="space-y-3 flex-1 min-w-[140px]">
+      <div className="space-y-3 flex-1 w-full sm:w-auto sm:min-w-[140px]">
         {segments.map((seg, idx) => (
           <button
             key={seg.label}
@@ -159,7 +159,7 @@ export const ProductBrandOverviewCard: React.FC<ProductBrandOverviewCardProps> =
             }
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 xl:gap-8 items-center">
             <InteractiveDonut
               centerTitle="Total Products"
               centerCount={products.total}

@@ -17,6 +17,7 @@ interface AuthStoreState {
   isAuthenticated: boolean;
   user: CustomerProfile | null;
   token: string | null;
+  refreshToken: string | null;
   addresses: Address[];
   isAuthModalOpen: boolean;
   authPromptReason: string | null;
@@ -36,7 +37,17 @@ interface AuthStoreState {
   ) => boolean;
   consumePostLoginEvent: (expectedType?: string) => { type: string; payload?: any; timestamp: number } | null;
   validateSession: () => Promise<void>;
-  requestOtp: (phone: string) => Promise<{ success: boolean; message: string; cooldownSeconds?: number }>;
+  requestOtp: (phone: string) => Promise<{
+    success: boolean;
+    message: string;
+    otpMode?: string;
+    cooldownSeconds?: number;
+    expiresInSeconds?: number;
+    retryAfterSeconds?: number;
+    code?: string;
+    devOtp?: string;
+    devOtpHint?: string;
+  }>;
   verifyOtp: (phone: string, otp: string) => Promise<{
     success: boolean;
     message: string;
@@ -58,6 +69,7 @@ export const useAuthStore = create<AuthStoreState>()(
       isAuthenticated: false,
       user: null,
       token: null,
+      refreshToken: null,
       addresses: [],
       isAuthModalOpen: false,
       authPromptReason: null,
@@ -103,9 +115,16 @@ export const useAuthStore = create<AuthStoreState>()(
       },
 
       validateSession: async () => {
-        const { isAuthenticated, token } = get();
+        const { isAuthenticated, token, refreshToken } = get();
         if (!isAuthenticated || !token) return;
-        const session = await api.getAuthSession();
+        let session = await api.getAuthSession();
+        if (!session.authenticated && !session.suspended && refreshToken) {
+          const refreshed = await api.refreshAuthSession(refreshToken);
+          if (refreshed.success && refreshed.token) {
+            set({ token: refreshed.token });
+            session = await api.getAuthSession();
+          }
+        }
         if (!session.authenticated) {
           get().logout();
           return;
@@ -151,6 +170,7 @@ export const useAuthStore = create<AuthStoreState>()(
               user: res.user,
               addresses: userAddrs,
               token: res.token,
+              refreshToken: res.refreshToken || null,
             });
 
             // Sync & merge guest cart, wishlist, and addresses against authenticated backend
@@ -222,11 +242,16 @@ export const useAuthStore = create<AuthStoreState>()(
       },
 
       logout: () => {
+        const currentRefresh = get().refreshToken;
+        if (currentRefresh) {
+          void api.logoutSession(currentRefresh).catch(() => {});
+        }
         pendingCallbackRef = null;
         set({
           isAuthenticated: false,
           user: null,
           token: null,
+          refreshToken: null,
           addresses: [],
           intendedDestination: null,
           authPromptReason: null,
@@ -331,6 +356,7 @@ export const useAuthStore = create<AuthStoreState>()(
         isAuthenticated: state.isAuthenticated,
         user: state.user,
         token: state.token,
+        refreshToken: state.refreshToken,
         addresses: state.addresses,
       }),
     }

@@ -136,7 +136,7 @@ export const VendorInventoryPage: React.FC = () => {
       />
 
       {/* Summary KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
           title="Available Stock"
           value={totalAvailable.toLocaleString('en-IN')}
@@ -234,7 +234,7 @@ export const VendorInventoryPage: React.FC = () => {
 
           <Card>
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[680px] text-left text-xs">
                 <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                   <tr>
                     <th className="py-3 px-4">Product</th>
@@ -371,7 +371,7 @@ export const VendorInventoryPage: React.FC = () => {
       {activeTab === 'HISTORY' && (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[680px] text-left text-xs">
               <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Date</th>
@@ -448,7 +448,7 @@ export const VendorInventoryPage: React.FC = () => {
         <form onSubmit={handleAdjustSubmit} className="space-y-4">
           <div>
             <label className="portal-label">Adjustment Type</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
               {[
                 { type: 'ADD', label: 'Add Stock' },
                 { type: 'SUBTRACT', label: 'Remove Stock' },

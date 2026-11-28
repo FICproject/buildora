@@ -156,20 +156,18 @@ export const SupportPage: React.FC = () => {
               <div
                 key={tkt.id}
                 onClick={() => setSelectedTicketId(tkt.id)}
-                className={`cursor-pointer p-4 rounded-2xl border transition-all text-xs space-y-1.5 ${
-                  selectedTicketId === tkt.id
+                className={`cursor-pointer p-4 rounded-2xl border transition-all text-xs space-y-1.5 ${selectedTicketId === tkt.id
                     ? 'border-brand-blue-600 bg-white shadow-card ring-1 ring-brand-blue-600'
                     : 'bg-white border-slate-200 hover:border-slate-300'
-                }`}
+                  }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900 truncate">{tkt.subject}</span>
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                      tkt.status === 'RESOLVED'
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${tkt.status === 'RESOLVED'
                         ? 'bg-emerald-100 text-emerald-800'
                         : 'bg-amber-100 text-amber-800'
-                    }`}
+                      }`}
                   >
                     {tkt.status}
                   </span>
@@ -201,16 +199,14 @@ export const SupportPage: React.FC = () => {
                   {activeTicket.messages.map((msg, idx) => (
                     <div
                       key={idx}
-                      className={`flex flex-col ${
-                        msg.sender === 'CUSTOMER' ? 'items-end' : 'items-start'
-                      }`}
+                      className={`flex flex-col ${msg.sender === 'CUSTOMER' ? 'items-end' : 'items-start'
+                        }`}
                     >
                       <div
-                        className={`p-3 rounded-2xl max-w-sm text-xs leading-relaxed ${
-                          msg.sender === 'CUSTOMER'
+                        className={`p-3 rounded-2xl max-w-[85%] sm:max-w-sm text-xs leading-relaxed ${msg.sender === 'CUSTOMER'
                             ? 'bg-brand-blue-900 text-white rounded-tr-none'
                             : 'bg-slate-100 text-slate-800 rounded-tl-none border border-slate-200'
-                        }`}
+                          }`}
                       >
                         <div className="text-[10px] font-bold opacity-75 mb-0.5">
                           {msg.sender === 'CUSTOMER' ? 'You' : 'BUILDORA 60 Support Specialist'}
@@ -230,7 +226,7 @@ export const SupportPage: React.FC = () => {
                   placeholder="Type your message reply..."
                   value={replyMessage}
                   onChange={(e) => setReplyMessage(e.target.value)}
-                  className="flex-1 p-2.5 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-blue-500"
+                  className="flex-1 min-w-0 p-2.5 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-blue-500"
                 />
                 <Button variant="primary" size="md" type="submit" leftIcon={<Send className="w-3.5 h-3.5" />}>
                   Send

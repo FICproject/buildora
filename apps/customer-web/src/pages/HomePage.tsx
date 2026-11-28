@@ -253,7 +253,7 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-2.5 sm:gap-3">
           {categories.map((cat) => (
             <CategoryCard key={cat.id} category={cat} />
           ))}
@@ -603,7 +603,7 @@ export const HomePage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-center">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-center">
             <span className="text-xs bg-white/10 border border-white/20 text-slate-300 px-3.5 py-2 rounded-xl font-bold">
               Android &bull; Coming Soon
             </span>

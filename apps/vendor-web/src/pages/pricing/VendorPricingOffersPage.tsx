@@ -308,7 +308,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
               {tiers.map((tier, idx) => (
                 <div
                   key={idx}
-                  className="p-4 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] grid grid-cols-1 sm:grid-cols-4 gap-3 items-end"
+                  className="p-3.5 sm:p-4 rounded-xl border border-[#E7E5E4] bg-[#F8F7F5] grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 items-end"
                 >
                   <div>
                     <label className="portal-label">Min Quantity</label>
@@ -435,7 +435,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
       {activeTab === 'PRICING' && (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[680px] text-left text-xs">
               <thead className="bg-[#F8F7F5] text-[#78716C] font-semibold border-b border-[#E7E5E4]">
                 <tr>
                   <th className="py-3 px-4">Product</th>
@@ -510,7 +510,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
               className="portal-input"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="portal-label">Discount Type *</label>
               <select
@@ -534,7 +534,7 @@ export const VendorPricingOffersPage: React.FC<{ initialTab?: PricingTab }> = ({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="portal-label">Start Date *</label>
               <input
