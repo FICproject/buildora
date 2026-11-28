@@ -9,6 +9,8 @@ import {
   ChevronDown,
   AlertCircle,
   Plus,
+  Minus,
+  Loader2,
   Scale
 } from 'lucide-react';
 import { Product, ProductVariant } from '@buildora/types';
@@ -94,7 +96,15 @@ export const ProductDetailPage: React.FC = () => {
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [loadingProduct, setLoadingProduct] = useState(true);
 
-  const { addItem } = useCartStore();
+  const {
+    items,
+    addItem,
+    updateQuantity,
+    removeItem,
+    isSyncing,
+    cartError,
+    clearCartError,
+  } = useCartStore();
   const { isInWishlist, toggleItem } = useWishlistStore();
   const { isInCompare, addItem: addToCompare } = useCompareStore();
   const { requireAuth } = useAuthStore();
@@ -105,6 +115,7 @@ export const ProductDetailPage: React.FC = () => {
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
 
   const [compareAlert, setCompareAlert] = useState<string | null>(null);
+  const [stockAlert, setStockAlert] = useState<string | null>(null);
 
   // Fetch product details & related category products from Backend API
   useEffect(() => {
@@ -218,9 +229,25 @@ export const ProductDetailPage: React.FC = () => {
       (!selectedVariant.inStock ||
         (selectedVariant.stock !== undefined && selectedVariant.stock <= 0)));
 
-  // Related products fetched from backend above
+  const effectiveStock = Math.max(
+    0,
+    Number(selectedVariant?.stock !== undefined ? selectedVariant.stock : product.stockCount) || 0
+  );
+  const minOrderQty = Math.max(1, Number((selectedVariant as any)?.moq ?? product.moq ?? 1));
+  const activeVariantId = selectedVariant?.id || undefined;
+  const isSingleOrNoVariant = !product.variants || product.variants.length <= 1;
+  const matchingCartItem = items.find((item) => {
+    if (item.productId !== product.id) return false;
+    if ((item.variantId || undefined) === activeVariantId) return true;
+    if (isSingleOrNoVariant && !item.variantId) return true;
+    return false;
+  });
+  const cartQuantity = matchingCartItem?.quantity || 0;
+  const targetCartVariantId = matchingCartItem?.variantId;
 
   const handleAttributeChange = (attrName: string, val: string) => {
+    setStockAlert(null);
+    clearCartError();
     const next = { ...selectedAttributes, [attrName]: val };
     setSelectedAttributes(next);
     const matched = getExactVariantForAttrs(next, product.variants) || findVariantForAttributes(next, product.variants);
@@ -237,7 +264,31 @@ export const ProductDetailPage: React.FC = () => {
 
   const handleAddToCart = () => {
     if (isUnavailableCombination || isOutOfStock) return;
-    addItem(product, 1, selectedVariant);
+    setStockAlert(null);
+    clearCartError();
+    addItem(product, minOrderQty, selectedVariant);
+  };
+
+  const handleIncreaseQuantity = () => {
+    if (isUnavailableCombination || isOutOfStock) return;
+    clearCartError();
+    if (cartQuantity >= effectiveStock) {
+      setStockAlert(`Only ${effectiveStock} unit${effectiveStock === 1 ? '' : 's'} available in stock.`);
+      return;
+    }
+    setStockAlert(null);
+    updateQuantity(product.id, cartQuantity + 1, targetCartVariantId);
+  };
+
+  const handleDecreaseQuantity = () => {
+    setStockAlert(null);
+    clearCartError();
+    const nextQty = cartQuantity - 1;
+    if (nextQty <= 0 || nextQty < minOrderQty) {
+      removeItem(product.id, targetCartVariantId);
+      return;
+    }
+    updateQuantity(product.id, nextQty, targetCartVariantId);
   };
 
   const handleCompareClick = () => {
@@ -246,8 +297,10 @@ export const ProductDetailPage: React.FC = () => {
     setTimeout(() => setCompareAlert(null), 2500);
   };
 
+  const hasBottomStickyBar = items.length > 0;
+
   return (
-    <div className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8 space-y-8 pb-24 lg:pb-8">
+    <div className={`w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8 space-y-8 ${hasBottomStickyBar ? 'pb-24 sm:pb-28' : 'pb-10'}`}>
       {/* 1. Breadcrumbs */}
       <nav className="flex items-center gap-1.5 text-xs text-slate-500 overflow-x-auto no-scrollbar whitespace-nowrap">
         <Link to="/" className="hover:text-brand-blue-900 flex-shrink-0">Home</Link>
@@ -713,7 +766,7 @@ export const ProductDetailPage: React.FC = () => {
             </div>
           ) : null}
 
-          {/* Full-Width Add to Cart & Out of Stock Interaction */}
+          {/* Full-Width Add to Cart -> Unified Quantity Selector Interaction */}
           <div className="space-y-3 pt-2">
             {isUnavailableCombination ? (
               <div className="space-y-2">
@@ -743,15 +796,86 @@ export const ProductDetailPage: React.FC = () => {
                   <span>This product / selected variant is currently out of stock. Please select another option or contact us for site restock.</span>
                 </div>
               </div>
+            ) : cartQuantity > 0 ? (
+              <div className="space-y-2">
+                <div
+                  data-testid="pdp-quantity-selector"
+                  role="group"
+                  aria-label={`Quantity selector for ${product.name}`}
+                  className="w-full h-12 sm:h-14 rounded-xl border-2 border-slate-200 bg-white shadow-sm flex items-center justify-between overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    data-testid="pdp-qty-decrease"
+                    onClick={handleDecreaseQuantity}
+                    disabled={isSyncing}
+                    aria-label="Decrease quantity"
+                    className="w-16 sm:w-20 h-full flex items-center justify-center text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Minus className="w-5 h-5" />
+                  </button>
+
+                  <div className="flex items-center justify-center gap-2 min-w-[3rem] select-none">
+                    <span
+                      data-testid="pdp-qty-value"
+                      className="text-base sm:text-lg font-black text-slate-900"
+                    >
+                      {cartQuantity}
+                    </span>
+                    {isSyncing && <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />}
+                  </div>
+
+                  <button
+                    type="button"
+                    data-testid="pdp-qty-increase"
+                    onClick={handleIncreaseQuantity}
+                    disabled={isSyncing || cartQuantity >= effectiveStock}
+                    aria-label="Increase quantity"
+                    className="w-16 sm:w-20 h-full flex items-center justify-center text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {(matchingCartItem?.bulkDiscountPercentage ?? 0) > 0 && (
+                  <p className="text-xs font-semibold text-emerald-700">
+                    Bulk discount applied: {matchingCartItem!.bulkDiscountPercentage}% off ({formatCurrency(matchingCartItem!.effectiveUnitPrice)} / {product.unit})
+                  </p>
+                )}
+
+                {cartQuantity >= effectiveStock && effectiveStock > 0 && (
+                  <p className="text-xs font-semibold text-amber-700">
+                    Maximum available stock ({effectiveStock}) in cart.
+                  </p>
+                )}
+              </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleAddToCart}
-                className="w-full py-3.5 sm:py-4 rounded-xl text-base font-bold bg-[#1e7e34] hover:bg-[#166527] active:scale-[0.99] text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  data-testid="pdp-add-to-cart"
+                  onClick={handleAddToCart}
+                  className="w-full h-12 sm:h-14 rounded-xl text-base font-bold bg-[#1e7e34] hover:bg-[#166527] active:scale-[0.99] text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer select-none"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add to Cart
+                </button>
+                {minOrderQty > 1 && (
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Minimum order quantity: {minOrderQty} {product.unit}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {(stockAlert || cartError) && (
+              <div
+                role="alert"
+                className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800 flex items-start gap-2"
               >
-                <Plus className="w-5 h-5" />
-                Add to Cart
-              </button>
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <span>{stockAlert || cartError}</span>
+              </div>
             )}
 
             {/* Compare Specs link */}
@@ -796,34 +920,6 @@ export const ProductDetailPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* 4. Mobile Sticky Add-to-Cart Bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 shadow-2xl flex items-center justify-between gap-3">
-        <div>
-          <div className="text-xs text-slate-400">Price</div>
-          <div className="text-base font-black text-slate-900">
-            {formatCurrency(activePrice)}
-          </div>
-        </div>
-        {isOutOfStock ? (
-          <button
-            type="button"
-            disabled
-            className="font-bold px-6 py-2.5 rounded-xl bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed text-sm"
-          >
-            Out of Stock
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleAddToCart}
-            className="font-bold px-6 py-2.5 rounded-xl bg-[#1e7e34] hover:bg-[#166527] text-white shadow-md transition-all text-sm flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Add to Cart
-          </button>
-        )}
-      </div>
     </div>
   );
 };

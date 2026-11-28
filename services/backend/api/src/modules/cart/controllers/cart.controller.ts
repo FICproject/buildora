@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Put, Delete, Body, Query, Headers } from '@nestjs/common';
-import { calculateCartSummary } from '@buildora/utils';
+import { calculateBulkDiscount, calculateCartSummary } from '@buildora/utils';
 import { dbStore } from '../../../database/store';
 import { requireCustomer } from '../../../common/customer-auth.util';
 import {
@@ -20,11 +20,13 @@ function resolveCartCatalogEntry(productId: string, variantId?: string) {
     ? prod.variants.find((v: any) => v.id === variantId)
     : undefined;
   const maxStock = Number(variant?.stock ?? (prod as any).stock ?? prod.stockCount ?? 0);
-  const effectiveUnitPrice = Number(
+  const basePrice = Number(
     variant?.sellingPrice ?? variant?.price ?? prod.sellingPrice ?? prod.price ?? 0
   );
-  const mrp = Number(variant?.mrp ?? prod.mrp ?? effectiveUnitPrice);
+  const mrp = Number(variant?.mrp ?? prod.mrp ?? basePrice);
   const unit = variant?.unit || variant?.size || prod.unit || 'Unit';
+  const bulkPricing = Array.isArray(prod.bulkPricing) ? prod.bulkPricing : undefined;
+  const moq = Math.max(1, Number(variant?.moq ?? prod.moq ?? 1));
   return {
     productId: prod.id,
     variantId: variant?.id,
@@ -34,9 +36,14 @@ function resolveCartCatalogEntry(productId: string, variantId?: string) {
     brand: prod.brand || 'Buildora Verified',
     image: Array.isArray(prod.images) && prod.images.length > 0 ? prod.images[0] : (prod.image || ''),
     unit,
-    unitPrice: effectiveUnitPrice,
-    effectiveUnitPrice,
+    price: basePrice,
+    unitPrice: basePrice,
+    effectiveUnitPrice: basePrice,
     mrp,
+    gstRate: Number(prod.gstRate ?? 18),
+    bulkPricing,
+    bulkDiscountPercentage: 0,
+    moq,
     maxStock,
     category: prod.category || '',
     categorySlug: prod.categorySlug || '',
@@ -62,24 +69,33 @@ function revalidateAndNormalizeCart(rawItems: any[]): {
     const reqQty = Math.max(1, Math.floor(Number(raw.quantity || 1)));
     const existing = mergedMap.get(key);
     const combinedQty = (existing ? existing.quantity : 0) + reqQty;
-    const finalQty = Math.min(combinedQty, catalog.maxStock);
+    const minReqQty = Math.min(catalog.moq, catalog.maxStock);
+    const finalQty = Math.max(minReqQty, Math.min(combinedQty, catalog.maxStock));
 
     if (finalQty < combinedQty) {
       adjustments.push(`${catalog.name} quantity adjusted to available stock (${catalog.maxStock}).`);
     }
+
+    const bulkDiscountPercentage = calculateBulkDiscount(finalQty, catalog.bulkPricing);
+    const discountedUnitPrice = Math.round(
+      catalog.price * (1 - bulkDiscountPercentage / 100)
+    );
+
     if (
       typeof raw.effectiveUnitPrice === 'number' &&
       raw.effectiveUnitPrice > 0 &&
-      Math.abs(raw.effectiveUnitPrice - catalog.effectiveUnitPrice) > 0.01 &&
+      Math.abs(raw.effectiveUnitPrice - discountedUnitPrice) > 1 &&
       !adjustments.some((a) => a.includes(catalog.name) && a.includes('price'))
     ) {
-      adjustments.push(`${catalog.name} unit price updated to ₹${catalog.effectiveUnitPrice}.`);
+      adjustments.push(`${catalog.name} unit price updated to ₹${discountedUnitPrice}.`);
     }
 
     mergedMap.set(key, {
       ...catalog,
       quantity: finalQty,
-      totalPrice: Number((finalQty * catalog.effectiveUnitPrice).toFixed(2)),
+      bulkDiscountPercentage,
+      effectiveUnitPrice: discountedUnitPrice,
+      totalPrice: Number((finalQty * discountedUnitPrice).toFixed(2)),
     });
   }
 

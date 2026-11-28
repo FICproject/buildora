@@ -105,7 +105,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const handleAddSingle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addItem(product, 1);
+    const singleVariant = product.variants && product.variants.length === 1 ? product.variants[0] : undefined;
+    addItem(product, 1, singleVariant);
   };
 
   const handleOpenOptions = (e: React.MouseEvent) => {

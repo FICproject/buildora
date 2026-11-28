@@ -19,6 +19,8 @@ function hasAuthToken(): boolean {
 interface CartStoreState {
   items: CartItem[];
   mergeAdjustments: string[];
+  isSyncing: boolean;
+  cartError: string | null;
   coupon: Coupon | null;
   deliverySpeed: DeliverySpeed;
   unloadingOptions: UnloadingServiceOptions;
@@ -26,6 +28,7 @@ interface CartStoreState {
   gstin?: string;
   companyName?: string;
   saveGstToProfile?: boolean;
+  clearCartError: () => void;
   setGstin: (gstin: string, companyName?: string, saveToProfile?: boolean) => void;
   removeGstin: () => void;
   addItem: (product: Product, quantity?: number, variant?: ProductVariant) => void;
@@ -43,11 +46,39 @@ interface CartStoreState {
   syncWithBackend: () => Promise<any>;
 }
 
+let latestCartSyncId = 0;
+
 export const useCartStore = create<CartStoreState>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      const pushCartToServer = () => {
+        if (!hasAuthToken()) return;
+        const syncId = ++latestCartSyncId;
+        set({ isSyncing: true });
+        void api
+          .saveServerCart(get().items)
+          .then((res) => {
+            if (syncId !== latestCartSyncId) return;
+            if (res && Array.isArray(res.adjustments) && res.adjustments.length > 0) {
+              set({ mergeAdjustments: res.adjustments, isSyncing: false });
+            } else {
+              set({ isSyncing: false });
+            }
+          })
+          .catch((err: any) => {
+            if (syncId !== latestCartSyncId) return;
+            set({
+              isSyncing: false,
+              cartError: err?.message || 'Unable to sync cart with server. Saved locally.',
+            });
+          });
+      };
+
+      return {
       items: [],
       mergeAdjustments: [],
+      isSyncing: false,
+      cartError: null,
       coupon: null,
       deliverySpeed: 'ASAP_60',
       unloadingOptions: {
@@ -58,12 +89,22 @@ export const useCartStore = create<CartStoreState>()(
       },
       walletBalanceToUse: 0,
 
+      clearCartError: () => set({ cartError: null }),
+
       addItem: (product, quantity = 1, variant) => {
+        let didMutate = false;
         set((state) => {
           const effectivePrice = variant ? variant.price : product.price;
           const effectiveMrp = variant ? variant.mrp : product.mrp;
           const variantId = variant?.id;
-          const maxStock = variant ? variant.stock : product.stockCount;
+          const maxStock = Math.max(0, Number(variant ? variant.stock : product.stockCount) || 0);
+          const moq = Math.max(1, Number((variant as any)?.moq ?? product.moq ?? 1));
+
+          if (maxStock <= 0 || !product.inStock || (variant && !variant.inStock)) {
+            return {
+              cartError: `${product.name} is currently out of stock.`,
+            };
+          }
 
           const existingIndex = state.items.findIndex(
             (item) => item.productId === product.id && (item.variantId || undefined) === (variantId || undefined)
@@ -73,8 +114,14 @@ export const useCartStore = create<CartStoreState>()(
 
           if (existingIndex > -1) {
             const existing = state.items[existingIndex];
+            if (existing.quantity >= maxStock) {
+              return {
+                cartError: `Maximum available stock (${maxStock}) reached for ${existing.name}.`,
+              };
+            }
             const newQty = Math.min(existing.quantity + quantity, maxStock);
-            const bulkDiscount = calculateBulkDiscount(newQty, product.bulkPricing);
+            const bulkTiers = product.bulkPricing ?? existing.bulkPricing;
+            const bulkDiscount = calculateBulkDiscount(newQty, bulkTiers);
             const effectiveUnit = effectivePrice * (1 - bulkDiscount / 100);
 
             updatedItems = [...state.items];
@@ -82,12 +129,16 @@ export const useCartStore = create<CartStoreState>()(
               ...existing,
               categorySlug: product.categorySlug,
               quantity: newQty,
+              moq,
+              maxStock,
+              bulkPricing: bulkTiers,
               bulkDiscountPercentage: bulkDiscount,
               effectiveUnitPrice: Math.round(effectiveUnit),
               totalPrice: Math.round(effectiveUnit * newQty)
             };
+            didMutate = true;
           } else {
-            const initialQty = Math.min(quantity, maxStock);
+            const initialQty = Math.min(Math.max(quantity, moq), maxStock);
             const bulkDiscount = calculateBulkDiscount(initialQty, product.bulkPricing);
             const effectiveUnit = effectivePrice * (1 - bulkDiscount / 100);
 
@@ -105,6 +156,8 @@ export const useCartStore = create<CartStoreState>()(
               mrp: effectiveMrp,
               gstRate: product.gstRate,
               quantity: initialQty,
+              moq,
+              bulkPricing: product.bulkPricing,
               bulkDiscountPercentage: bulkDiscount,
               effectiveUnitPrice: Math.round(effectiveUnit),
               totalPrice: Math.round(effectiveUnit * initialQty),
@@ -112,12 +165,13 @@ export const useCartStore = create<CartStoreState>()(
               selectedOptions: variant?.attributes || (variant ? { Option: variant.name } : undefined)
             };
             updatedItems = [...state.items, newItem];
+            didMutate = true;
           }
 
-          return { items: updatedItems };
+          return { items: updatedItems, cartError: null };
         });
-        if (hasAuthToken()) {
-          void api.saveServerCart(get().items);
+        if (didMutate) {
+          pushCartToServer();
         }
       },
 
@@ -125,30 +179,50 @@ export const useCartStore = create<CartStoreState>()(
         set((state) => ({
           items: state.items.filter(
             (item) => !(item.productId === productId && (item.variantId || undefined) === (variantId || undefined))
-          )
+          ),
+          cartError: null,
         }));
-        if (hasAuthToken()) {
-          void api.saveServerCart(get().items);
-        }
+        pushCartToServer();
       },
 
       updateQuantity: (productId, quantity, variantId) => {
+        let didMutate = false;
         set((state) => {
-          if (quantity <= 0) {
+          const target = state.items.find(
+            (item) => item.productId === productId && (item.variantId || undefined) === (variantId || undefined)
+          );
+          if (!target) return state;
+
+          const itemMoq = Math.max(1, Number(target.moq ?? 1));
+          const maxStock = Math.max(0, Number(target.maxStock ?? 0));
+
+          if (quantity <= 0 || (quantity < target.quantity && quantity < itemMoq)) {
+            didMutate = true;
             return {
               items: state.items.filter(
                 (item) => !(item.productId === productId && (item.variantId || undefined) === (variantId || undefined))
-              )
+              ),
+              cartError: null,
             };
           }
 
+          if (maxStock > 0 && quantity > maxStock) {
+            return {
+              cartError: `Maximum available stock (${maxStock}) reached for ${target.name}.`,
+            };
+          }
+
+          const clampedQty = maxStock > 0 ? Math.max(itemMoq, Math.min(quantity, maxStock)) : Math.max(1, quantity);
+          didMutate = true;
+
           const updatedItems = state.items.map((item) => {
             if (item.productId === productId && (item.variantId || undefined) === (variantId || undefined)) {
-              const clampedQty = Math.max(1, Math.min(quantity, item.maxStock));
-              const effectiveUnit = item.price * (1 - item.bulkDiscountPercentage / 100);
+              const bulkDiscount = calculateBulkDiscount(clampedQty, item.bulkPricing);
+              const effectiveUnit = item.price * (1 - bulkDiscount / 100);
               return {
                 ...item,
                 quantity: clampedQty,
+                bulkDiscountPercentage: bulkDiscount,
                 effectiveUnitPrice: Math.round(effectiveUnit),
                 totalPrice: Math.round(effectiveUnit * clampedQty)
               };
@@ -156,10 +230,10 @@ export const useCartStore = create<CartStoreState>()(
             return item;
           });
 
-          return { items: updatedItems };
+          return { items: updatedItems, cartError: null };
         });
-        if (hasAuthToken()) {
-          void api.saveServerCart(get().items);
+        if (didMutate) {
+          pushCartToServer();
         }
       },
 
@@ -179,11 +253,13 @@ export const useCartStore = create<CartStoreState>()(
               return {
                 ...(prev || {}),
                 ...srv,
-                price: Number(srv.unitPrice ?? srv.effectiveUnitPrice ?? prev?.price ?? 0),
+                price: Number(srv.price ?? srv.unitPrice ?? srv.effectiveUnitPrice ?? prev?.price ?? 0),
                 effectiveUnitPrice: Number(srv.effectiveUnitPrice ?? srv.unitPrice ?? prev?.effectiveUnitPrice ?? 0),
                 mrp: Number(srv.mrp ?? prev?.mrp ?? srv.effectiveUnitPrice ?? 0),
-                gstRate: Number(prev?.gstRate ?? 18),
-                bulkDiscountPercentage: Number(prev?.bulkDiscountPercentage ?? 0),
+                gstRate: Number(srv.gstRate ?? prev?.gstRate ?? 18),
+                moq: Number(srv.moq ?? prev?.moq ?? 1),
+                bulkPricing: srv.bulkPricing ?? prev?.bulkPricing,
+                bulkDiscountPercentage: Number(srv.bulkDiscountPercentage ?? prev?.bulkDiscountPercentage ?? 0),
                 totalPrice: Number(srv.totalPrice ?? Number(srv.effectiveUnitPrice || 0) * Number(srv.quantity || 1)),
               } as CartItem;
             });
@@ -294,9 +370,20 @@ export const useCartStore = create<CartStoreState>()(
           return null;
         }
       }
-    }),
+      };
+    },
     {
-      name: 'buildora-cart-storage'
+      name: 'buildora-cart-storage',
+      partialize: (state) => ({
+        items: state.items,
+        coupon: state.coupon,
+        deliverySpeed: state.deliverySpeed,
+        unloadingOptions: state.unloadingOptions,
+        walletBalanceToUse: state.walletBalanceToUse,
+        gstin: state.gstin,
+        companyName: state.companyName,
+        saveGstToProfile: state.saveGstToProfile,
+      }),
     }
   )
 );

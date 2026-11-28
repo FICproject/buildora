@@ -476,6 +476,8 @@ export interface CartItem {
   mrp: number;
   gstRate: number;
   quantity: number;
+  moq?: number;
+  bulkPricing?: BulkPriceTier[];
   bulkDiscountPercentage: number;
   effectiveUnitPrice: number;
   totalPrice: number;
