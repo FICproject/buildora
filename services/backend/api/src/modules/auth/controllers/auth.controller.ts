@@ -52,10 +52,11 @@ const ipRateLimits = new Map<string, { count: number; windowStart: number }>();
 const revokedRefreshJtis = new Set<string>();
 
 /**
- * Development / Mock OTP mode is enabled ONLY when server config permits it:
- * 1) Strict providers disabled AND otpMode is not explicitly 'sms'/'production', AND
- * 2) Either non-production NODE_ENV (with CUSTOMER_OTP_MODE=development/mock or unset fallback)
- *    OR explicitly authorized testing deployment with ALLOW_DEV_OTP_FALLBACK=true.
+ * Development / Mock OTP mode is controlled strictly by server environment variables:
+ * 1) Disabled whenever STRICT_OTP_PROVIDERS=true or CUSTOMER_OTP_MODE is 'sms'/'production'.
+ * 2) Enabled whenever the server explicitly sets CUSTOMER_OTP_MODE=development (or 'mock'),
+ *    including Render testing deployments running under NODE_ENV=production.
+ * 3) If CUSTOMER_OTP_MODE is unset on NODE_ENV=production, enabled only if ALLOW_DEV_OTP_FALLBACK=true.
  *
  * Client headers/body flags are never trusted.
  */
@@ -71,10 +72,9 @@ export function isCustomerDevOtpMode(env: NodeJS.ProcessEnv = process.env): bool
   }
 
   if (otpMode === 'development' || otpMode === 'mock') {
-    return nodeEnv !== 'production' || allowTestingFallback;
+    return true;
   }
 
-  // Fallback when CUSTOMER_OTP_MODE is unset on an explicitly authorized Render testing server
   if (nodeEnv === 'production') {
     return allowTestingFallback;
   }
